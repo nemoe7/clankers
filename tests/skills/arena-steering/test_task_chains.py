@@ -345,6 +345,68 @@ def test_browser_shows_faded_finished_phase_chip(tmp_path: Path) -> None:
     store.close()
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_browser_shimmers_only_for_active_task_gates(tmp_path: Path) -> None:
+  import json
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "gates.sqlite3")
+  app = SteeringApp(store, repo_name="Task gate indicators")
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  for name, exit_code in (("active", None), ("failed", "7"), ("passed", "0")):
+    marker = runs / f"{name}.exit"
+    (runs / f"{name}.json").write_text(json.dumps({"exit_path": str(marker)}))
+    if exit_code is not None:
+      marker.write_text(exit_code)
+    app.tasks.create_task(
+      name, name.title(), size=3, details=["Verify."], gate_names=[name]
+    )
+  app.reports.publish_report("decision", "Decision", QUESTION)
+  app.tasks.create_task(
+    "waiting", "Waiting", size=3, details=["Answer."], report_ids=["decision"]
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 390, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-tasks").click()
+        for name in ("active", "failed", "passed", "waiting"):
+          title = page.locator(f'.task[data-task-id="{name}"] .task-title')
+          title.wait_for()
+          expected = name == "active"
+          assert title.get_attribute("data-gate-running") == str(expected).lower()
+          animation = title.evaluate(
+            "element => getComputedStyle(element).animationName"
+          )
+          assert (animation != "none") is expected, (name, animation)
+        page.screenshot(path=str(tmp_path / "task-gate-shimmer.png"))
+        page.emulate_media(reduced_motion="reduce")
+        title = page.locator('.task[data-task-id="active"] .task-title')
+        assert (
+          title.evaluate("element => getComputedStyle(element).animationName") == "none"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 def test_dirty_checkout_finish_raises_one_persisted_violation(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -604,6 +604,14 @@ class TaskService:
       lambda commit: verify_completion_commit(pre_mod.repo_root(), commit)
     )
 
+  def has_running_gate(self, task: Task) -> bool:
+    """Distinguish an active linked run from other task blockers."""
+    return (
+      task.status == "upcoming"
+      and self._gates is not None
+      and any(self._gates.is_running(gate) for gate in task.gate_names)
+    )
+
   def is_task_blocked(
     self,
     task: Task,
@@ -614,9 +622,7 @@ class TaskService:
     """Derive blocking from unanswered linked reports and unfinished dependencies."""
     if task.status == "finished":
       return False
-    if self._gates is not None and any(
-      self._gates.is_running(gate) for gate in task.gate_names
-    ):
+    if self.has_running_gate(task):
       return True
     tasks_by_id = (
       task_map

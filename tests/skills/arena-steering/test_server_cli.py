@@ -2546,15 +2546,25 @@ def test_gate_links_block_only_while_run_is_active() -> None:
     },
   )
   assert status == HTTPStatus.CREATED and created["task"]["blocked"]
+  assert created["task"]["running_gate"] is True
   status, patched = app.dispatch("PATCH", "/tasks/gate-task", {"scope": "code"})
   assert status == HTTPStatus.OK and patched["task"]["links"]["gate_names"] == [
     "verify"
   ]
+  assert patched["task"]["running_gate"] is True
+  assert app.dispatch("GET", "/tasks")[1]["tasks"][0]["running_gate"] is True
   code, output, _ = _run_cli(state_dir, "task", "gate-task")
   assert code == 0 and "Gates: verify" in output and "blocked" in output.lower()
   for result in ("1", "0"):
     marker.write_text(result)
-    assert not app.dispatch("GET", "/tasks/gate-task")[1]["task"]["blocked"]
+    task = app.dispatch("GET", "/tasks/gate-task")[1]["task"]
+    assert task["blocked"] is False
+    assert task["running_gate"] is False
+  marker.unlink()
+  finished = cli.Task(
+    "finished-task", "Finished", size=3, status="finished", gate_names=["verify"]
+  )
+  assert app._serialize_task(finished, blocked=False)["running_gate"] is False
   store.close()
   reopened = SqliteStore(state_dir / "state.sqlite3")
   assert reopened.get_task("gate-task").gate_names == ["verify"]

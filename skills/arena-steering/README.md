@@ -293,7 +293,7 @@ Successful creates return HTTP 201. Other successful route operations return 200
 | Upload | JSON `file` object with `name` and `content_base64` or `text`, or multipart `file`. | `attachment` with name, path, size, presence, and static URL. |
 | Message with file | Message fields plus `file`, `attachments`, or `pasted_text`. | `message`. A long paste uses `pasted-text.txt`. |
 | Acknowledge | `markdown` or `ack`. | `message` or `answer`, depending on the route. `task_details_added` appears only when an answer acknowledgement adds details. |
-| List tasks | `full=0` excludes finished tasks. | `tasks`, each with derived `blocked`. |
+| List tasks | `full=0` excludes finished tasks. | `tasks`, each with derived `blocked` and `running_gate` booleans. Only an active linked run sets `running_gate`. |
 | Create or patch task | `id`, `title`, single `type` or ordered `types`, `scope`, `details`, and link lists. PATCH accepts zero-based `position`, or `status: "finished"` to advance with `commit_hash` for code or docs. | `task` includes `type`, `types`, `current_phase`, `remaining_phases`, `phase_index`, and `phase_evidence`. Progress cannot be patched directly. |
 | List reports | `stale=1` selects stale reports. `summary=1` omits report bodies. | `reports`. |
 | Publish report | `id`, `title`, Markdown `body`, and optional boolean `allow_unparsed_markers`. | Verified `report`, including parsed fields and rendered blocks. |

@@ -1877,6 +1877,20 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
   color: hsl(var(--text-tertiary));
 }
 
+.task-title[data-gate-running="true"] {
+  color: #90caf9;
+  background: linear-gradient(110deg, #90caf9 25%, #dcefff 50%, #90caf9 75%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: task-gate-shimmer 1.6s linear infinite;
+}
+
+@keyframes task-gate-shimmer {
+  to { background-position: -200% 0; }
+}
+
 .task-type {
   display: inline-block;
   margin-left: 6px;
@@ -2712,6 +2726,13 @@ article#report.report img,
 
 @media (prefers-reduced-motion: reduce) {
   .composer-shell #send[aria-busy="true"] svg { animation: none; }
+
+  .task-title[data-gate-running="true"] {
+    background: none;
+    color: #90caf9;
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
 
   #history {
     --edge-start: var(--edge-stop-start);

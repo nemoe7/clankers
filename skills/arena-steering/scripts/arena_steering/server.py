@@ -33,7 +33,7 @@ from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
 from .markdown import render_markdown, render_report_markdown
 from .markdown_fields import parse_report_markdown
-from .models import Attachment
+from .models import Attachment, Task
 from .services import POLL_FRESH_SECONDS, MessageService, ReportService, TaskService
 from .store import STATE_TABLES, SqliteStore
 
@@ -1137,7 +1137,7 @@ class SteeringApp:
     items = self.tasks.list_tasks(include_finished=include_finished)
     return (
       int(HTTPStatus.OK),
-      {"tasks": [task.to_dict(blocked=blocked) for task, blocked in items]},
+      {"tasks": [self._serialize_task(task, blocked) for task, blocked in items]},
     )
 
   def _handle_create_task(
@@ -1162,20 +1162,20 @@ class SteeringApp:
       gate_names=[str(x) for x in body["gate_names"]] if "gate_names" in body else None,
     )
     _, blocked = self.tasks.get_task(task.id)
-    return (int(HTTPStatus.CREATED), {"task": task.to_dict(blocked=blocked)})
+    return (int(HTTPStatus.CREATED), {"task": self._serialize_task(task, blocked)})
 
   def _handle_get_task(
     self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
   ) -> tuple[int, Any]:
     task, blocked = self.tasks.get_task(params["id"])
-    return (int(HTTPStatus.OK), {"task": task.to_dict(blocked=blocked)})
+    return (int(HTTPStatus.OK), {"task": self._serialize_task(task, blocked)})
 
   def _handle_patch_task(
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
     task = self.tasks.patch_task(params["id"], body)
     _, blocked = self.tasks.get_task(task.id)
-    return (int(HTTPStatus.OK), {"task": task.to_dict(blocked=blocked)})
+    return (int(HTTPStatus.OK), {"task": self._serialize_task(task, blocked)})
 
   def _handle_delete_task(
     self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
@@ -1295,6 +1295,11 @@ class SteeringApp:
     if answer.task_details_added:
       payload["task_details_added"] = answer.task_details_added
     return (int(HTTPStatus.OK), payload)
+
+  def _serialize_task(self, task: Task, blocked: bool) -> dict[str, Any]:
+    payload = task.to_dict(blocked=blocked)
+    payload["running_gate"] = self.tasks.has_running_gate(task)
+    return payload
 
   @staticmethod
   def _serialize_message(msg: Any) -> dict[str, Any]:

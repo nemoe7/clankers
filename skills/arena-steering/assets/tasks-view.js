@@ -110,7 +110,7 @@ function renderTaskRow(task) {
 
   return `
     <li class="task" data-task-id="${escapeHtml(task.id)}" title="Task ${escapeHtml(task.id)}">
-      <span class="task-title" data-blocked="${task.blocked ? "true" : "false"}">${escapeHtml(task.title)}</span>
+      <span class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}">${escapeHtml(task.title)}</span>
       ${formatTaskPhases(task)}
       ${detailsHtml}
     </li>

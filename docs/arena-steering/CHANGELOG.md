@@ -24,6 +24,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `server.py`, `assets/tasks-view.js`, `assets/style.css`: Show a blue task-title shimmer only for an active linked gate. Keep report blockers and finished gates static.
+
 - `assets/style.css`: Let Reports prose use the full content width rather than stop at 72ch. Keep tables scrollable.
 
 - `assets/style.css`: Keep the first-line composer hint on one visual line without an edge fade, while draft text still wraps.
