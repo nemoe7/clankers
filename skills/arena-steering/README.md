@@ -146,7 +146,7 @@ The steps, in order, are `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `pus
 
 Arena-owned detached runs and exact platform utility calls do not spend the six-call budget. Ordinary Bash, mixed lines, and pushes remain guarded. The `BASH_COMMAND_POLICY` command-name-or-pattern map in `pre.py` sets `(count, block)` at the pending-inbox threshold. Immediate guards, including pending pushes, stay separate.
 
-`bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `install.sh` holds the profile block that installs the `steer pre` hook.
+`bible` blocks `cat`, `grep`, `head`, `tail`, and `rg` on ARENA.md, AGENTS.md, and a skill SKILL.md. A passing step prints nothing and lands in `_arena_preview_done`, so a later command in one shell skips it. `install.sh` holds the profile block that installs the `steer pre` hook. The [notice inventory](references/notices.md) lists preflight violations, warnings, reminders, and removed legacy notices.
 
 ## Task and message contracts
 
