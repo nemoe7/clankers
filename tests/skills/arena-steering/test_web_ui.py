@@ -1367,6 +1367,72 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
     store.close()
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_report_custom_answer_caret_matches_text_answer_padding(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "caret-layout",
+    "Caret layout",
+    "# Caret layout\n\n"
+    '<!-- question {"id":"text","label":"Text response"} -->\n'
+    "Text response: ___\n\n"
+    '<!-- question {"id":"choice","label":"Choose"} -->\n'
+    'Choose one:\n- ( ) First <!-- option {"label":"First"} -->\n',
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        text = page.locator(".field-text-input")
+        custom = page.locator(".custom-text-input")
+        custom.wait_for()
+        metrics = page.evaluate("""() => {
+          function measure(selector) {
+            const element = document.querySelector(selector);
+            const css = getComputedStyle(element);
+            return {
+              left: element.getBoundingClientRect().left,
+              height: element.getBoundingClientRect().height,
+              inset: parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft),
+            };
+          }
+          return {text: measure('.field-text-input'), custom: measure('.custom-text-input')};
+        }""")
+        assert metrics["custom"]["inset"] == metrics["text"]["inset"]
+        assert metrics["custom"]["height"] == 32
+        assert metrics["custom"]["left"] > metrics["text"]["left"] + 16
+        custom.fill("An answer")
+        assert custom.evaluate("element => document.activeElement === element")
+        assert page.locator(".custom-toggle").is_checked()
+        assert text.input_value() == ""
+        page.screenshot(path=str(tmp_path / f"reports-caret-aligned-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=3)
+    store.close()
+
+
 def test_composer_upload_manager_handles_failures_and_concurrent_changes():
   script = r"""
 import assert from 'node:assert/strict';

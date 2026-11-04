@@ -2611,7 +2611,7 @@ article#report.report img,
   flex: 1 1 auto;
   min-width: 0;
   height: 32px;
-  padding: 4px 8px;
+  padding: 4px 10px;
   background-color: hsl(var(--surface-tertiary));
 }
 
