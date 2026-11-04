@@ -1573,6 +1573,106 @@ def test_report_custom_answer_caret_matches_text_answer_padding(
     store.close()
 
 
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 855, 1372])
+def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "type-ramp",
+    "Report type ramp",
+    "# Main `code` title\n\n"
+    "## Section with `code`\n\n"
+    "### Subheading `code`\n\n#### Minor `code`\n\n"
+    "##### Smaller `code`\n\n###### Smallest `code`\n\n"
+    "Body text with `inline code`.\n\n"
+    "| Name | Value |\n| --- | --- |\n| One | Two |\n\n"
+    "```python\nprint('hello')\n```\n\n"
+    "```mermaid\nflowchart LR\n  A[Start] --> B[End]\n```\n\n"
+    '<!-- question {"id":"text","label":"Text response"} -->\n'
+    "Text response: ___\n\n"
+    '<!-- question {"id":"choice","label":"Choose one"} -->\n'
+    'Choose one:\n- ( ) First <!-- option {"label":"First"} -->\n',
+  )
+  answer = app.reports.submit_answer("type-ramp", {"text": "Reply", "choice": "First"})
+  app.reports.ack_answer("type-ramp", answer.id, "Acknowledged with `code`.")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        page.locator("#report .mermaid-svg tspan").first.wait_for()
+        expected = {
+          "#report": 16,
+          "#report h1": 32,
+          "#report h2": 22,
+          "#report h3": 18,
+          "#report h4": 16,
+          "#report h5": 12,
+          "#report h6": 11,
+          "#report h1 > code": 28,
+          "#report h2 > code": 22,
+          "#report h3 > code": 16,
+          "#report h4 > code": 14,
+          "#report h5 > code": 11,
+          "#report h6 > code": 11,
+          "#report p": 16,
+          "#report p > code": 14,
+          "#report table": 16,
+          "#report .code-block-header": 14,
+          "#report pre > code": 14,
+          "#report .field-label": 16,
+          "#report .field-id-chip": 16,
+          "#report .option-row": 16,
+          "#report .field-text-input": 16,
+          "#report .custom-text-input": 16,
+          "#report .mermaid-svg tspan": 14,
+          "#tab-reports": 14,
+          "#tab-messages": 14,
+          "#tab-tasks": 14,
+          ".report-toc-title": 12,
+          ".report-picker-link": 12,
+          "#report-status": 12,
+          "#report-ack-history": 13,
+          "#report-submit-float": 14,
+        }
+        measured = page.evaluate(
+          """selectors => Object.fromEntries(
+          selectors.map(selector => [selector, getComputedStyle(
+            document.querySelector(selector)).fontSize])
+        )""",
+          list(expected),
+        )
+        assert measured == {
+          selector: f"{size}px" for selector, size in expected.items()
+        }, measured
+        page.screenshot(
+          path=str(tmp_path / f"report-type-ramp-{width}.png"), full_page=True
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 def test_composer_upload_manager_handles_failures_and_concurrent_changes():
   script = r"""
 import assert from 'node:assert/strict';

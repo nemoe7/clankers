@@ -2650,6 +2650,27 @@ article#report.report img,
   background-color: hsl(var(--surface-tertiary));
 }
 
+#report { font-size: 16px; }
+#report h1 { font-size: 32px; }
+#report h2 { font-size: 22px; }
+#report h3 { font-size: 18px; }
+#report h4,
+#report table,
+#report .option-row,
+#report .input { font-size: 16px; }
+#report h5 { font-size: 12px; }
+#report h6 { font-size: 11px; }
+
+#report :not(pre) > code:not(.msg-id),
+#report .code-block pre > code,
+#report .code-block-header,
+#report .mermaid-svg { font-size: 14px; }
+#report h1 > code:not(.msg-id) { font-size: 28px; }
+#report h2 > code:not(.msg-id) { font-size: 22px; }
+#report h3 > code:not(.msg-id) { font-size: 16px; }
+#report h5 > code:not(.msg-id),
+#report h6 > code:not(.msg-id) { font-size: 11px; }
+
 .report-submit-row {
   margin-top: 14px;
 }
