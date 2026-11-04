@@ -679,6 +679,167 @@ button {font:inherit;min-height:32px}
       server.shutdown()
 
 
+def test_live_audit_inspects_open_overlays_at_every_house_viewport(tmp_path):
+  """Clause 33 runs without -O, but ignores hidden and reachable scroll content."""
+  import http.server
+  import os
+  import threading
+
+  import pytest
+
+  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
+    pytest.skip("Optional browser integration is not enabled")
+  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  page = tmp_path / "index.html"
+  page.write_text(
+    """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}body{margin:0;font:16px sans-serif;background:#151515;color:#fff}
+dialog{width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 24px);
+  padding:16px;background:#333;color:#fff;overflow:auto;border:1px solid #fff}
+#clip-frame{position:relative;width:220px;height:110px;overflow:hidden;border:1px solid #aaa}
+#clip-frame p{position:absolute;margin:0;white-space:nowrap;font-size:16px;line-height:20px}
+#clip-top{top:-9px;left:40px}#clip-left{top:30px;left:-12px}
+#clip-right{top:55px;right:-11px}#clip-bottom{top:102px;left:40px}
+#scroll-pane{height:45px;overflow-y:auto}
+#scroll-copy{margin:70px 0 0}#covered-wrap{position:relative;height:27px}
+#obscured{margin:0;line-height:24px}#blocker{position:absolute;inset:0;z-index:5;background:#444}
+[role=tooltip]{position:fixed;pointer-events:none;width:110px;height:28px;padding:4px}
+#no-surface{top:50px;left:35px;background:transparent}
+#good-surface{position:absolute;top:160px;left:30px;background:rgb(30,30,30)}
+#edge-left{left:-18px;top:140px;background:#333}
+#edge-top{left:175px;top:-12px;background:#333}
+#edge-right{left:calc(100vw - 18px);top:140px;background:#333}
+#edge-bottom{left:175px;top:calc(100vh - 12px);background:#333}
+#popup{width:120px;height:36px;background:transparent;color:#fff}
+</style></head><body>
+<button id="open" onclick="document.getElementById('panel').showModal();
+  document.getElementById('popup').showPopover()">Open</button>
+<dialog id="panel"><h2>Visible overlay</h2>
+<div id="clip-frame"><p id="clip-top">Top text</p><p id="clip-left">Left text</p>
+<p id="clip-right">Right text</p><p id="clip-bottom">Bottom text</p></div>
+<div id="scroll-pane"><p id="scroll-copy">Reachable scroll text</p></div>
+<div id="covered-wrap"><p id="obscured">Hidden under cover</p><div id="blocker"></div></div>
+<div id="no-surface" role="tooltip">No surface</div>
+<div id="good-surface" role="tooltip">Solid surface</div>
+<div id="edge-left" role="tooltip">Left edge</div>
+<div id="edge-top" role="tooltip">Top edge</div>
+<div id="edge-right" role="tooltip">Right edge</div>
+<div id="edge-bottom" role="tooltip">Bottom edge</div>
+<div id="hidden-surface" role="tooltip" hidden>Hidden tooltip</div>
+<button>Close</button></dialog><div id="popup" popover>Unpainted popover</div>
+</body></html>""",
+    encoding="utf-8",
+  )
+
+  class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, directory=str(tmp_path), **kwargs)
+
+    def log_message(self, *_args):
+      pass
+
+  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def inspect(widths, flow):
+      request = {
+        "command": "audit",
+        "url": f"http://127.0.0.1:{server.server_port}/index.html",
+        "widths": widths,
+        "heights": {"1920": 957, "1080": 2437, "958": 958, "855": 325, "411": 799},
+        "timeout": 8,
+        "engine": "chromium",
+        "executable": config["executable"],
+        "output": str(tmp_path / f"audit-{len(widths)}-{len(flow)}"),
+        "flow": flow,
+        "selector": "#panel,#clip-frame,#scroll-pane",
+      }
+      result = subprocess.run(
+        ["node", str(SCRIPT.with_name("browser.cjs"))],
+        input=json.dumps(request),
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, **config.get("env", {})},
+      )
+      assert result.returncode == 0, result.stderr or result.stdout
+      report = json.loads(result.stdout)
+      assert all(row["status"] == "captured" for row in report["captures"]), report
+      return report
+
+    try:
+      hidden = inspect([411], [])
+      assert all(not row["overlays"]["overlays"] for row in hidden["captures"])
+      assert not any(
+        item.get("criterion") == "clause-33" for item in hidden["findings"]
+      )
+      flow = [
+        {"action": "click", "selector": "#open"},
+        {"action": "visible", "selector": "#panel"},
+        {"action": "visible", "selector": "#popup"},
+      ]
+      report = inspect(list(nuu.WIDTHS), flow)
+      assert len(report["captures"]) == len(nuu.WIDTHS) * 4
+      assert report["automated_flow"] == "every audit capture"
+      for capture in report["captures"]:
+        assert capture["flow"]["status"] == "passed"
+        assert "#panel" in capture["overlays"]["overlays"]
+        assert "overlaps" not in capture  # Generic -O sibling scan remains opt-in.
+        found = [
+          row for row in capture["overlays"]["findings"] if row["rule"] == "ACC203"
+        ]
+        for selector, edge in (
+          ("#clip-top", "top"),
+          ("#clip-left", "left"),
+          ("#clip-right", "right"),
+          ("#clip-bottom", "bottom"),
+        ):
+          assert any(
+            item["selector"] == selector
+            and item["clipping_ancestor"] == "#clip-frame"
+            and edge in item["edges"]
+            for item in found
+          ), (selector, capture["width"], found)
+        assert any(
+          item["selector"] == "#obscured" and item["issue"] == "occluded"
+          for item in found
+        )
+        assert any(
+          item["selector"] == "#no-surface" and item["issue"] == "background"
+          for item in found
+        )
+        assert any(
+          item["selector"] == "#popup" and item["issue"] == "background"
+          for item in found
+        )
+        for selector, edge in (
+          ("#edge-top", "top"),
+          ("#edge-left", "left"),
+          ("#edge-right", "right"),
+          ("#edge-bottom", "bottom"),
+        ):
+          assert any(
+            item["selector"] == selector and edge in item["edges"] for item in found
+          )
+        unexpected = [
+          item
+          for item in found
+          if item["selector"] in {"#scroll-copy", "#hidden-surface", "#good-surface"}
+        ]
+        assert not unexpected, [(row["selector"], row["issue"]) for row in unexpected]
+        assert all(
+          item["viewport"] == {"width": capture["width"], "height": capture["height"]}
+          and item["bounds"]["width"] > 0
+          and item["computed_surface_color"]
+          and item["clipping_ancestor"]
+          for item in found
+        ), capture["width"]
+    finally:
+      server.shutdown()
+      thread.join()
+
+
 def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path):
   import http.server
   import threading
@@ -2260,6 +2421,13 @@ def test_house_style_amendments_stay_synced():
     skill = (root / "SKILL.md").read_text(encoding="utf-8")
     assert "except .eyebrow labels at 0.06em" in skill
     assert "44x44 px hit areas" in skill
+    assert (
+      "33. On every live Nuu audit, inspect visible dialog and floating-overlay text "
+      "and controls for clipping or occlusion at every edge across the five house "
+      "viewports. Check tooltip and popover surfaces for missing effective "
+      "backgrounds. Report selector, viewport, bounds, clipping ancestor, and "
+      "computed surface color."
+    ) in skill
 
     modal = (root / "references/recipes/modal-manager.md").read_text(encoding="utf-8")
     assert "padding: var(--space-5);" in modal

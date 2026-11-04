@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.72]
+
+### Added
+
+- **Live overlay inspection (Clause 33, `ACC203`)**: Check visible overlay text, controls, clipping, occlusion, and tooltip/popover backgrounds at each viewport. Replay audit flows across viewports, leaving reachable scroll content and optional page-wide overlaps separate.
+
 ## [0.1.71]
 
 ### Changed
