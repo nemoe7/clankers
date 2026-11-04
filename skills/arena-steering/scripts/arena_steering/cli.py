@@ -384,7 +384,7 @@ def main(
       if delivered["status"] == "timeout":
         print("Poll waited fully. End turn.", file=stdout)
       elif delivered["status"] == "skipped":
-        print("User skipped poll, end turn", file=stdout)
+        print("User skipped poll. End turn.", file=stdout)
       elif delivered["messages"] or delivered["report_answers"]:
         _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
       elif (task := delivered["next_task"]) is not None:

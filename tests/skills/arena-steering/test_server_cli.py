@@ -266,7 +266,7 @@ def test_cli_poll_distinguishes_skip_and_timeout(
     app = SteeringApp(store)
     app.messages.trigger_skip_poll()
     code, out, err = _run_cli(state_dir, "poll")
-    assert (code, out, err) == (0, "User skipped poll, end turn\n", "")
+    assert (code, out, err) == (0, "User skipped poll. End turn.\n", "")
     assert store.get_meta("turn_ended_at")
     _run_cli(state_dir, "read")  # A real command resets the fast-repeat guard.
 
@@ -308,7 +308,7 @@ def test_cli_poll_keeps_skip_armed_during_live_run(
     assert store.get_meta("skip_poll") == "1"
     exit_path.write_text("0", encoding="utf-8")
     _run_cli(state_dir, "read")  # Clear the fast-repeat guard.
-    assert _run_cli(state_dir, "poll") == (0, "User skipped poll, end turn\n", "")
+    assert _run_cli(state_dir, "poll") == (0, "User skipped poll. End turn.\n", "")
     assert store.get_meta("skip_poll") == "0"
   finally:
     store.close()
@@ -329,7 +329,7 @@ def test_cli_poll_skips_with_only_blocked_tasks(tmp_path: Path) -> None:
       "blocked", "Blocked task", size=2, report_ids=["decision"], details=["Wait."]
     )
     app.messages.trigger_skip_poll()
-    assert _run_cli(state_dir, "poll") == (0, "User skipped poll, end turn\n", "")
+    assert _run_cli(state_dir, "poll") == (0, "User skipped poll. End turn.\n", "")
     assert app.tasks.get_task("blocked")[1]
   finally:
     store.close()
