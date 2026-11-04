@@ -62,6 +62,16 @@ def with_bible_read(body: str) -> str:
   return body + "\n" + BIBLE_READ.format(paths=paths)
 
 
+def _validate_ack_markdown(markdown: str, target_id: str) -> str:
+  if not isinstance(markdown, str) or not markdown.strip():
+    raise ValueError("Acknowledgement Markdown cannot be empty")
+  reply = markdown.strip()
+  words = re.findall(r"[^\W_]+", reply)
+  if words and all(word.casefold() == target_id for word in words):
+    raise ValueError("Acknowledgement must contain more than the target ID alone")
+  return reply
+
+
 def _report_timestamp(value: str) -> datetime:
   stamp = datetime.fromisoformat(value)
   return stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
@@ -377,7 +387,6 @@ class MessageService:
     """Acknowledge a message or report answer by appending a Markdown reply."""
     if not isinstance(markdown, str) or not markdown.strip():
       raise ValueError("Acknowledgement Markdown cannot be empty")
-    reply = markdown.strip()
     now = self._clock.now_iso()
 
     if target_id is None:
@@ -387,6 +396,7 @@ class MessageService:
     msg = self._messages.get_message(target_id)
     if msg is None:
       raise KeyError(f"Unknown message or answer ID: {target_id}")
+    reply = _validate_ack_markdown(markdown, target_id)
     first_ack = msg.status != "acked"
     msg = self._messages.append_message_ack(target_id, reply, now)
     if msg.type != "report_answer":
@@ -1542,15 +1552,12 @@ class ReportService:
   def ack_answer(self, report_id: str, answer_id: str, markdown: str) -> ReportAnswer:
     report = self.get_report(report_id)
     validate_hex_id(answer_id, "ReportAnswer.id")
-    if not isinstance(markdown, str) or not markdown.strip():
-      raise ValueError("Acknowledgement Markdown cannot be empty")
+    reply = _validate_ack_markdown(markdown, answer_id)
     now = self._clock.now_iso()
     for ans in report.answers:
       if ans.id == answer_id:
         first_ack = ans.status != "acked"
-        ans = self._reports.append_message_ack(
-          answer_id, markdown.strip(), now
-        ).as_report_answer()
+        ans = self._reports.append_message_ack(answer_id, reply, now).as_report_answer()
         if first_ack:
           ans.task_details_added = _append_answer_details_to_linked_tasks(
             self._tasks, report, ans, now

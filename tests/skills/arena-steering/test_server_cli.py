@@ -3069,6 +3069,70 @@ def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> N
   store.close()
 
 
+def test_cli_ack_rejects_id_only_reply_and_keeps_message_pending() -> None:
+  state_dir = cli.resolve_state_dir()
+  store, messages, _, _ = cli.open_services(state_dir)
+  try:
+    messages.send_message("Please review the change", msg_id="ab1014")
+    code, out, err = _run_cli(state_dir, "ack", "ab1014")
+    assert code == 1
+    assert not out
+    assert "id alone" in err.lower()
+    assert store.get_message("ab1014").acks == []
+
+    code, out, err = _run_cli(state_dir, "ack", "ab1014", "Reviewed the change")
+    assert code == 0, err
+    assert out == "ok ab1014\n"
+    assert store.get_message("ab1014").acks == ["Reviewed the change"]
+  finally:
+    store.close()
+
+
+@pytest.mark.parametrize("route", ["inbox", "answer_message", "answer_report"])
+def test_http_ack_rejects_id_only_markdown_for_messages_and_answers(route: str) -> None:
+  store = SqliteStore(":memory:")
+  try:
+    app = SteeringApp(store)
+    if route == "inbox":
+      target_id = "ab1021"
+      app.messages.send_message("Please review", msg_id=target_id)
+      url = f"/messages/{target_id}/ack"
+      get_acks = lambda: store.get_message(target_id).acks
+    else:
+      target_id = "ab1022"
+      app.reports.publish_report(
+        "ack-check",
+        "Ack check",
+        '<!-- question {"id":"choice","label":"Choice"} -->\nChoice: ___\n',
+      )
+      app.reports.submit_answer("ack-check", {"choice": "Ready"}, answer_id=target_id)
+      url = (
+        f"/messages/{target_id}/ack"
+        if route == "answer_message"
+        else f"/reports/ack-check/answers/{target_id}/ack"
+      )
+      get_acks = lambda: app.reports.get_report("ack-check").answers[0].acks
+
+    for reply in (
+      target_id,
+      f"  `{target_id}`  ",
+      f"# {target_id}",
+      f"{target_id}.",
+      f"**{target_id}**\n\n> `{target_id}`",
+    ):
+      status, response = app.dispatch("POST", url, {"markdown": reply})
+      assert status == HTTPStatus.BAD_REQUEST, response
+      assert "id alone" in str(response).lower()
+      assert get_acks() == []
+
+    reply = f"Reviewed {target_id} and the related work."
+    status, response = app.dispatch("POST", url, {"markdown": reply})
+    assert status == HTTPStatus.OK, response
+    assert get_acks() == [reply]
+  finally:
+    store.close()
+
+
 def test_cli_ack_batch_rejects_task_creation_without_changes(tmp_path: Path) -> None:
   state_dir = cli.resolve_state_dir()
   _seed_ack_batch(state_dir)
