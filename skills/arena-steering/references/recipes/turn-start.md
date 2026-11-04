@@ -6,7 +6,5 @@ At every turn start:
 3. If the second check fails, report it and stop before resuming the queue.
 
 After the CLI check:
-1. Check whether the current v2 preview serves `/`.
-2. If it does not, call `functions.start_process` from the checkout with command `steer serve` and keep that process running.
-3. If startup fails, report the failure and do not start another copy on the same port.
-4. Otherwise reuse the live preview and continue queued work.
+1. If the initial `steer --version` failed, stop any live v2 preview with `functions.stop_process`, then call `functions.start_process` from the checkout with command `steer serve`.
+2. Keep a successful preview running and continue queued work.
