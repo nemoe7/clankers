@@ -1410,6 +1410,7 @@ select,
 }
 
 .message {
+  position: relative;
   margin-bottom: 14px;
   background-color: hsl(var(--surface-raised));
   padding: 10px 14px;
@@ -3094,6 +3095,8 @@ article#report.report img,
 
 /* A visible end marker records a rendered reply list, not a reply count. */
 .reply-seen-sentinel {
+  position: absolute;
   display: block;
+  width: 1px;
   height: 1px;
 }

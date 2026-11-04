@@ -11,6 +11,7 @@ import struct
 import subprocess
 import threading
 import zlib
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -3517,6 +3518,94 @@ def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -
       finally:
         browser.close()
   finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+@pytest.mark.parametrize("transport", ["ws", "poll"])
+def test_seen_reply_receipt_keeps_message_height(
+  tmp_path: Path, width: int, transport: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  msg_id = "aa1234"
+  app.messages.send_message("Review the reply layout", msg_id=msg_id)
+  receipt_requested = threading.Event()
+  release_receipt = threading.Event()
+  mark_seen = app.messages.mark_replies_seen
+
+  def delayed_receipt(id_: str, revision: str) -> bool:
+    receipt_requested.set()
+    if not release_receipt.wait(10):
+      raise RuntimeError("Seen receipt was not released")
+    return mark_seen(id_, revision)
+
+  app.messages.mark_replies_seen = delayed_receipt
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(
+          viewport={"width": width, "height": 844},
+          is_mobile=width == 390,
+          has_touch=width == 390,
+        )
+        sockets: list[str] = []
+        page.on("websocket", lambda socket: sockets.append(socket.url))
+        url = f"http://127.0.0.1:{server.server_port}/"
+        if transport == "poll":
+          url += "?transport=poll"
+        page.goto(url)
+        card = page.locator(f'.message[data-msg-id="{msg_id}"]')
+        card.wait_for()
+        before = card.bounding_box()
+        assert before is not None
+        assert (
+          app.dispatch(
+            "POST", f"/messages/{msg_id}/ack", {"markdown": "Acknowledged."}
+          )[0]
+          == HTTPStatus.OK
+        )
+        assert receipt_requested.wait(8), (
+          "Reply intersection did not request a seen receipt"
+        )
+        sentinel = card.locator(".reply-seen-sentinel")
+        sentinel.wait_for()
+        pending = card.bounding_box()
+        receipt_pending = card.locator(".receipt").bounding_box()
+        assert pending is not None and receipt_pending is not None
+        assert card.locator(".state-dot").get_attribute("data-state") == "said"
+        release_receipt.set()
+        sentinel.wait_for(state="detached")
+        seen = card.bounding_box()
+        receipt_seen = card.locator(".receipt").bounding_box()
+        assert seen is not None and receipt_seen is not None
+        assert app.messages.get_message(msg_id).replies_seen
+        assert seen["height"] > before["height"]
+        assert abs(pending["height"] - seen["height"]) < 0.5
+        assert abs(receipt_pending["y"] - receipt_seen["y"]) < 0.5
+        assert card.locator(".state-dot").get_attribute("data-state") == "said"
+        assert bool(sockets) == (transport == "ws")
+      finally:
+        release_receipt.set()
+        browser.close()
+  finally:
+    release_receipt.set()
     server.shutdown()
     server.server_close()
     thread.join(timeout=5)
