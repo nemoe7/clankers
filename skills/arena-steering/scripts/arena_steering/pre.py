@@ -1050,19 +1050,19 @@ class BibleReadGuard:
     """Name a protected read target, leaving checked-in skill source searchable."""
     root = Path(os.path.abspath(ctx.checkout_root or repo_root()))
     cwd = Path(os.path.abspath(ctx.cwd or root))
-    protected = {root / "ARENA.md", root / self.INSTALLED_SKILL}
+    protected = {root / "AGENTS.md", root / "ARENA.md", root / self.INSTALLED_SKILL}
     for words in _line_commands(ctx):
       if not words or Path(words[0]).name not in self.VERBS:
         continue
+      if Path(words[0]).name == "rg" and "--files" in words[1:]:
+        continue  # File discovery does not read file contents.
       for token in words[1:]:
-        name = Path(token).name
-        if name == "AGENTS.md":
+        path = Path(token)
+        if path.name not in {"AGENTS.md", "ARENA.md", "SKILL.md"}:
+          continue
+        target = Path(os.path.abspath(path if path.is_absolute() else cwd / path))
+        if target in protected:
           return token
-        if name in {"ARENA.md", "SKILL.md"}:
-          path = Path(token)
-          target = Path(os.path.abspath(path if path.is_absolute() else cwd / path))
-          if target in protected:
-            return token
     return None
 
   def run(self, ctx: PreContext) -> PreResult:

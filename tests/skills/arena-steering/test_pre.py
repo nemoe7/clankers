@@ -1023,6 +1023,7 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "bash -lc 'rg -n gate AGENTS.md'",
     "find skills -name AGENTS.md -print && rg -n gate AGENTS.md",
     "rg -n gate AGENTS.md && find skills -name ARENA.md -print",
+    "rg --files -g AGENTS.md && rg -n gate AGENTS.md",
   ):
     ctx = pre.PreContext(line=line, shell="bash")
     assert guard.applies(ctx), line
@@ -1036,6 +1037,9 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "tail -n 5 skills/unrelated/SKILL.md",
     "rg -n gate skills/arena-steering && find skills -name AGENTS.md -print",
     "find skills -name ARENA.md -print && rg -n gate tests/skills/arena-steering/test_pre.py",
+    "rg --files -g AGENTS.md",
+    "rg --files .agents/skills/arena-steering -g SKILL.md",
+    "rg --files -g ARENA.md -g AGENTS.md",
     "printf AGENTS.md | head -n 1",
   ):
     assert not guard.applies(pre.PreContext(line=line, shell="bash")), line
@@ -1047,7 +1051,6 @@ def test_bible_guard_matches_only_root_and_installed_paths(tmp_path: Path) -> No
   child = root / "nested"
   child.mkdir(parents=True)
   protected = (
-    "rg -n gate AGENTS.md",
     "rg -n gate ../AGENTS.md",
     "rg -n gate ../ARENA.md",
     f"rg -n gate {root / 'ARENA.md'}",
@@ -1060,9 +1063,12 @@ def test_bible_guard_matches_only_root_and_installed_paths(tmp_path: Path) -> No
     assert guard.run(ctx).verdict == pre.BLOCK, line
 
   allowed = (
+    "rg -n gate AGENTS.md",
     "rg -n gate ARENA.md",
     "rg -n gate ../docs/ARENA.md",
+    "rg -n gate ../docs/AGENTS.md",
     f"rg -n gate {tmp_path / 'other/ARENA.md'}",
+    f"rg -n gate {tmp_path / 'other/AGENTS.md'}",
     "rg -n gate ../skills/arena-steering/SKILL.md",
     f"rg -n gate {root / 'skills/arena-steering/SKILL.md'}",
     "rg --files ../skills/arena-steering; rg -n gate ../skills/arena-steering/SKILL.md",
@@ -1079,6 +1085,21 @@ def test_bible_guard_matches_only_root_and_installed_paths(tmp_path: Path) -> No
   root_ctx = pre.PreContext(line="rg -n gate ARENA.md", cwd=root, checkout_root=root)
   assert guard.applies(root_ctx)
   assert guard.run(root_ctx).verdict == pre.BLOCK
+
+
+def test_rg_file_discovery_passes_preflight_without_bible_warning(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  for line in (
+    "rg --files -g AGENTS.md",
+    "rg --files -g SKILL.md skills/arena-steering",
+  ):
+    code, output = _run("pre", "-l", line, "-c", line, "-s", "bash")
+    assert code == pre.CONTINUE, output
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_violation() is None
+  store.close()
 
 
 @pytest.mark.parametrize(
