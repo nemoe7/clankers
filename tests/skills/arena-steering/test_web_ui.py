@@ -3662,3 +3662,98 @@ def test_fallback_poll_analytics_counts_browser_ticks_across_reload(
     thread.join(timeout=5)
     app.analytics.close()
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_report_recommendations_preselect_without_becoming_owner_answers(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  body = (
+    "# Recommendations\n\n"
+    '<!-- question {"id":"route","label":"Route"} -->\n'
+    "Choose a route\n"
+    '- (x) Guided review <!-- option {"label":"Guided"} -->\n'
+    '- ( ) Manual review <!-- option {"label":"Manual"} -->\n\n'
+    '<!-- question {"id":"signals","label":"Signals"} -->\n'
+    "Choose signals\n"
+    '- [x] First signal <!-- option {"label":"First"} -->\n'
+    '- [ ] Second <!-- option {"label":"Second"} -->\n\n'
+    '<!-- question {"id":"note","label":"Note"} -->\n'
+    "Your note: ___\n"
+  )
+  app.reports.publish_report("recommend", "Recommendations", body)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        route = page.locator('[data-field-id="route"] input[value="Guided review"]')
+        signal = page.locator('[data-field-id="signals"] input[value="First signal"]')
+        route.wait_for()
+        assert route.is_checked()
+        assert signal.is_checked()
+        assert app.reports.get_report("recommend").answers == []
+        page.locator('[data-field-id="note"] .field-text-input').fill("Only my note")
+        with page.expect_request("**/reports/recommend/answers") as first_request:
+          page.locator("#report-submit-float").click()
+        assert first_request.value.post_data_json["values"] == {"note": "Only my note"}
+        assert app.reports.get_report("recommend").answers == []
+        page.reload()
+        page.locator("#tab-reports").click()
+        assert route.is_checked()
+        assert signal.is_checked()
+        route.click()
+        signal.click()
+        assert not signal.is_checked()
+        page.reload()
+        page.locator("#tab-reports").click()
+        assert not signal.is_checked()
+        signal.click()
+        with page.expect_response("**/reports/recommend/answers") as answer_response:
+          page.locator("#report-submit-float").click()
+        assert answer_response.value.status == HTTPStatus.CREATED
+        answer = app.reports.get_report("recommend").answers[-1]
+        assert answer.values == {
+          "route": "Guided",
+          "signals": ["First"],
+          "note": "Only my note",
+        }
+        page.reload()
+        page.locator("#tab-reports").click()
+        assert route.is_checked()
+        assert signal.is_checked()
+        assert not page.locator('[data-field-id="route"] .custom-toggle').is_checked()
+        page.locator('[data-field-id="route"] input[value="Manual review"]').click()
+        with page.expect_response("**/reports/recommend/answers") as revised_response:
+          page.locator("#report-submit-float").click()
+        assert revised_response.value.status == HTTPStatus.CREATED
+        revisions = app.reports.get_report("recommend").answers
+        assert len(revisions) == 2
+        assert revisions[-1].values == {
+          "route": "Manual",
+          "signals": ["First"],
+          "note": "Only my note",
+        }
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

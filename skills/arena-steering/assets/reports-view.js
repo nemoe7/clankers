@@ -91,7 +91,7 @@ function copyReportMarkdown(text) {
   }
 }
 
-function renderFieldBlock(field, headings, stored = null) {
+function renderFieldBlock(field, headings, stored) {
   const fieldId = escapeHtml(field.id);
   const label = escapeHtml(field.question || field.label);
   const anchorId = `field-${field.id}`;
@@ -106,7 +106,10 @@ function renderFieldBlock(field, headings, stored = null) {
       ? []
       : [String(stored)];
   const storedSet = new Set(storedList);
-  const customStored = storedList.find((item) => !options.includes(item)) || "";
+  const knownAnswers = new Set([...options, ...Object.values(field.option_labels || {})]);
+  const customStored = storedList.find((item) => !knownAnswers.has(item)) || "";
+  const suggestedDefault = stored === undefined && recommended.size > 0;
+  const firstSuggested = options.find((option) => recommended.has(option));
 
   if (field.type === "text") {
     const textValue = storedList[0] || "";
@@ -124,10 +127,15 @@ function renderFieldBlock(field, headings, stored = null) {
   const inputType = field.type === "choice" ? "radio" : "checkbox";
   const optionsHtml = options
     .map((opt) => {
-      const checked = storedSet.has(opt) ? "checked" : "";
-       const star = recommended.has(opt)
-         ? '<span class="option-star" aria-label="Recommended by agent">*</span> '
-         : "";
+      const preselected = suggestedDefault && recommended.has(opt) &&
+        (inputType === "checkbox" || opt === firstSuggested);
+      const savedLabel = field.option_labels?.[opt];
+      const isChecked = storedSet.has(opt) ||
+        (savedLabel && storedSet.has(savedLabel)) || preselected;
+      const checked = isChecked ? "checked" : "";
+      const star = recommended.has(opt)
+        ? '<span class="option-star" aria-label="Recommended by agent">*</span> '
+        : "";
       return `
         <label class="option-row${recommended.has(opt) ? " is-recommended" : ""}">
           <input type="${inputType}" name="field-${fieldId}" value="${escapeHtml(opt)}" ${checked}>
@@ -138,7 +146,7 @@ function renderFieldBlock(field, headings, stored = null) {
     .join("");
 
   return `
-    <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}">
+    <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}" data-suggested-default="${suggestedDefault}">
       <div class="field-header">
         <span class="field-label">${label}</span>
         <code class="field-id-chip msg-id">${fieldId}</code>
@@ -596,6 +604,7 @@ export function renderReportsView(container, state, handlers) {
     )) {
       const fid = question.dataset.fieldId;
       const ftype = question.dataset.fieldType;
+      if (question.dataset.suggestedDefault === "true" && question.dataset.userTouched !== "true") continue;
       if (ftype === "text") {
         const val =
           question.querySelector(".field-text-input")?.value.trim() || "";
@@ -630,9 +639,21 @@ export function renderReportsView(container, state, handlers) {
     return values;
   };
 
-  listen(form, "input", () => {
-    writeDrafts(activeReport.id, collectValues());
-  });
+  const saveOwnerDraft = (event) => {
+    if (event.type === "click" && !event.target.matches('input[type="radio"], input[type="checkbox"]')) return;
+    const question = event.target.closest(".question[data-field-id]");
+    if (!question) return;
+    question.dataset.userTouched = "true";
+    const values = collectValues();
+    for (const field of form.querySelectorAll(".question[data-user-touched='true']")) {
+      if (!Object.hasOwn(values, field.dataset.fieldId)) {
+        values[field.dataset.fieldId] = field.dataset.fieldType === "checkbox" ? [] : "";
+      }
+    }
+    writeDrafts(activeReport.id, values);
+  };
+  listen(form, "input", saveOwnerDraft);
+  listen(form, "click", saveOwnerDraft);
 
   listen(form, "submit", async (event) => {
     event.preventDefault();
