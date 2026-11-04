@@ -2798,6 +2798,37 @@ article#report.report img,
         calc(100% - var(--edge-ramp)) 100%;
     }
 
+    @supports (animation-timeline: scroll(self inline)) {
+      #report table {
+        scroll-padding-inline: var(--edge-fade);
+        -webkit-mask-image:
+          linear-gradient(
+            to right,
+            transparent 0,
+            black var(--edge-start),
+            black calc(100% - var(--edge-end)),
+            transparent 100%
+          ),
+          linear-gradient(to top, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
+        mask-image:
+          linear-gradient(
+            to right,
+            transparent 0,
+            black var(--edge-start),
+            black calc(100% - var(--edge-end)),
+            transparent 100%
+          ),
+          linear-gradient(to top, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
+        -webkit-mask-composite: source-over;
+        mask-composite: add;
+        animation: edge-start linear both, edge-end linear both;
+        animation-timeline: scroll(self inline), scroll(self inline);
+        animation-range:
+          0px var(--edge-ramp),
+          calc(100% - var(--edge-ramp)) 100%;
+      }
+    }
+
     .reports-layout::before,
     .reports-layout::after,
     .tasks-layout::after {

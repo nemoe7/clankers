@@ -3971,8 +3971,10 @@ def test_state_refresh_preserves_unaffected_view_controls(tmp_path: Path) -> Non
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-@pytest.mark.parametrize("width", [390, 1200])
-def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -> None:
+@pytest.mark.parametrize("width,height", [(1372, 883), (855, 325), (411, 799)])
+def test_markdown_tables_match_github_across_views(
+  width: int, height: int, tmp_path: Path
+) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   markdown = (
     "| Label | Value |\n| :--- | ---: |\n| First | short |\n| Second | "
@@ -4001,7 +4003,7 @@ def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
       try:
-        page = browser.new_page(viewport={"width": width, "height": 700})
+        page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         for tab, selector in (
           ("messages", ".message-text table"),
@@ -4052,12 +4054,53 @@ def test_markdown_tables_match_github_across_views(width: int, tmp_path: Path) -
             path=str(tmp_path / f"markdown-table-{tab}-{width}.png"),
             animations="disabled",
           )
+          if tab == "reports":
+            fade = table.evaluate("""element =>
+              parseFloat(getComputedStyle(element).getPropertyValue('--edge-fade'))
+            """)
+            page.wait_for_function(
+              """fade =>
+              parseFloat(getComputedStyle(document.querySelector('#report table'))
+                .getPropertyValue('--edge-end')) >= fade
+            """,
+              arg=fade,
+            )
+            start = table.evaluate("""element => {
+              const style = getComputedStyle(element);
+              return {start: parseFloat(style.getPropertyValue('--edge-start')),
+                end: parseFloat(style.getPropertyValue('--edge-end')),
+                gradients: style.maskImage.split('linear-gradient(').length - 1};
+            }""")
+            assert start == {"start": 0, "end": fade, "gradients": 2}, start
           assert (
             table.evaluate(
               "el => { el.scrollLeft = el.scrollWidth; return el.scrollLeft; }"
             )
             > 0
           )
+          if tab == "reports":
+            page.wait_for_function(
+              """fade => {
+              const table = document.querySelector('#report table');
+              const style = getComputedStyle(table);
+              return parseFloat(style.getPropertyValue('--edge-start')) >= fade &&
+                parseFloat(style.getPropertyValue('--edge-end')) === 0;
+            }""",
+              arg=fade,
+            )
+            end = table.evaluate("""element => {
+              const style = getComputedStyle(element);
+              return {start: parseFloat(style.getPropertyValue('--edge-start')),
+                end: parseFloat(style.getPropertyValue('--edge-end')),
+                remaining: element.scrollWidth - element.clientWidth - element.scrollLeft,
+                overflow: style.overflowX};
+            }""")
+            expected = {"start": fade, "end": 0, "remaining": 0, "overflow": "auto"}
+            assert end == expected, end
+            page.screenshot(path=str(tmp_path / f"markdown-table-end-{width}.png"))
+            page.emulate_media(reduced_motion="reduce")
+            assert table.evaluate("el => getComputedStyle(el).maskImage") == "none"
+            assert table.evaluate("el => el.scrollLeft") > 0
       finally:
         browser.close()
   finally:
