@@ -1743,6 +1743,88 @@ def test_report_view_staleness_tracks_visible_browser_activity(tmp_path: Path) -
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+def test_task_search_highlights_matches_and_clear_collapses_details() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Task search regression")
+  app.tasks.create_task(
+    "alpha-task",
+    "Alpha <plan>",
+    size=3,
+    details=["Alpha detail", "Literal <manual> & safe"],
+  )
+  app.tasks.create_task("other-task", "Other work", size=3, details=["Other detail"])
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for width, height in ((1200, 700), (390, 844)):
+          context = browser.new_context(viewport={"width": width, "height": height})
+          page = context.new_page()
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-tasks").click()
+          row = page.locator('li.task[data-task-id="alpha-task"]')
+          search = page.locator("#task-search")
+          details = row.locator("details.task-details")
+          details.locator("summary").click()
+          assert details.get_attribute("open") is not None
+
+          search.fill("Alpha")
+          assert row.locator(".task-title mark.search-hit").all_text_contents() == [
+            "Alpha"
+          ]
+          assert row.locator(".task-detail mark.search-hit").all_text_contents() == [
+            "Alpha"
+          ]
+          assert details.get_attribute("open") is not None
+
+          search.fill("<manual>")
+          assert details.get_attribute("open") is not None
+          assert row.locator(".task-detail mark.search-hit").all_text_contents() == [
+            "<manual>"
+          ]
+          assert row.locator("manual").count() == 0
+          assert row.locator(".task-title mark.search-hit").count() == 0
+
+          search.fill("")
+          assert page.locator("details.task-details[open]").count() == 0
+          search.fill("<manual>")
+          assert details.get_attribute("open") is not None
+          search.fill("")
+          assert page.locator("details.task-details[open]").count() == 0
+          details.locator("summary").click()
+          assert details.get_attribute("open") is not None
+          page.locator("#task-type-filter").select_option("code")
+          assert details.get_attribute("open") is not None
+          context.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+def test_task_gate_shimmer_uses_two_blue_shades() -> None:
+  css = (ASSETS_DIR / "style.css").read_text()
+  rule = css.split('.task-title[data-gate-running="true"] {', 1)[1].split("}", 1)[0]
+  assert "#90caf9" in rule
+  assert "#42a5f5" in rule
+  assert "#dcefff" not in rule
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
   import base64
 

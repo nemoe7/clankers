@@ -1951,7 +1951,7 @@ code.msg-id {
 
 .task-title[data-gate-running="true"] {
   color: #90caf9;
-  background: linear-gradient(110deg, #90caf9 25%, #dcefff 50%, #90caf9 75%);
+  background: linear-gradient(110deg, #90caf9 25%, #42a5f5 50%, #90caf9 75%);
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;

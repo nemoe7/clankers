@@ -16,6 +16,7 @@ const openTaskDetails = new Set();
 let taskRenderEvents = null;
 
 export function expandTaskTarget(id) {
+  if (taskSearchQuery) openTaskDetails.clear();
   taskSearchQuery = "";
   taskTypeFilter = "all";
   visibleFinishedCount = Infinity;
@@ -87,6 +88,22 @@ function taskMatchesFilter(task) {
   return haystack.includes(taskSearchQuery);
 }
 
+function highlightTaskText(text) {
+  if (!taskSearchQuery) return escapeHtml(text);
+  const lowered = text.toLowerCase();
+  const parts = [];
+  let start = 0;
+  while (true) {
+    const index = lowered.indexOf(taskSearchQuery, start);
+    if (index === -1) break;
+    parts.push(escapeHtml(text.slice(start, index)));
+    parts.push(`<mark class="search-hit">${escapeHtml(text.slice(index, index + taskSearchQuery.length))}</mark>`);
+    start = index + taskSearchQuery.length;
+  }
+  parts.push(escapeHtml(text.slice(start)));
+  return parts.join("");
+}
+
 function renderTaskRow(task, selectedParentRefs) {
   const details = taskDetailLines(task);
   const count = details.length;
@@ -103,7 +120,7 @@ function renderTaskRow(task, selectedParentRefs) {
       <details class="task-details" data-task-id="${escapeHtml(task.id)}" ${isOpen ? "open" : ""}>
         <summary>${count} detail${count === 1 ? "" : "s"}</summary>
         <ul class="task-detail-list">
-          ${details.map((line) => `<li class="task-detail">${escapeHtml(line)}</li>`).join("")}
+          ${details.map((line) => `<li class="task-detail">${highlightTaskText(line)}</li>`).join("")}
         </ul>
       </details>
     `
@@ -111,7 +128,7 @@ function renderTaskRow(task, selectedParentRefs) {
 
   return `
     <li class="task" data-task-id="${escapeHtml(task.id)}">
-      <button type="button" class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}" data-parent-type="task" data-parent-id="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.title)}: task ${escapeHtml(task.id)} as message parent" aria-pressed="${selected ? "true" : "false"}" title="${selected ? "Remove" : "Select"} task as message parent">${escapeHtml(task.title)}</button>
+      <button type="button" class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}" data-parent-type="task" data-parent-id="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.title)}: task ${escapeHtml(task.id)} as message parent" aria-pressed="${selected ? "true" : "false"}" title="${selected ? "Remove" : "Select"} task as message parent">${highlightTaskText(task.title)}</button>
       ${formatTaskPhases(task)}
       ${detailsHtml}
     </li>
@@ -205,7 +222,9 @@ export function renderTasksView(container, state) {
 
   const searchEl = container.querySelector("#task-search");
   searchEl?.addEventListener("input", () => {
-    taskSearchQuery = searchEl.value.trim().toLowerCase();
+    const nextQuery = searchEl.value.trim().toLowerCase();
+    if (taskSearchQuery && !nextQuery) openTaskDetails.clear();
+    taskSearchQuery = nextQuery;
     renderTasksView(container, state);
   }, { signal });
 
@@ -216,13 +235,13 @@ export function renderTasksView(container, state) {
   }, { signal });
 
   for (const detailsEl of container.querySelectorAll("details.task-details")) {
-    detailsEl.addEventListener("toggle", () => {
+    detailsEl.querySelector("summary")?.addEventListener("click", () => {
       const id = detailsEl.dataset.taskId;
       if (!id) return;
       if (detailsEl.open) {
-        openTaskDetails.add(id);
-      } else {
         openTaskDetails.delete(id);
+      } else {
+        openTaskDetails.add(id);
       }
     }, { signal });
   }
