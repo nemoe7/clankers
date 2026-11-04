@@ -1131,6 +1131,8 @@ class SteeringApp:
     task = self.tasks.create_task(
       str(body.get("id", "")),
       str(body.get("title", "")),
+      size=body.get("size"),
+      priority=body.get("priority", "P3"),
       type=str(body.get("type", "code")),
       types=body.get("types"),
       status=str(body.get("status", "upcoming")),
@@ -1155,12 +1157,7 @@ class SteeringApp:
   def _handle_patch_task(
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
   ) -> tuple[int, Any]:
-    pos = body.get("position")
-    task = self.tasks.patch_task(
-      params["id"],
-      body,
-      position=int(pos) if pos is not None else None,
-    )
+    task = self.tasks.patch_task(params["id"], body)
     _, blocked = self.tasks.get_task(task.id)
     return (int(HTTPStatus.OK), {"task": task.to_dict(blocked=blocked)})
 

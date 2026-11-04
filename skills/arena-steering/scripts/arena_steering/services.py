@@ -648,7 +648,7 @@ class TaskService:
     return False
 
   def list_tasks(self, *, include_finished: bool = False) -> list[tuple[Task, bool]]:
-    queue = self._tasks.list_tasks()
+    queue = self._enforce_dependency_order(self._tasks.list_tasks())
     task_map = {item.id: item for item in queue}
     report_map = {item.id: item for item in self._reports.list_reports()}
     result: list[tuple[Task, bool]] = []
@@ -672,6 +672,8 @@ class TaskService:
     task_id: str,
     title: str,
     *,
+    size: int,
+    priority: str = "P3",
     type: str = "code",
     types: list[str] | None = None,
     status: str = "upcoming",
@@ -692,6 +694,9 @@ class TaskService:
     task = Task(
       id=task_id,
       title=title,
+      size=size,
+      priority=priority,
+      insertion_order=self._tasks.next_task_insertion_order(),
       type=type,
       types=types,
       status=status,
@@ -810,7 +815,7 @@ class TaskService:
       if task_id in item.task_ids:
         item.task_ids = [dep for dep in item.task_ids if dep != task_id]
         item.modified_at = now
-    self._tasks.save_task_queue(remaining)
+    self._tasks.save_task_queue(self._enforce_dependency_order(remaining))
     return True
 
   @_transactional_task_write
@@ -1013,10 +1018,10 @@ class TaskService:
     return self.patch_task(task_id, {"types": types})
 
   @_transactional_task_write
-  def patch_task(
-    self, task_id: str, changes: dict[str, Any], *, position: int | None = None
-  ) -> Task:
-    """Apply partial updates and optional queue position change for HTTP PATCH."""
+  def patch_task(self, task_id: str, changes: dict[str, Any]) -> Task:
+    """Apply validated updates and derive queue rank from priority and size."""
+    if "position" in changes or "insertion_order" in changes:
+      raise ValueError("Task position and insertion_order are not manually editable")
     queue, target = self._load_queue_and_target(task_id)
     if any(
       key in changes
@@ -1086,6 +1091,8 @@ class TaskService:
       status=target.status if finishing else str(changes.get("status", target.status)),
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
+      priority=changes.get("priority", target.priority),
+      size=changes.get("size", target.size),
       links=merged_links,
     )
     self._validate_details(updated)
@@ -1093,10 +1100,6 @@ class TaskService:
     if finishing:
       updated = self._complete_phase(updated, queue, changes.get("commit_hash"))
     new_queue = [updated if item.id == task_id else item for item in queue]
-    if position is not None:
-      new_queue = [item for item in new_queue if item.id != task_id]
-      clamped = max(0, min(int(position), len(new_queue)))
-      new_queue.insert(clamped, updated)
     ordered = self._enforce_dependency_order(new_queue)
     self._tasks.save_task_queue(ordered)
     return updated
@@ -1151,8 +1154,32 @@ class TaskService:
 
   @staticmethod
   def _enforce_dependency_order(tasks: list[Task]) -> list[Task]:
-    """Place every dependent task behind all of its dependencies in the queue."""
-    task_map = {item.id: item for item in tasks}
+    """Rank upcoming tasks while promoting prerequisites and preserving history."""
+    all_tasks = {item.id: item for item in tasks}
+    cycle_state: dict[str, int] = {}
+
+    def check_cycle(task_id: str) -> None:
+      state = cycle_state.get(task_id, 0)
+      if state == 2:
+        return
+      if state == 1:
+        raise ValueError(f"Task dependency cycle detected at {task_id!r}")
+      cycle_state[task_id] = 1
+      for dep_id in all_tasks[task_id].deps:
+        if dep_id in all_tasks:
+          check_cycle(dep_id)
+      cycle_state[task_id] = 2
+
+    for item in tasks:
+      check_cycle(item.id)
+
+    upcoming = {item.id: item for item in tasks if item.status != "finished"}
+    finished = sorted(
+      (item for item in tasks if item.status == "finished"),
+      key=lambda task: (
+        task.insertion_order if task.insertion_order is not None else len(tasks)
+      ),
+    )
     visited: dict[str, int] = {}
     ordered: list[Task] = []
 
@@ -1163,16 +1190,23 @@ class TaskService:
       if state == 1:
         raise ValueError(f"Task dependency cycle detected at {task_id!r}")
       visited[task_id] = 1
-      task = task_map[task_id]
+      task = upcoming[task_id]
       for dep_id in task.deps:
-        if dep_id in task_map:
+        if dep_id in upcoming:
           visit(dep_id)
       visited[task_id] = 2
       ordered.append(task)
 
-    for item in tasks:
+    for item in sorted(
+      upcoming.values(),
+      key=lambda task: (
+        int(task.priority[1]),
+        task.size,
+        task.insertion_order if task.insertion_order is not None else len(tasks),
+      ),
+    ):
       visit(item.id)
-    return ordered
+    return [*ordered, *finished]
 
 
 class ReportService:

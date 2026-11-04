@@ -97,6 +97,9 @@ class TaskRepository(Protocol):
   def list_tasks(self) -> list[Task]:
     """Return all tasks in queue order."""
 
+  def next_task_insertion_order(self) -> int:
+    """Allocate a durable, never-reused insertion rank."""
+
   def save_task_queue(self, tasks: list[Task]) -> list[Task]:
     """Atomically replace the ordered task queue."""
 

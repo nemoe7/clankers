@@ -465,7 +465,9 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Nuu UI repairs")
-  app.tasks.create_task("ref012", "Reference task", details=["Review reference"])
+  app.tasks.create_task(
+    "ref012", "Reference task", size=3, details=["Review reference"]
+  )
   checklist = (
     '- [ ] Review **one** & "two" &lt;three&gt; [details](https://example.com) `ref012`\n'
     "  - [x] Nested `item`\n\nPlain ref012 and `ref012/extra` stay unlinked."
@@ -477,6 +479,7 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
   app.tasks.create_task(
     "ref013",
     "Linked task",
+    size=3,
     details=["See `ref012`, plain ref012, `ref012/extra`, and ``ref012``"],
     msg_ids=["cc0401"],
   )
@@ -1274,7 +1277,7 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
     ),
   )
   app.tasks.create_task(
-    "work", "Review choice", details=["Review"], report_ids=["choice"]
+    "work", "Review choice", size=3, details=["Review"], report_ids=["choice"]
   )
   app.reports.submit_answer("choice", {"choice": answer}, answer_id="ba2001")
   app.reports.ack_answer("choice", "ba2001", "Read")
@@ -1422,7 +1425,7 @@ def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Task divider regression")
-  app.tasks.create_task("work", "Work", details=["Review"])
+  app.tasks.create_task("work", "Work", size=3, details=["Review"])
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -1965,7 +1968,7 @@ def test_retained_message_references_follow_loaded_targets() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Message reference paging regression")
-  app.tasks.create_task("00000a", "Referenced task", details=["Review"])
+  app.tasks.create_task("00000a", "Referenced task", size=3, details=["Review"])
   for index in range(45):
     body = f"Message {index}\n\n" + "Long scrolling content. " * 40
     if index == 44:
@@ -2889,7 +2892,7 @@ def test_state_refresh_preserves_unaffected_view_controls(tmp_path: Path) -> Non
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="State refresh DOM preservation")
-  app.tasks.create_task("initial-work", "Work already here", details=["Review"])
+  app.tasks.create_task("initial-work", "Work already here", size=3, details=["Review"])
   app.reports.publish_report(
     "draft",
     "Draft answer",
@@ -2939,7 +2942,7 @@ def test_state_refresh_preserves_unaffected_view_controls(tmp_path: Path) -> Non
         task_search.focus()
         original_search = task_search.element_handle()
         app.tasks.create_task(
-          "external-work", "Work from elsewhere", details=["Review"]
+          "external-work", "Work from elsewhere", size=3, details=["Review"]
         )
         page.clock.fast_forward(3100)
         page.locator('li.task[data-task-id="external-work"]').wait_for()

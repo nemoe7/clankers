@@ -26,18 +26,19 @@ SECOND_COMMIT = "b" * 40
 
 
 def test_ordered_phases_survive_model_store_and_sync(tmp_path: Path) -> None:
-  task = Task(id="chain", title="Report then code", types=["report", "code"])
+  task = Task(size=3, id="chain", title="Report then code", types=["report", "code"])
   assert task.type == "report"
   assert task.to_dict()["current_phase"] == "report"
   assert task.to_dict()["remaining_phases"] == ["code"]
   assert Task.from_dict(task.to_dict()) == task
   with pytest.raises(ValueError, match="phase|type"):
-    Task(id="empty", title="Empty", types=[])
+    Task(size=3, id="empty", title="Empty", types=[])
 
   source = SqliteStore(tmp_path / "source.sqlite3")
   source.save_task_queue(
     [
       Task(
+        size=3,
         id="chain",
         title="Report then code",
         types=["report", "code"],
@@ -60,8 +61,8 @@ def test_ordered_phases_survive_model_store_and_sync(tmp_path: Path) -> None:
   legacy = SqliteStore(tmp_path / "legacy.sqlite3")
   with legacy.transaction():
     legacy._conn.execute(
-      "INSERT INTO tasks (position, id, title, type, status, scope, modified_at) "
-      "VALUES (0, 'old', 'Old task', 'docs', 'finished', '', '2026-11-01T00:00:00Z')"
+      "INSERT INTO tasks (position, size, insertion_order, id, title, type, status, scope, modified_at) "
+      "VALUES (0, 3, 0, 'old', 'Old task', 'docs', 'finished', '', '2026-11-01T00:00:00Z')"
     )
   old = legacy.get_task("old")
   assert old.types == ["docs"]
@@ -84,6 +85,8 @@ def test_existing_task_table_migrates_to_single_phase(tmp_path: Path) -> None:
       "VALUES (0, 'old', 'Old task', 'code', 'upcoming', '', '[\"Review\"]', '2026-11-01T00:00:00Z')"
     )
   store = SqliteStore(database)
+  with store.transaction():
+    store._conn.execute("UPDATE tasks SET size=3 WHERE id='old'")
   assert store.get_task("old").types == ["code"]
   assert store.get_task("old").phase_index == 0
   store.save_task_queue(store.list_tasks())
@@ -102,6 +105,7 @@ def test_report_then_code_advances_without_waiting_for_its_old_report() -> None:
   created = tasks.create_task(
     "chain",
     "Review and build",
+    size=3,
     types=["report", "code"],
     details=["Build after the report."],
     report_ids=["decision"],
@@ -135,7 +139,9 @@ def test_phase_evidence_is_required_unique_and_immutable() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
   tasks = TaskService(store, store, commit_verifier=lambda commit: commit)
-  tasks.create_task("work", "Code then docs", types=["code", "docs"], details=["Ship."])
+  tasks.create_task(
+    "work", "Code then docs", size=3, types=["code", "docs"], details=["Ship."]
+  )
   with pytest.raises(ValueError, match="commit"):
     tasks.finish_phase("work")
   first = tasks.finish_phase("work", commit_hash=FIRST_COMMIT)
@@ -150,16 +156,18 @@ def test_phase_evidence_is_required_unique_and_immutable() -> None:
   assert tasks.get_task("work")[0].phase_evidence == [FIRST_COMMIT, None]
   done = tasks.patch_task("work", {"status": "finished", "commit_hash": SECOND_COMMIT})
   assert done.status == "finished"
-  tasks.create_task("other", "Another change", type="code", details=["Ship."])
+  tasks.create_task("other", "Another change", size=3, type="code", details=["Ship."])
   with pytest.raises(ValueError, match="unique|already"):
     tasks.finish_phase("other", commit_hash=SECOND_COMMIT)
   assert tasks.get_task("other")[0].status == "upcoming"
   with pytest.raises(ValueError, match="upcoming|finish"):
     tasks.create_task(
-      "bypass", "Bypass", type="code", status="finished", details=["Ship."]
+      "bypass", "Bypass", size=3, type="code", status="finished", details=["Ship."]
     )
   reports.publish_report("decision", "Decision", QUESTION)
-  tasks.create_task("report-work", "Report first", type="report", details=["Review."])
+  tasks.create_task(
+    "report-work", "Report first", size=3, type="report", details=["Review."]
+  )
   with pytest.raises(ValueError, match="report"):
     tasks.finish_phase("report-work")
   tasks.mod_links_add("report-work", "decision", link_type="report")
@@ -175,6 +183,7 @@ def test_report_rename_preserves_finished_phase_evidence() -> None:
   tasks.create_task(
     "chain",
     "Report then operate",
+    size=3,
     types=["report", "ops"],
     details=["Review."],
     report_ids=["decision"],
@@ -197,12 +206,13 @@ def test_report_id_that_looks_like_commit_is_not_duplicate_commit() -> None:
   tasks.create_task(
     "report-work",
     "Report",
+    size=3,
     type="report",
     details=["Review."],
     report_ids=[FIRST_COMMIT],
   )
   tasks.finish_phase("report-work")
-  tasks.create_task("code-work", "Code", type="code", details=["Ship."])
+  tasks.create_task("code-work", "Code", size=3, type="code", details=["Ship."])
   assert tasks.finish_phase("code-work", commit_hash=FIRST_COMMIT).status == "finished"
   store.close()
 
@@ -218,6 +228,7 @@ def test_http_task_create_and_patch_expose_phase_progress(tmp_path: Path) -> Non
     {
       "id": "chain",
       "title": "Report then code",
+      "size": 3,
       "types": ["report", "code"],
       "details": ["Build."],
       "report_ids": ["decision"],
@@ -289,6 +300,7 @@ def test_browser_shows_faded_finished_phase_chip(tmp_path: Path) -> None:
   app.tasks.create_task(
     "chain",
     "Review then operate",
+    size=3,
     types=["report", "ops"],
     details=["Review."],
     report_ids=["decision"],
@@ -356,9 +368,11 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
   from arena_steering.git_safety import DirtyTreeError
 
   store, messages, tasks, _ = cli.open_services(state_dir)
-  tasks.create_task("review", "Review", type="misc", details=["Review."])
+  tasks.create_task("review", "Review", size=3, type="misc", details=["Review."])
   for phase_type in ("ops", "report", "code", "docs"):
-    tasks.create_task(phase_type, phase_type, type=phase_type, details=["Review."])
+    tasks.create_task(
+      phase_type, phase_type, size=3, type=phase_type, details=["Review."]
+    )
   assert not git("status", "--porcelain=v1", "--untracked-files=all")
   (checkout / "unfinished.txt").write_text("dirty")
   for task_id in ("review", "ops", "report", "code", "docs"):

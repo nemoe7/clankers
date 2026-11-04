@@ -17,6 +17,8 @@ from typing import Any
 from urllib.parse import unquote
 
 from .models import (
+  TASK_PRIORITIES,
+  TASK_SIZES,
   TASK_STATUSES,
   Attachment,
   Message,
@@ -119,6 +121,9 @@ class SqliteStore:
 
         CREATE TABLE IF NOT EXISTS tasks (
           position INTEGER NOT NULL,
+          priority TEXT NOT NULL DEFAULT 'P3' CHECK (priority IN ('P1','P2','P3','P4','P5')),
+          size INTEGER NOT NULL CHECK (size IN (1,2,3,5,8,13,21,34)),
+          insertion_order INTEGER NOT NULL CHECK (insertion_order >= 0),
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
           type TEXT NOT NULL,
@@ -238,6 +243,23 @@ class SqliteStore:
       if "phase_evidence_json" not in task_cols:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN phase_evidence_json TEXT NOT NULL DEFAULT '[]'"
+        )
+      if "priority" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'P3' "
+          "CHECK (priority IN ('P1','P2','P3','P4','P5'))"
+        )
+      if "size" not in task_cols:
+        # Existing work needs individual estimates. Never guess a legacy size.
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN size INTEGER CHECK (size IN (1,2,3,5,8,13,21,34))"
+        )
+      if "insertion_order" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN insertion_order INTEGER CHECK (insertion_order >= 0)"
+        )
+        self._conn.execute(
+          "UPDATE tasks SET insertion_order = position WHERE insertion_order IS NULL"
         )
       cols = {
         row["name"]
@@ -746,11 +768,43 @@ class SqliteStore:
       rows = self._conn.execute("SELECT * FROM tasks ORDER BY position ASC").fetchall()
     return [self._row_to_task(row) for row in rows]
 
+  def next_task_insertion_order(self) -> int:
+    """Allocate a never-reused insertion rank, including after deletions."""
+    with self.transaction():
+      highest = self._conn.execute("SELECT MAX(insertion_order) FROM tasks").fetchone()[
+        0
+      ]
+      next_order = max(
+        int(highest) + 1 if highest is not None else 0,
+        int(self.get_meta("task_insertion_next", "0") or "0"),
+      )
+      self.set_meta("task_insertion_next", str(next_order + 1))
+      return next_order
+
   def save_task_queue(self, tasks: list[Task]) -> list[Task]:
     with self.transaction():
       previous = {
         str(row["id"]): row for row in self._conn.execute("SELECT * FROM tasks")
       }
+      assigned_orders: set[int] = set()
+      for task in tasks:
+        prior = previous.get(task.id)
+        if prior is not None:
+          existing_order = int(prior["insertion_order"])
+          if (
+            task.insertion_order is not None and task.insertion_order != existing_order
+          ):
+            raise ValueError("Task.insertion_order cannot be changed")
+          task.insertion_order = existing_order
+        elif task.insertion_order is None:
+          task.insertion_order = self.next_task_insertion_order()
+        else:
+          next_order = int(self.get_meta("task_insertion_next", "0") or "0")
+          if task.insertion_order >= next_order:
+            self.set_meta("task_insertion_next", str(task.insertion_order + 1))
+        if task.insertion_order in assigned_orders:
+          raise ValueError("Duplicate Task.insertion_order in queue")
+        assigned_orders.add(task.insertion_order)
       self._conn.execute("DELETE FROM tasks")
       for index, task in enumerate(tasks):
         task.details = list(dict.fromkeys(line.strip() for line in task.details))
@@ -768,13 +822,16 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO tasks (
-            position, id, title, type, types_json, phase_index, phase_evidence_json,
-            status, scope, details_json, links_json, msg_ids_json, report_ids_json,
-            deps_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            position, priority, size, insertion_order, id, title, type, types_json,
+            phase_index, phase_evidence_json, status, scope, details_json, links_json,
+            msg_ids_json, report_ids_json, deps_json, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
+            task.priority,
+            task.size,
+            task.insertion_order,
             task.id,
             task.title,
             task.type,
@@ -1063,7 +1120,7 @@ class SqliteStore:
             result["skipped"].append("")
             continue
           current = self._conn.execute(
-            f"SELECT modified_at FROM {table} WHERE id=?", (row_id,)
+            f"SELECT * FROM {table} WHERE id=?", (row_id,)
           ).fetchone()
           incoming_stamp = str(data.get("modified_at") or "")
           if current is not None and _timestamp_us(incoming_stamp) <= _timestamp_us(
@@ -1084,6 +1141,46 @@ class SqliteStore:
             ):
               result["skipped"].append(row_id)
               continue
+          if table == "tasks":
+            if current is None and "size" not in data:
+              raise ValueError(
+                f"Task {row_id!r} needs an individual Fibonacci size before import"
+              )
+            if current is not None:
+              # Once created, insertion order cannot be reset by a remote edit.
+              data.pop("insertion_order", None)
+              if current["size"] is None and "size" not in data:
+                raise ValueError(f"Task {row_id!r} needs an individual Fibonacci size")
+            if "priority" in data and (
+              not isinstance(data["priority"], str)
+              or data["priority"] not in TASK_PRIORITIES
+            ):
+              raise ValueError(f"Invalid Task.priority: {data['priority']!r}")
+            if "size" in data and (
+              not isinstance(data["size"], int)
+              or isinstance(data["size"], bool)
+              or data["size"] not in TASK_SIZES
+            ):
+              raise ValueError(f"Invalid Task.size: {data['size']!r}")
+            if current is None:
+              order = data.get("insertion_order")
+              if order is not None and (
+                not isinstance(order, int) or isinstance(order, bool) or order < 0
+              ):
+                raise ValueError(f"Invalid Task.insertion_order: {order!r}")
+              conflict = (
+                order is not None
+                and self._conn.execute(
+                  "SELECT 1 FROM tasks WHERE insertion_order = ?", (order,)
+                ).fetchone()
+                is not None
+              )
+              if order is None or conflict:
+                order = self.next_task_insertion_order()
+              data["insertion_order"] = order
+              next_order = int(self.get_meta("task_insertion_next", "0") or "0")
+              if order >= next_order:
+                self.set_meta("task_insertion_next", str(order + 1))
           if table == "messages":
             if current is None:
               stamp = data.get("written_at")
@@ -1251,6 +1348,9 @@ class SqliteStore:
       "status": status,
       "scope": str(row["scope"]),
       "details": [str(item) for item in json.loads(row["details_json"] or "[]")],
+      "priority": row["priority"],
+      "size": row["size"],
+      "insertion_order": row["insertion_order"],
       "allow_long_details": True,
       "modified_at": str(row["modified_at"]),
     }

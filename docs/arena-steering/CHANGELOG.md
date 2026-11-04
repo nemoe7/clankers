@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `models.py`, `services.py`, `store.py`, `cli.py`, `server.py`, `assets/tasks-view.js`: Require Fibonacci sizes and rank upcoming tasks by priority, size, and insertion order. Keep dependencies ahead, preserve finished history, show rank fields only in details, and reject manual position edits.
+
 - `blocked_bash.py`, `cli.py`, `scripts/install.sh`: Append unredacted blocked Bash calls to permission-restricted local JSONL, including failed hook pushes.
 
 - `blocked_bash.py`, `server.py`, `assets/`: Show full blocked Bash entries in a local modal beside the violation flag. Render each field as text and exclude the log from state sync and reports.

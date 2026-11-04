@@ -123,11 +123,14 @@ def test_task_lists_only_titles_and_ids_but_single_task_keeps_details() -> None:
   tasks.create_task(
     "queued-task",
     "Draft preview",
+    size=3,
     type="ops",
     scope="Private scope",
     details=["Long details"],
   )
-  tasks.create_task("done-task", "Shipped", type="ops", details=["Finished details"])
+  tasks.create_task(
+    "done-task", "Shipped", size=3, type="ops", details=["Finished details"]
+  )
   tasks.finish_phase("done-task")
   store.close()
 
@@ -268,7 +271,7 @@ def test_task_status_api_and_cli_reject_noncanonical_values(
   state_dir = cli.resolve_state_dir()
   store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
-  base = {"id": "work", "title": "Work", "details": ["Do work"]}
+  base = {"id": "work", "title": "Work", "size": 3, "details": ["Do work"]}
   status, _ = app.dispatch("POST", "/tasks", {**base, "status": invalid_status})
   assert status == HTTPStatus.BAD_REQUEST
   assert app.dispatch("POST", "/tasks", base)[0] == HTTPStatus.CREATED
@@ -283,6 +286,8 @@ def test_task_status_api_and_cli_reject_noncanonical_values(
     state_dir,
     "task",
     "new",
+    "-z",
+    "3",
     "another",
     "Another",
     "-d",
@@ -308,9 +313,11 @@ def test_tasks_view_uses_first_unblocked_upcoming_task(tmp_path: Path) -> None:
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
-  app.tasks.create_task("blocked", "Blocked", details=["Wait"], report_ids=["decision"])
-  app.tasks.create_task("ready", "Ready", details=["Work"])
-  app.tasks.create_task("legacy", "Legacy", details=["Work"])
+  app.tasks.create_task(
+    "blocked", "Blocked", size=3, details=["Wait"], report_ids=["decision"]
+  )
+  app.tasks.create_task("ready", "Ready", size=3, details=["Work"])
+  app.tasks.create_task("legacy", "Legacy", size=3, details=["Work"])
   with store.transaction():
     store._conn.execute("UPDATE tasks SET status = 'in_progress' WHERE id = 'legacy'")
   code, payload = app.dispatch("GET", "/tasks")
@@ -387,7 +394,9 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
   )
   assert status == int(HTTPStatus.CONFLICT) and not stale["message"]["replies_seen"]
 
-  status, _ = app.dispatch("POST", "/tasks", {"id": "empty-task", "title": "Empty"})
+  status, _ = app.dispatch(
+    "POST", "/tasks", {"id": "empty-task", "title": "Empty", "size": 3}
+  )
   assert status == int(HTTPStatus.BAD_REQUEST)
 
   status, t_created = app.dispatch(
@@ -396,6 +405,7 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
     {
       "id": "build-router",
       "title": "Build HTTP router",
+      "size": 3,
       "type": "code",
       "details": ["Build routes."],
     },
@@ -536,7 +546,7 @@ def test_state_syncs_same_second_task_and_report_updates(tmp_path: Path) -> None
   app = SteeringApp(source)
   app.tasks._clock = FixedClock()
   app.reports._clock = FixedClock()
-  app.tasks.create_task("work", "Work", details=["Review"])
+  app.tasks.create_task("work", "Work", size=3, details=["Review"])
   app.reports.publish_report("report", "Report", "# Report")
   _, snapshot = app.dispatch("GET", "/state/snapshot")
   target.merge_rows(snapshot)
@@ -1231,6 +1241,8 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   code, out, _ = _run_cli(
     state_dir,
     "ack",
+    "-z",
+    "3",
     MSG_ID_CLI,
     ACK_MARKDOWN,
     "-i",
@@ -1255,13 +1267,15 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
     _run_cli(state_dir, "msg", "show", MSG_ID_CLI)
   assert invalid_args.value.code == 2
 
-  code, _, err = _run_cli(state_dir, "task", "new", "empty-task", "Empty")
+  code, _, err = _run_cli(state_dir, "task", "new", "-z", "3", "empty-task", "Empty")
   expected_error = "at least one detail"
   assert code != 0 and expected_error in err
   code, out, _ = _run_cli(
     state_dir,
     "task",
     "new",
+    "-z",
+    "3",
     TASK_ID_BASE,
     "Base task",
     "-T",
@@ -1621,6 +1635,8 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
     state_dir,
     "task",
     "new",
+    "-z",
+    "3",
     "base-task",
     "Base task",
     "-T",
@@ -1634,6 +1650,8 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
     state_dir,
     "task",
     "new",
+    "-z",
+    "3",
     "child-task",
     "Child task",
     "-d",
@@ -2134,7 +2152,7 @@ def test_cli_single_task_keeps_persisted_answer_details(tmp_path: Path) -> None:
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
-  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  tasks.create_task("work", "Work", size=3, details=["Review"], report_ids=["decision"])
   answer = reports.submit_answer("decision", {"select": "Yes"}, answer_id="aa5511")
   reports.ack_answer("decision", answer.id, "Read")
   reports.remove_report("decision")
@@ -2165,6 +2183,8 @@ def test_ack_task_rolls_back_both_on_failure(
   code, out, _ = _run_cli(
     state_dir,
     "ack",
+    "-z",
+    "3",
     "ab7701",
     "Received",
     "-i",
@@ -2200,6 +2220,8 @@ def test_ack_answer_creates_task_with_report_link(tmp_path: Path) -> None:
   code, out, err = _run_cli(
     state_dir,
     "ack",
+    "-z",
+    "3",
     answer.id,
     "Received",
     "-i",
@@ -2234,6 +2256,7 @@ def _seed_report_removal_batch(state_dir: Path) -> str:
   tasks.create_task(
     "linked-work",
     "Linked work",
+    size=3,
     type="ops",
     details=["Review reports"],
     report_ids=["ready", "protected", "empty"],
@@ -2398,6 +2421,8 @@ def test_cli_ack_batch_rejects_task_creation_without_changes(tmp_path: Path) -> 
   code, _, err = _run_cli(
     state_dir,
     "ack",
+    "-z",
+    "3",
     "ab1001",
     "ab1003",
     "One shared reply",
@@ -2431,7 +2456,18 @@ def test_concurrent_ack_task_creation_preserves_both(tmp_path: Path) -> None:
     start.wait()
     msg_id, task_id = pair
     return _run_cli(
-      state_dir, "ack", msg_id, "Received", "-i", task_id, "-t", "Task", "-d", "Do work"
+      state_dir,
+      "ack",
+      "-z",
+      "3",
+      msg_id,
+      "Received",
+      "-i",
+      task_id,
+      "-t",
+      "Task",
+      "-d",
+      "Do work",
     )
 
   with ThreadPoolExecutor(max_workers=2) as pool:
@@ -2485,6 +2521,7 @@ def test_gate_links_block_only_while_run_is_active() -> None:
     {
       "id": "gate-task",
       "title": "Gate task",
+      "size": 3,
       "details": ["Check it"],
       "gate_names": ["verify"],
     },
@@ -2514,7 +2551,9 @@ def test_run_start_rolls_back_link_on_launch_failure(
 ) -> None:
   state_dir = cli.resolve_state_dir()
   assert (
-    _run_cli(state_dir, "task", "new", "gate-task", "Gate task", "-d", "Check it")[0]
+    _run_cli(
+      state_dir, "task", "new", "-z", "3", "gate-task", "Gate task", "-d", "Check it"
+    )[0]
     == 0
   )
 
@@ -2539,7 +2578,9 @@ def test_linked_run_blocks_until_verdict(tmp_path: Path, exit_code: int) -> None
   state_dir = cli.resolve_state_dir()
   release = tmp_path / "release"
   assert (
-    _run_cli(state_dir, "task", "new", "gate-task", "Gate task", "-d", "Check it")[0]
+    _run_cli(
+      state_dir, "task", "new", "-z", "3", "gate-task", "Gate task", "-d", "Check it"
+    )[0]
     == 0
   )
   command = (
@@ -2587,7 +2628,9 @@ def test_gate_links_survive_concurrent_task_edits() -> None:
 
   state_dir = cli.resolve_state_dir()
   assert (
-    _run_cli(state_dir, "task", "new", "gate-task", "Gate task", "-d", "Check it")[0]
+    _run_cli(
+      state_dir, "task", "new", "-z", "3", "gate-task", "Gate task", "-d", "Check it"
+    )[0]
     == 0
   )
   barrier = Barrier(2)
@@ -2875,7 +2918,7 @@ def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> N
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
-  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  tasks.create_task("work", "Work", size=3, details=["Review"], report_ids=["decision"])
   answer = reports.submit_answer("decision", {"select": "Yes"}, answer_id="ab8801")
   reports.ack_answer("decision", answer.id, "Read")
   store.close()
@@ -3016,7 +3059,7 @@ def test_cli_pr_update_blocks_session_local_ids(
   state_dir = cli.resolve_state_dir()
   store, messages, tasks, reports = cli.open_services(state_dir)
   messages.send_message("Hidden note", msg_id="aa11bb", hidden=True)
-  tasks.create_task("review-task", "Review", details=["Review"])
+  tasks.create_task("review-task", "Review", size=3, details=["Review"])
   reports.publish_report(
     "decision-report",
     "Decision",
@@ -3146,10 +3189,14 @@ def test_cli_bare_task_shows_first_unblocked_without_details(tmp_path: Path) -> 
     'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
   )
   tasks.create_task(
-    "blocked-task", "Blocked", details=["Waiting"], report_ids=["waiting-report"]
+    "blocked-task",
+    "Blocked",
+    size=3,
+    details=["Waiting"],
+    report_ids=["waiting-report"],
   )
   tasks.create_task(
-    "ready-task", "Ready", scope="Ready scope", details=["Detailed step"]
+    "ready-task", "Ready", size=3, scope="Ready scope", details=["Detailed step"]
   )
   store.close()
 
@@ -3175,6 +3222,8 @@ def test_cli_chain_creation_and_phase_finish() -> None:
     state_dir,
     "task",
     "new",
+    "-z",
+    "3",
     "chain",
     "Review then operate",
     "-d",
@@ -3212,7 +3261,7 @@ def test_cli_bare_task_handles_no_unblocked_work(tmp_path: Path) -> None:
   assert code == 0, err
   assert NO_CURRENT_TASK in out
   store, _, tasks, _ = cli.open_services(state_dir)
-  tasks.create_task("done-task", "Done", type="ops", details=["Done"])
+  tasks.create_task("done-task", "Done", size=3, type="ops", details=["Done"])
   tasks.finish_phase("done-task")
   store.close()
   code, out, err = _run_cli(state_dir, "task", "--deets")
@@ -3223,11 +3272,11 @@ def test_cli_bare_task_handles_no_unblocked_work(tmp_path: Path) -> None:
 def test_cli_bare_task_excludes_non_upcoming_items(
   monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-  finished = cli.Task("done-task", "Done", status="finished")
-  legacy = cli.Task("legacy-task", "Legacy")
+  finished = cli.Task("done-task", "Done", size=3, status="finished")
+  legacy = cli.Task("legacy-task", "Legacy", size=3)
   legacy.status = "legacy"
-  blocked = cli.Task("blocked-task", "Blocked")
-  ready = cli.Task("ready-task", "Ready")
+  blocked = cli.Task("blocked-task", "Blocked", size=3)
+  ready = cli.Task("ready-task", "Ready", size=3)
   items = [(finished, False), (legacy, False), (blocked, True), (ready, False)]
   monkeypatch.setattr(cli.TaskService, "list_tasks", lambda self: items)
 
@@ -3249,7 +3298,7 @@ def test_cli_ack_reports_only_actual_task_detail_additions(tmp_path: Path) -> No
     "Decision",
     '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
   )
-  tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  tasks.create_task("work", "Work", size=3, details=["Review"], report_ids=["decision"])
   answer = reports.submit_answer("decision", {"note": "Yes"}, answer_id="fd0001")
   store.close()
   code, first, error = _run_cli(state_dir, "ack", answer.id, "Received")
@@ -3271,9 +3320,13 @@ def test_http_ack_reports_only_actual_task_detail_additions() -> None:
     "Decision",
     '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
   )
-  app.tasks.create_task("one", "One", details=["Review"], report_ids=["decision"])
-  app.tasks.create_task("two", "Two", details=["Note: Yes"], report_ids=["decision"])
-  app.tasks.create_task("other", "Other", details=["Review"])
+  app.tasks.create_task(
+    "one", "One", size=3, details=["Review"], report_ids=["decision"]
+  )
+  app.tasks.create_task(
+    "two", "Two", size=3, details=["Note: Yes"], report_ids=["decision"]
+  )
+  app.tasks.create_task("other", "Other", size=3, details=["Review"])
   status, first = app.dispatch(
     "POST", "/reports/decision/answers", {"id": "aa0021", "values": {"note": "Yes"}}
   )
@@ -3320,7 +3373,9 @@ def test_http_ack_rolls_back_answer_and_details_on_save_failure(
     "Decision",
     '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
   )
-  app.tasks.create_task("work", "Work", details=["Review"], report_ids=["decision"])
+  app.tasks.create_task(
+    "work", "Work", size=3, details=["Review"], report_ids=["decision"]
+  )
   app.reports.submit_answer("decision", {"note": "Yes"}, answer_id="aa0024")
   original = store.save_task_queue
 
@@ -3358,7 +3413,9 @@ def test_cli_multi_ack_rolls_back_all_detail_additions(
       report_id,
       '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
     )
-    tasks.create_task(report_id, report_id, details=["Review"], report_ids=[report_id])
+    tasks.create_task(
+      report_id, report_id, size=3, details=["Review"], report_ids=[report_id]
+    )
     reports.submit_answer(report_id, {"note": report_id}, answer_id=answer_id)
   store.close()
   original = SqliteStore.save_task_queue

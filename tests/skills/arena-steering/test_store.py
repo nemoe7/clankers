@@ -58,6 +58,7 @@ def test_message_strict_hex_id_and_status_ladder() -> None:
 
 def test_task_validation_and_detail_limit() -> None:
   task = Task(
+    size=3,
     id="core-models",
     title="Build models and store",
     type="code",
@@ -87,16 +88,16 @@ def test_task_validation_and_detail_limit() -> None:
   assert Task.from_dict(task.to_dict()) == task
 
   with pytest.raises(ValueError, match="120 characters"):
-    Task(id="bad-detail", title="Too long", details=["x" * 121])
+    Task(size=3, id="bad-detail", title="Too long", details=["x" * 121])
 
   with pytest.raises(ValueError, match="depend on itself"):
-    Task(id="self-dep", title="Cycle", links={"task_ids": ["self-dep"]})
+    Task(size=3, id="self-dep", title="Cycle", links={"task_ids": ["self-dep"]})
 
 
 @pytest.mark.parametrize("status", ["in_progress", "blocked", "other"])
 def test_task_status_rejects_other_values(status: str) -> None:
   with pytest.raises(ValueError, match="Invalid Task.status"):
-    Task(id="work", title="Work", status=status, details=["Do work"])
+    Task(size=3, id="work", title="Work", status=status, details=["Do work"])
 
 
 def test_report_field_auto_kebab_id_and_choice_rules() -> None:
@@ -146,8 +147,8 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
   store.save_message(msg)
   assert store.list_messages(unread_only=True) == []
 
-  t1 = Task(id="task-a", title="First task", modified_at=now)
-  t2 = Task(id="task-b", title="Second task", deps=["task-a"], modified_at=now)
+  t1 = Task(size=3, id="task-a", title="First task", modified_at=now)
+  t2 = Task(size=3, id="task-b", title="Second task", deps=["task-a"], modified_at=now)
   store.save_task_queue([t1, t2])
   assert [item.id for item in store.list_tasks()] == ["task-a", "task-b"]
   assert store.delete_task("task-a") is True
@@ -513,6 +514,8 @@ def test_legacy_task_without_answer_snapshots_remains_readable(tmp_path):
   conn.commit()
   conn.close()
   store = SqliteStore(path)
+  with store.transaction():
+    store._conn.execute("UPDATE tasks SET size=3 WHERE id='legacy'")
   task = store.get_task("legacy")
   assert task is not None and task.details == ["A detail"]
   assert "answer_snapshots" not in task.to_dict()
@@ -543,7 +546,11 @@ def test_old_task_answer_snapshots_are_not_migrated(tmp_path):
   )
   reports.submit_answer("choice", {"select": "Yes"}, answer_id="ab1234")
   store.save_task_queue(
-    [Task(id="linked", title="Linked", details=["Review"], report_ids=["choice"])]
+    [
+      Task(
+        size=3, id="linked", title="Linked", details=["Review"], report_ids=["choice"]
+      )
+    ]
   )
   store.close()
   conn = sqlite3.connect(path)
@@ -637,15 +644,21 @@ def test_legacy_in_progress_tasks_convert_without_reordering_and_sync(
   store = SqliteStore(path)
   original = [
     Task(
-      id="first", title="First", details=["Do work"], modified_at="2025-01-01T00:00:00Z"
+      size=3,
+      id="first",
+      title="First",
+      details=["Do work"],
+      modified_at="2025-01-01T00:00:00Z",
     ),
     Task(
+      size=3,
       id="second",
       title="Second",
       details=["Do work"],
       modified_at="2025-01-01T00:00:00Z",
     ),
     Task(
+      size=3,
       id="third",
       title="Third",
       status="finished",
@@ -700,7 +713,7 @@ def test_merging_legacy_task_status_normalizes_the_stored_row(
   legacy_status: str,
 ) -> None:
   source = SqliteStore()
-  source.save_task_queue([Task(id="work", title="Work", details=["Do work"])])
+  source.save_task_queue([Task(size=3, id="work", title="Work", details=["Do work"])])
   snapshot = source.export_rows()
   snapshot["tasks"][0]["status"] = legacy_status
   with source.transaction():
@@ -723,8 +736,8 @@ def test_merging_unknown_task_status_is_atomic() -> None:
   source = SqliteStore()
   source.save_task_queue(
     [
-      Task(id="first", title="First", details=["Do work"]),
-      Task(id="work", title="Work", details=["Do work"]),
+      Task(size=3, id="first", title="First", details=["Do work"]),
+      Task(size=3, id="work", title="Work", details=["Do work"]),
     ]
   )
   snapshot = source.export_rows()
@@ -757,8 +770,10 @@ def test_legacy_blocked_tasks_keep_derived_blocking_after_upgrade(
       '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
     ),
   )
-  tasks.create_task("linked", "Linked", details=["Review"], report_ids=["decision"])
-  tasks.create_task("standalone", "Standalone", details=["Review"])
+  tasks.create_task(
+    "linked", "Linked", size=3, details=["Review"], report_ids=["decision"]
+  )
+  tasks.create_task("standalone", "Standalone", size=3, details=["Review"])
   store.close()
   with sqlite3.connect(path) as conn:
     conn.execute("UPDATE tasks SET status = 'blocked'")
@@ -790,7 +805,7 @@ def test_state_deletions_survive_restart_and_later_edits_win(tmp_path: Path) -> 
     Message(id="de1001", body="Remove me", modified_at="2020-01-01T00:00:00Z")
   )
   source.save_task_queue(
-    [Task(id="remove-task", title="Remove task", modified_at=future)]
+    [Task(size=3, id="remove-task", title="Remove task", modified_at=future)]
   )
   source.save_report(
     Report(id="remove-report", title="Remove report", body="Old", modified_at=future)
@@ -846,7 +861,9 @@ def test_stale_deletions_do_not_remove_later_edits() -> None:
   store = SqliteStore()
   future = "2099-01-01T00:00:00Z"
   store.save_message(Message(id="de1002", body="Later message", modified_at=future))
-  store.save_task_queue([Task(id="later-task", title="Later task", modified_at=future)])
+  store.save_task_queue(
+    [Task(size=3, id="later-task", title="Later task", modified_at=future)]
+  )
   store.save_report(
     Report(id="later-report", title="Later report", body="Later", modified_at=future)
   )
@@ -870,11 +887,11 @@ def test_stale_deletions_do_not_remove_later_edits() -> None:
 def test_local_recreation_after_a_delete_uses_a_later_stamp() -> None:
   store = SqliteStore()
   future = "2099-01-01T00:00:00.000000Z"
-  store.save_task_queue([Task(id="reused", title="Old", modified_at=future)])
+  store.save_task_queue([Task(size=3, id="reused", title="Old", modified_at=future)])
   store.save_task_queue([])
   task_deleted_at = store.export_rows()["deleted"]["tasks"][0]["modified_at"]
   store.save_task_queue(
-    [Task(id="reused", title="New", modified_at="2026-01-01T00:00:00Z")]
+    [Task(size=3, id="reused", title="New", modified_at="2026-01-01T00:00:00Z")]
   )
   assert store.get_task("reused").modified_at > task_deleted_at
 

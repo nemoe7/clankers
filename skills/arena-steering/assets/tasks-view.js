@@ -46,6 +46,8 @@ function formatTaskPhases(task) {
 
 function taskDetailLines(task) {
   const lines = [];
+  if (task.priority) lines.push(`Priority: ${task.priority}`);
+  if (task.size != null) lines.push(`Size: ${task.size}`);
   if (task.scope) {
     lines.push(`Scope: ${task.scope}`);
   }

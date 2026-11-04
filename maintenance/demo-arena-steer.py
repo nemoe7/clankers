@@ -809,6 +809,7 @@ steer poll
     models.Task(
       "core-models-store",
       "Build domain models, protocol ports, and SQLite store",
+      size=3,
       type="code",
       status="finished",
       scope="skills/arena-steering/scripts/arena_steering/",
@@ -822,6 +823,7 @@ steer poll
     models.Task(
       "draft-architecture-spec",
       "Publish initial Arena Steering architecture specification",
+      size=3,
       type="report",
       status="finished",
       scope="arena-state/reports/",
@@ -835,6 +837,7 @@ steer poll
     models.Task(
       "configure-ci-gates",
       "Wire ruff, pytest, and prose lint gates for steering skill",
+      size=3,
       type="ops",
       status="finished",
       scope="maintenance/",
@@ -845,6 +848,7 @@ steer poll
     models.Task(
       "update-readme-index",
       "Register arena-steering in repository skill documentation",
+      size=3,
       type="docs",
       status="finished",
       scope="skills/arena-steering/SKILL.md",
@@ -858,6 +862,7 @@ steer poll
       models.Task(
         f"finished-milestone-{idx:02d}",
         f"Complete steering verification milestone #{idx:02d}",
+        size=3,
         type=task_types[idx % len(task_types)],
         status="finished",
         scope="skills/arena-steering/",
@@ -870,6 +875,7 @@ steer poll
   app.tasks.create_task(
     "web-ui-assets",
     "Refine Inbox, Reports, and Tasks views with Arena tokens",
+    size=3,
     type="code",
     status="upcoming",
     scope="skills/arena-steering/assets/",
@@ -884,6 +890,7 @@ steer poll
   app.tasks.create_task(
     "hot-reload-server",
     "Maintain in-process hot-reload watcher on port 8100",
+    size=3,
     type="ops",
     status="upcoming",
     scope="skills/arena-steering/scripts/arena_steering/server.py",
@@ -897,6 +904,7 @@ steer poll
   app.tasks.create_task(
     "publish-audit-report",
     "Publish layout and latency audit report for review",
+    size=3,
     type="report",
     status="upcoming",
     scope="arena-state/reports/",
@@ -909,6 +917,7 @@ steer poll
   app.tasks.create_task(
     "finalize-storage-tuning",
     "Apply selected SQLite journal and synchronous parameters",
+    size=3,
     type="code",
     status="upcoming",
     scope="skills/arena-steering/scripts/arena_steering/store.py",
@@ -921,6 +930,7 @@ steer poll
   app.tasks.create_task(
     "document-cli-reference",
     "Document steer CLI subcommands and environment variables",
+    size=3,
     type="docs",
     status="upcoming",
     scope="skills/arena-steering/SKILL.md",
@@ -933,6 +943,7 @@ steer poll
   app.tasks.create_task(
     "cleanup-temp-fixtures",
     "Prune stale preview fixture directories and verify gitignore",
+    size=3,
     type="misc",
     status="upcoming",
     scope="tests/skills/arena-steering/",

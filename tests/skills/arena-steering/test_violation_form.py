@@ -82,6 +82,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       {
         "id": "check-inbox",
         "title": "Check the inbox",
+        "size": 3,
         "details": ["Read the current task."],
       },
     )
@@ -134,7 +135,11 @@ def test_flagged_report_is_unpublished_without_losing_links_or_answers(
     app.reports.publish_report("flagged", "Flagged", body)
     app.reports.publish_report("other", "Other", body)
     app.tasks.create_task(
-      "waiting", "Waiting", details=["Review the answer"], report_ids=["flagged"]
+      "waiting",
+      "Waiting",
+      size=3,
+      details=["Review the answer"],
+      report_ids=["flagged"],
     )
     assert app.tasks.get_task("waiting")[1] is True
 
@@ -256,7 +261,11 @@ def test_violation_form_and_cancel_in_browser(
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store, repo_name="Violation form test")
   app.tasks.create_task(
-    "fix-flag", "Fix violation flag", type="code", details=["Fix the violation form."]
+    "fix-flag",
+    "Fix violation flag",
+    size=3,
+    type="code",
+    details=["Fix the violation form."],
   )
   app.reports.publish_report("review", "Review", "Report body.")
   server = create_http_server(app, host="0.0.0.0", port=0)

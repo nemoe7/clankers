@@ -23,7 +23,15 @@ from . import pre as pre_mod
 from .blocked_bash import append_blocked_bash
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
-from .models import MESSAGE_ID_RE, Message, Report, ReportAnswer, Task
+from .models import (
+  MESSAGE_ID_RE,
+  TASK_PRIORITIES,
+  TASK_SIZES,
+  Message,
+  Report,
+  ReportAnswer,
+  Task,
+)
 from .server import SteeringApp, create_http_server
 from .services import MessageService, ReportService, TaskService
 from .store import SqliteStore
@@ -111,6 +119,8 @@ def main(
   ack_p.add_argument("parts", nargs="+", help="[<id> ...] <markdown>")
   ack_p.add_argument("-i", "--id", dest="task_id", default=None)
   ack_p.add_argument("-t", "--title", dest="task_title", default=None)
+  ack_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES, default="P3")
+  ack_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES)
   ack_p.add_argument("-T", "--type", dest="task_types", action="append", default=[])
   ack_p.add_argument("-S", "--scope", dest="task_scope", default="")
   ack_p.add_argument("-d", "--detail", dest="task_details", action="append", default=[])
@@ -142,7 +152,7 @@ def main(
       "Commands:\n"
       "  [-d|--deets]                        Show the current task and optional details.\n"
       "  ID                                  Show a task with details.\n"
-      "  new ID TITLE -d DETAIL [-T TYPE ...]  Create ordered phases.\n"
+      "  new ID TITLE -d DETAIL -z SIZE [-p P1..P5] [-T TYPE ...]  Create ordered phases.\n"
       "  finish ID [-c COMMIT]               Validate and advance one phase.\n"
       "  rm ID                               Remove a task.\n"
       "  mod ID FIELD [rm] VALUE             Update a task.\n"
@@ -446,10 +456,14 @@ def _run_ack(
         raise ValueError("Task creation on ack requires one target")
       if not parsed.task_title:
         raise ValueError("Task creation on ack requires -t/--title")
+      if parsed.size is None:
+        raise ValueError("Task creation on ack requires -z/--size")
       target_type, target = messages.resolve_ack_target(target_ids[0])
       created = tasks.create_task(
         parsed.task_id,
         parsed.task_title,
+        size=parsed.size,
+        priority=parsed.priority,
         type=parsed.task_types[0] if parsed.task_types else "code",
         types=parsed.task_types or None,
         scope=parsed.task_scope,
@@ -524,6 +538,8 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     new_p = argparse.ArgumentParser(prog="steer task new")
     new_p.add_argument("id")
     new_p.add_argument("title")
+    new_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES, default="P3")
+    new_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES, required=True)
     new_p.add_argument("-T", "--type", dest="types", action="append", default=[])
     new_p.add_argument("-s", "--status", default="upcoming")
     new_p.add_argument("-S", "--scope", default="")
@@ -538,6 +554,8 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     task = tasks.create_task(
       parsed.id,
       parsed.title,
+      priority=parsed.priority,
+      size=parsed.size,
       type=parsed.types[0] if parsed.types else "code",
       types=parsed.types or None,
       status=parsed.status,
@@ -642,11 +660,18 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
     updated = tasks.finish_phase(
       task_id, commit_hash=rest[1] if len(rest) == 2 else None
     )
+  elif field in {"priority", "size"}:
+    if len(rest) != 1:
+      raise ValueError(f"Usage: steer task mod <id> {field} <value>")
+    updated = tasks.patch_task(
+      task_id, {field: int(rest[0]) if field == "size" else rest[0]}
+    )
   elif field in {"status", "title", "type", "scope"}:
     updated = tasks.mod_scalar(task_id, field, " ".join(rest))
   else:
     raise ValueError(
-      f"Unknown task mod field {field!r}; expected deets, links, deps, status, title, type, types, or scope"
+      f"Unknown task mod field {field!r}; expected deets, links, deps, "
+      "priority, size, status, title, type, types, or scope"
     )
 
   _, blocked = tasks.get_task(updated.id)
@@ -1646,6 +1671,8 @@ def _print_single_task(
   if task.gate_names:
     print(f"- Gates: {', '.join(task.gate_names)}", file=out)
   if include_details:
+    print(f"- Priority: {task.priority}", file=out)
+    print(f"- Size: {task.size}", file=out)
     for idx, line in enumerate(task.details, 1):
       print(f"- [{idx}] {line}", file=out)
 

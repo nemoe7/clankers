@@ -32,7 +32,9 @@ def test_demo_reset_command_restores_samples_without_restarting(tmp_path: Path) 
   thread.start()
   try:
     app.messages.send_message("Demo sentinel", msg_id="fa0002")
-    app.tasks.create_task("demo-sentinel", "Demo sentinel", details=["Temporary"])
+    app.tasks.create_task(
+      "demo-sentinel", "Demo sentinel", size=3, details=["Temporary"]
+    )
     old_version = app.data_version()
     result = subprocess.run(
       [sys.executable, str(DEMO_PATH), "--reset", "--port", str(server.server_port)],

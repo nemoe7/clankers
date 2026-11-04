@@ -14,6 +14,8 @@ ENTITY_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MESSAGE_STATUSES = ("sent", "seen", "acked")
 TASK_TYPES = ("report", "code", "docs", "ops", "misc")
 TASK_STATUSES = ("upcoming", "finished")
+TASK_PRIORITIES = ("P1", "P2", "P3", "P4", "P5")
+TASK_SIZES = (1, 2, 3, 5, 8, 13, 21, 34)
 REPORT_STATUSES = ("published", "answered", "dismissed")
 REPORT_FIELD_TYPES = ("choice", "checkbox", "text")
 
@@ -289,6 +291,9 @@ class Task:
   scope: str
   details: list[str]
   links: dict[str, list[str]]
+  priority: str
+  size: int
+  insertion_order: int | None
   modified_at: str
 
   def __init__(
@@ -301,6 +306,9 @@ class Task:
     details: list[str] | None = None,
     links: dict[str, list[str]] | None = None,
     *,
+    size: int,
+    priority: str = "P3",
+    insertion_order: int | None = None,
     types: list[str] | None = None,
     phase_index: int | None = None,
     phase_evidence: list[str | None] | None = None,
@@ -317,6 +325,21 @@ class Task:
       raise ValueError("Task.title must be a non-empty string")
     self.id = id
     self.title = title.strip()
+    if priority not in TASK_PRIORITIES or not isinstance(priority, str):
+      raise ValueError(f"Invalid Task.priority (P1–P5): {priority!r}")
+    if not isinstance(size, int) or isinstance(size, bool) or size not in TASK_SIZES:
+      raise ValueError(
+        f"Invalid Task.size (Fibonacci 1, 2, 3, 5, 8, 13, 21, 34): {size!r}"
+      )
+    if insertion_order is not None and (
+      not isinstance(insertion_order, int)
+      or isinstance(insertion_order, bool)
+      or insertion_order < 0
+    ):
+      raise ValueError(f"Invalid Task.insertion_order: {insertion_order!r}")
+    self.priority = priority
+    self.size = size
+    self.insertion_order = insertion_order
     if type not in TASK_TYPES:
       raise ValueError(f"Invalid Task.type: {type!r}")
     if types is not None and (
@@ -459,6 +482,9 @@ class Task:
       "status": self.status,
       "scope": self.scope,
       "details": list(self.details),
+      "priority": self.priority,
+      "size": self.size,
+      "insertion_order": self.insertion_order,
       "links": {
         "msg_ids": list(self.msg_ids),
         "report_ids": list(self.report_ids),
@@ -484,6 +510,9 @@ class Task:
       status=str(data.get("status", "upcoming")),
       scope=str(data.get("scope", "")),
       details=[str(item) for item in data.get("details", [])],
+      priority=data.get("priority", "P3"),
+      size=data.get("size"),
+      insertion_order=data.get("insertion_order"),
       links=raw_links if isinstance(raw_links, dict) else None,
       msg_ids=([str(item) for item in data["msg_ids"]] if "msg_ids" in data else None),
       report_ids=(
