@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`, `test_web_ui.py`: Keep the Tasks toolbar on one row across viewports. Preserve search and filter focus order.
+
 - `assets/style.css`, `test_web_ui.py`: Anchor the Tasks top fade below its sticky toolbar after scrolling. Keep it absent at rest.
 
 - `assets/style.css`, `test_web_ui.py`: Fade report-table edges only while more columns remain past that edge. Keep native scrolling.

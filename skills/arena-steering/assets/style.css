@@ -2519,16 +2519,8 @@ article#report.report img,
     width: min(900px, calc(100vw - 32px));
   }
 
-  .tasks-layout > .row.tight {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  #tasks-status {
-    grid-column: 1 / -1;
-  }
-
   #task-search {
-    max-width: none;
+    width: 100%;
   }
 }
 

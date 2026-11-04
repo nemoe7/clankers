@@ -2243,7 +2243,7 @@ def test_task_marker_tracks_first_line_of_wrapped_title(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_tasks_toolbar_divider_and_fade_follow_scroll(tmp_path: Path) -> None:
+def test_tasks_toolbar_row_divider_and_fade_follow_scroll(tmp_path: Path) -> None:
   import base64
 
   playwright = pytest.importorskip("playwright.sync_api")
@@ -2278,6 +2278,29 @@ def test_tasks_toolbar_divider_and_fade_follow_scroll(tmp_path: Path) -> None:
           toolbar = page.locator(".tasks-toolbar")
           rect = toolbar.bounding_box()
           assert rect is not None
+          controls = page.evaluate("""() => {
+            const box = selector => {
+              const rect = document.querySelector(selector).getBoundingClientRect();
+              return {left: rect.left, right: rect.right,
+                middle: rect.top + rect.height / 2, width: rect.width};
+            };
+            return {status: box('#tasks-status'), search: box('#task-search'),
+              filter: box('.task-filter'), toolbar: box('.tasks-toolbar')};
+          }""")
+          status, search, filter_box = (
+            controls["status"],
+            controls["search"],
+            controls["filter"],
+          )
+          assert abs(status["middle"] - search["middle"]) < 1, controls
+          assert abs(search["middle"] - filter_box["middle"]) < 1, controls
+          assert status["right"] < search["left"], controls
+          assert search["right"] < filter_box["left"], controls
+          assert search["width"] >= 80, controls
+          assert filter_box["right"] <= controls["toolbar"]["right"] + 1, controls
+          page.locator("#task-search").focus()
+          page.keyboard.press("Tab")
+          assert page.evaluate("document.activeElement.id") == "task-type-filter"
           screenshot = page.screenshot(path=str(tmp_path / f"tasks-divider-{name}.png"))
           color = page.evaluate(
             """async ({png, x, y}) => {
