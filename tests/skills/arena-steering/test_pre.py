@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from arena_steering import cli, pre
+from arena_steering import cli, git_safety, pre
 from arena_steering.cli import main as cli_main
 from arena_steering.server import scripts_signature
 from arena_steering.services import with_bible_read
@@ -2463,6 +2463,94 @@ def test_incomplete_or_mixed_github_routes_block(
   )
   code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
   assert code == pre.BLOCK, (line, out)
+
+
+def test_post_push_watcher_checks_ancestry_after_pr_checks(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  started: list[tuple[str, list[str], list[str] | None]] = []
+
+  def start(_state: Path, name: str, command: list[str], **kwargs: object) -> int:
+    started.append((name, command, kwargs.get("on_finish")))
+    return 0
+
+  monkeypatch.setattr(cli, "_start_detached_run", start)
+  code, out = _run("post-exit", "--line", "git push origin topic", "--rc", "0")
+  assert code == 0, out
+  assert started == [
+    (
+      "pr-checks",
+      ["gh", "pr", "checks", "--watch"],
+      ["steer", "post-exit", "--rc", "0", "--check-ancestry"],
+    )
+  ]
+
+
+def test_post_checks_ancestry_note_is_hidden_and_deduplicated(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Ready.", acked=True)
+  pair = [("a" * 40, "b" * 40)]
+  monkeypatch.setattr(
+    git_safety, "behind_main_pair", lambda _cwd: pair[0], raising=False
+  )
+  for attempt, expected in enumerate((1, 1, 2)):
+    code, out = _run("post-exit", "--rc", "0", "--check-ancestry")
+    assert (code, out) == (0, "")
+    store, messages, _, _ = cli.open_services(_isolate_state)
+    try:
+      notes = [
+        msg
+        for msg in messages.list_messages()
+        if msg.body.startswith("Branch cannot merge into main:")
+      ]
+      assert len(notes) == expected
+      assert all(msg.hidden and not msg.blocking for msg in notes)
+    finally:
+      store.close()
+    if attempt == 1:
+      pair[0] = (pair[0][0], "c" * 40)
+  pair[0] = None
+  assert _run("post-exit", "--rc", "0", "--check-ancestry") == (0, "")
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  try:
+    assert (
+      sum(
+        msg.body.startswith("Branch cannot merge into main:")
+        for msg in messages.list_messages()
+      )
+      == 2
+    )
+  finally:
+    store.close()
+
+
+@pytest.mark.parametrize("ancestor", [True, False])
+def test_background_ancestry_pair_uses_fresh_main(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ancestor: bool
+) -> None:
+  calls: list[tuple[str, ...]] = []
+
+  def fake_git(_cwd: Path, *args: str, **_kwargs: object):
+    calls.append(args)
+    if args[0] == "fetch":
+      return subprocess.CompletedProcess(args, 0, "", "")
+    if args[0] == "rev-parse":
+      sha = "b" * 40 if args[1].endswith("origin/main") else "a" * 40
+      return subprocess.CompletedProcess(args, 0, sha + "\n", "")
+    return subprocess.CompletedProcess(args, 0 if ancestor else 1, "", "")
+
+  monkeypatch.setattr(git_safety, "_git", fake_git)
+  pair = git_safety.behind_main_pair(tmp_path)
+  assert pair == (None if ancestor else ("a" * 40, "b" * 40))
+  assert calls[0] == (
+    "fetch",
+    "--quiet",
+    "--no-tags",
+    "origin",
+    "+refs/heads/main:refs/remotes/origin/main",
+  )
+  assert calls[-1][:2] == ("merge-base", "--is-ancestor")
 
 
 @pytest.mark.parametrize(

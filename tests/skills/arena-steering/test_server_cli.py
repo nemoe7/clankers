@@ -3017,6 +3017,27 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   )
 
 
+def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> None:
+  import sys
+
+  state_dir = tmp_path / "arena-state"
+  result = cli._start_detached_run(
+    state_dir,
+    "checks",
+    [sys.executable, "-c", "import sys; sys.exit(7)"],
+    on_finish=[sys.executable, "-c", "print('ancestry checked')"],
+    out=io.StringIO(),
+  )
+  assert result == 0
+  record = json.loads((state_dir / "runs" / "checks.json").read_text())
+  marker = Path(record["exit_path"])
+  deadline = time.monotonic() + 2
+  while not marker.exists() and time.monotonic() < deadline:
+    time.sleep(0.02)
+  assert marker.read_text().strip() == "7"
+  assert "ancestry checked" in Path(record["log_path"]).read_text()
+
+
 def test_run_start_rolls_back_link_on_launch_failure(
   monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-from . import __version__
+from . import __version__, git_safety
 from . import pre as pre_mod
 from .blocked_bash import append_blocked_bash
 from .gates import FileGateStatus
@@ -41,6 +41,7 @@ SERVE_PORT = 8000
 HISTORICAL_PAGE_SIZE = 10
 MESSAGE_PAGE_MIN = 5
 MESSAGE_PAGE_MAX = 50
+PR_CHECK_ANCESTRY_FOLLOWUP = ("steer", "post-exit", "--rc", "0", "--check-ancestry")
 
 
 def _snippet_words(text: str, max_words: int = 6) -> str:
@@ -232,6 +233,9 @@ def main(
   post_exit_p.add_argument("--line", default="", help="The completed shell line.")
   post_exit_p.add_argument("--rc", type=int, required=True, help="Shell exit status.")
   post_exit_p.add_argument("--elapsed", type=float, default=0, help="Elapsed seconds.")
+  post_exit_p.add_argument(
+    "--check-ancestry", action="store_true", help=argparse.SUPPRESS
+  )
 
   skills_p = sub.add_parser("skills", help="List skill names, descriptions, and paths.")
 
@@ -1241,12 +1245,15 @@ def _start_detached_run(
   command: list[str],
   *,
   after: str | None = None,
+  on_finish: list[str] | None = None,
   out: TextIO,
 ) -> int:
   runs = _runs_dir(state_dir).resolve()
   with sqlite3.connect(runs / ".launch.sqlite3") as lock:
     lock.execute("BEGIN IMMEDIATE")
-    return _start_locked_run(runs, name, command, after=after, out=out)
+    return _start_locked_run(
+      runs, name, command, after=after, on_finish=on_finish, out=out
+    )
 
 
 def _start_locked_run(
@@ -1255,6 +1262,7 @@ def _start_locked_run(
   command: list[str],
   *,
   after: str | None,
+  on_finish: list[str] | None,
   out: TextIO,
 ) -> int:
   record_path = runs / f"{name}.json"
@@ -1286,7 +1294,10 @@ def _start_locked_run(
       f"status=125; {write_exit}; exit 125; fi"
     )
   script_lines.append(f"( {shlex.join(command)} )")
-  script_lines.append(f"status=$?; {write_exit}")
+  script_lines.append("status=$?")
+  if on_finish:
+    script_lines.append(f"( {shlex.join(on_finish)} ) || true")
+  script_lines.append(write_exit)
   log_handle = log_path.open("ab")
   try:
     proc = subprocess.Popen(
@@ -1412,8 +1423,33 @@ def _exit_state_reminders(state_dir: Path) -> list[str]:
     store.close()
 
 
+def _note_background_ancestry(state_dir: Path) -> None:
+  """Notify once per confirmed HEAD/main pair after a background PR check."""
+  pair = git_safety.behind_main_pair(pre_mod.repo_root())
+  if pair is None:
+    return
+  store, messages, _, _ = open_services(state_dir)
+  try:
+    key = f"ancestry_note:{pair[0]}:{pair[1]}"
+    with store.transaction():
+      if store.get_meta(key) == "1":
+        return
+      messages.send_message(
+        "Branch cannot merge into main: origin/main is not an ancestor of HEAD. "
+        "Rebase main and retry.",
+        hidden=True,
+        blocking=False,
+      )
+      store.set_meta(key, "1")
+  finally:
+    store.close()
+
+
 def _run_post_exit(parsed: argparse.Namespace, state_dir: Path, out: TextIO) -> int:
   """Watch checks and print advice without changing the completed shell status."""
+  if parsed.check_ancestry:
+    _note_background_ancestry(state_dir)
+    return 0
   if (
     parsed.rc == 0
     and pre_mod.post_push_watch(parsed.line)
@@ -1421,7 +1457,11 @@ def _run_post_exit(parsed: argparse.Namespace, state_dir: Path, out: TextIO) -> 
   ):
     try:
       _start_detached_run(
-        state_dir, "pr-checks", ["gh", "pr", "checks", "--watch"], out=out
+        state_dir,
+        "pr-checks",
+        ["gh", "pr", "checks", "--watch"],
+        on_finish=list(PR_CHECK_ANCESTRY_FOLLOWUP),
+        out=out,
       )
       print(
         "routed pr-checks: background watch after push. Verdict on later call.",
@@ -1498,7 +1538,13 @@ def _run_run(
     if parsed.number is not None:
       command.append(str(parsed.number))
     command.append("--watch")
-    return _start_detached_run(state_dir, "pr-checks", command, out=out)
+    return _start_detached_run(
+      state_dir,
+      "pr-checks",
+      command,
+      on_finish=list(PR_CHECK_ANCESTRY_FOLLOWUP),
+      out=out,
+    )
   raise ValueError(f"Unknown run subcommand: {subcmd!r}")
 
 

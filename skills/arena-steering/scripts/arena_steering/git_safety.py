@@ -214,6 +214,25 @@ def push_warning(cwd: Path, words: list[str]) -> str:
   return ""
 
 
+def behind_main_pair(cwd: Path) -> tuple[str, str] | None:
+  """Return HEAD and fresh origin/main only when main is not an ancestor."""
+  try:
+    _git(
+      cwd,
+      "fetch",
+      "--quiet",
+      "--no-tags",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+    )
+    base = _git(cwd, "rev-parse", "refs/remotes/origin/main").stdout.strip()
+    head = _git(cwd, "rev-parse", "HEAD").stdout.strip()
+    verdict = _git(cwd, "merge-base", "--is-ancestor", base, head, allowed=(0, 1))
+  except GitCheckError:
+    return None
+  return (head, base) if verdict.returncode == 1 else None
+
+
 def require_clean_tree(cwd: Path) -> None:
   """Refuse task completion when Git sees tracked or untracked checkout changes."""
   if _git(cwd, "status", "--porcelain=v1", "--untracked-files=all").stdout:
