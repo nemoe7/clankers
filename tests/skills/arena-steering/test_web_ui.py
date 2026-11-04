@@ -1433,6 +1433,85 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
 @pytest.mark.parametrize("width", [390, 1200])
+def test_report_answer_textareas_grow_and_enter_never_submits(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "multiline",
+    "Multiline answers",
+    "# Multiline answers\n\n"
+    '<!-- question {"id":"text","label":"Text response"} -->\n'
+    "Text response: ___\n\n"
+    '<!-- question {"id":"choice","label":"Choose"} -->\n'
+    'Choose one:\n- ( ) First <!-- option {"label":"First"} -->\n',
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        text = page.locator(".field-text-input")
+        custom = page.locator(".custom-text-input")
+        assert text.evaluate("el => el.tagName") == "TEXTAREA"
+        assert custom.evaluate("el => el.tagName") == "TEXTAREA"
+
+        text.fill("Line one")
+        initial_height = text.evaluate("el => el.getBoundingClientRect().height")
+        text.press("Enter")
+        page.keyboard.type("Line two")
+        assert text.input_value() == "Line one\nLine two"
+        assert text.evaluate("el => el.getBoundingClientRect().height") > initial_height
+        assert app.reports.get_report("multiline").answers == []
+
+        custom.fill("Option one")
+        custom_height = custom.evaluate("el => el.getBoundingClientRect().height")
+        custom.press("Enter")
+        page.keyboard.type("Option two")
+        assert custom.input_value() == "Option one\nOption two"
+        assert (
+          custom.evaluate("el => el.getBoundingClientRect().height") > custom_height
+        )
+        assert app.reports.get_report("multiline").answers == []
+
+        with page.expect_response("**/reports/multiline/answers") as response:
+          page.locator("#report-submit-float").click()
+        assert response.value.status == HTTPStatus.CREATED
+        assert app.reports.get_report("multiline").answers[-1].values == {
+          "text": "Line one\nLine two",
+          "choice": "Option one\nOption two",
+        }
+        page.reload()
+        page.locator("#tab-reports").click()
+        assert text.input_value() == "Line one\nLine two"
+        assert custom.input_value() == "Option one\nOption two"
+        assert text.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
+        assert custom.evaluate("el => el.scrollHeight <= el.clientHeight + 1")
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
 def test_report_custom_answer_caret_matches_text_answer_padding(
   tmp_path: Path, width: int
 ) -> None:

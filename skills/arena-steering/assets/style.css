@@ -2608,10 +2608,22 @@ article#report.report img,
   align-items: center;
 }
 
+.field-text-input,
+.option-custom .custom-text-input {
+  line-height: 20px;
+  resize: none;
+  max-height: min(240px, 40dvh);
+  overflow-y: auto;
+}
+
+.field-text-input {
+  min-height: 34px;
+}
+
 .option-custom .custom-text-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 32px;
+  min-height: 32px;
   padding: 4px 10px;
   background-color: hsl(var(--surface-tertiary));
 }

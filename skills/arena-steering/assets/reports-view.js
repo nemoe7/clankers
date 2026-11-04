@@ -119,7 +119,7 @@ function renderFieldBlock(field, headings, stored) {
           <span class="field-label">${label}</span>
           <code class="field-id-chip msg-id">${fieldId}</code>
         </div>
-        <input type="text" class="input field-text-input" name="field-${fieldId}" value="${escapeHtml(textValue)}" placeholder="Something else..." aria-label="${label}">
+        <textarea class="input field-text-input" name="field-${fieldId}" rows="1" placeholder="Something else..." aria-label="${label}">${escapeHtml(textValue)}</textarea>
       </div>
     `;
   }
@@ -155,7 +155,7 @@ function renderFieldBlock(field, headings, stored) {
         ${optionsHtml}
         <label class="option-row option-custom">
           <input type="${inputType}" name="field-${fieldId}" value="${CUSTOM_SENTINEL}" class="custom-toggle" ${customStored ? "checked" : ""} aria-label="Something else for ${label}">
-          <input type="text" class="input custom-text-input" value="${escapeHtml(customStored)}" placeholder="Something else..." aria-label="Custom response for ${label}">
+          <textarea class="input custom-text-input" rows="1" placeholder="Something else..." aria-label="Custom response for ${label}">${escapeHtml(customStored)}</textarea>
         </label>
       </div>
     </div>
@@ -391,6 +391,16 @@ export function renderReportsView(container, state, handlers) {
       void container.offsetHeight;
       container.style.animation = "";
     }
+  }
+
+  for (const input of container.querySelectorAll(".field-text-input, .custom-text-input")) {
+    const resize = () => {
+      const border = input.offsetHeight - input.clientHeight;
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight + border}px`;
+    };
+    resize();
+    listen(input, "input", resize);
   }
 
   const railEl = container.querySelector("#report-rail");
