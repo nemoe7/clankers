@@ -72,6 +72,35 @@ def test_cli_inbox_message_header_omits_status_metadata(
     store.close()
 
 
+def test_cli_inbox_header_uses_browser_timezone_and_utc_fallback(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  class FixedDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+      return datetime(2026, 11, 4, 7, 20, 10, tzinfo=UTC).astimezone(tz or UTC)
+
+  monkeypatch.setattr(cli, "datetime", FixedDateTime)
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    assert _run_cli(state_dir, "read")[1] == "Inbox 07:20:10: 0 pending\n"
+    assert app.dispatch("POST", "/timezone", {"timezone": "Asia/Manila"})[0] == 200
+    app.messages.send_message("Read the note", msg_id="ab1234")
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, err) == (0, "")
+    assert out == "Inbox 15:20:10: 1 pending\n`ab1234`\nRead the note\n"
+    browser_stamp = app.dispatch("GET", "/messages/ab1234")[1]["message"]["modified_at"]
+    assert datetime.fromisoformat(browser_stamp).utcoffset() == timedelta(0)
+    assert app.dispatch("POST", "/timezone", {"timezone": "UTC"})[0] == 200
+    assert _run_cli(state_dir, "read")[1] == (
+      "Inbox 07:20:10: 1 pending\n`ab1234`\nRead the note\n"
+    )
+  finally:
+    store.close()
+
+
 def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
   store = SqliteStore(state_dir / "state.sqlite3")

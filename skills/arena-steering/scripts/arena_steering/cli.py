@@ -17,6 +17,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import __version__, git_safety
 from . import pre as pre_mod
@@ -347,7 +348,7 @@ def main(
       read_p.parse_args(cmd_args)
       _print_restore_notice(store, stdout)
       delivered = messages.read_pending(mark_seen=True)
-      _print_delivered(delivered, stdout)
+      _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
       messages.reset_gate_if_clear()
       return 0
     if cmd == "poll":
@@ -384,7 +385,7 @@ def main(
       elif delivered["status"] == "skipped":
         print("User skipped poll, end turn", file=stdout)
       elif delivered["messages"] or delivered["report_answers"]:
-        _print_delivered(delivered, stdout)
+        _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
       elif (task := delivered["next_task"]) is not None:
         print(
           f"DO NOT END TURN, CONTINUE TASK: {task.title} | {task.id} | {task.type}",
@@ -1624,11 +1625,17 @@ def _print_restore_notice(store: SqliteStore, out: TextIO) -> None:
   print(f"State restored from {source}: {added} added, {updated} updated.", file=out)
 
 
-def _print_delivered(delivered: dict[str, list], out: TextIO) -> None:
+def _print_delivered(
+  delivered: dict[str, list], out: TextIO, timezone_name: str = ""
+) -> None:
   msgs: list[Message] = delivered["messages"]
   ans_pairs: list[tuple[Report, ReportAnswer]] = delivered["report_answers"]
   total = len(msgs) + len(ans_pairs)
-  stamp = datetime.now(UTC).strftime("%H:%M:%S")
+  try:
+    zone = ZoneInfo(timezone_name) if timezone_name else UTC
+  except (ZoneInfoNotFoundError, ValueError):
+    zone = UTC
+  stamp = datetime.now(UTC).astimezone(zone).strftime("%H:%M:%S")
   if total == 0:
     print(f"Inbox {stamp}: 0 pending", file=out)
     return
