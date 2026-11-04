@@ -358,8 +358,13 @@ def main(
         (task for task, blocked in tasks.list_tasks() if not blocked), None
       )
 
+      gate_status = FileGateStatus(resolved_state_dir)
       started = time.monotonic()
-      delivered = messages.poll(timeout_seconds=1799.0, initial_task=initial_task)
+      delivered = messages.poll(
+        timeout_seconds=1799.0,
+        initial_task=initial_task,
+        live_run=lambda: bool(gate_status.running_names()),
+      )
       messages.record_poll_duration(time.monotonic() - started)
       if delivered["status"] == "timeout":
         print("Poll waited fully. End turn.", file=stdout)

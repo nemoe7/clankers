@@ -79,6 +79,40 @@ def test_skip_poll_from_another_store_marks_turn_ended(tmp_path: Path) -> None:
     server_store.close()
 
 
+def test_skip_arriving_during_live_run_waits_until_run_ends(tmp_path: Path) -> None:
+  db = tmp_path / "state.sqlite3"
+  polling_store = SqliteStore(db)
+  sender_store = SqliteStore(db)
+  poller = SteeringApp(polling_store)
+  sender = SteeringApp(sender_store)
+  live = [True]
+  delivered: list[dict] = []
+  thread = threading.Thread(
+    target=lambda: delivered.append(
+      poller.messages.poll(timeout_seconds=0.25, live_run=lambda: live[0])
+    ),
+    daemon=True,
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not sender_store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert sender_store.get_meta("polling_at")
+    sender.messages.trigger_skip_poll()
+    thread.join(timeout=1.5)
+    assert not thread.is_alive()
+    assert delivered[0]["status"] == "timeout"
+    assert sender_store.get_meta("skip_poll") == "1"
+    live[0] = False
+    assert poller.messages.poll()["status"] == "skipped"
+    assert sender_store.get_meta("skip_poll") == "0"
+  finally:
+    thread.join(timeout=2)
+    polling_store.close()
+    sender_store.close()
+
+
 def test_answer_wakes_poll_without_lock_inversion() -> None:
   store = SqliteStore()
   app = SteeringApp(store)

@@ -467,8 +467,9 @@ class MessageService:
     timeout_seconds: float = 0.0,
     *,
     initial_task: Task | None = None,
+    live_run: Callable[[], bool] | None = None,
   ) -> dict[str, Any]:
-    """Wait for inbox work, an initial runnable task, or Skip."""
+    """Wait for inbox work, an initial runnable task, or eligible Skip."""
     timeout = max(0.0, min(float(timeout_seconds), 1799.0))
     deadline = time.monotonic() + timeout
     skipped = timed_out = False
@@ -476,7 +477,7 @@ class MessageService:
     self.touch_agent()
     if not self.has_pending_deliverables():
       task = initial_task
-      if task is None:
+      if task is None and not (live_run and live_run()):
         skipped = self.consume_skip_poll()
       if task is None and not skipped and timeout > 0:
         with self._reports.transaction():
@@ -484,7 +485,7 @@ class MessageService:
           self._meta.set_meta("polling_at", self._clock.now_iso())
         try:
           while not self.has_pending_deliverables():
-            if self.consume_skip_poll():
+            if not (live_run and live_run()) and self.consume_skip_poll():
               skipped = True
               break
             remaining = deadline - time.monotonic()

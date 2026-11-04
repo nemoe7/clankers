@@ -211,6 +211,58 @@ def test_cli_poll_distinguishes_skip_and_timeout(
     store.close()
 
 
+@pytest.mark.parametrize("run_name", ["verify", "pr-checks"])
+def test_cli_poll_keeps_skip_armed_during_live_run(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run_name: str
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  exit_path = runs / f"{run_name}.exit"
+  (runs / f"{run_name}.json").write_text(
+    json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+  )
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.messages.trigger_skip_poll()
+    original_poll = cli.MessageService.poll
+
+    def short_poll(self, timeout_seconds=0.0, **kwargs):
+      return original_poll(self, timeout_seconds=0.08, **kwargs)
+
+    monkeypatch.setattr(cli.MessageService, "poll", short_poll)
+    assert _run_cli(state_dir, "poll") == (0, "Poll waited fully. End turn.\n", "")
+    assert store.get_meta("skip_poll") == "1"
+    exit_path.write_text("0", encoding="utf-8")
+    _run_cli(state_dir, "read")  # Clear the fast-repeat guard.
+    assert _run_cli(state_dir, "poll") == (0, "User skipped poll, end turn\n", "")
+    assert store.get_meta("skip_poll") == "0"
+  finally:
+    store.close()
+
+
+def test_cli_poll_skips_with_only_blocked_tasks(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.reports.publish_report(
+      "decision",
+      "Decision",
+      '<!-- question {"id":"pick","label":"Pick"} -->\n'
+      'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    )
+    app.tasks.create_task(
+      "blocked", "Blocked task", size=2, report_ids=["decision"], details=["Wait."]
+    )
+    app.messages.trigger_skip_poll()
+    assert _run_cli(state_dir, "poll") == (0, "User skipped poll, end turn\n", "")
+    assert app.tasks.get_task("blocked")[1]
+  finally:
+    store.close()
+
+
 def test_cli_version_flags() -> None:
   out = io.StringIO()
   code = cli_main(["--version"], out=out)
