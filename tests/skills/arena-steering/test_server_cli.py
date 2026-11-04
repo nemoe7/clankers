@@ -204,7 +204,7 @@ def test_cli_poll_distinguishes_skip_and_timeout(
 
     monkeypatch.setattr(cli.MessageService, "poll", short_poll)
     code, out, err = _run_cli(state_dir, "poll")
-    assert (code, out, err) == (1, "", "")
+    assert (code, out, err) == (1, "Poll waited fully. End turn.\n", "")
     assert store.get_meta("turn_ended_at")
   finally:
     store.close()

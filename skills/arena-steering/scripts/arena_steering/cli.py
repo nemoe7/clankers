@@ -379,7 +379,9 @@ def main(
         gate_task=unblocked_gate_task if waiting_gate_ids else None,
       )
       messages.record_poll_duration(time.monotonic() - started)
-      if delivered["status"] == "skipped":
+      if delivered["status"] == "timeout":
+        print("Poll waited fully. End turn.", file=stdout)
+      elif delivered["status"] == "skipped":
         print("User skipped poll, end turn", file=stdout)
       elif delivered["messages"] or delivered["report_answers"]:
         _print_delivered(delivered, stdout)
