@@ -1604,7 +1604,7 @@ def _print_delivered(delivered: dict[str, list], out: TextIO) -> None:
 
 
 def _print_message(msg: Message, out: TextIO) -> None:
-  print(f"`{msg.id}` [{msg.modified_at}]", file=out)
+  print(f"`{msg.id}`", file=out)
   if msg.parent_refs:
     parents = (
       ", ".join(msg.parent_ids)
