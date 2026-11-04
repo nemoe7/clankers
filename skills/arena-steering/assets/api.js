@@ -10,56 +10,11 @@ let changeHandler = () => {};
 let reloadHandler = () => {};
 let reportAckedHandler = () => {};
 let disconnectPollTimer = null;
-const FALLBACK_ANALYTICS_KEY = "steer:fallbackAnalytics";
-let fallbackAnalytics = null;
-try {
-  const saved = JSON.parse(sessionStorage.getItem(FALLBACK_ANALYTICS_KEY) || "null");
-  if (saved && typeof saved.client_id === "string" && Number.isSafeInteger(saved.total) && saved.total >= 0) {
-    fallbackAnalytics = saved;
-  }
-} catch {
-  // The counter still works until this page closes when session storage is unavailable.
-}
-if (!fallbackAnalytics) fallbackAnalytics = { client_id: crypto.randomUUID(), total: 0 };
-let fallbackSubmitted = 0;
-let fallbackSending = false;
-
-async function flushFallbackAnalytics() {
-  if (fallbackSending || fallbackAnalytics.total <= fallbackSubmitted) return;
-  fallbackSending = true;
-  const total = fallbackAnalytics.total;
-  try {
-    const response = await fetch("/analytics/fallback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: fallbackAnalytics.client_id, total }),
-    });
-    if (response.ok) fallbackSubmitted = total;
-  } catch {
-    // Keep the cumulative total for the next interval or WebSocket reconnect.
-  } finally {
-    fallbackSending = false;
-    if (fallbackSubmitted === total && fallbackAnalytics.total > total) {
-      void flushFallbackAnalytics();
-    }
-  }
-}
-
-function recordFallbackTick() {
-  fallbackAnalytics.total += 1;
-  try {
-    sessionStorage.setItem(FALLBACK_ANALYTICS_KEY, JSON.stringify(fallbackAnalytics));
-  } catch {
-    // A blocked session store must not stop fallback refreshes.
-  }
-  void flushFallbackAnalytics();
-}
 
 function startFallbackPoll() {
   if (disconnectPollTimer) return;
   disconnectPollTimer = setInterval(() => {
     if (!liveSocket || liveSocket.readyState !== 1) {
-      recordFallbackTick();
       changeHandler();
     }
   }, 3000);
@@ -105,7 +60,6 @@ export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
     clearTimeout(deadline);
     lastSocketMessage = Date.now();
     stopFallbackPoll();
-    void flushFallbackAnalytics();
     changeHandler();
   });
   socket.addEventListener("message", (event) => {

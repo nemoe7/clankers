@@ -3800,7 +3800,7 @@ def test_seen_reply_receipt_keeps_message_height(
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
 @pytest.mark.parametrize("width", [390, 1200])
-def test_fallback_poll_analytics_counts_browser_ticks_across_reload(
+def test_fallback_poll_refreshes_without_analytics_across_reload(
   tmp_path: Path, width: int
 ) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
@@ -3819,31 +3819,40 @@ def test_fallback_poll_analytics_counts_browser_ticks_across_reload(
       try:
         page = browser.new_page(viewport={"width": width, "height": 844})
         page.clock.install()
+        analytics_requests = []
+        page.on(
+          "request",
+          lambda request: (
+            analytics_requests.append(request.url)
+            if "/analytics/fallback" in request.url
+            else None
+          ),
+        )
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
-        with page.expect_response("**/analytics/fallback", timeout=6000) as first:
-          page.clock.fast_forward(3_100)
-        assert first.value.status == HTTPStatus.OK
-        assert app.analytics.snapshot()["fallback_ticks"] == 1
-        stored = json.loads(
-          page.evaluate("sessionStorage.getItem('steer:fallbackAnalytics')")
+        page.locator("#compose").wait_for()
+        app.messages.send_message("First fallback update", msg_id="ab7101")
+        page.clock.fast_forward(3_100)
+        page.locator('.message[data-msg-id="ab7101"]').wait_for()
+        assert not analytics_requests
+        assert (
+          page.evaluate("sessionStorage.getItem('steer:fallbackAnalytics')") is None
         )
-        assert stored["total"] == 1
+
         page.reload()
-        with page.expect_response("**/analytics/fallback", timeout=6000) as second:
-          page.clock.fast_forward(3_100)
-        assert second.value.status == HTTPStatus.OK
-        assert app.analytics.snapshot()["fallback_ticks"] == 2
-        persisted = json.loads(
-          page.evaluate("sessionStorage.getItem('steer:fallbackAnalytics')")
+        page.locator("#compose").wait_for()
+        app.messages.send_message("Second fallback update", msg_id="ab7102")
+        page.clock.fast_forward(3_100)
+        page.locator('.message[data-msg-id="ab7102"]').wait_for()
+        assert not analytics_requests
+        assert (
+          page.evaluate("sessionStorage.getItem('steer:fallbackAnalytics')") is None
         )
-        assert persisted == {"client_id": stored["client_id"], "total": 2}
       finally:
         browser.close()
   finally:
     server.shutdown()
     server.server_close()
     thread.join(timeout=5)
-    app.analytics.close()
     store.close()
 
 
