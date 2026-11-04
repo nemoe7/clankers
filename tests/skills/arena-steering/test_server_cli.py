@@ -251,9 +251,14 @@ def test_cli_poll_ignores_blocked_tasks_after_gate_finishes(
     exit_path.write_text("0", encoding="utf-8")
     thread.join(timeout=1.5)
     assert not thread.is_alive()
-    assert results == [(0, "running: verify\nPoll waited fully. End turn.\n", "")]
+    assert results == [
+      (
+        0,
+        "running: verify\nrun verify done: exit 0\nDO NOT END TURN. POLL AGAIN.\n",
+        "",
+      )
+    ]
     assert not app.tasks.get_task("gate-task")[1]
-    _run_cli(state_dir, "read")  # Clear the fast-repeat guard before a new poll.
     assert _run_cli(state_dir, "poll") == (
       0,
       "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n",
@@ -378,6 +383,93 @@ def test_cli_poll_keeps_skip_armed_during_live_run(
     assert _run_cli(state_dir, "poll") == (0, "User skipped poll. End turn.\n", "")
     assert store.get_meta("skip_poll") == "0"
   finally:
+    store.close()
+
+
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_cli_poll_delivers_unlinked_verdict_before_armed_skip(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exit_code: int
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  exit_path = runs / "background.exit"
+  (runs / "background.json").write_text(
+    json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+  )
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.trigger_skip_poll()
+  original_poll = cli.MessageService.poll
+
+  def short_poll(self, timeout_seconds=0.0, **kwargs):
+    return original_poll(self, timeout_seconds=0.25, **kwargs)
+
+  monkeypatch.setattr(cli.MessageService, "poll", short_poll)
+  results: list[tuple[int, str, str]] = []
+  thread = threading.Thread(
+    target=lambda: results.append(_run_cli(state_dir, "poll")), daemon=True
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert store.get_meta("polling_at")
+    exit_path.write_text(str(exit_code), encoding="utf-8")
+    thread.join(timeout=1.5)
+    assert not thread.is_alive()
+    assert results == [
+      (0, f"run background done: exit {exit_code}\nDO NOT END TURN. POLL AGAIN.\n", "")
+    ]
+    assert store.get_meta("skip_poll") == "1"
+    assert _run_cli(state_dir, "poll") == (0, "User skipped poll. End turn.\n", "")
+    assert store.get_meta("skip_poll") == "0"
+  finally:
+    thread.join(timeout=2)
+    store.close()
+
+
+def test_cli_poll_reports_each_new_run_started_during_the_wait(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  store = SqliteStore(state_dir / "state.sqlite3")
+  original_poll = cli.MessageService.poll
+
+  def short_poll(self, timeout_seconds=0.0, **kwargs):
+    return original_poll(self, timeout_seconds=0.25, **kwargs)
+
+  monkeypatch.setattr(cli.MessageService, "poll", short_poll)
+  results: list[tuple[int, str, str]] = []
+  thread = threading.Thread(
+    target=lambda: results.append(_run_cli(state_dir, "poll")), daemon=True
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert store.get_meta("polling_at")
+    for name, suffix, code in (("alpha", "a" * 32, 0), ("beta", "b" * 32, 7)):
+      exit_path = runs / f"{name}-{suffix}.exit"
+      (runs / f"{name}.json").write_text(
+        json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+      )
+      exit_path.write_text(str(code), encoding="utf-8")
+    thread.join(timeout=1.5)
+    assert not thread.is_alive()
+    assert results == [
+      (
+        0,
+        "run alpha done: exit 0\nrun beta done: exit 7\nDO NOT END TURN. POLL AGAIN.\n",
+        "",
+      )
+    ]
+  finally:
+    thread.join(timeout=2)
     store.close()
 
 

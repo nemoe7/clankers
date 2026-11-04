@@ -24,7 +24,7 @@ from . import pre as pre_mod
 from .analytics import FALLBACK_SECONDS, FallbackAnalytics
 from .blocked_bash import append_blocked_bash
 from .display_paths import home_relative
-from .gates import FileGateStatus
+from .gates import FileGateStatus, RunCompletionWatcher
 from .git_safety import DirtyTreeError, completion_tree_check
 from .models import (
   MESSAGE_ID_RE,
@@ -390,6 +390,7 @@ def main(
       listed_tasks = tasks.list_tasks()
       initial_task = next((task for task, blocked in listed_tasks if not blocked), None)
       gate_status = FileGateStatus(resolved_state_dir)
+      run_watcher = RunCompletionWatcher(resolved_state_dir)
       if initial_task is None and not messages.has_pending_deliverables():
         running = set(gate_status.running_names())
         linked_runs = dict.fromkeys(
@@ -406,15 +407,23 @@ def main(
         timeout_seconds=1799.0,
         initial_task=initial_task,
         live_run=lambda: bool(gate_status.running_names()),
+        finished_run=run_watcher.finished,
       )
       messages.record_poll_duration(time.monotonic() - started)
-      if delivered["status"] == "timeout":
+      if delivered["messages"] or delivered["report_answers"]:
+        _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
+      if verdicts := delivered.get("run_verdicts", []):
+        for name, exit_code in verdicts:
+          print(f"run {name} done: exit {exit_code}", file=stdout)
+        print("DO NOT END TURN. POLL AGAIN.", file=stdout)
+        messages.request_poll_followup()
+      elif delivered["status"] == "timeout":
         print("Poll waited fully. End turn.", file=stdout)
       elif delivered["status"] == "skipped":
         print("User skipped poll. End turn.", file=stdout)
-      elif delivered["messages"] or delivered["report_answers"]:
-        _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
-      elif (task := delivered["next_task"]) is not None:
+      elif (task := delivered["next_task"]) is not None and not (
+        delivered["messages"] or delivered["report_answers"]
+      ):
         print(
           f"DO NOT END TURN, CONTINUE TASK: {task.title} | {task.id} | {task.type}",
           file=stdout,

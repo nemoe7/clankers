@@ -437,12 +437,21 @@ class MessageService:
     """Reset consecutive agent polls after another agent command."""
     if self._meta.get_meta("poll_repeat_at") not in (None, "0"):
       self._meta.set_meta("poll_repeat_at", "0")
+    if self._meta.get_meta("poll_followup") == "1":
+      self._meta.set_meta("poll_followup", "0")
+
+  def request_poll_followup(self) -> None:
+    """Permit the immediate poll requested by a completed detached run."""
+    self._meta.set_meta("poll_followup", "1")
 
   def check_repeat_poll(self) -> Message | None:
     """Flag a fast repeat before starting another agent poll."""
     now = int(time.time())
     with self._reports.transaction():
       previous = self._meta.get_meta("poll_repeat_at")
+      followup = self._meta.get_meta("poll_followup") == "1"
+      if followup:
+        self._meta.set_meta("poll_followup", "0")
       self._meta.set_meta("poll_repeat_at", str(now))
       try:
         recent = (
@@ -450,7 +459,7 @@ class MessageService:
         )
       except ValueError:
         recent = False
-      if not recent or self._meta.get_meta("poll_immediate") != "1":
+      if followup or not recent or self._meta.get_meta("poll_immediate") != "1":
         return None
       return self.flag_violation_once(
         "repeat-poll",
@@ -469,23 +478,30 @@ class MessageService:
     *,
     initial_task: Task | None = None,
     live_run: Callable[[], bool] | None = None,
+    finished_run: Callable[[], list[tuple[str, int]]] | None = None,
   ) -> dict[str, Any]:
-    """Wait for inbox work, an initial runnable task, or eligible Skip."""
+    """Wait for inbox work, an initial runnable task, a run, or eligible Skip."""
     timeout = max(0.0, min(float(timeout_seconds), 1799.0))
     deadline = time.monotonic() + timeout
     skipped = timed_out = False
     task: Task | None = None
+    verdicts: list[tuple[str, int]] = []
     self.touch_agent()
     if not self.has_pending_deliverables():
       task = initial_task
-      if task is None and not (live_run and live_run()):
-        skipped = self.consume_skip_poll()
-      if task is None and not skipped and timeout > 0:
+      if task is None:
+        verdicts = finished_run() if finished_run else []
+        if not verdicts and not (live_run and live_run()):
+          skipped = self.consume_skip_poll()
+      if task is None and not skipped and not verdicts and timeout > 0:
         with self._reports.transaction():
           self._meta.set_meta("polling_since", self._clock.now_iso())
           self._meta.set_meta("polling_at", self._clock.now_iso())
         try:
           while not self.has_pending_deliverables():
+            verdicts = finished_run() if finished_run else []
+            if verdicts:
+              break
             if not (live_run and live_run()) and self.consume_skip_poll():
               skipped = True
               break
@@ -504,16 +520,20 @@ class MessageService:
             self._meta.set_meta("polling_since", "")
     delivered = self.read_pending(mark_seen=True)
     inbox_ready = bool(delivered["messages"] or delivered["report_answers"])
-    if (skipped or timed_out) and not inbox_ready and task is None:
+    if (skipped or timed_out) and not inbox_ready and task is None and not verdicts:
       self._meta.set_meta("turn_ended_at", self._clock.now_iso())
     delivered["status"] = (
       "ready"
       if inbox_ready or task is not None
+      else "run_finished"
+      if verdicts
       else "skipped"
       if skipped
       else "timeout"
     )
     delivered["next_task"] = None if inbox_ready else task
+    if verdicts:
+      delivered["run_verdicts"] = verdicts
     return delivered
 
   def notify_new_work(self) -> None:
