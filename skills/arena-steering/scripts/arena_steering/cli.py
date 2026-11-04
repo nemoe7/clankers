@@ -1602,12 +1602,7 @@ def _print_delivered(delivered: dict[str, list], out: TextIO) -> None:
 
 
 def _print_message(msg: Message, out: TextIO) -> None:
-  flags: list[str] = [msg.status]
-  if msg.hidden:
-    flags.append("hidden")
-  if not msg.blocking:
-    flags.append("non-blocking")
-  print(f"`{msg.id}` ({', '.join(flags)}) [{msg.modified_at}]", file=out)
+  print(f"`{msg.id}` [{msg.modified_at}]", file=out)
   if msg.parent_refs:
     parents = (
       ", ".join(msg.parent_ids)

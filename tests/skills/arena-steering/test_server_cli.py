@@ -50,6 +50,28 @@ def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
   return code, out.getvalue(), err.getvalue()
 
 
+@pytest.mark.parametrize("command", ["read", "poll", "msg"])
+def test_cli_inbox_message_header_omits_status_metadata(
+  tmp_path: Path, command: str
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.messages.send_message("Visible work", msg_id="d4e5f6")
+    app.messages.send_message(
+      "Hidden context", msg_id="a1b2c3", hidden=True, blocking=False
+    )
+    args = ("msg", "a1b2c3") if command == "msg" else (command,)
+    code, out, err = _run_cli(state_dir, *args)
+    assert (code, err) == (0, "")
+    header = next(line for line in out.splitlines() if line.startswith("`a1b2c3`"))
+    assert header == f"`a1b2c3` [{store.get_message('a1b2c3').modified_at}]"
+    assert "Hidden context" in out
+  finally:
+    store.close()
+
+
 def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
   store = SqliteStore(state_dir / "state.sqlite3")
