@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import io
 import json
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
@@ -80,9 +82,7 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
 
     code, out, err = _run_cli(state_dir, "poll")
     assert (code, err) == (0, "")
-    assert out == (
-      "Poll: ready\nDO NOT END TURN, CONTINUE TASK: First task | first | docs\n"
-    )
+    assert out == "DO NOT END TURN, CONTINUE TASK: First task | first | docs\n"
     assert store.get_meta("skip_poll") == "1"  # Ready work outranks Skip poll.
     app.messages.consume_skip_poll()
     assert app.dispatch("GET", "/poll?timeout=0") == (
@@ -90,6 +90,56 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
       {"messages": [], "report_answers": []},
     )
   finally:
+    store.close()
+
+
+def test_cli_poll_wakes_when_initial_gate_finishes(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  exit_path = runs / "verify.exit"
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+  )
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.tasks.create_task(
+    "gate-task",
+    "Gate task",
+    size=2,
+    gate_names=["verify"],
+    type="docs",
+    details=["Wait for verify."],
+  )
+  assert app.tasks.get_task("gate-task")[1]
+  original_poll = cli.MessageService.poll
+
+  def short_poll(self, timeout_seconds=0.0, *, next_task=None, gate_task=None):
+    return original_poll(
+      self, timeout_seconds=1, next_task=next_task, gate_task=gate_task
+    )
+
+  monkeypatch.setattr(cli.MessageService, "poll", short_poll)
+  results: list[tuple[int, str, str]] = []
+  thread = threading.Thread(
+    target=lambda: results.append(_run_cli(state_dir, "poll")), daemon=True
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert store.get_meta("polling_at")
+    exit_path.write_text("0", encoding="utf-8")
+    thread.join(timeout=1.5)
+    assert not thread.is_alive()
+    assert results == [
+      (0, "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n", "")
+    ]
+  finally:
+    thread.join(timeout=2)
     store.close()
 
 
@@ -103,7 +153,7 @@ def test_cli_poll_delivers_inbox_before_ready_task(tmp_path: Path) -> None:
     app.messages.send_message(message_body, msg_id=MSG_ID_CLI)
     code, out, err = _run_cli(state_dir, "poll")
     assert (code, err) == (0, "")
-    assert out.startswith("Poll: ready\nInbox ")
+    assert out.startswith("Inbox ")
     assert message_body in out
     assert "DO NOT END TURN, CONTINUE TASK:" not in out
   finally:
@@ -119,18 +169,20 @@ def test_cli_poll_distinguishes_skip_and_timeout(
     app = SteeringApp(store)
     app.messages.trigger_skip_poll()
     code, out, err = _run_cli(state_dir, "poll")
-    assert (code, out, err) == (0, "Poll: skipped\n", "")
+    assert (code, out, err) == (0, "User skipped poll, end turn\n", "")
     assert store.get_meta("turn_ended_at")
     _run_cli(state_dir, "read")  # A real command resets the fast-repeat guard.
 
     original_poll = cli.MessageService.poll
 
-    def short_poll(self, timeout_seconds=0.0, *, next_task=None):
-      return original_poll(self, timeout_seconds=0.05, next_task=next_task)
+    def short_poll(self, timeout_seconds=0.0, *, next_task=None, gate_task=None):
+      return original_poll(
+        self, timeout_seconds=0.05, next_task=next_task, gate_task=gate_task
+      )
 
     monkeypatch.setattr(cli.MessageService, "poll", short_poll)
     code, out, err = _run_cli(state_dir, "poll")
-    assert (code, out, err) == (1, "Poll: timeout\n", "")
+    assert (code, out, err) == (1, "", "")
     assert store.get_meta("turn_ended_at")
   finally:
     store.close()

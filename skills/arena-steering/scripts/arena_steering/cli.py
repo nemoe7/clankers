@@ -354,14 +354,34 @@ def main(
         print(violation.body, file=stdout)
         return 2
 
-      def next_runnable_task() -> Task | None:
-        return next((task for task, blocked in tasks.list_tasks() if not blocked), None)
+      listed_tasks = tasks.list_tasks()
+      initial_task = next((task for task, blocked in listed_tasks if not blocked), None)
+      waiting_gate_ids = {
+        task.id
+        for task, blocked in listed_tasks
+        if blocked and tasks.has_running_gate(task)
+      }
+
+      def unblocked_gate_task() -> Task | None:
+        return next(
+          (
+            task
+            for task, blocked in tasks.list_tasks()
+            if task.id in waiting_gate_ids and not blocked
+          ),
+          None,
+        )
 
       started = time.monotonic()
-      delivered = messages.poll(timeout_seconds=1799.0, next_task=next_runnable_task)
+      delivered = messages.poll(
+        timeout_seconds=1799.0,
+        next_task=lambda: initial_task,
+        gate_task=unblocked_gate_task if waiting_gate_ids else None,
+      )
       messages.record_poll_duration(time.monotonic() - started)
-      print(f"Poll: {delivered['status']}", file=stdout)
-      if delivered["messages"] or delivered["report_answers"]:
+      if delivered["status"] == "skipped":
+        print("User skipped poll, end turn", file=stdout)
+      elif delivered["messages"] or delivered["report_answers"]:
         _print_delivered(delivered, stdout)
       elif (task := delivered["next_task"]) is not None:
         print(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import threading
 import time
@@ -133,24 +134,58 @@ def test_timed_out_poll_marks_turn_end() -> None:
     store.close()
 
 
-def test_agent_poll_wakes_for_task_created_on_another_connection(
-  tmp_path: Path,
-) -> None:
+def test_agent_poll_checks_task_once_at_entry() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  task_checks: list[bool] = []
+
+  def next_task():
+    task_checks.append(True)
+
+  try:
+    delivered = app.messages.poll(timeout_seconds=0.4, next_task=next_task)
+    assert delivered["status"] == "timeout"
+    assert delivered["next_task"] is None
+    assert task_checks == [True]
+    assert store.get_meta("turn_ended_at")
+  finally:
+    store.close()
+
+
+def test_agent_poll_wakes_for_gate_linked_task_present_at_start(tmp_path: Path) -> None:
   db = tmp_path / "state.sqlite3"
   polling_store = SqliteStore(db)
   other_store = SqliteStore(db)
   poller = SteeringApp(polling_store)
   sender = SteeringApp(other_store)
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  exit_path = runs / "verify.exit"
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+  )
+  sender.tasks.create_task(
+    "gate-task", "Gate task", size=3, gate_names=["verify"], details=["Wait for gate."]
+  )
+  gate_id = "gate-task"
+  assert poller.tasks.has_running_gate(poller.tasks.get_task(gate_id)[0])
   delivered: list[dict] = []
 
-  def next_task():
+  def gate_task():
     return next(
-      (task for task, blocked in poller.tasks.list_tasks() if not blocked), None
+      (
+        task
+        for task, blocked in poller.tasks.list_tasks()
+        if task.id == gate_id and not blocked
+      ),
+      None,
     )
 
   thread = threading.Thread(
     target=lambda: delivered.append(
-      poller.messages.poll(timeout_seconds=3, next_task=next_task)
+      poller.messages.poll(
+        timeout_seconds=2, next_task=lambda: None, gate_task=gate_task
+      )
     ),
     daemon=True,
   )
@@ -160,17 +195,13 @@ def test_agent_poll_wakes_for_task_created_on_another_connection(
     while not other_store.get_meta("polling_at") and time.monotonic() < deadline:
       time.sleep(0.02)
     assert other_store.get_meta("polling_at")
-    sender.tasks.create_task(
-      "new-task", "New task", size=3, type="docs", details=["Verify task wake."]
-    )
-    thread.join(timeout=2.5)
+    exit_path.write_text("0", encoding="utf-8")
+    thread.join(timeout=1.5)
     assert not thread.is_alive()
     assert delivered[0]["status"] == "ready"
-    assert delivered[0]["next_task"].id == "new-task"
-    assert not polling_store.get_meta("turn_ended_at")
-    assert not polling_store.get_meta("polling_at")
+    assert delivered[0]["next_task"].id == "gate-task"
   finally:
-    thread.join(timeout=6)
+    thread.join(timeout=3)
     polling_store.close()
     other_store.close()
 
