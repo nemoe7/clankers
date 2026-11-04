@@ -2243,13 +2243,19 @@ def test_task_marker_tracks_first_line_of_wrapped_title(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
+def test_tasks_toolbar_divider_and_fade_follow_scroll(tmp_path: Path) -> None:
   import base64
 
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
-  app = SteeringApp(store, repo_name="Task divider regression")
-  app.tasks.create_task("work", "Work", size=3, details=["Review"])
+  app = SteeringApp(store, repo_name="Task edge regression")
+  for index in range(28):
+    app.tasks.create_task(
+      f"work-{index:02d}",
+      f"Work item {index} with a longer title",
+      size=3,
+      details=["Review"],
+    )
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -2261,7 +2267,11 @@ def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
       try:
-        for name, width, height in (("desktop", 1200, 700), ("mobile", 390, 844)):
+        for name, width, height in (
+          ("desktop", 1372, 883),
+          ("landscape", 855, 325),
+          ("mobile", 411, 799),
+        ):
           page = browser.new_page(viewport={"width": width, "height": height})
           page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
           page.locator("#tab-tasks").click()
@@ -2304,6 +2314,40 @@ def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
           )
           assert expected_contrast > 0
           assert visible_contrast >= expected_contrast / 2
+          edge = page.evaluate("""() => {
+            const pane = document.querySelector('#view-tasks');
+            const toolbar = document.querySelector('.tasks-toolbar');
+            const fade = getComputedStyle(toolbar, '::after');
+            return {
+              remaining: pane.scrollHeight - pane.clientHeight,
+              opacity: Number(fade.opacity),
+              fadeHeight: parseFloat(fade.height),
+              fadeBottom: parseFloat(fade.bottom),
+              paneTop: pane.getBoundingClientRect().top,
+              toolbarTop: toolbar.getBoundingClientRect().top,
+              bottomFade: getComputedStyle(document.querySelector('.tasks-layout'), '::after').content,
+            };
+          }""")
+          assert edge["remaining"] >= 36, edge
+          assert edge["opacity"] < 0.01, edge
+          assert edge["fadeBottom"] == -edge["fadeHeight"], edge
+          assert abs(edge["toolbarTop"] - edge["paneTop"]) < 1, edge
+          assert edge["bottomFade"] != "none", edge
+          page.locator("#view-tasks").evaluate("element => element.scrollTop = 260")
+          page.wait_for_function("""() => {
+            const pane = document.querySelector('#view-tasks');
+            const toolbar = document.querySelector('.tasks-toolbar');
+            const fade = getComputedStyle(toolbar, '::after');
+            return pane.scrollTop >= 36 && Number(fade.opacity) > 0.99;
+          }""")
+          page.screenshot(path=str(tmp_path / f"tasks-fade-scrolled-{name}.png"))
+          page.emulate_media(reduced_motion="reduce")
+          assert (
+            page.evaluate("""() =>
+            getComputedStyle(document.querySelector('.tasks-toolbar'), '::after').content
+          """)
+            == "none"
+          )
           assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
           page.close()
       finally:

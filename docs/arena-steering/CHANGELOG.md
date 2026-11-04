@@ -38,6 +38,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`, `test_web_ui.py`: Anchor the Tasks top fade below its sticky toolbar after scrolling. Keep it absent at rest.
+
 - `assets/style.css`, `test_web_ui.py`: Fade report-table edges only while more columns remain past that edge. Keep native scrolling.
 
 - `assets/style.css`: Remove shared main-panel top padding and the Tasks-only fade gap. Retain inline and bottom spacing.
