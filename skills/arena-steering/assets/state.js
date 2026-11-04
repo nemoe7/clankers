@@ -78,7 +78,7 @@ export function createStore(initial = {}) {
     messagesLoading: false,
     tasks: [],
     reports: [],
-    replyParentIds: [],
+    replyParentRefs: [],
     composerAttachments: [],
     composerExpanded: false,
     composerError: "",

@@ -270,9 +270,12 @@ export function renderReportsView(container, state, handlers) {
   const updatedAt = activeReport.updated_at || activeReport.modified_at;
   const modIso = escapeHtml(updatedAt || "");
   const modRel = escapeHtml(relativeTime(updatedAt));
+  const reportParentSelected = (state.replyParentRefs || []).some(
+    (ref) => ref.type === "report" && ref.id === activeReport.id
+  );
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
-      <code class="msg-id">${escapeHtml(activeReport.id)}</code>
+      <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}" title="${reportParentSelected ? "Remove" : "Select"} report as message parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
       <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
     </div>
   `;

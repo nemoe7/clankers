@@ -96,9 +96,6 @@ OPTION_CUSTOM_CLASS = "option-custom"
 ON_THIS_PAGE_TEXT = "On this page"
 REPORT_PICKER_META_CLASS = "report-picker-meta"
 TASK_SECTION_TITLE_FONT_SIZE = "font-size: 18px;"
-EARLIER_LINK_BLUE_RGB = "rgb(110, 163, 214)"
-
-
 NOTES_PIP_ID = 'id="notes-pip"'
 REPORT_PIP_ID = 'id="report-pip"'
 TAB_BADGE_CLASS = "tab-badge"
@@ -117,7 +114,8 @@ REPLY_PARENT_CHIP_CLASS = "reply-parent-chip"
 COMPOSER_REPLY_BAR_ID = 'id="composer-reply-bar"'
 COMPOSER_REPLY_CHIP_CLASS = "composer-reply-chip"
 PARENT_IDS_FIELD = "parent_ids"
-REPLY_PARENT_IDS_STATE = "replyParentIds"
+PARENT_REFS_FIELD = "parent_refs"
+REPLY_PARENT_REFS_STATE = "replyParentRefs"
 TOGGLE_REPLY_PARENT_HANDLER = "onToggleReplyParent"
 STATIC_ASSET_PREFIX = "/static/assets/"
 STATIC_STYLE_HREF = 'href="/static/assets/style.css"'
@@ -581,24 +579,27 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         ), message.aria_snapshot()
         assert message.get_by_role("checkbox", name="Nested item").count() == 1
         assert message.get_by_role("link", name="details").count() == 1
-        reference = message.locator('button.reference-link[data-reference-id="ref012"]')
-        reference.wait_for()
-        assert reference.count() == 1
-        assert reference.locator(":scope > code").count() == 1
-        assert "baselGroteskMono" in reference.locator("code").evaluate(
-          "element => getComputedStyle(element).fontFamily"
+        assert message.locator('button[data-reference-id="ref012"]').count() == 0
+        assert (
+          message.locator("code").filter(has_text=re.compile(r"^ref012$")).count() == 1
         )
         receipt = page.locator('.message[data-msg-id="cc0401"] .receipt')
-        task_code = receipt.locator(
-          '.reference-link[data-reference-id="ref013"] > code'
+        reference = receipt.locator(
+          'button.reply-parent-chip[data-reference-id="ref013"]'
         )
-        assert task_code.count() == 1
+        reference.wait_for()
+        assert reference.get_attribute("aria-label") == "Open task ref013"
+        assert reference.inner_text() == "ref013"
         assert (
-          task_code.evaluate("element => getComputedStyle(element).color")
-          == EARLIER_LINK_BLUE_RGB
+          receipt.locator(
+            '.reply-parent-chip[data-reference-type="task"] > code'
+          ).count()
+          == 1
         )
         assert (
-          receipt.locator('.reply-parent-chip[data-parent-id="cc0400"] > code').count()
+          receipt.locator(
+            '.reply-parent-chip[data-reference-type="message"] > code'
+          ).count()
           == 1
         )
         for interaction in (None, "hover", "focus"):
@@ -619,7 +620,6 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
           const a = luminance(color), b = luminance(background);
           return {color, background, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)};
         }""")
-        assert contrast["color"] == EARLIER_LINK_BLUE_RGB, (interaction, contrast)
         assert contrast["ratio"] >= 4.5, (interaction, contrast)
         page.screenshot(path=str(tmp_path / f"checklist-message-{width}.png"))
 
@@ -631,15 +631,16 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         )
         report_checkbox.wait_for()
         assert report_checkbox.count() == 1
-        assert report.locator(".report-meta [data-auto-reference]").count() == 0
         assert report.get_by_role("checkbox", name="Nested item").count() == 1
         assert report.get_by_role("link", name="details").count() == 1
+        assert report.locator('button[data-reference-id="ref012"]').count() == 0
         assert (
-          report.locator('[data-auto-reference][data-reference-id="ref012"]').count()
-          == 1
+          report.locator("code").filter(has_text=re.compile(r"^ref012$")).count() == 1
         )
         assert (
-          report.locator('.reference-link[data-reference-id="ref012"] > code').count()
+          report.locator(
+            'button[data-parent-type="report"][data-parent-id="repair"]'
+          ).count()
           == 1
         )
         image_el = report.locator('img[alt="Wide evidence"]')
@@ -668,16 +669,17 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
         page.screenshot(path=str(tmp_path / f"checklist-report-{width}.png"))
 
         page.locator("#tab-tasks").click()
-        detail = page.locator('[data-task-id="ref013"] .task-detail')
-        detail.wait_for(state="attached")
-        assert (
-          detail.locator(
-            '[data-auto-reference][data-reference-id="ref012"] > code'
-          ).count()
-          == 1
+        page.locator('[data-task-id="ref013"] details.task-details > summary').click()
+        detail = page.locator('[data-task-id="ref013"] .task-detail').filter(
+          has_text="See `ref012`"
         )
+        detail.wait_for(state="visible")
+        assert detail.locator('[data-reference-id="ref012"]').count() == 0
+        assert "`ref012`" in detail.inner_text()
         assert (
-          detail.locator('[data-auto-reference][data-reference-id="ref012"]').count()
+          page.locator(
+            'button[data-parent-type="task"][data-parent-id="ref013"]'
+          ).count()
           == 1
         )
       finally:
@@ -956,23 +958,25 @@ def test_multi_message_reply_assets() -> None:
   assert COMPOSER_REPLY_BAR_ID in messages_js
   assert COMPOSER_REPLY_CHIP_CLASS in messages_js
   assert PARENT_IDS_FIELD in messages_js
-  assert "↪" in messages_js
+  assert PARENT_REFS_FIELD in messages_js
+  assert "data-reference-type" in messages_js
 
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
-  assert REPLY_PARENT_IDS_STATE in app_js
+  assert REPLY_PARENT_REFS_STATE in app_js
   assert TOGGLE_REPLY_PARENT_HANDLER in app_js
   assert "event.shiftKey" in app_js
 
   api_js = (ASSETS_DIR / "api.js").read_text(encoding="utf-8")
   assert PARENT_IDS_FIELD in api_js
+  assert PARENT_REFS_FIELD in api_js
 
   state_js = (ASSETS_DIR / "state.js").read_text(encoding="utf-8")
-  assert REPLY_PARENT_IDS_STATE in state_js
+  assert REPLY_PARENT_REFS_STATE in state_js
 
   style_css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
   assert ".composer-reply-bar" in style_css
   assert ".reply-parent-chip" in style_css
-  assert ".receipt-id" in style_css
+  assert ".parent-id-button" in style_css
 
 
 def test_static_asset_contract_assets() -> None:
@@ -1300,31 +1304,6 @@ assert.equal(state.composerAttachments.length, 0);
   assert result.returncode == 0, result.stderr
 
 
-def test_reference_index_omits_ambiguous_ids():
-  script = r"""
-import assert from 'node:assert/strict';
-import { referenceTargets } from './skills/arena-steering/assets/references.js';
-const index = referenceTargets({
-  messages: [{id:'a1b2c3'}, {id:'shared'}],
-  reports: [{id:'report-one'}, {id:'shared'}],
-  tasks: [{id:'task-one'}],
-});
-assert.equal(index.get('a1b2c3'), 'message');
-assert.equal(index.get('report-one'), 'report');
-assert.equal(index.get('task-one'), 'task');
-assert.equal(index.get('shared'), null);
-assert.equal(index.has('unknown'), false);
-"""
-  result = subprocess.run(
-    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
-    cwd=SKILL_DIR.parents[1],
-    capture_output=True,
-    text=True,
-    check=False,
-  )
-  assert result.returncode == 0, result.stderr
-
-
 def test_report_navigation_preloads_on_pointer_and_keyboard_intent():
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
   assert 'addEventListener("pointerover", preloadReport)' in app_js
@@ -1384,7 +1363,7 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
       f'- ( ) {answer} <!-- option {{"label": "{answer}"}} -->\n'
     ),
   )
-  app.tasks.create_task(
+  task = app.tasks.create_task(
     "work", "Review choice", size=3, details=["Review"], report_ids=["choice"]
   )
   app.reports.submit_answer("choice", {"choice": answer}, answer_id="ba2001")
@@ -1418,7 +1397,13 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
             }"""
           )
           details = row.locator("li.task-detail").all_text_contents()
-          assert details == ["Report: choice", "Review", f"Choice?: {answer}"]
+          assert details == [
+            f"Priority: {task.priority}",
+            f"Size: {task.size}",
+            "Report: choice",
+            "Review",
+            f"Choice?: {answer}",
+          ]
           assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
           assert not errors
           page.screenshot(path=str(tmp_path / f"task-details-{name}.png"))
@@ -1590,6 +1575,136 @@ def test_tasks_toolbar_divider_remains_visible(tmp_path: Path) -> None:
           assert visible_contrast >= expected_contrast / 2
           assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
           page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_displayed_ids_choose_typed_composer_parents(
+  width: int, tmp_path: Path
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Typed composer parents")
+  app.messages.send_message(
+    "Parent note. Plain task-parent stays text.", msg_id="aa1001", blocking=False
+  )
+  app.tasks.create_task("task-parent", "Task title", size=3, details=["Review"])
+  app.reports.publish_report(
+    "report-parent", "Report title", "# Report title\n\n`task-parent` stays code."
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-tasks").click()
+        task_row = page.locator('.task[data-task-id="task-parent"]')
+        assert "task-parent" not in task_row.inner_text()
+        task_row.locator('button.task-title[data-parent-type="task"]').click()
+        page.locator('#tab-messages[aria-selected="true"]').wait_for()
+        assert page.locator("#msg").evaluate("el => document.activeElement === el")
+        page.locator("#tab-reports").click()
+        report_button = page.locator(
+          'button[data-parent-type="report"][data-parent-id="report-parent"]'
+        )
+        report_button.click(modifiers=["Shift"])
+        assert page.locator('#tab-reports[aria-selected="true"]').count() == 1
+        assert page.locator(
+          "#composer-reply-bar .composer-reply-chip"
+        ).all_text_contents() == ["task-parent"]
+        report_button.click()
+        page.locator('#tab-messages[aria-selected="true"]').wait_for()
+        assert page.locator("#msg").evaluate("el => document.activeElement === el")
+        page.locator("#tab-reports").click()
+        assert (
+          page.locator('article#report button[data-reference-id="task-parent"]').count()
+          == 0
+        )
+        page.locator("#tab-messages").click()
+        receipt_button = page.locator(
+          'button[data-parent-type="message"][data-parent-id="aa1001"]'
+        ).first
+        receipt_button.click(modifiers=["Shift"])
+        assert page.locator(
+          "#composer-reply-bar .composer-reply-chip"
+        ).all_text_contents() == [
+          "task-parent",
+          "report-parent",
+        ]
+        receipt_button.click()
+        chips = page.locator("#composer-reply-bar .composer-reply-chip")
+        assert chips.all_text_contents() == [
+          "task-parent",
+          "report-parent",
+          "aa1001",
+        ]
+        message_text = page.locator('.message[data-msg-id="aa1001"] .message-text')
+        assert message_text.get_by_text("task-parent", exact=False).count() == 1
+        assert message_text.locator("button").count() == 0
+        page.screenshot(path=str(tmp_path / f"typed-composer-parents-{width}.png"))
+        page.locator("#msg").fill("Child from browser")
+        page.locator("#send").click()
+        page.locator(".message").filter(has_text="Child from browser").wait_for()
+        child = next(
+          msg
+          for msg in app.messages.list_messages(unread_only=False, include_hidden=True)
+          if msg.body == "Child from browser"
+        )
+        assert child.parent_refs == [
+          {"type": "task", "id": "task-parent"},
+          {"type": "report", "id": "report-parent"},
+          {"type": "message", "id": "aa1001"},
+        ]
+        assert child.parent_ids == ["aa1001"]
+        child_row = page.locator(f'.message[data-msg-id="{child.id}"]')
+        child_row.wait_for()
+        assert child_row.locator(".receipt .reply-parent-chip").all_text_contents() == [
+          "task-parent",
+          "report-parent",
+          "aa1001",
+        ]
+        nav = child_row.locator(
+          'button.reply-parent-chip[data-reference-type="task"][data-reference-id="task-parent"]'
+        )
+        assert nav.get_attribute("aria-label") == "Open task task-parent"
+        nav.focus()
+        page.keyboard.press("Enter")
+        page.locator('#tab-tasks[aria-selected="true"]').wait_for()
+        assert page.locator('.task[data-task-id="task-parent"]').count() == 1
+        page.locator("#tab-messages").click()
+        child_row.locator(
+          'button.reply-parent-chip[data-reference-type="report"][data-reference-id="report-parent"]'
+        ).click()
+        page.locator('#tab-reports[aria-selected="true"]').wait_for()
+        assert (
+          page.locator(
+            'button[data-parent-type="report"][data-parent-id="report-parent"]'
+          ).count()
+          == 1
+        )
+        page.locator("#tab-messages").click()
+        child_row.locator(
+          'button.reply-parent-chip[data-reference-type="message"][data-reference-id="aa1001"]'
+        ).click()
+        page.locator('.message[data-msg-id="aa1001"][data-highlight="true"]').wait_for()
       finally:
         browser.close()
   finally:
@@ -2072,7 +2187,7 @@ def test_message_search_can_page_while_an_old_query_is_loading() -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_retained_message_references_follow_loaded_targets() -> None:
+def test_retained_id_like_markdown_stays_plain_as_history_pages_change() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Message reference paging regression")
@@ -2099,15 +2214,9 @@ def test_retained_message_references_follow_loaded_targets() -> None:
           "document.querySelectorAll('#history .message').length === 20"
         )
         card = page.locator('.message[data-msg-id="00002c"]')
-        old_task_link = card.locator(
-          '[data-auto-reference][data-reference-id="00000a"]'
-        )
-        old_task_link.wait_for()
-        assert old_task_link.count() == 1
-        assert old_task_link.get_attribute("data-reference-type") == "task"
-        assert (
-          card.locator('[data-auto-reference][data-reference-id="00000b"]').count() == 0
-        )
+        card.locator("code").filter(has_text=re.compile(r"^00000a$")).wait_for()
+        assert card.locator(".message-text button").count() == 0
+        assert card.locator(".message-text code").count() == 2
         page.evaluate(
           "window.retainedReferenceCard = document.querySelector('.message[data-msg-id=\"00002c\"]')"
         )
@@ -2116,27 +2225,12 @@ def test_retained_message_references_follow_loaded_targets() -> None:
           "document.querySelectorAll('#history .message').length === 40"
         )
         assert page.evaluate("window.retainedReferenceCard.isConnected")
-        assert old_task_link.count() == 0
-        assert (
-          card.locator("code").filter(has_text=re.compile(r"^00000a$")).count() == 1
-        )
-        new_message_link = card.locator(
-          '[data-auto-reference][data-reference-id="00000b"]'
-        )
-        assert new_message_link.get_attribute("data-reference-type") == "message"
-        assert "00000a" in card.inner_text()
+        assert card.locator(".message-text button").count() == 0
+        assert card.locator(".message-text code").count() == 2
         app.tasks.remove_task("00000a")
-        page.wait_for_function(
-          """() => {
-          const card = document.querySelector('.message[data-msg-id="00002c"]');
-          const link = card?.querySelector('[data-auto-reference][data-reference-id="00000a"]');
-          return link?.dataset.referenceType === 'message';
-        }""",
-          timeout=6000,
-        )
-        assert (
-          card.locator('[data-auto-reference][data-reference-id="00000a"]').count() == 1
-        )
+        page.wait_for_timeout(200)
+        assert card.locator(".message-text button").count() == 0
+        assert "00000a" in card.inner_text()
       finally:
         browser.close()
   finally:

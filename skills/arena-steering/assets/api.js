@@ -290,8 +290,8 @@ export const api = {
   getMessage(id) {
     return requestJson("GET", `/messages/${encodeURIComponent(id)}`);
   },
-  sendMessage({ body, hidden = false, blocking = true, parent_ids = [], request_id }) {
-    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids, request_id });
+  sendMessage({ body, hidden = false, blocking = true, parent_ids = [], parent_refs, request_id }) {
+    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids, parent_refs, request_id });
   },
   markRepliesSeen(id, revision) {
     return requestJson("POST", `/messages/${encodeURIComponent(id)}/replies-seen`, { revision });
@@ -307,6 +307,7 @@ export const api = {
     hidden = false,
     blocking = true,
     parent_ids = [],
+    parent_refs = undefined,
     attachments = [],
     pasted_text = undefined,
     request_id = undefined,
@@ -316,6 +317,7 @@ export const api = {
       hidden,
       blocking,
       parent_ids,
+      parent_refs,
       attachments,
       pasted_text,
       request_id,

@@ -121,6 +121,11 @@ function stateDotForStatus(status) {
   return "sent";
 }
 
+function parentControls(type, id) {
+  const label = escapeHtml(`${type} ${id}`);
+  return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}" title="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
+}
+
 export function messageQueryKey(state) {
   return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
 }
@@ -257,9 +262,11 @@ export function renderMessagesView(container, state, handlers) {
 
   const showHidden = Boolean(state.showHidden);
   const query = (state.searchQuery || "").trim().toLowerCase();
-  const selectedReplyParentIds = Array.isArray(state.replyParentIds)
-    ? state.replyParentIds
+  const selectedParentRefs = Array.isArray(state.replyParentRefs)
+    ? state.replyParentRefs
     : [];
+  const isParentSelected = (type, id) =>
+    selectedParentRefs.some((ref) => ref.type === type && ref.id === id);
   const composerAttachments = Array.isArray(state.composerAttachments)
     ? state.composerAttachments
     : [];
@@ -321,19 +328,16 @@ export function renderMessagesView(container, state, handlers) {
             : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
-            ? ` · ${linkedTasks.map((tid) => `<button type="button" class="reference-link" data-reference-type="task" data-reference-id="${escapeHtml(tid)}"><code>${escapeHtml(tid)}</code></button>`).join(", ")}`
+            ? ` · ${linkedTasks.map((tid) => parentControls("task", tid)).join(" ")}`
             : "";
-          const parentIds = Array.isArray(msg.parent_ids) ? msg.parent_ids : [];
-          const parentsSuffix = parentIds.length
-            ? ` · ${parentIds
-                .map(
-                  (pid) =>
-                    `<button type="button" class="reply-parent-chip" data-parent-id="${escapeHtml(pid)}" title="Go to parent message">↪ <code>${escapeHtml(pid)}</code></button>`
-                )
-                .join(" ")}`
+          const parentRefs = Array.isArray(msg.parent_refs) && msg.parent_refs.length
+            ? msg.parent_refs
+            : (msg.parent_ids || []).map((id) => ({ type: "message", id }));
+          const parentsSuffix = parentRefs.length
+            ? ` · ${parentRefs.map((ref) => parentControls(ref.type, ref.id)).join(" ")}`
             : "";
-          const replySelected = selectedReplyParentIds.includes(msg.id);
-          messageSignatures.set(msg.id, JSON.stringify({ msg, linkedTasks, replySelected, query }));
+          const replySelected = isParentSelected("message", msg.id);
+          messageSignatures.set(msg.id, JSON.stringify({ msg, linkedTasks, selectedParentRefs, query }));
 
           return `
             <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
@@ -342,7 +346,7 @@ export function renderMessagesView(container, state, handlers) {
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 <span class="state-dot" data-state="${dotState}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}></span>
-                <code class="msg-id receipt-id" data-msg-id="${escapeHtml(msg.id)}" data-reply-selected="${replySelected ? "true" : "false"}" title="Reply to message. Shift+Click copies ID">${escapeHtml(msg.id)}</code>
+                <button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>
                 · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${parentsSuffix}${flagsSuffix}${filesSuffix}${tasksSuffix}
               </p>
             </li>
@@ -419,14 +423,14 @@ export function renderMessagesView(container, state, handlers) {
           <div
             id="composer-reply-bar"
             class="composer-reply-bar"
-            aria-label="Replying to messages"
-            ${selectedReplyParentIds.length ? "" : "hidden"}
+            aria-label="Selected parents"
+            ${selectedParentRefs.length ? "" : "hidden"}
           >
-            <span class="composer-reply-label">Replying to</span>
-            ${selectedReplyParentIds
+            <span class="composer-reply-label">Parents</span>
+            ${selectedParentRefs
               .map(
-                (pid) =>
-                  `<button type="button" class="composer-reply-chip" data-remove-reply-parent="${escapeHtml(pid)}" title="Remove reply parent">↪ ${escapeHtml(pid)} ×</button>`
+                (ref) =>
+                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent" title="Remove parent">${escapeHtml(ref.id)}</button>`
               )
               .join("")}
           </div>
@@ -633,16 +637,6 @@ export function renderMessagesView(container, state, handlers) {
   listen(logEditedBtn, "click", () => {
     if (unreadEditedMsgId) handlers.onNavigateReference?.("message", unreadEditedMsgId);
   });
-
-  for (const chip of container.querySelectorAll(".reply-parent-chip")) {
-    chip.onclick = () => handlers.onNavigateReference?.("message", chip.dataset.parentId);
-  }
-
-  for (const chip of container.querySelectorAll("[data-remove-reply-parent]")) {
-    listen(chip, "click", () => {
-      handlers.onToggleReplyParent?.(chip.dataset.removeReplyParent);
-    });
-  }
 
   for (const chip of container.querySelectorAll(
     "[data-remove-composer-attachment]"
@@ -933,7 +927,8 @@ export function renderMessagesView(container, state, handlers) {
     pinnedToBottom = true;
     submitPayload({
       body,
-      parent_ids: [...selectedReplyParentIds],
+      parent_ids: selectedParentRefs.filter((ref) => ref.type === "message").map((ref) => ref.id),
+      parent_refs: selectedParentRefs.map((ref) => ({ ...ref })),
       attachments: composerAttachments.map((item) => item.attachment),
       attachmentIds: composerAttachments.map((item) => item.id),
       rawDraft: submittedDraft,

@@ -1493,11 +1493,28 @@ code.msg-id {
   font-size: 1em;
   background: none;
   padding: 0;
-  cursor: pointer;
-  transition: color var(--fast) var(--ease);
 }
 
-code.msg-id.receipt-id[data-reply-selected="true"] {
+.parent-id-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.parent-id-button code {
+  color: inherit;
+  font-family: var(--font-basel-grotesk-mono);
+  font-size: inherit;
+}
+
+.parent-id-button[aria-pressed="true"] {
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1868,9 +1885,15 @@ code.msg-id.receipt-id[data-reply-selected="true"] {
 }
 
 .task-title {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--text-primary));
+  font: inherit;
   font-size: 16px;
   font-weight: 400;
-  color: hsl(var(--text-primary));
+  text-align: left;
+  cursor: pointer;
 }
 
 .task-title[data-blocked="true"] {
@@ -3025,15 +3048,4 @@ article#report.report img,
 .reply-seen-sentinel {
   display: block;
   height: 1px;
-}
-
-.reference-link {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--link);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
 }

@@ -87,9 +87,10 @@ function taskMatchesFilter(task) {
   return haystack.includes(taskSearchQuery);
 }
 
-function renderTaskRow(task) {
+function renderTaskRow(task, selectedParentRefs) {
   const details = taskDetailLines(task);
   const count = details.length;
+  const selected = selectedParentRefs.some((ref) => ref.type === "task" && ref.id === task.id);
   const isOpen =
     openTaskDetails.has(task.id) ||
     Boolean(
@@ -109,8 +110,8 @@ function renderTaskRow(task) {
     : "";
 
   return `
-    <li class="task" data-task-id="${escapeHtml(task.id)}" title="Task ${escapeHtml(task.id)}">
-      <span class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}">${escapeHtml(task.title)}</span>
+    <li class="task" data-task-id="${escapeHtml(task.id)}">
+      <button type="button" class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}" data-parent-type="task" data-parent-id="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.title)}: task ${escapeHtml(task.id)} as message parent" aria-pressed="${selected ? "true" : "false"}" title="${selected ? "Remove" : "Select"} task as message parent">${escapeHtml(task.title)}</button>
       ${formatTaskPhases(task)}
       ${detailsHtml}
     </li>
@@ -123,6 +124,7 @@ export function renderTasksView(container, state) {
   const signal = taskRenderEvents.signal;
   const prevScrollTop = container.scrollTop || 0;
   const allTasks = state.tasks || [];
+  const selectedParentRefs = state.replyParentRefs || [];
 
   const activeTasks = allTasks.filter((t) => t.status !== "finished");
   const finishedTasks = allTasks.filter((t) => t.status === "finished");
@@ -181,21 +183,21 @@ export function renderTasksView(container, state) {
       <div id="tasks-current" class="task-div" ${currentTasks.length ? "" : "hidden"}>
         <h2 id="tasks-current-title" class="task-section-title">Current</h2>
         <ul id="tasks-current-body" class="task-list">
-          ${currentTasks.map(renderTaskRow).join("")}
+          ${currentTasks.map((task) => renderTaskRow(task, selectedParentRefs)).join("")}
         </ul>
       </div>
 
       <div id="tasks-upcoming" class="task-div" ${upcomingTasks.length ? "" : "hidden"}>
         <h2 id="tasks-upcoming-title" class="task-section-title">Upcoming</h2>
         <ul id="tasks-upcoming-body" class="task-list">
-          ${upcomingTasks.map(renderTaskRow).join("")}
+          ${upcomingTasks.map((task) => renderTaskRow(task, selectedParentRefs)).join("")}
         </ul>
       </div>
 
       <div id="tasks-finished" class="task-div" ${shownFinished.length ? "" : "hidden"}>
         <h2 id="tasks-finished-title" class="task-section-title">Finished</h2>
         <ul id="tasks-finished-body" class="task-list">
-          ${shownFinished.map(renderTaskRow).join("")}
+          ${shownFinished.map((task) => renderTaskRow(task, selectedParentRefs)).join("")}
         </ul>
       </div>
     </div>

@@ -9,7 +9,6 @@ import {
   hydrateMermaidBlocks,
   toggleCodeMermaid,
 } from "./markdown.js";
-import { linkReferences } from "./references.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
 import { createStore, writePendingSend } from "./state.js";
@@ -340,7 +339,7 @@ let searchBase = null;
 export function messageMatchesQuery(message, query) {
   const needle = String(query || "").trim().toLowerCase();
   if (!needle) return true;
-  const haystacks = [message.id, message.body, ...(message.parent_ids || []), ...(message.acks || [])];
+  const haystacks = [message.id, message.body, ...(message.parent_refs || []).map((ref) => ref.id), ...(message.parent_ids || []), ...(message.acks || [])];
   return haystacks.some((item) => String(item || "").toLowerCase().includes(needle));
 }
 
@@ -446,14 +445,14 @@ async function refreshAll(force = false) {
       await ensureReportCached(selectedReportId, selectedSummary?.modified_at);
     }
     const reports = hydrateReportsWithCache(reportSummaries);
-    const replyParentIds = curState.replyParentIds || [];
+    const replyParentRefs = curState.replyParentRefs || [];
     const nextSignature = JSON.stringify({
       messages,
       tasks,
       reports,
       survey,
       selectedReportId,
-      replyParentIds,
+      replyParentRefs,
       showHidden: Boolean(curState.showHidden),
     });
     if (!force && nextSignature === lastDataSignature) {
@@ -465,7 +464,7 @@ async function refreshAll(force = false) {
       reports,
       survey,
       selectedReportId,
-      replyParentIds,
+      replyParentRefs,
     });
   } catch (err) {
     console.error(err);
@@ -486,7 +485,15 @@ const handlers = {
       const attachments = pending
         ? payload.attachments || []
         : await composerUploads.readyForSend(payload.attachmentIds || []);
-      const content = { body: payload.body, parent_ids: payload.parent_ids || [], attachments };
+      const parentRefs = payload.parent_refs || [];
+      const content = {
+        body: payload.body,
+        parent_ids: parentRefs.length
+          ? parentRefs.filter((ref) => ref.type === "message").map((ref) => ref.id)
+          : payload.parent_ids || [],
+        attachments,
+      };
+      if (parentRefs.length) content.parent_refs = parentRefs;
       if (pending && JSON.stringify(pending.content) !== JSON.stringify(content)) {
         throw new Error("Retry the unconfirmed send before sending changes");
       }
@@ -502,8 +509,8 @@ const handlers = {
       } else {
         await api.sendMessage(request);
       }
-      if (JSON.stringify(store.getState().replyParentIds || []) === JSON.stringify(request.parent_ids)) {
-        store.setState({ replyParentIds: [] });
+      if (JSON.stringify(store.getState().replyParentRefs || []) === JSON.stringify(request.parent_refs || [])) {
+        store.setState({ replyParentRefs: [] });
       }
       writePendingSend(null);
       store.setState({ pendingSend: null, sending: false });
@@ -587,13 +594,13 @@ const handlers = {
       store.setState({ composerExpanded: expanded });
     }
   },
-  onToggleReplyParent(parentId) {
-    if (!parentId) return;
-    const current = store.getState().replyParentIds || [];
-    const next = current.includes(parentId)
-      ? current.filter((id) => id !== parentId)
-      : [...current, parentId];
-    store.setState({ replyParentIds: next });
+  onToggleReplyParent(type, id) {
+    if (!id || !["message", "task", "report"].includes(type)) return;
+    const current = store.getState().replyParentRefs || [];
+    const next = current.some((ref) => ref.type === type && ref.id === id)
+      ? current.filter((ref) => ref.type !== type || ref.id !== id)
+      : [...current, { type, id }];
+    store.setState({ replyParentRefs: next });
   },
   async onSkipPoll() {
     await api.skipPoll();
@@ -831,7 +838,7 @@ function renderApp(state) {
       delete visible.last_viewed_at;
       return visible;
     });
-    const signature = JSON.stringify([state.selectedReportId, visibleReports]);
+    const signature = JSON.stringify([state.selectedReportId, visibleReports, state.replyParentRefs]);
     if (signature !== lastReportRenderSignature) {
       lastReportRenderSignature = signature;
       renderReportsView(reportsEl, state, handlers);
@@ -841,8 +848,6 @@ function renderApp(state) {
     maybeMarkAckSeen(reports.find((r) => r.id === state.selectedReportId));
   }
 
-  const activeView = { messages: messagesEl, tasks: tasksEl, reports: reportsEl }[state.activeTab];
-  if (activeView) linkReferences(activeView, state);
   cleanupTimers = mountRelativeTimers(document);
 }
 
@@ -1162,6 +1167,27 @@ function initEvents() {
       await handlers.onNavigateReference(reference.dataset.referenceType, reference.dataset.referenceId);
       return;
     }
+    const parent = event.target.closest?.("button[data-parent-type][data-parent-id]");
+    if (parent) {
+      const { parentType, parentId } = parent.dataset;
+      const idCode = parent.querySelector("code.msg-id");
+      if (event.shiftKey && idCode) {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(parentId).catch(() => {});
+        }
+        idCode.dataset.state = "good";
+        setTimeout(() => {
+          if (idCode.isConnected) delete idCode.dataset.state;
+        }, 1000);
+        return;
+      }
+      handlers.onToggleReplyParent(parentType, parentId);
+      if (parentType !== "message") {
+        store.setState({ activeTab: "messages" });
+        document.querySelector("#view-messages #msg")?.focus();
+      }
+      return;
+    }
     const mermaidBtn = event.target.closest?.(".preview-code-mermaid");
     if (mermaidBtn) {
       toggleCodeMermaid(mermaidBtn);
@@ -1183,45 +1209,6 @@ function initEvents() {
         }
       }, 1400);
       return;
-    }
-    if (event.target.closest?.(".report-picker-link")) {
-      return;
-    }
-    const receiptChip = event.target.closest?.("code.msg-id.receipt-id");
-    if (receiptChip) {
-      const parentId = (
-        receiptChip.dataset.msgId ||
-        receiptChip.textContent ||
-        ""
-      ).trim();
-      if (!event.shiftKey) {
-        handlers.onToggleReplyParent(parentId);
-        return;
-      }
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(parentId).catch(() => {});
-      }
-      receiptChip.dataset.state = "good";
-      setTimeout(() => {
-        if (receiptChip.isConnected) {
-          delete receiptChip.dataset.state;
-        }
-      }, 1000);
-      return;
-    }
-    const msgChip = event.target.closest?.("code.msg-id");
-    if (msgChip) {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard
-          .writeText(msgChip.textContent || "")
-          .catch(() => {});
-      }
-      msgChip.dataset.state = "good";
-      setTimeout(() => {
-        if (msgChip.isConnected) {
-          delete msgChip.dataset.state;
-        }
-      }, 1000);
     }
   });
 }

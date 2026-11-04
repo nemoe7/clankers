@@ -288,9 +288,14 @@ def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
       data={"id": "aaaa01", "body": "Parent message"},
     )
     assert response.ok
-    page.wait_for_selector('code[data-msg-id="aaaa01"]', timeout=6000)
-    page.locator('code[data-msg-id="aaaa01"]').click()
-    assert page.locator('[data-remove-reply-parent="aaaa01"]').count() == 1
+    page.wait_for_selector('button.receipt-id[data-parent-id="aaaa01"]', timeout=6000)
+    page.locator('button.receipt-id[data-parent-id="aaaa01"]').click()
+    assert (
+      page.locator(
+        '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa01"]'
+      ).count()
+      == 1
+    )
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
       window.firstSend = true;
@@ -319,7 +324,12 @@ def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
       has_text="Reply once despite a lost response"
     )
     assert matching.count() == 1
-    assert matching.locator('[data-parent-id="aaaa01"]').count() == 1
+    assert (
+      matching.locator(
+        '.reply-parent-chip[data-reference-type="message"][data-reference-id="aaaa01"]'
+      ).count()
+      == 1
+    )
     assert page.locator("#msg").input_value() == ""
 
 
