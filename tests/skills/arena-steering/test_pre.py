@@ -2278,6 +2278,7 @@ def test_new_blocker_still_blocks_push_after_gate_step_done() -> None:
     ("go test ./...", "go-tests"),
     ("cargo test", "cargo-tests"),
     ("gh pr checks 124 --watch", "pr-checks"),
+    ("gh pr checks 124 --json name,state", "pr-checks"),
     ("gh run watch 123", "run-watch"),
   ),
 )
@@ -2305,7 +2306,16 @@ def test_test_and_check_waits_route_to_background(
   ("line", "command"),
   (
     ("printf ready && pytest -q", "pytest -q"),
+    ("printf ready && gh pr checks 124 --watch", "gh pr checks 124 --watch"),
     ("gh pr checks 124 --watch | tee checks.log", "gh pr checks 124 --watch"),
+    (
+      "gh pr checks 124 --json name,state && printf done",
+      "gh pr checks 124 --json name,state",
+    ),
+    (
+      "steer run logs pr-checks -n 8; gh pr checks 124 --json name,state",
+      "gh pr checks 124 --json name,state",
+    ),
     ("pytest -q; printf done", "pytest -q"),
   ),
 )
@@ -2324,6 +2334,13 @@ def test_mixed_test_wait_lines_refuse_replay(
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.BLOCK, (line, out)
   assert "mixed" in out.lower()
+  audited = [
+    json.loads(row)
+    for row in (_isolate_state / "blocked-bash.jsonl")
+    .read_text(encoding="utf-8")
+    .splitlines()
+  ]
+  assert [(row["line"], row["blocked_by"]) for row in audited] == [(line, "route")]
 
 
 @pytest.mark.parametrize(
