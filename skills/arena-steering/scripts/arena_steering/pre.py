@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -1024,28 +1025,32 @@ class BibleReadGuard:
   name = "bible"
 
   VERBS = ("cat", "grep", "head", "tail", "rg")
-  NAMES = ("ARENA.md", "AGENTS.md")
-  SKILL_DIRS = ("arena-steering",)
+  INSTALLED_SKILL = Path(".agents/skills/arena-steering/SKILL.md")
 
   def applies(self, ctx: PreContext) -> bool:
-    return self.bible_path(ctx.line or ctx.command) is not None
+    return self.bible_path(ctx) is not None
 
-  def bible_path(self, line: str) -> str | None:
-    """Name the bible file a read command uses, if it uses one."""
-    for words in _line_commands(PreContext(line=line)):
+  def bible_path(self, ctx: PreContext) -> str | None:
+    """Name a protected read target, leaving checked-in skill source searchable."""
+    root = Path(os.path.abspath(ctx.checkout_root or repo_root()))
+    cwd = Path(os.path.abspath(ctx.cwd or root))
+    protected = {root / "ARENA.md", root / self.INSTALLED_SKILL}
+    for words in _line_commands(ctx):
       if not words or Path(words[0]).name not in self.VERBS:
         continue
       for token in words[1:]:
-        name = token.rsplit("/", 1)[-1]
-        if name in self.NAMES:
+        name = Path(token).name
+        if name == "AGENTS.md":
           return token
-        parent = token.rsplit("/", 2)[-2] if token.count("/") >= 2 else ""
-        if name == "SKILL.md" and parent in self.SKILL_DIRS:
-          return token
+        if name in {"ARENA.md", "SKILL.md"}:
+          path = Path(token)
+          target = Path(os.path.abspath(path if path.is_absolute() else cwd / path))
+          if target in protected:
+            return token
     return None
 
   def run(self, ctx: PreContext) -> PreResult:
-    found = self.bible_path(ctx.line or ctx.command) or "the bible"
+    found = self.bible_path(ctx) or "the bible"
     return PreResult(
       [
         f"BIBLE BLOCKED: `{found}` cannot be read in part.",

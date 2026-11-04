@@ -26,6 +26,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`: Guard partial reads of any `AGENTS.md`, root `ARENA.md`, and the installed steering skill. Permit searches of the checked-in skill source and nested `ARENA.md` files.
+
 - `assets/` and `test_web_ui.py`: Select typed parents from message IDs, task titles, and report IDs. Focus the composer after task and report selection, show IDs only in UI chips, navigate from sent-message chips, and leave ID-like Markdown as plain text.
 
 - `cli.py`, `server.py`, `.agents/skills/arena-steering/SKILL.md`: Point v2 bible reminders and read sets to its future installed skill path. The repo-only stub directs readers to the checked-in v2 skill without releasing it.

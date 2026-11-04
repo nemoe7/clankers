@@ -921,13 +921,11 @@ def test_login_path_ack_wrapper_exempts_only_one_literal_ack(
 
 def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
   guard = pre.BibleReadGuard()
-  assert guard.SKILL_DIRS == ("arena-steering",)
+  assert guard.INSTALLED_SKILL == Path(".agents/skills/arena-steering/SKILL.md")
   for line in (
     "rg -n 'gate' AGENTS.md",
     "grep -n gate ARENA.md",
     "head -20 ARENA.md",
-    "tail -n 5 skills/arena-steering/SKILL.md",
-    "cat skills/arena-steering/SKILL.md",
     "cat AGENTS.md | head -n 5",
     "head -n 5 < ARENA.md",
     "cat .agents/skills/arena-steering/SKILL.md | tail -n 5",
@@ -942,6 +940,8 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
 
   for line in (
     "rg -n gate skills/arena-steering",
+    "tail -n 5 skills/arena-steering/SKILL.md",
+    "cat skills/arena-steering/SKILL.md",
     "head -20 assets/app.js",
     "tail -n 5 skills/unrelated/SKILL.md",
     "rg -n gate skills/arena-steering && find skills -name AGENTS.md -print",
@@ -949,6 +949,46 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "printf AGENTS.md | head -n 1",
   ):
     assert not guard.applies(pre.PreContext(line=line, shell="bash")), line
+
+
+def test_bible_guard_matches_only_root_and_installed_paths(tmp_path: Path) -> None:
+  guard = pre.BibleReadGuard()
+  root = tmp_path / "checkout"
+  child = root / "nested"
+  child.mkdir(parents=True)
+  protected = (
+    "rg -n gate AGENTS.md",
+    "rg -n gate ../AGENTS.md",
+    "rg -n gate ../ARENA.md",
+    f"rg -n gate {root / 'ARENA.md'}",
+    "rg -n gate ../.agents/skills/arena-steering/SKILL.md",
+    f"rg -n gate {root / '.agents/skills/arena-steering/SKILL.md'}",
+  )
+  for line in protected:
+    ctx = pre.PreContext(line=line, cwd=child, checkout_root=root)
+    assert guard.applies(ctx), line
+    assert guard.run(ctx).verdict == pre.BLOCK, line
+
+  allowed = (
+    "rg -n gate ARENA.md",
+    "rg -n gate ../docs/ARENA.md",
+    f"rg -n gate {tmp_path / 'other/ARENA.md'}",
+    "rg -n gate ../skills/arena-steering/SKILL.md",
+    f"rg -n gate {root / 'skills/arena-steering/SKILL.md'}",
+    "rg --files ../skills/arena-steering; rg -n gate ../skills/arena-steering/SKILL.md",
+  )
+  for line in allowed:
+    ctx = pre.PreContext(
+      line=line,
+      command="rg -n gate ../skills/arena-steering/SKILL.md",
+      cwd=child,
+      checkout_root=root,
+    )
+    assert not guard.applies(ctx), line
+
+  root_ctx = pre.PreContext(line="rg -n gate ARENA.md", cwd=root, checkout_root=root)
+  assert guard.applies(root_ctx)
+  assert guard.run(root_ctx).verdict == pre.BLOCK
 
 
 @pytest.mark.parametrize(
