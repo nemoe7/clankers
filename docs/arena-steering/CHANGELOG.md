@@ -24,6 +24,10 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`: Exempt only the complete checkout-directory validator after confirming each path stays inside the checkout through symlinks. Reject altered tests and added commands.
+
+- `pre.py`: Exempt a pinned platform stop script with one eight-hex process name from the sleep guard and inbox count. Keep changed scripts blocked.
+
 - `pre.py`: Accept only a literal login-shell PATH prefix before one quoted `steer ack`. Reject changed assignments, pipes, and extra commands.
 
 - `pre.py`: Exempt literal single-quoted `mkdir -p` paths paired with profile sourcing in the observed login shell. Reject broken quotes, changed options, and extra commands.

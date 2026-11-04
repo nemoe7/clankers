@@ -85,11 +85,78 @@ ARENA_PROCESS_PROBE_SHA256 = (
   "98cec4863048f02988a62faac41ce8c46bb987e3ec4e843769d123b67d48b665"
 )
 ARENA_WORKSPACE_VERBS = {"read", "edit", "write"}
+STOP_PROCESS_NAME = re.compile(r"clankers-steering-[0-9a-f]{8}")
+STOP_PROCESS_SCRIPT_SHA256 = (
+  "34229acc3bb28de2035839b6a592ac81c7d4d01bc25f7b74bc361facbb885f39"
+)
 
 
-def arena_maintenance_call(line: str, command: str) -> bool:
+def _checkout_directory_validator(line: str, command: str, root: Path | None) -> bool:
+  """Match each checkout prefix check and reject paths escaping through symlinks."""
+  launcher = "/bin/bash -l -c "
+  if not line.startswith(launcher + "[ -e '"):
+    return False
+  checks = line.replace("\r\n", "\n").strip().removeprefix(launcher).split("\n")
+  if len(checks) < 3:
+    return False
+  final = re.fullmatch(
+    r"\[ -d '([^'\r\n]+)' \] && \{ printf 'DIR\\n'; exit 0; \}", checks[-2]
+  )
+  if final is None:
+    return False
+  target = Path(final.group(1))
+  if not target.is_absolute() or any(mark in str(target) for mark in ("'", "\r", "\n")):
+    return False
+  try:
+    checkout = (root or repo_root()).resolve()
+    relative = target.relative_to(checkout)
+    if len(relative.parts) < 2 or ".." in relative.parts:
+      return False
+    if not target.resolve().is_relative_to(checkout):
+      return False
+  except (OSError, RuntimeError, ValueError):
+    return False
+  expected = []
+  for index in range(1, len(relative.parts)):
+    prefix = relative.parts[:index]
+    path = checkout.joinpath(*prefix)
+    try:
+      if not path.resolve().is_relative_to(checkout):
+        return False
+    except (OSError, RuntimeError):
+      return False
+    expected.append(
+      f"[ -e '{path}' ] && [ ! -d '{path}' ] "
+      f"&& {{ printf 'FILE:%s\\n' '{'/'.join(prefix)}'; exit 0; }}"
+    )
+  expected.extend(
+    [f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}", "printf 'OK\\n'"]
+  )
+  return checks == expected and command.strip() == expected[0].split(" && ", 1)[0]
+
+
+def _platform_stop_process(line: str, command: str) -> bool:
+  """Match the complete stop script for one eight-hex platform process name."""
+  if command.strip() != "echo '===ARENA_STATUS==='":
+    return False
+  names = set(STOP_PROCESS_NAME.findall(line))
+  if len(names) != 1:
+    return False
+  normalized = (
+    line.replace("\r\n", "\n").strip().replace(names.pop(), "clankers-steering-{id}")
+  )
+  return hashlib.sha256(normalized.encode()).hexdigest() == STOP_PROCESS_SCRIPT_SHA256
+
+
+def arena_maintenance_call(
+  line: str, command: str, *, checkout_root: Path | None = None
+) -> bool:
   """Recognize whole Arena utility calls, not user lines that merely mention them."""
   text = shell_line(line).strip()
+  if _checkout_directory_validator(line, command, checkout_root):
+    return True
+  if _platform_stop_process(line, command):
+    return True
   if command.strip() == "source ~/.profile" and PROFILE_MKDIR_LAUNCHER.fullmatch(
     line.strip()
   ):
@@ -176,7 +243,9 @@ class PreContext:
     )
 
   def is_arena_maintenance(self) -> bool:
-    return arena_maintenance_call(self.line, self.command)
+    return arena_maintenance_call(
+      self.line, self.command, checkout_root=self.checkout_root
+    )
 
   def is_standalone_mkdir(self) -> bool:
     if (
@@ -847,8 +916,12 @@ class SleepGuard:
   name = "sleep"
 
   def applies(self, ctx: PreContext) -> bool:
-    return not ctx.routed and any(
-      words and Path(words[0]).name == "sleep" for words, _ in self.commands(ctx)
+    return (
+      not _platform_stop_process(ctx.line, ctx.command)
+      and not ctx.routed
+      and any(
+        words and Path(words[0]).name == "sleep" for words, _ in self.commands(ctx)
+      )
     )
 
   def commands(self, ctx: PreContext) -> list[tuple[list[str], str]]:

@@ -472,6 +472,80 @@ def test_quoted_mkdir_profile_mismatch_does_not_count_or_block(
   assert code == pre.BLOCK, output
 
 
+def test_checkout_directory_validator_requires_one_confined_template(
+  _isolate_state: Path, tmp_path: Path
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  def script(root: Path, target: Path) -> tuple[str, str]:
+    relative = target.relative_to(root)
+    prefixes = (relative.parts[:index] for index in range(1, len(relative.parts)))
+    checks = [
+      f"[ -e '{root.joinpath(*prefix)}' ] && [ ! -d '{root.joinpath(*prefix)}' ] "
+      f"&& {{ printf 'FILE:%s\\n' '{'/'.join(prefix)}'; exit 0; }}"
+      for prefix in prefixes
+    ]
+    checks.extend(
+      [f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}", "printf 'OK\\n'"]
+    )
+    return "/bin/bash -l -c " + "\n".join(checks) + " ", checks[0].split(" && ", 1)[0]
+
+  root = pre.repo_root().resolve()
+  line, command = script(
+    root, root / "tests" / "skills" / "arena-steering" / "test_pre.py"
+  )
+  code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  quoted, quoted_command = script(
+    root, root / "tests" / "x' && echo unsafe; #" / "target.py"
+  )
+  external, external_command = script(tmp_path, tmp_path / "elsewhere" / "target.py")
+  for altered, current in (
+    (line + "\nprintf 'extra\\n'", command),
+    (line.replace(" && [ ! -d ", " || [ ! -d ", 1), command),
+    (line.replace("printf 'OK\\n'", "printf 'OK\\n'; echo extra"), command),
+    (external, external_command),
+    (line, "[ -e '/elsewhere' ]"),
+    (quoted, quoted_command),
+  ):
+    code, output = _run("pre", "-l", altered, "-c", current, "-s", "bash")
+    assert code == pre.BLOCK, output
+
+  link = tmp_path / "link"
+  link.symlink_to(tmp_path.parent, target_is_directory=True)
+  unsafe_line, unsafe_command = script(tmp_path, link / "target.py")
+  ctx = pre.PreContext(
+    line=unsafe_line,
+    command=unsafe_command,
+    shell="bash",
+    pending_ids=["pending"],
+    call_count=pre.GATE_THRESHOLD,
+    checkout_root=tmp_path,
+  )
+  assert pre.run_pipeline(ctx).verdict == pre.BLOCK
+
+  outside = tmp_path.parent / f"{tmp_path.name}-outside"
+  outside.mkdir()
+  link.unlink()
+  link.symlink_to(outside, target_is_directory=True)
+  (outside / "back").symlink_to(tmp_path, target_is_directory=True)
+  returned_line, returned_command = script(tmp_path, link / "back" / "target.py")
+  returned = pre.PreContext(
+    line=returned_line,
+    command=returned_command,
+    shell="bash",
+    pending_ids=["pending"],
+    call_count=pre.GATE_THRESHOLD,
+    checkout_root=tmp_path,
+  )
+  assert pre.run_pipeline(returned).verdict == pre.BLOCK
+
+
 @pytest.mark.parametrize(
   ("line", "command"),
   (
@@ -680,6 +754,54 @@ def test_active_run_blocks_sleep_but_not_its_own_worker(
   exit_path.write_text("0", encoding="utf-8")
   code, _ = _run("pre", "-l", "sleep 1", "-c", "sleep 1", "-s", "bash")
   assert code == pre.CONTINUE
+
+
+def test_platform_stop_helper_exempts_only_one_exact_process_script(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  record = Path("/tmp") / "arena-workspace" / "procs" / "clankers-steering-a1b2c3d4"
+  line = f"""/bin/bash -l -c echo '===ARENA_STATUS==='
+if [ ! -f '{record}'/meta.json ]; then echo "not_found"
+elif pid=$(cat '{record}'/pid 2>/dev/null) && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+  kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
+  if kill -0 "$pid" 2>/dev/null; then kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null; fi
+  echo "stopped"
+else echo "already_exited"
+fi
+echo '===ARENA_LOG==='
+tail -c 80000 '{record}'/out.log 2>/dev/null | tail -n 100 || true """
+  command = "echo '===ARENA_STATUS==='"
+  code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  for changed, current in (
+    (line + "\necho extra", command),
+    (line.replace("sleep 0.2", "sleep 0.3"), command),
+    (line.replace("arena-workspace/procs", "arena-workspace/elsewhere"), command),
+    (line.replace("clankers-steering-a1b2c3d4", "other-a1b2c3d4"), command),
+    (line.replace("a1b2c3d4'/out.log", "12345678'/out.log"), command),
+    (line.replace('kill -TERM "$pid"', 'echo kill -TERM "$pid"'), command),
+    (line, "sleep 0.2"),
+  ):
+    code, output = _run("pre", "-l", changed, "-c", current, "-s", "bash")
+    assert code == pre.BLOCK, output
+
+  ordinary = pre.PreContext(
+    line="sleep 0.2",
+    command="sleep 0.2",
+    shell="bash",
+    active_runs=("verify",),
+    pending_ids=["pending"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.run_pipeline(ordinary).verdict == pre.BLOCK
 
 
 @pytest.mark.parametrize(
