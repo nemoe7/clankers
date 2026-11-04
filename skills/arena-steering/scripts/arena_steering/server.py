@@ -961,10 +961,12 @@ class SteeringApp:
     ):
       raise ValueError("clause_file must name a path in the bible")
     clause_file = clause_file or ""
-    note = body.get("note")
-    if note is not None and not isinstance(note, str):
-      raise ValueError("note must be text")
-    cited = " ".join((note or "").split())
+    if "note" in body:
+      raise ValueError("Use msg instead of the legacy note field")
+    msg = body.get("msg")
+    if msg is not None and not isinstance(msg, str):
+      raise ValueError("msg must be text")
+    cited = " ".join((msg or "").split())
     report_id = body.get("report_id")
     if report_id is not None and tab != "reports":
       raise ValueError("report_id is only valid for reports")

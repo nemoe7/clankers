@@ -1045,7 +1045,7 @@ function openViolationForm(health, trigger) {
   const form = document.getElementById("violation-form");
   const reason = document.getElementById("violation-reason");
   const clause = document.getElementById("violation-clause-file");
-  const note = document.getElementById("violation-note");
+  const msg = document.getElementById("violation-msg");
   const submit = document.getElementById("violation-submit");
   const errorText = document.getElementById("violation-error");
   reason.replaceChildren(...types.map((type) =>
@@ -1068,7 +1068,7 @@ function openViolationForm(health, trigger) {
       tab,
       reason: reason.value,
       clause_file: clause.value || null,
-      note: note.value.trim() || null,
+      msg: msg.value.trim() || null,
     };
     if (tab === "reports" && reportId) payload.report_id = reportId;
     submit.disabled = true;

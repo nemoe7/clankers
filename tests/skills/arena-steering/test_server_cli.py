@@ -537,6 +537,7 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
   assert f"`~/{v2_path}`" in checkpoint.body
   assert f"`~/{old_path}`" not in checkpoint.body
   assert "if bible missing from context:" in checkpoint.body  # nonemo: NMT100
+  assert "ack this msg" in checkpoint.body  # nonemo: NMT100
   assert (
     "Read every listed path in full with read_file" in checkpoint.body  # nonemo: NMT100
   )

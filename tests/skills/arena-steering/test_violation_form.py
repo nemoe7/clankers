@@ -33,7 +33,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       "tab": "messages",
       "reason": "bash-violation",
       "clause_file": "ARENA.md",
-      "note": "The command failed without an acknowledgement.",
+      "msg": "The command failed without an acknowledgement.",
     }
     status, result = app.dispatch("POST", "/agent-interrupt", flag)
     assert status == HTTPStatus.OK
@@ -46,7 +46,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
     assert violation.hidden and violation.blocking
     assert violation.violation_type == flag["reason"]
     assert violation.violation_clause_file == flag["clause_file"]
-    assert "Cited: " + flag["note"] in violation.body
+    assert "Cited: " + flag["msg"] in violation.body
     assert BIBLE_READ == "If full bible missing, use read_file for {paths}"
     assert violation.body.endswith(with_bible_read("").strip())
     root = Path(__file__).resolve().parents[3]
@@ -66,7 +66,12 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       {**flag, "tab": "reports"},
       {**flag, "clause_file": "../outside.md"},
       {**flag, "clause_file": 0},
-      {**flag, "note": {"not": "text"}},
+      {**flag, "msg": {"not": "text"}},
+      {**flag, "note": "Legacy key is not supported"},
+      {
+        **{key: value for key, value in flag.items() if key != "msg"},
+        "note": "Legacy key",
+      },
     ):
       status, _ = app.dispatch("POST", "/agent-interrupt", invalid)
       assert status == HTTPStatus.BAD_REQUEST
@@ -329,7 +334,11 @@ def test_violation_form_and_cancel_in_browser(
         assert reason.locator('option[value="format-violation"]').count() == 0
         page.locator("#violation-clause-file").select_option("ARENA.md")
         cited_reason = "Wrong command."
-        page.locator("#violation-note").fill(cited_reason)
+        assert (
+          page.locator('label[for="violation-msg"]').inner_text()  # nonemo: NMT100
+          == "Cited reason (optional)"
+        )
+        page.locator("#violation-msg").fill(cited_reason)
         box = form.bounding_box()
         assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
         page.screenshot(path=str(tmp_path / f"violation-form-{width}.png"))
@@ -341,7 +350,10 @@ def test_violation_form_and_cancel_in_browser(
           ),
           times=1,
         )
-        page.locator("#violation-submit").click()
+        with page.expect_request("**/agent-interrupt") as sent:
+          page.locator("#violation-submit").click()
+        assert sent.value.post_data_json["msg"] == cited_reason
+        assert "note" not in sent.value.post_data_json
         page.locator("#violation-error").wait_for(state="visible", timeout=5000)
         assert form.is_visible()
         assert button.get_attribute("aria-pressed") == "false"

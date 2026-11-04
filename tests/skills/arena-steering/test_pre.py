@@ -2681,7 +2681,7 @@ def test_exit_reminds_without_acking_or_incrementing_pending_items(
 
   code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
   assert code == 0
-  assert "unacked 1 note" in out
+  assert "unacked 1 msg" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_ids() == ["ab1001"]
   assert store.get_meta(pre.CALL_COUNT_META) == "3"
@@ -2700,7 +2700,7 @@ def test_exit_counts_latest_report_answer_with_notes(_isolate_state: Path) -> No
   reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1004")
   store.close()
   code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
-  assert code == 0 and "1 note" in out and "1 answer" in out
+  assert code == 0 and "1 msg" in out and "1 answer" in out
 
 
 def test_exit_labels_hidden_violation_separately_from_note_and_answer(
@@ -2726,9 +2726,9 @@ def test_exit_labels_hidden_violation_separately_from_note_and_answer(
   code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
   assert code == 0
   assert "1 violation" in out
-  assert "1 note" in out
+  assert "1 msg" in out
   assert "1 answer" in out
-  assert "2 notes" not in out
+  assert "2 msgs" not in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert set(messages.pending_ids()) == {"ab1005", "ab1006", "ab1007"}
   violation = store.get_message("ab1005")

@@ -993,7 +993,7 @@ def _schedule_instruction_check(
       "if bible missing from context:\n"
       f"{listed}\n"
       "Read every listed path in full with read_file and follow its rules.\n"
-      "Answer the survey, ack this note, and continue. "
+      "Answer the survey, ack this msg, and continue. "
       "If no bible text was missing, only ack and continue.\n"
       "For the survey, use existing knowledge only. Read only references/survey.json "
       "(or bare `steer survey`) and the image path from `steer survey -i`, "
@@ -1427,18 +1427,18 @@ def _exit_state_reminders(state_dir: Path) -> list[str]:
   store, messages, _, reports = open_services(state_dir)
   try:
     pending = messages.read_pending(mark_seen=False)
-    pending_notes = [
+    pending_messages = [
       msg for msg in pending["messages"] if msg.type == "message" and msg.requires_ack
     ]
-    violations = sum(bool(msg.violation_type) for msg in pending_notes)
-    notes = len(pending_notes) - violations
+    violations = sum(bool(msg.violation_type) for msg in pending_messages)
+    msgs = len(pending_messages) - violations
     answers = len(pending["report_answers"])
     parts = []
     counts = []
     if violations:
       counts.append(f"{violations} violation{'s' if violations != 1 else ''}")
-    if notes:
-      counts.append(f"{notes} note{'s' if notes != 1 else ''}")
+    if msgs:
+      counts.append(f"{msgs} msg{'s' if msgs != 1 else ''}")
     if answers:
       counts.append(f"{answers} answer{'s' if answers != 1 else ''}")
     if counts:

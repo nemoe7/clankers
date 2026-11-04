@@ -241,7 +241,7 @@ Answer messages remain after report removal and reappear when that ID is republi
 - Multi-ID removal is atomic. A missing or protected report leaves every target in place.
 - Explicit removal removes report links from tasks, while answer messages remain available for republishing.
 - A report violation flag unpublishes its report without removing its links or answers, so waiting tasks unblock.
-- CLI publication saves the source path for the flag note. Earlier or API-only reports may have no recorded path.
+- CLI publication saves the source path for the flag message. Earlier or API-only reports may have no recorded path.
 - An unlinked report becomes stale only 30 minutes after the user sees its latest acknowledgement. A linked report becomes stale as soon as all linked tasks finish.
 - A pinned report is not stale. Pins survive server restarts, and unpinning restores the normal staleness rules.
 - A visible report refreshes its view time every 30 seconds. A hidden browser tab does not refresh it.
