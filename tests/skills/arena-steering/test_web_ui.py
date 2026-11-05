@@ -658,7 +658,8 @@ def test_nuu_repairs_checklists_reference_contrast_and_report_media(
           == 1
         )
         assert (
-          receipt.locator(
+          page.locator(
+            '.message[data-msg-id="cc0401"] .message-parents '
             '.reply-parent-chip[data-reference-type="message"] > code'
           ).count()
           == 1
@@ -1187,7 +1188,7 @@ assert.match(container.innerHTML, /linked-task/);
   assert result.returncode == 0, result.stderr
 
 
-def test_message_receipts_hide_redundant_status_text_but_name_state() -> None:
+def test_message_receipts_show_sent_and_seen_and_name_acked_state() -> None:
   script = r"""
 import assert from 'node:assert/strict';
 import { renderMessagesView } from './skills/arena-steering/assets/messages-view.js';
@@ -1204,21 +1205,27 @@ renderMessagesView(container, {
     {id: 'aa0001', body: 'Hidden seen', status: 'seen', hidden: true, blocking: false},
     {id: 'aa0002', body: 'Seen', status: 'seen', hidden: false, blocking: true},
     {id: 'aa0003', body: 'Sent', status: 'sent', hidden: false, blocking: false},
+    {id: 'aa0004', body: 'Acked', status: 'acked', hidden: false, blocking: true, acks: ['Done']},
   ],
 }, {});
 const card = id => container.innerHTML.match(
   new RegExp(`<li class="message" data-msg-id="${id}"[\\s\\S]*?</li>`)
 )?.[0];
-const hidden = card('aa0001'), seen = card('aa0002'), sent = card('aa0003');
-assert.ok(hidden && seen && sent);
+const hidden = card('aa0001'), seen = card('aa0002'), sent = card('aa0003'), acked = card('aa0004');
+assert.ok(hidden && seen && sent && acked);
 assert.match(hidden, /data-hidden="true"/);
-assert.match(hidden, /role="img" aria-label="Hidden message. Status: seen"/);
+assert.match(hidden, /class="receipt-status" role="img" aria-label="Hidden message. Status: seen">Seen<\/span>/);
 assert.doesNotMatch(hidden, /· hidden|title="Status: seen"/);
 assert.match(hidden, /· checkpoint/);
-assert.match(seen, /role="img" aria-label="Status: seen"/);
+assert.match(seen, /class="receipt-status" role="img" aria-label="Status: seen">Seen<\/span>/);
 assert.doesNotMatch(seen, /title="Status: seen"/);
-assert.match(sent, /role="img" aria-label="Status: sent" title="Status: sent"/);
+assert.match(sent, /class="receipt-status" role="img" aria-label="Status: sent" title="Status: sent">Sent<\/span>/);
 assert.match(sent, /· checkpoint/);
+assert.match(
+  acked,
+  /class="receipt-status sr-only" role="img" aria-label="Status: acked" title="Status: acked"><\/span>/
+);
+for (const item of [hidden, seen, sent, acked]) assert.doesNotMatch(item, /state-dot/);
 """
   result = subprocess.run(
     ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
@@ -1728,10 +1735,10 @@ def test_fenced_markdown_code_uses_one_smaller_type_token(
         }""")
         page.locator("#client-markdown .code-block").wait_for()
         selectors = {
-          "body": ".message > .message-text p",
-          "fence": ".message > .message-text .code-block pre > code",
-          "label": ".message > .message-text .code-block-header",
-          "inline": ".message > .message-text p > code",
+          "body": ".message-bubble > .message-text p",
+          "fence": ".message-bubble > .message-text .code-block pre > code",
+          "label": ".message-bubble > .message-text .code-block-header",
+          "inline": ".message-bubble > .message-text p > code",
           "client": "#client-markdown .code-block pre > code",
           "client_label": "#client-markdown .code-block-header",
           "reply": ".answer.reply .code-block pre > code",
@@ -2540,7 +2547,9 @@ def test_displayed_ids_choose_typed_composer_parents(
         assert child.parent_ids == ["aa1001"]
         child_row = page.locator(f'.message[data-msg-id="{child.id}"]')
         child_row.wait_for()
-        assert child_row.locator(".receipt .reply-parent-chip").all_text_contents() == [
+        assert child_row.locator(
+          ".message-parents .reply-parent-chip"
+        ).all_text_contents() == [
           "task-parent",
           "report-parent",
           "aa1001",
@@ -4328,7 +4337,11 @@ def test_seen_reply_receipt_keeps_message_height(
         pending = card.bounding_box()
         receipt_pending = card.locator(".receipt").bounding_box()
         assert pending is not None and receipt_pending is not None
-        assert card.locator(".state-dot").get_attribute("data-state") == "said"
+        assert card.locator(".state-dot").count() == 0
+        assert (
+          card.locator(".receipt-status").get_attribute("aria-label") == "Status: acked"
+        )
+        assert card.locator(".receipt-status").inner_text() == ""
         release_receipt.set()
         sentinel.wait_for(state="detached")
         seen = card.bounding_box()
@@ -4338,7 +4351,10 @@ def test_seen_reply_receipt_keeps_message_height(
         assert seen["height"] > before["height"]
         assert abs(pending["height"] - seen["height"]) < 0.5
         assert abs(receipt_pending["y"] - receipt_seen["y"]) < 0.5
-        assert card.locator(".state-dot").get_attribute("data-state") == "said"
+        assert card.locator(".state-dot").count() == 0
+        assert (
+          card.locator(".receipt-status").get_attribute("aria-label") == "Status: acked"
+        )
         assert bool(sockets) == (transport == "ws")
       finally:
         release_receipt.set()

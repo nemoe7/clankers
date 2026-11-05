@@ -1424,23 +1424,59 @@ select,
 }
 
 .message {
+  --message-row-width: min(900px, 90vw);
+  --message-bubble-padding: 14px;
   position: relative;
   margin-bottom: 14px;
-  background-color: hsl(var(--surface-raised));
-  padding: 10px 14px;
-  border-radius: 6px;
-  border: 1px solid hsl(var(--border-faint));
-  width: min(900px, 90vw);
-  transition: background-color var(--motion-duration) var(--ease);
+  width: var(--message-row-width);
 }
 
 .message:last-child {
   margin-bottom: 0;
 }
 
+.message-heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-right: calc(var(--message-bubble-padding) + 1px);
+  color: hsl(var(--text-tertiary));
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.message-bubble {
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  padding: 10px var(--message-bubble-padding);
+  border: 1px solid hsl(var(--border-faint));
+  border-radius: 6px;
+  background-color: hsl(var(--surface-raised));
+  transition: background-color var(--motion-duration) var(--ease);
+}
+
+.message-parents,
+.message-attachments {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.message-attachments {
+  margin-bottom: 8px;
+}
+
 .message-text {
   font-size: 16px;
   overflow-wrap: anywhere;
+}
+
+.message-bubble > .message-text {
+  text-align: left;
 }
 
 .message-text p {
@@ -1465,6 +1501,21 @@ select,
   margin-top: 8px;
 }
 
+.message-bubble > .answer.reply {
+  width: 100%;
+  max-width: calc(var(--message-row-width) * 0.666667 - 30px);
+  margin-left: auto;
+  padding-left: 0;
+  padding-right: 12px;
+  border-left: 0;
+  border-right: 2px solid hsl(var(--border-strong));
+  text-align: left;
+}
+
+.message[data-message-wide] .message-bubble > .answer.reply {
+  max-width: 100%;
+}
+
 .answer .reply-block {
   margin-top: 8px;
   padding-top: 8px;
@@ -1481,13 +1532,26 @@ select,
   flex-wrap: wrap;
 }
 
+.message > .receipt {
+  justify-content: flex-end;
+  padding-right: calc(var(--message-bubble-padding) + 1px);
+  text-align: right;
+}
+
+.receipt-status {
+  display: inline-flex;
+  align-items: center;
+}
+
 .receipt-file {
   display: flex;
-  flex: 1 1 100%;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .message-attachment-preview {
@@ -1533,22 +1597,6 @@ select,
   justify-content: center;
   text-align: center;
   width: 100%;
-}
-
-.state-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background-color: hsl(var(--text-tertiary));
-}
-
-.state-dot[data-state="seen"] {
-  background-color: var(--dot-seen);
-}
-
-.state-dot[data-state="said"] {
-  background-color: hsl(var(--interactive-positive));
 }
 
 code.msg-id {
@@ -2512,7 +2560,7 @@ article#report.report img,
   }
 
   .message {
-    width: min(900px, calc(100vw - 32px));
+    --message-row-width: min(900px, calc(100vw - 32px));
   }
 
   #task-search {
@@ -2574,7 +2622,7 @@ article#report.report img,
   }
 
   .message {
-    width: min(900px, calc(100vw - 24px));
+    --message-row-width: min(900px, calc(100vw - 24px));
   }
 }
 

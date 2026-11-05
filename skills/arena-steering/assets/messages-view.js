@@ -115,12 +115,6 @@ function renderComposerAttachment(item, sending) {
   </span>`;
 }
 
-function stateDotForStatus(status) {
-  if (status === "acked") return "said";
-  if (status === "seen") return "seen";
-  return "sent";
-}
-
 function parentControls(type, id) {
   const label = escapeHtml(`${type} ${id}`);
   return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}" title="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
@@ -303,8 +297,8 @@ export function renderMessagesView(container, state, handlers) {
                 )
                 .join("")}</div>`
             : "";
-          const dotState = stateDotForStatus(msg.status);
           const status = escapeHtml(msg.status);
+          const statusText = msg.status === "sent" ? "Sent" : msg.status === "seen" ? "Seen" : "";
           const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.status}`);
           const iso = escapeHtml(msg.modified_at || "");
           const rel = escapeHtml(relativeTime(msg.modified_at));
@@ -332,26 +326,34 @@ export function renderMessagesView(container, state, handlers) {
             : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
-            ? ` · ${linkedTasks.map((tid) => parentControls("task", tid)).join(" ")}`
+            ? `<span class="receipt-task-links">${linkedTasks.map((tid) => parentControls("task", tid)).join(" ")}</span>`
             : "";
           const parentRefs = Array.isArray(msg.parent_refs) && msg.parent_refs.length
             ? msg.parent_refs
             : (msg.parent_ids || []).map((id) => ({ type: "message", id }));
           const parentsSuffix = parentRefs.length
-            ? ` · ${parentRefs.map((ref) => parentControls(ref.type, ref.id)).join(" ")}`
+            ? `<span class="message-parents" aria-label="Message parents">${parentRefs.map((ref) => parentControls(ref.type, ref.id)).join(" ")}</span>`
             : "";
           const replySelected = isParentSelected("message", msg.id);
           messageSignatures.set(msg.id, JSON.stringify({ msg, linkedTasks, selectedParentRefs, query }));
 
           return `
             <li class="message" data-msg-id="${escapeHtml(msg.id)}" data-hidden="${msg.hidden ? "true" : "false"}">
-              <div class="message-text">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
-              ${acksHtml}
+              ${filesSuffix ? `<div class="message-attachments">${filesSuffix}</div>` : ""}
+              <div class="message-heading">
+                ${parentsSuffix}
+                <button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>
+              </div>
+              <div class="message-bubble">
+                <div class="message-text">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
+                ${acksHtml}
+              </div>
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
-                <span class="state-dot" data-state="${dotState}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}></span>
-                <button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>
-                · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>${parentsSuffix}${flagsSuffix}${filesSuffix}${tasksSuffix}
+                ${flagsSuffix ? `<span class="receipt-flags">${flagsSuffix}</span>` : ""}
+                ${tasksSuffix}
+                <span class="receipt-status${statusText ? "" : " sr-only"}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}>${statusText}</span>
+                <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>
               </p>
             </li>
           `;
@@ -554,6 +556,17 @@ export function renderMessagesView(container, state, handlers) {
     return dist;
   }
 
+  function syncMessageWidths() {
+    for (const message of historyEl.querySelectorAll(":scope > .message")) {
+      const bubble = message.querySelector(".message-bubble");
+      if (!bubble) continue;
+      message.toggleAttribute(
+        "data-message-wide",
+        bubble.getBoundingClientRect().width >= message.getBoundingClientRect().width - 1
+      );
+    }
+  }
+
   function syncScrollControls() {
     if (!historyEl) return;
     const dist = syncScrollEdges();
@@ -576,6 +589,7 @@ export function renderMessagesView(container, state, handlers) {
     if (query) {
       highlightSearchMatches(historyEl, state.searchQuery);
     }
+    syncMessageWidths();
     if (pinnedToBottom || savedScrollTop === null) {
       historyEl.scrollTop = historyEl.scrollHeight;
     } else {
@@ -596,8 +610,12 @@ export function renderMessagesView(container, state, handlers) {
     historyScrollHandler = syncScrollControls;
     historyEl.addEventListener("scroll", historyScrollHandler, { passive: true });
     if (typeof ResizeObserver === "function") {
-      historyResizeObserver = new ResizeObserver(syncScrollEdges);
+      historyResizeObserver = new ResizeObserver(() => {
+        syncMessageWidths();
+        syncScrollEdges();
+      });
       historyResizeObserver.observe(historyEl);
+      historyEl.querySelectorAll(".message-bubble").forEach((bubble) => historyResizeObserver.observe(bubble));
     }
   }
 

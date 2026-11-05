@@ -34,9 +34,15 @@ This log has no Unreleased section.
 
 - `cli.py`: Limit task lists to IDs and titles while single-task inspection keeps scope, links, and details.
 
-- `assets/messages-view.js`: Remove hidden and seen status text from message receipts. Keep state names available to screen readers and retain other status tooltips.
+- `assets/messages-view.js`, `assets/style.css`: Right-align content-width bubbles, put attachments above the ID, and show parent chips beside it.
+
+- `assets/messages-view.js`, `assets/style.css`: Show Sent or Seen before the stamp without a status dot. Keep acknowledged status screen-reader-only.
 
 ### Fixed
+
+- `assets/style.css`: Size short acknowledgements with bubble content and cap their right-side rule at two-thirds. Let full-row bubbles expand replies.
+
+- `assets/style.css`: Align parent chips, message IDs, and receipt contents with the bubble text's right inset.
 
 - `assets/style.css`, `test_web_ui.py`: Match mobile and desktop header tab widths. Keep both Reports markers above the mobile label without crowding header actions.
 
