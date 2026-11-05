@@ -44,6 +44,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/style.css`: Shorten the Reports bottom fade without changing its top fade. Match Scroll to Top sizing, blur, and hover with Messages.
+
 - `assets/style.css`: Size short acknowledgements with bubble content and cap their right-side rule at two-thirds. Let full-row bubbles expand replies.
 
 - `assets/style.css`: Align parent chips, message IDs, and receipt contents with the bubble text's right inset.

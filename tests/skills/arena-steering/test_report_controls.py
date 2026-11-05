@@ -76,6 +76,39 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               top_button.wait_for(state="visible")
               assert top_button.text_content().strip() == ""
               assert top_button.get_attribute("aria-label") == "Scroll to top"
+            styles = page.evaluate("""() => {
+              const layout = document.querySelector('.reports-layout');
+              const top = getComputedStyle(document.querySelector('#report-scroll-top'));
+              const newest = getComputedStyle(document.querySelector('#log-newest'));
+              const root = getComputedStyle(document.documentElement);
+              return {
+                bottomFade: parseFloat(getComputedStyle(layout, '::after').height),
+                topFade: parseFloat(getComputedStyle(layout, '::before').height),
+                edgeFade: parseFloat(root.getPropertyValue('--edge-fade')),
+                compactFade: parseFloat(root.getPropertyValue('--space-4')),
+                topPadding: top.padding,
+                messagePadding: newest.padding,
+                topBlur: top.backdropFilter,
+                messageBlur: newest.backdropFilter,
+              };
+            }""")
+            if motion == "no-preference":
+              assert (
+                0 < styles["bottomFade"] <= styles["compactFade"] < styles["edgeFade"]
+              ), styles
+              assert styles["topFade"] == styles["edgeFade"], styles
+            assert styles["topPadding"] == styles["messagePadding"], styles
+            assert styles["topBlur"] == styles["messageBlur"], styles
+            if not toc_available:
+              top_button.evaluate("el => { el.style.transition = 'none'; }")
+              border_color = top_button.evaluate(
+                "el => getComputedStyle(el).borderColor"
+              )
+              top_button.hover()
+              assert (
+                top_button.evaluate("el => getComputedStyle(el).borderColor")
+                == border_color
+              )
             geometry = page.evaluate("""() => {
               const box = selector => {
                 const {x, y, width, height} = document.querySelector(selector).getBoundingClientRect();
