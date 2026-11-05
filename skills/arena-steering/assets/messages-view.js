@@ -560,9 +560,10 @@ export function renderMessagesView(container, state, handlers) {
     for (const message of historyEl.querySelectorAll(":scope > .message")) {
       const bubble = message.querySelector(".message-bubble");
       if (!bubble) continue;
+      const ackExpansionCap = message.getBoundingClientRect().width * 2 / 3;
       message.toggleAttribute(
         "data-message-wide",
-        bubble.getBoundingClientRect().width >= message.getBoundingClientRect().width - 1
+        bubble.getBoundingClientRect().width > ackExpansionCap + 1
       );
     }
   }

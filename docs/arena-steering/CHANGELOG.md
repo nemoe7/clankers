@@ -46,7 +46,7 @@ This log has no Unreleased section.
 
 - `assets/style.css`: Extend the Reports fade behind Submit to the viewport bottom while preserving last-line clearance. Keep a separate dock in reduced motion and match Scroll to Top with Messages.
 
-- `assets/style.css`: Size short acknowledgements with bubble content and cap their right-side rule at two-thirds. Let full-row bubbles expand replies.
+- `assets/messages-view.js`, `assets/style.css`: Let replies fill message-driven bubbles and cap only reply-driven expansion at two-thirds of the row.
 
 - `assets/style.css`: Align parent chips, message IDs, and receipt contents with the bubble text's right inset.
 

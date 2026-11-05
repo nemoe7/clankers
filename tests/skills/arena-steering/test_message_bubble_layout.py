@@ -51,6 +51,14 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
     blocking=False,
   )
   app.messages.ack("bb0003", "A long acknowledgement can fill this row. " * 95)
+  app.messages.send_message(
+    "A message wider than an acknowledgement cap.",
+    msg_id="bb0006",
+    blocking=False,
+  )
+  app.messages.ack(
+    "bb0006", "A longer acknowledgement should fill its wider bubble. " * 36
+  )
   app.messages.send_message("Awaiting the agent.", msg_id="bb0004")
   app.tasks.create_task(
     "linked-task", "Linked task", size=1, details=["Review"], msg_ids=["bb0004"]
@@ -73,11 +81,17 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
             viewport={"width": width, "height": height}, reduced_motion="reduce"
           )
           page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.add_style_tag(
+            content=""".message[data-msg-id="bb0006"] .message-text {
+              width: calc(var(--message-row-width) * 0.78 - 30px);
+            }"""
+          )
           short = page.locator('.message[data-msg-id="bb0002"]')
           long = page.locator('.message[data-msg-id="bb0003"]')
+          middle = page.locator('.message[data-msg-id="bb0006"]')
           sent = page.locator('.message[data-msg-id="bb0004"]')
           seen = page.locator('.message[data-msg-id="bb0005"]')
-          for card in (short, long, sent, seen):
+          for card in (short, long, middle, sent, seen):
             card.wait_for()
 
           def boxes(card):
@@ -112,7 +126,7 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
               };
             }""")
 
-          for card in (short, long, sent, seen):
+          for card in (short, long, middle, sent, seen):
             card.scroll_into_view_if_needed()
             shape = boxes(card)
             assert shape["bubble"] and shape["id"] and shape["receipt"], shape
@@ -164,6 +178,20 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           full = boxes(long)
           assert full["bubble"]["width"] >= full["row"]["width"] - 2, full
           assert full["ack"]["width"] >= full["row"]["width"] * 0.8, full
+          intermediate = boxes(middle)
+          assert (
+            intermediate["row"]["width"] * 0.72 < intermediate["bubble"]["width"]
+          ), intermediate
+          assert (
+            intermediate["bubble"]["width"] < intermediate["row"]["width"] * 0.85
+          ), intermediate
+          assert intermediate["ack"]["width"] >= intermediate["bubble"]["width"] - 31, (
+            intermediate
+          )
+          assert (
+            abs(intermediate["ack"]["right"] - (intermediate["bubble"]["right"] - 15))
+            <= 1
+          ), intermediate
           t = boxes(sent)
           assert t["task"]["right"] <= t["status"]["x"], t
           assert t["status"]["right"] <= t["stamp"]["x"], t
@@ -179,6 +207,85 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           page.locator("#image-modal").wait_for(state="hidden")
           assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
           page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+@pytest.mark.parametrize("transport", ("poll", "ws"))
+def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  for idx in range(10):
+    app.messages.send_message(
+      f"Message {idx}. " + "Earlier context stays on the page. " * 22,
+      msg_id=f"ac{idx:04d}",
+      blocking=False,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.set_default_timeout(10000)
+        errors: list[str] = []
+        sockets: list[object] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on("websocket", lambda socket: sockets.append(socket))
+        query = "?transport=poll" if transport == "poll" else ""
+        page.goto(f"http://127.0.0.1:{server.server_port}/{query}")
+        page.add_style_tag(
+          content=""".message[data-msg-id="ac0006"] .message-text {
+            width: calc(var(--message-row-width) * 0.78 - 30px);
+          }"""
+        )
+        source = page.locator('.message[data-msg-id="ac0006"]')
+        anchor = page.locator('.message[data-msg-id="ac0008"]')
+        source.wait_for()
+        anchor.scroll_into_view_if_needed()
+        history = page.locator("#history")
+        assert (
+          history.evaluate("el => el.scrollHeight - el.scrollTop - el.clientHeight")
+          > 100
+        )
+        if transport == "ws":
+          assert sockets, "the websocket path must actually connect"
+        else:
+          assert not sockets, "the polling path must not open a websocket"
+        offset = anchor.evaluate("""element =>
+          element.getBoundingClientRect().top - document.querySelector('#history').getBoundingClientRect().top
+        """)
+        app.messages.ack("ac0006", "A new acknowledgement arrives. " * 75)
+        source.locator(".answer.reply").get_by_text(
+          "A new acknowledgement arrives.", exact=False
+        ).wait_for()
+        after = anchor.evaluate("""element =>
+          element.getBoundingClientRect().top - document.querySelector('#history').getBoundingClientRect().top
+        """)
+        geometry = source.evaluate("""element => {
+          const bubble = element.querySelector('.message-bubble').getBoundingClientRect();
+          const ack = element.querySelector('.answer.reply').getBoundingClientRect();
+          return {bubbleWidth:bubble.width, ackWidth:ack.width};
+        }""")
+        assert abs(after - offset) <= 30, (transport, offset, after)
+        assert geometry["ackWidth"] >= geometry["bubbleWidth"] - 31, geometry
+        assert not errors, errors
       finally:
         browser.close()
   finally:
