@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [1.10.31]
+
+### Added
+
+- `skills/nemoizer/scripts/nemoize.py`: Add `-v` and `--verbose` logging for file scans and worker start or completion.
+
 ## [1.10.30]
 
 ### Fixed
@@ -27,4 +33,3 @@ This log has no Unreleased section.
 ### Added
 
 - `skills/nemoizer/scripts/nemoize.py` (`_match_glob`, `skipped`): Support `/**/` zero-or-more directory globs and `!pattern` negation rules in `exclude`, `extend-exclude`, and `--ignore`.
-
