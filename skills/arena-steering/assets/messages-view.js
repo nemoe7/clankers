@@ -289,6 +289,9 @@ export function renderMessagesView(container, state, handlers) {
         .map((msg) => {
           const acks = msg.acks || [];
           const acksHtmlList = msg.acks_html || [];
+          const bodyClass = /\S[ \t]*\r?\n[ \t]*\S/.test(msg.body || "")
+            ? " message-text-multiline"
+            : "";
           const acksHtml = acks.length
             ? `<div class="answer reply message-text">${acks
                 .map(
@@ -345,7 +348,7 @@ export function renderMessagesView(container, state, handlers) {
                 <button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>
               </div>
               <div class="message-bubble">
-                <div class="message-text">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
+                <div class="message-text${bodyClass}">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
                 ${acksHtml}
               </div>
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}

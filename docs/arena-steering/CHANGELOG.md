@@ -44,6 +44,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/messages-view.js`, `assets/style.css`, `test_message_bubble_layout.py`: Place one-line message text at the bubble's right inset. Keep wrapped and explicitly multiline text at the left inset, and reserve a narrow gutter beside wide bubbles.
+
 - `pre.py`, `cli.py`, `test_pre.py`: Exempt exact native file-tool and Arena probe steps from the inbox Bash count. Count and gate later commands in mixed shells.
 
 - `assets/style.css`: Extend the Reports fade behind Submit to the viewport bottom while preserving last-line clearance. Keep a separate dock in reduced motion and match Scroll to Top with Messages.
