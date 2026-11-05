@@ -2000,7 +2000,67 @@ def test_clear_inbox_single_push_arms_exit_guard_only_for_whole_line(
   assert "_steer_single_push_approved=1" not in output
 
 
-def test_installer_exit_hook_preserves_prior_trap_and_call_status(
+def test_installer_counts_each_visible_command_once(tmp_path: Path) -> None:
+  root = Path(__file__).resolve().parents[3]
+  project = tmp_path / "project with spaces"
+  scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
+  shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  shutil.copytree(
+    root / "skills" / "arena-steering" / "references", scripts.parent / "references"
+  )
+  subprocess.run(
+    ["git", "init", "--quiet", "-b", "main", str(project)],
+    check=True,
+    capture_output=True,
+  )
+  home = tmp_path / "home with spaces"
+  python = home / ".agents" / ".steer-venv" / "bin" / "python"
+  python.parent.mkdir(parents=True)
+  python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+  python.chmod(0o755)
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  installed = subprocess.run(
+    ["bash", str(scripts / "install.sh")],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert installed.returncode == 0, installed.stderr
+  command = home / ".local" / "bin" / "steer"
+  command.write_text(
+    '#!/bin/sh\ncase "$1" in\n  pre) printf "%s\\n" "$*" >> "$HOME/pre.log" ;;\nesac\n',
+    encoding="utf-8",
+  )
+  command.chmod(0o755)
+  shell = subprocess.run(
+    [
+      "bash",
+      "-c",
+      (
+        'git() { return 0; }; source "$HOME/.bash_profile"; : > "$HOME/pre.log"; '
+        "git fetch origin topic; git merge-base --is-ancestor origin/topic HEAD; printf visible"
+      ),
+    ],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert shell.returncode == 0, shell.stderr
+  calls = (home / "pre.log").read_text(encoding="utf-8").splitlines()
+  assert len(calls) == 3, calls
+  for visible in (
+    "git fetch origin topic",
+    "git merge-base --is-ancestor origin/topic HEAD",
+    "printf visible",
+  ):
+    assert sum(f"--command {visible}" in call for call in calls) == 1, calls
+
+
+def test_installer_migrates_exit_hook_and_preserves_prior_trap(
   tmp_path: Path,
 ) -> None:
   root = Path(__file__).resolve().parents[3]
@@ -2026,7 +2086,19 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
     encoding="utf-8",
   )
   env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
-  for _ in range(2):
+  for attempt in range(2):
+    if attempt:
+      profile.write_text(
+        profile.read_text(encoding="utf-8").replace(
+          "# arena-steering-debug\n",
+          "# arena-steering-exit\n"
+          "_steer_on_exit() { return 0; }\n"
+          "trap '_steer_on_exit' EXIT # arena-steering-exit-trap\n\n"
+          "# arena-steering-debug\n",
+          1,
+        ),
+        encoding="utf-8",
+      )
     installed = subprocess.run(
       ["bash", str(scripts / "install.sh")],
       cwd=project,
@@ -2036,7 +2108,7 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
       check=False,
     )
     assert installed.returncode == 0, installed.stderr
-  assert "arena-steering-exit-trap" in profile.read_text(encoding="utf-8")
+  assert "arena-steering-exit" not in profile.read_text(encoding="utf-8")
 
   command = home / ".local" / "bin" / "steer"
   command.write_text(
@@ -2079,11 +2151,7 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
     check=False,
   )
   assert strict.returncode == 7, strict.stderr
-  exits = (home / "post-exit.log").read_text(encoding="utf-8").splitlines()
-  assert len(exits) == 3
-  assert "--rc 0" in exits[0] and "git push origin topic" in exits[0]
-  assert all("--elapsed " in exit_line for exit_line in exits)
-  assert "--rc 5" in exits[1] and "--rc 7" in exits[2]
+  assert not (home / "post-exit.log").exists()
   assert (home / "prior-exit.log").read_text(encoding="utf-8").splitlines() == [
     "prior-exit:0",
     "prior-exit:5",
@@ -2108,9 +2176,7 @@ def test_installer_exit_hook_preserves_prior_trap_and_call_status(
   assert (home / "remote-updated").read_text(encoding="utf-8") == "done"
   assert late_note.returncode == 0, late_note.stdout
   assert "PUSH BLOCKED" not in late_note.stdout
-  assert (
-    "--rc 0" in (home / "post-exit.log").read_text(encoding="utf-8").splitlines()[-1]
-  )
+  assert not (home / "post-exit.log").exists()
 
 
 def test_installer_failed_gate_logs_a_blocked_push(tmp_path: Path) -> None:
