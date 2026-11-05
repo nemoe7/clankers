@@ -95,6 +95,13 @@ STOP_PROCESS_SCRIPT_SHA256 = (
 ISOLATED_READER_SHA256 = (
   "387e3514ed96d946f84178cc5b262b7740321b2638d1de359fd7fd2dac6df6b3"
 )
+PLATFORM_SNAPSHOT_SCRIPT_SHA256 = (
+  "22e1bd74b86c719275edefddba4cb16044f13fe6b84377b1eda100e25dadf663"
+)
+REMOTE_HEALTH_SCRIPT_SHA256 = (
+  "9cbda07ac13c5b39f857f1ef65575b127f7a19b0942413a195598a06a42087e9"
+)
+REMOTE_HEALTH_REF = re.compile(r"refs/remotes/origin/([A-Za-z0-9][A-Za-z0-9._/-]*)")
 
 
 def _isolated_reader(line: str, command: str) -> bool:
@@ -126,7 +133,10 @@ def _isolated_reader(line: str, command: str) -> bool:
     return False
   for name in ("offset", "limit"):
     text, count = re.subn(
-      rf"^{name} = ([1-9][0-9]*)$", f"{name} = <{name}>", text, flags=re.MULTILINE
+      rf"^{name} = (None|[1-9][0-9]*)$",
+      f"{name} = <{name}>",
+      text,
+      flags=re.MULTILINE,
     )
     if count != 1:
       return False
@@ -138,10 +148,12 @@ def _checkout_directory_validator(
 ) -> bool:
   """Match each checkout prefix check and reject paths escaping through symlinks."""
   launcher = "/bin/bash -l -c "
-  if not line.startswith(launcher + "[ -e '"):
+  if not line.startswith(launcher) or not line.removeprefix(launcher).startswith(
+    ("[ -e '", "[ -d '")
+  ):
     return False
   checks = line.replace("\r\n", "\n").strip().removeprefix(launcher).split("\n")
-  if len(checks) < 3:
+  if len(checks) < 2:
     return False
   final = re.fullmatch(
     r"\[ -d '([^'\r\n]+)' \] && \{ printf 'DIR\\n'; exit 0; \}", checks[-2]
@@ -154,7 +166,7 @@ def _checkout_directory_validator(
   try:
     checkout = (root or repo_root()).resolve()
     relative = target.relative_to(checkout)
-    if len(relative.parts) < 2 or ".." in relative.parts:
+    if not relative.parts or ".." in relative.parts:
       return False
     if not target.resolve().is_relative_to(checkout):
       return False
@@ -208,6 +220,47 @@ def _platform_stop_process(line: str, command: str) -> bool:
   return hashlib.sha256(normalized.encode()).hexdigest() == STOP_PROCESS_SCRIPT_SHA256
 
 
+def _pinned_platform_shell(
+  line: str, command: str, *, allow_inner: bool = False
+) -> bool:
+  """Match exact platform shells, varying only their pinned base or branch."""
+  launcher = "/bin/bash -l -c "
+  text = line.replace("\r\n", "\n").strip()
+  current = command.replace("\r\n", "\n").strip()
+  if not current or not text.startswith(launcher):
+    return False
+  script = text.removeprefix(launcher)
+  if script.startswith("set -euo pipefail\nBASE='"):
+    normalized_script, count = re.subn(
+      r"^BASE='[0-9a-f]{40}'$",
+      "BASE='<base>'",
+      script,
+      flags=re.MULTILINE,
+    )
+    if count != 1:
+      return False
+    expected = PLATFORM_SNAPSHOT_SCRIPT_SHA256
+  elif script.startswith(
+    "set -o pipefail\ngit rev-parse --verify -q 'refs/remotes/origin/"
+  ):
+    refs = list(REMOTE_HEALTH_REF.finditer(script))
+    if len(refs) != 2 or len({match.group(1) for match in refs}) != 1:
+      return False
+    normalized_script = REMOTE_HEALTH_REF.sub("refs/remotes/origin/<branch>", script)
+    expected = REMOTE_HEALTH_SCRIPT_SHA256
+  else:
+    return False
+  normalized = launcher + normalized_script
+  if hashlib.sha256(normalized.encode()).hexdigest() != expected:
+    return False
+  return current in script if allow_inner else current == script
+
+
+def _normalize_native_redirect(command: str) -> str:
+  """Treat native stdout/stderr redirect spacing as equivalent for matching only."""
+  return re.sub(r"(?<!\S)(2?)> /dev/null", r"\1>/dev/null", command.strip(), count=1)
+
+
 def arena_maintenance_call(
   line: str, command: str, *, checkout_root: Path | None = None
 ) -> bool:
@@ -220,6 +273,8 @@ def arena_maintenance_call(
   if _checkout_directory_validator(line, command, checkout_root):
     return True
   if _platform_stop_process(line, command):
+    return True
+  if _pinned_platform_shell(line, command):
     return True
   if command.strip() == "source ~/.profile" and PROFILE_MKDIR_LAUNCHER.fullmatch(
     line.strip()
@@ -238,7 +293,7 @@ def arena_maintenance_call(
   if (
     "===ARENA_ENTRY===" in text
     and "===ARENA_PORTS===" in text
-    and command.strip().replace(" > /dev/null", " >/dev/null", 1) in text
+    and _normalize_native_redirect(command) in text
     and hashlib.sha256(text.encode()).hexdigest() == ARENA_PROCESS_PROBE_SHA256
   ):
     return True
@@ -277,7 +332,7 @@ def arena_maintenance_step(
       if end <= start:
         continue
       segment = text[start:end].strip()
-      current = command.strip()
+      current = _normalize_native_redirect(command)
       if current == "source ~/.profile":
         if segment.startswith("[ -e '"):
           current = segment.split(" && ", 1)[0]
@@ -290,7 +345,9 @@ def arena_maintenance_step(
       candidate = launcher + segment
       if arena_maintenance_call(candidate, current, checkout_root=checkout_root):
         return True
-      if segment.startswith("[ -e '") and _checkout_directory_validator(
+      if _pinned_platform_shell(candidate, current, allow_inner=True):
+        return True
+      if segment.startswith(("[ -e '", "[ -d '")) and _checkout_directory_validator(
         candidate, current, checkout_root, allow_inner=True
       ):
         return True
