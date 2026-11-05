@@ -65,6 +65,11 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
   )
   seen = app.messages.send_message("Already seen.", msg_id="bb0005", blocking=False)
   store.mark_message_seen(seen.id, seen.modified_at)
+  app.messages.send_message(
+    "Multiple acknowledgements.", msg_id="bb0007", blocking=False
+  )
+  app.messages.ack("bb0007", "An earlier paragraph.")
+  app.messages.ack("bb0007", "The final paragraph.")
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -145,6 +150,24 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           assert abs(s["ack"]["width"] - (s["bubble"]["width"] - 30)) <= 1, s
           assert s["ackBorderLeft"] == "0px" and s["ackBorderRight"] == "2px", s
           assert abs(s["ack"]["right"] - (s["bubble"]["right"] - 15)) <= 1, s
+          final_paragraph = short.locator(
+            ".answer.reply > div:last-child > p:last-child"
+          )
+          assert (
+            final_paragraph.evaluate("el => getComputedStyle(el).marginBottom") == "0px"
+          )
+          multiple = page.locator('.message[data-msg-id="bb0007"]')
+          multiple.scroll_into_view_if_needed()
+          paragraphs = multiple.locator(".answer.reply > div > p:last-child")
+          assert paragraphs.count() == 2
+          assert (
+            paragraphs.nth(0).evaluate("el => getComputedStyle(el).marginBottom")
+            == "8px"
+          )
+          assert (
+            paragraphs.nth(1).evaluate("el => getComputedStyle(el).marginBottom")
+            == "0px"
+          )
           assert short.locator(
             ".message-parents .reply-parent-chip"
           ).all_text_contents() == ["bb0001", "reference"]

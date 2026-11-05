@@ -1522,6 +1522,10 @@ select,
   border-top: 1px solid hsl(var(--border-faint));
 }
 
+.message-bubble > .answer.reply > div:last-child > p:last-child {
+  margin-bottom: 0;
+}
+
 .receipt {
   font-size: 12px;
   color: hsl(var(--text-tertiary));
