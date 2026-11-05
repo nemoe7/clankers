@@ -1,0 +1,7 @@
+[
+  {"action":"click","selector":"#tab-reports"},
+  {"action":"visible","selector":"#report-answer-form"},
+  {"action":"attribute","selector":"#view-reports","name":"data-scrollable","expected":"true"},
+  {"action":"focus","selector":"#report .field-text-input"},
+  {"action":"focused","selector":"#report .field-text-input"}
+]

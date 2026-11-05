@@ -1,0 +1,6 @@
+[
+  {"action":"click","selector":"#tab-reports"},
+  {"action":"visible","selector":"#report-status"},
+  {"action":"text","selector":"#report-status","expected":"No report published yet."},
+  {"action":"attribute","selector":"#view-reports","name":"data-scrollable","expected":"false"}
+]
