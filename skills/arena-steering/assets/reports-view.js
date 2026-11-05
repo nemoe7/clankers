@@ -18,6 +18,7 @@ const TOC_BOTTOM_CLAMP_PX = 8;
 const TOC_CLICK_LOCK_MS = 650;
 
 let lastRenderedReportId = null;
+const pendingReportSubmissions = new Set();
 const DRAFT_KEY = "steer-report-drafts";
 
 function readDrafts() {
@@ -198,6 +199,9 @@ export function renderReportsView(container, state, handlers) {
     { type: "markdown", markdown: activeReport.body || "" },
   ];
   const hasFields = (activeReport.fields || []).length > 0;
+  const submitBusyAttrs = pendingReportSubmissions.has(activeReport.id)
+    ? 'disabled aria-busy="true"'
+    : "";
   const headings = [];
 
   const answerValues = storedValuesFor(activeReport);
@@ -355,20 +359,20 @@ export function renderReportsView(container, state, handlers) {
       </aside>
 
       <div id="report-main" class="report-main">
-        <form id="report-answer-form">
+        <form id="report-answer-form" data-report-id="${escapeHtml(activeReport.id)}">
           <article id="report" class="report" aria-label="Selected report">
             ${renderedWithMeta}
           </article>
           ${
             hasFields
-              ? `<div class="report-submit-row"><button type="submit" id="report-submit" class="btn btn-primary">${SEND_SVG} Submit Answers</button></div>`
+              ? `<div class="report-submit-row"><button type="submit" id="report-submit" class="btn btn-primary" ${submitBusyAttrs}>${SEND_SVG} Submit</button></div>`
               : ""
           }
         </form>
       </div>
       ${
         hasFields
-          ? `<button type="button" id="report-submit-float" class="btn btn-primary report-submit-float">${SEND_SVG} Submit Answers</button>`
+          ? `<button type="button" id="report-submit-float" class="btn btn-primary report-submit-float" ${submitBusyAttrs}>${SEND_SVG} Submit</button>`
           : ""
       }
       <button
@@ -460,7 +464,8 @@ export function renderReportsView(container, state, handlers) {
   const scrollTopBtn = container.querySelector("#report-scroll-top");
   listen(scrollTopBtn, "click", () => {
     if (typeof container.scrollTo === "function") {
-      container.scrollTo({ top: 0, behavior: "smooth" });
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      container.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
     } else {
       container.scrollTop = 0;
     }
@@ -483,7 +488,9 @@ export function renderReportsView(container, state, handlers) {
       (container.scrollHeight || 0) > (container.clientHeight || 0) + 1;
     container.dataset.scrollable = scrollable ? "true" : "false";
     if (scrollTopBtn) {
-      scrollTopBtn.hidden = (container.scrollTop || 0) <= 160;
+      const toc = container.querySelector("#report-toc");
+      const tocAvailable = toc && !toc.hidden && toc.getClientRects().length > 0;
+      scrollTopBtn.hidden = Boolean(tocAvailable) || (container.scrollTop || 0) <= 160;
     }
     if (!headings.length) return;
     if (tocClickLockId && Date.now() < tocClickLockUntil) {
@@ -515,6 +522,7 @@ export function renderReportsView(container, state, handlers) {
   };
 
   container.addEventListener?.("scroll", syncScrollState, { passive: true });
+  listen(window, "resize", syncScrollState, { passive: true });
   activeScrollCleanup = () => {
     container.removeEventListener?.("scroll", syncScrollState);
     if (tocFlashTimer) {
@@ -601,6 +609,7 @@ export function renderReportsView(container, state, handlers) {
   const submitBtn = container.querySelector("#report-submit");
   const submitFloat = container.querySelector("#report-submit-float");
   listen(submitFloat, "click", () => {
+    if (pendingReportSubmissions.has(activeReport.id)) return;
     if (typeof form?.requestSubmit === "function") {
       form.requestSubmit(submitBtn || undefined);
     } else {
@@ -671,8 +680,27 @@ export function renderReportsView(container, state, handlers) {
 
   listen(form, "submit", async (event) => {
     event.preventDefault();
-    const values = collectValues(true);
-    await handlers.onSubmitReportAnswer(activeReport.id, values);
-    clearDrafts(activeReport.id);
+    if (pendingReportSubmissions.has(activeReport.id)) return;
+    pendingReportSubmissions.add(activeReport.id);
+    for (const button of [submitBtn, submitFloat]) {
+      if (!button) continue;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+    }
+    try {
+      const values = collectValues(true);
+      await handlers.onSubmitReportAnswer(activeReport.id, values);
+      clearDrafts(activeReport.id);
+    } finally {
+      pendingReportSubmissions.delete(activeReport.id);
+      if (container.querySelector("#report-answer-form")?.dataset.reportId === activeReport.id) {
+        for (const selector of ["#report-submit", "#report-submit-float"]) {
+          const button = container.querySelector(selector);
+          if (!button) continue;
+          button.disabled = false;
+          button.removeAttribute("aria-busy");
+        }
+      }
+    }
   });
 }
