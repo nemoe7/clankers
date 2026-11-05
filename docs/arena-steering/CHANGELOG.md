@@ -112,6 +112,8 @@ This log has no Unreleased section.
 
 - `scripts/install.sh`, `test_pre.py`: Remove the managed EXIT hook and migrate existing profiles while preserving user traps. Prevent managed EXIT replay from duplicating the final visible Bash command.
 
+- `server.py`, `test_web_ui.py`: Reload changed Python modules after 10 quiet seconds. Keep the last-good handler when a reload fails.
+
 ## [2.2.0]
 
 ### Added

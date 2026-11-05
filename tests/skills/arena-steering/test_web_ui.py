@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from _reload_isolation import run_reload_in_child
+from arena_steering import server as steering_server
 from arena_steering import survey
 from arena_steering.blocked_bash import append_blocked_bash
 from arena_steering.server import (
@@ -888,6 +889,48 @@ def test_served_app_pushes_finished_runs(tmp_path: Path) -> None:
   after_first = app.data_version()
   (runs / "gate-2.exit").write_text("0\n", encoding="utf-8")
   assert app.data_version() != after_first
+
+
+def test_hot_reload_waits_for_quiet_seconds_and_keeps_last_good_app(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  clock = [0.0]
+
+  class ClockStop:
+    def is_set(self) -> bool:
+      return False
+
+    def wait(self, interval: float) -> bool:
+      clock[0] += interval
+      return clock[0] >= 28
+
+  def signature(_scripts_dir: object) -> str:
+    if clock[0] >= 17:
+      return "fourth"
+    if clock[0] >= 5:
+      return "third"
+    if clock[0] >= 1:
+      return "second"
+    return "first"
+
+  original_app = object()
+  calls: list[tuple[float, object]] = []
+
+  def reload_app(_server: object, app: object) -> object:
+    calls.append((clock[0], app))
+    if len(calls) == 1:
+      raise RuntimeError("invalid module")
+    return object()
+
+  monkeypatch.setattr(steering_server, "scripts_signature", signature)
+  monkeypatch.setattr(steering_server, "reload_server_handler", reload_app)
+  monkeypatch.setattr(steering_server.time, "monotonic", lambda: clock[0])
+
+  steering_server.watch_hot_reload(object(), original_app, ClockStop(), interval=1.0)
+
+  expected_reload_times = [15.0, 27.0]
+  assert [when for when, _app in calls] == expected_reload_times
+  assert [app for _when, app in calls] == [original_app, original_app]
 
 
 def test_demo_script_seeds_messages_tasks_and_reports(
