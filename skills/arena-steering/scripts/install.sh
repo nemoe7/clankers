@@ -133,6 +133,37 @@ _steer_gate() {
 }
 EOF
 fi
+EXIT_MARKER="# arena-steering-exit"
+if ! grep -qxF "$EXIT_MARKER" "$PROFILE"; then
+  cat >> "$PROFILE" <<'EOF'
+
+# arena-steering-exit
+_steer_on_exit() {
+  _steer_exit_rc=$1
+  _steer_gate_running=1
+  "$HOME/.local/bin/steer" post-exit --rc "$_steer_exit_rc" --line "${_steer_line:-}" --elapsed "$SECONDS" >&2 || :
+  return "$_steer_exit_rc"
+}
+_steer_previous_exit=$(trap -p EXIT)
+case $_steer_previous_exit in
+  *arena-steering-exit-trap*) ;;
+  *)
+    if [ -n "$_steer_previous_exit" ]; then
+      eval "_steer_exit_parts=( ${_steer_previous_exit#trap -- } )"
+      _steer_exit_action=${_steer_exit_parts[0]}
+      unset _steer_exit_parts
+      printf -v _steer_exit_hook '%s\n%s\n%s' '_steer_exit_rc=$?; set +e; _steer_on_exit "$_steer_exit_rc"' "$_steer_exit_action" 'exit "$_steer_exit_rc" # arena-steering-exit-trap'
+    else
+      _steer_exit_hook='_steer_exit_rc=$?; set +e; _steer_on_exit "$_steer_exit_rc"; exit "$_steer_exit_rc" # arena-steering-exit-trap'
+    fi
+    trap "$_steer_exit_hook" EXIT
+    unset _steer_exit_hook _steer_exit_action
+    ;;
+esac
+unset _steer_previous_exit
+EOF
+fi
+
 DEBUG_MARKER="# arena-steering-debug"
 if ! grep -qxF "$DEBUG_MARKER" "$PROFILE"; then
   cat >> "$PROFILE" <<'EOF'
@@ -160,8 +191,10 @@ EOF
 fi
 
 GATE_BLOCK=$(awk '/^# arena-steering-gate$/ {copy=1} copy && /^EOF$/ {exit} copy {print}' "$SCRIPTS_DIR/install.sh")
+EXIT_BLOCK=$(awk '/^# arena-steering-exit$/ {copy=1} copy && /^EOF$/ {exit} copy {print}' "$SCRIPTS_DIR/install.sh")
 [ -n "$GATE_BLOCK" ] || fail "cannot read the managed gate block"
-STEER_GATE_BLOCK="$GATE_BLOCK" "$PYTHON" - "$PROFILE" <<'PY' || fail "cannot refresh the managed profile blocks"
+[ -n "$EXIT_BLOCK" ] || fail "cannot read the managed exit block"
+STEER_GATE_BLOCK="$GATE_BLOCK" STEER_EXIT_BLOCK="$EXIT_BLOCK" "$PYTHON" - "$PROFILE" <<'PY' || fail "cannot refresh the managed profile blocks"
 from pathlib import Path
 import os
 import sys
@@ -169,13 +202,19 @@ import sys
 profile = Path(sys.argv[1])
 text = profile.read_text(encoding="utf-8")
 original = text
-if "# arena-steering-exit\n" in text:
-  start = text.index("# arena-steering-exit\n")
-  end = text.index("# arena-steering-debug\n", start)
-  text = text[:start] + text[end:]
-start = text.index("# arena-steering-gate\n")
-end = text.index("# arena-steering-debug\n", start)
-updated = text[:start] + os.environ["STEER_GATE_BLOCK"] + "\n\n" + text[end:]
+gate_start = text.index("# arena-steering-gate\n")
+exit_start = text.index("# arena-steering-exit\n")
+debug_start = text.index("# arena-steering-debug\n")
+# Pre-EXIT profiles need the appended EXIT block moved before DEBUG.
+suffix = text[debug_start:exit_start] if exit_start > debug_start else text[debug_start:]
+updated = (
+  text[:gate_start]
+  + os.environ["STEER_GATE_BLOCK"]
+  + "\n\n"
+  + os.environ["STEER_EXIT_BLOCK"]
+  + "\n\n"
+  + suffix
+)
 if updated != original:
   profile.write_text(updated, encoding="utf-8")
 PY

@@ -937,6 +937,32 @@ def _bump_call_count(store: SqliteStore) -> int:
     return count
 
 
+def _count_outer_bash(state_dir: Path, line: str, *, routed: bool) -> None:
+  """Count one completed outer agent shell, never its routed child shell."""
+  if not line.strip() or routed:
+    return
+  store, messages, _, _ = open_services(state_dir)
+  try:
+    pending_ids = messages.pending_ids()
+    if not pending_ids:
+      messages.reset_gate_if_clear()
+      return
+    ctx = pre_mod.PreContext(
+      line=line,
+      command=pre_mod.shell_line(line),
+      shell="bash",
+      pending_ids=pending_ids,
+      call_count=_call_count(store),
+      routed=routed,
+      cwd=Path.cwd(),
+      checkout_root=pre_mod.repo_root(),
+    )
+    if pre_mod.bash_command_policy(ctx)[0]:
+      _bump_call_count(store)
+  finally:
+    store.close()
+
+
 def _audit_blocked_bash(
   state_dir: Path, *, line: str, command: str, blocked_by: str, out: TextIO
 ) -> None:
@@ -1163,13 +1189,6 @@ def _run_pre(
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.
     print(f'_arena_preview_done="{" ".join(result.done)}"', file=out)
-  countable = bool(
-    parsed.shell
-    and ("gate" not in ctx.done or ctx.is_mixed_line())
-    and pre_mod.bash_command_policy(ctx)[0]
-  )
-  if pending_ids and countable:
-    _bump_call_count(store)
   if not routed and not ctx.is_inbox_recovery():
     tool_name = pre_mod.native_tool_name(
       ctx.line, ctx.command, ctx.shell, checkout_root=ctx.checkout_root
@@ -1528,6 +1547,11 @@ def _run_post_exit(parsed: argparse.Namespace, state_dir: Path, out: TextIO) -> 
   if parsed.check_ancestry:
     _note_background_ancestry(state_dir)
     return 0
+  _count_outer_bash(
+    state_dir,
+    str(parsed.line or ""),
+    routed=os.environ.get("ARENA_STEER_ROUTE") == "1",
+  )
   if (
     parsed.rc == 0
     and pre_mod.post_push_watch(parsed.line)

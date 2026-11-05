@@ -36,6 +36,11 @@ def _run(*args: str) -> tuple[int, str]:
   return code, out.getvalue()
 
 
+def _finish_outer(line: str, *, rc: int = 0) -> None:
+  code, out = _run("post-exit", "--line", line, "--rc", str(rc))
+  assert code == 0, out
+
+
 def _seed(state_dir: Path, body: str, *, acked: bool = False) -> None:
   state_dir.mkdir(parents=True, exist_ok=True)
   store, messages, _tasks, _reports = cli.open_services(state_dir)
@@ -174,6 +179,7 @@ def test_local_stash_push_does_not_trigger_remote_push_guards(
   _seed(_isolate_state, "Pending work")
   code, output = _run("pre", "-l", line, "-c", line, "-s", "bash")
   assert code == pre.CONTINUE, output
+  _finish_outer(line)
   assert _count(_isolate_state) == "1"
   assert (
     pre.run_pipeline(pre.PreContext(line=line, command=line)).verdict == pre.CONTINUE
@@ -376,8 +382,9 @@ def test_exact_maintenance_shell_skips_its_cleanup_without_widening_the_match(
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
   blocked, out = _run("pre", "-l", line, "-c", cleanup, "-s", "bash")
   assert blocked == pre.BLOCK, out
+  _finish_outer(line)
   count_after_block = _count(_isolate_state)
-  assert count_after_block == str(pre.GATE_THRESHOLD + 1)
+  assert count_after_block == str(pre.GATE_THRESHOLD)
   code, out = _run("pre", "-l", line, "-c", cleanup, "-s", "bash", "--done", "gate")
   assert code == pre.CONTINUE, out
   assert _count(_isolate_state) == count_after_block
@@ -449,6 +456,7 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
     assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
   code, output = _run("pre", "-l", mixed, "-c", "echo extra", "-s", "bash")
   assert code == pre.BLOCK, output
+  _finish_outer(mixed)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
   store, _, _, _ = cli.open_services(_isolate_state)
@@ -553,6 +561,7 @@ def test_mixed_native_reader_and_probe_keep_following_command_gated(
       assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
     code, output = _run("pre", "-l", line, "-c", "printf extra", "-s", "bash")
     assert code == pre.BLOCK, output
+    _finish_outer(line)
     assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
     store, _, _, _ = cli.open_services(_isolate_state)
     store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
@@ -567,6 +576,7 @@ def test_agent_isolated_python_still_uses_inbox_gate(_isolate_state: Path) -> No
   line = "/bin/bash -l -c python3 -I -c 'print(1)'"
   code, output = _run("pre", "-l", line, "-c", "python3 -I -c 'print(1)'", "-s", "bash")
   assert code == pre.BLOCK, output
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -578,12 +588,14 @@ def test_mixed_counted_command_does_not_waive_next_gate(
   code, output = _run("pre", "-l", line, "-c", "printf first", "-s", "bash")
   assert code == pre.CONTINUE, output
   assert "gate" not in output
+  _finish_outer(line)
   assert _count(_isolate_state) == "1"
   store, _, _, _ = cli.open_services(_isolate_state)
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
   code, output = _run("pre", "-l", line, "-c", "printf second", "-s", "bash")
   assert code == pre.BLOCK, output
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -612,6 +624,7 @@ def test_native_mkdir_and_mixed_shell_gate_each_current_command(
     "pre", "-l", mixed, "-c", "printf extra", "-s", "bash", "--done", "gate"
   )
   assert code == pre.BLOCK, output
+  _finish_outer(mixed)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
   push = native + "; git push origin topic"
@@ -642,6 +655,7 @@ def test_native_mkdir_shape_changes_still_spend_inbox_budget(
   line = "/bin/bash -l -c " + command
   assert not pre.arena_maintenance_step(line, command)
   _run("pre", "-l", line, "-c", command, "-s", "bash")
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -663,6 +677,8 @@ def test_pre_records_native_tool_cadence_only_for_agent_tools(
   def run(line: str, command: str) -> None:
     code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
     assert code == pre.CONTINUE, output
+    code, output = _run("post-exit", "--line", line, "--rc", "0")
+    assert code == 0, output
 
   run("printf one", "printf one")
   name, stamp, count = activity()
@@ -819,6 +835,7 @@ def test_standalone_mkdir_runs_but_counts_while_inbox_waits(
 
   code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.CONTINUE, output
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
@@ -844,6 +861,7 @@ def test_mkdir_waiver_requires_exact_current_command(
 
   code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.BLOCK, output
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -991,6 +1009,7 @@ def test_mixed_mkdir_lines_stay_inbox_gated(
 
   code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.BLOCK, output
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -1033,6 +1052,7 @@ def test_mixed_platform_probe_remains_inbox_gated(
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.BLOCK
   assert "VIOLATION: Bash blocked." in out  # nonemo: NMT100
+  _finish_outer(line)
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
@@ -1046,6 +1066,7 @@ def test_six_call_bash_block_persists_one_violation_for_inbox_gate(
 
   command = ("pre", "-c", "printf ok", "-l", "printf ok", "-s", "bash")
   assert _run(*command)[0] == pre.CONTINUE
+  _finish_outer("printf ok")
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert store.get_meta(pre.CALL_COUNT_META) == str(pre.GATE_THRESHOLD)
   assert messages.pending_violation() is None
@@ -1850,6 +1871,7 @@ def test_the_gate_reads_the_stored_count_and_the_done_list_skips_steps(
   _seed(_isolate_state, "Work through this note.")
   code, first = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
   assert code == pre.CONTINUE
+  _finish_outer("ls")
   assert _count(_isolate_state) == "1"
 
   code, second = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls", "-d", "gate")
@@ -1877,10 +1899,12 @@ def test_reading_the_inbox_preserves_the_count_while_work_remains(
   _seed(_isolate_state, "Note for the countdown.")
   for _ in range(3):
     _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+    _finish_outer("ls")
   assert _count(_isolate_state) == "3"
 
   _run("read")
   _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  _finish_outer("ls")
   assert _count(_isolate_state) == "4"
 
 
@@ -2173,7 +2197,7 @@ def test_clear_inbox_single_push_arms_exit_guard_only_for_whole_line(
   assert "_steer_single_push_approved=1" not in output
 
 
-def test_installer_counts_each_visible_command_once(tmp_path: Path) -> None:
+def test_installer_allows_managed_debug_replay(tmp_path: Path) -> None:
   root = Path(__file__).resolve().parents[3]
   project = tmp_path / "project with spaces"
   scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
@@ -2224,13 +2248,81 @@ def test_installer_counts_each_visible_command_once(tmp_path: Path) -> None:
   )
   assert shell.returncode == 0, shell.stderr
   calls = (home / "pre.log").read_text(encoding="utf-8").splitlines()
-  assert len(calls) == 3, calls
+  assert len(calls) == 6, calls
   for visible in (
     "git fetch origin topic",
     "git merge-base --is-ancestor origin/topic HEAD",
-    "printf visible",
   ):
     assert sum(f"--command {visible}" in call for call in calls) == 1, calls
+  assert sum("--command printf visible" in call for call in calls) == 4, calls
+
+
+def test_installer_prior_exit_trap_allows_managed_debug_replay(
+  tmp_path: Path,
+) -> None:
+  root = Path(__file__).resolve().parents[3]
+  project = tmp_path / "project with spaces"
+  scripts = project / ".agents" / "skills" / "arena-steering" / "scripts"
+  shutil.copytree(root / "skills" / "arena-steering" / "scripts", scripts)
+  shutil.copytree(
+    root / "skills" / "arena-steering" / "references", scripts.parent / "references"
+  )
+  subprocess.run(
+    ["git", "init", "--quiet", "-b", "main", str(project)],
+    check=True,
+    capture_output=True,
+  )
+  home = tmp_path / "home with spaces"
+  python = home / ".agents" / ".steer-venv" / "bin" / "python"
+  python.parent.mkdir(parents=True)
+  python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+  python.chmod(0o755)
+  profile = home / ".bash_profile"
+  profile.write_text(
+    'trap \'printf "prior-exit\\n" >> "$HOME/prior-exit.log"\' EXIT\n',
+    encoding="utf-8",
+  )
+  env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
+  installed = subprocess.run(
+    ["bash", str(scripts / "install.sh")],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert installed.returncode == 0, installed.stderr
+  command = home / ".local" / "bin" / "steer"
+  command.write_text(
+    '#!/bin/sh\ncase "$1" in\n  pre) printf "%s\\n" "$*" >> "$HOME/pre.log" ;;\nesac\n',
+    encoding="utf-8",
+  )
+  command.chmod(0o755)
+  shell = subprocess.run(
+    [
+      "bash",
+      "-c",
+      (
+        'git() { return 0; }; source "$HOME/.bash_profile"; : > "$HOME/pre.log"; '
+        "git fetch origin topic; git merge-base --is-ancestor origin/topic HEAD; printf visible"
+      ),
+    ],
+    cwd=project,
+    env=env,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert shell.returncode == 0, shell.stderr
+  calls = (home / "pre.log").read_text(encoding="utf-8").splitlines()
+  assert len(calls) == 6, calls
+  for visible in (
+    "git fetch origin topic",
+    "git merge-base --is-ancestor origin/topic HEAD",
+  ):
+    assert sum(f"--command {visible}" in call for call in calls) == 1, calls
+  assert sum("--command printf visible" in call for call in calls) == 4, calls
+  assert (home / "prior-exit.log").read_text(encoding="utf-8") == "prior-exit\n"
 
 
 def test_installer_migrates_exit_hook_and_preserves_prior_trap(
@@ -2259,8 +2351,8 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
     encoding="utf-8",
   )
   env = {**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin"}
-  for attempt in range(2):
-    if attempt:
+  for attempt in range(3):
+    if attempt == 1:
       profile.write_text(
         profile.read_text(encoding="utf-8").replace(
           "# arena-steering-debug\n",
@@ -2272,6 +2364,11 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
         ),
         encoding="utf-8",
       )
+    if attempt == 2:
+      text = profile.read_text(encoding="utf-8")
+      start = text.index("# arena-steering-exit\n")
+      end = text.index("# arena-steering-debug\n", start)
+      profile.write_text(text[:start] + text[end:], encoding="utf-8")
     installed = subprocess.run(
       ["bash", str(scripts / "install.sh")],
       cwd=project,
@@ -2281,7 +2378,7 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
       check=False,
     )
     assert installed.returncode == 0, installed.stderr
-  assert "arena-steering-exit" not in profile.read_text(encoding="utf-8")
+  assert profile.read_text(encoding="utf-8").count("# arena-steering-exit\n") == 1
 
   command = home / ".local" / "bin" / "steer"
   command.write_text(
@@ -2324,7 +2421,10 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
     check=False,
   )
   assert strict.returncode == 7, strict.stderr
-  assert not (home / "post-exit.log").exists()
+  exit_calls = (home / "post-exit.log").read_text(encoding="utf-8").splitlines()
+  assert len(exit_calls) == 3
+  for call, status in zip(exit_calls, (0, 5, 7), strict=True):
+    assert f"--rc {status} " in call
   assert (home / "prior-exit.log").read_text(encoding="utf-8").splitlines() == [
     "prior-exit:0",
     "prior-exit:5",
@@ -2349,7 +2449,7 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
   assert (home / "remote-updated").read_text(encoding="utf-8") == "done"
   assert late_note.returncode == 0, late_note.stdout
   assert "PUSH BLOCKED" not in late_note.stdout
-  assert not (home / "post-exit.log").exists()
+  assert len((home / "post-exit.log").read_text(encoding="utf-8").splitlines()) == 4
 
 
 def test_installer_failed_gate_logs_a_blocked_push(tmp_path: Path) -> None:
@@ -2639,6 +2739,7 @@ def test_poll_and_partial_ack_keep_count_until_last_blocker(
   store.close()
   for _ in range(3):
     _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+    _finish_outer("ls")
   assert _count(_isolate_state) == "3"
   assert _run("poll")[0] == 0
   assert _count(_isolate_state) == "3"
@@ -2648,6 +2749,7 @@ def test_poll_and_partial_ack_keep_count_until_last_blocker(
   assert _count(_isolate_state) == "0"
   _seed(_isolate_state, "New work")
   assert _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")[0] == 0
+  _finish_outer("ls")
   assert _count(_isolate_state) == "1"
 
 
@@ -2799,6 +2901,7 @@ def test_initial_ack_rechecks_pending_state_and_counts(
   code, _ = _run("pre", "-l", line, "-c", "printf later", "-s", "bash")
   expected = pre.CONTINUE if blocker_count == 1 else pre.BLOCK
   assert code == expected
+  _finish_outer(line)
   expected_count = "0" if blocker_count == 1 else str(pre.GATE_THRESHOLD + 1)
   assert _count(_isolate_state) == expected_count
 
@@ -3017,6 +3120,37 @@ def test_incomplete_or_mixed_github_routes_block(
   assert code == pre.BLOCK, (line, out)
 
 
+def test_outer_exit_counts_mixed_agent_line_once_per_call(
+  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  line = "/bin/bash -l -c printf one; printf two"
+  code, output = _run("pre", "-l", line, "-c", "printf one", "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) in (None, "0")
+
+  for expected in ("1", "2"):
+    code, output = _run("post-exit", "--line", line, "--rc", "0")
+    assert code == 0, output
+    assert _count(_isolate_state) == expected
+
+  monkeypatch.setenv("ARENA_STEER_ROUTE", "1")
+  assert _run("post-exit", "--line", line, "--rc", "0")[0] == 0
+  assert _count(_isolate_state) == "2"
+  monkeypatch.delenv("ARENA_STEER_ROUTE")
+
+  process_probe = (
+    Path(__file__)
+    .with_name("process_probe_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+  )
+  assert _run("post-exit", "--line", process_probe, "--rc", "0")[0] == 0
+  assert _count(_isolate_state) == "2"
+  assert _run("post-exit", "--line", "steer read", "--rc", "0")[0] == 0
+  assert _count(_isolate_state) == "2"
+
+
 def test_post_push_watcher_checks_ancestry_after_pr_checks(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3199,7 +3333,7 @@ def test_exit_warns_on_slow_unrouted_calls(
   assert (">= 10s" in out) == warn
 
 
-def test_exit_reminds_without_acking_or_incrementing_pending_items(
+def test_exit_reminds_without_acking_and_counts_pending_items_once(
   _isolate_state: Path,
 ) -> None:
   store, messages, _, _ = cli.open_services(_isolate_state)
@@ -3213,7 +3347,7 @@ def test_exit_reminds_without_acking_or_incrementing_pending_items(
   assert "unacked 1 msg" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_ids() == ["ab1001"]
-  assert store.get_meta(pre.CALL_COUNT_META) == "3"
+  assert store.get_meta(pre.CALL_COUNT_META) == "4"
   store.close()
 
 
