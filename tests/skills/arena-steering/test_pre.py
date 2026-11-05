@@ -327,6 +327,14 @@ def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
       "/bin/bash -l -c 'arena-workspace read /home/user/project/README.md'",
       "arena-workspace read /home/user/project/README.md",
     ),
+    (
+      "/bin/bash -l -c 'arena-workspace edit /home/user/project/file.txt'",
+      "arena-workspace edit /home/user/project/file.txt",
+    ),
+    (
+      "/bin/bash -l -c 'arena-workspace write /home/user/project/file.txt'",
+      "arena-workspace write /home/user/project/file.txt",
+    ),
   ),
 )
 def test_arena_platform_shells_do_not_spend_inbox_call_budget(
@@ -410,7 +418,7 @@ def test_port_probe_bypasses_inbox_gate_even_if_policy_would_block(
 def test_exact_arena_process_probe_skips_block_and_call_count(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-  script = "ports_observed=1\necho '===ARENA_ENTRY==='\necho '===ARENA_PORTS==='"
+  script = "ports_observed=1\necho probe >/dev/null\necho '===ARENA_ENTRY==='\necho '===ARENA_PORTS==='"
   monkeypatch.setattr(
     pre,
     "ARENA_PROCESS_PROBE_SHA256",
@@ -422,9 +430,10 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
 
-  code, output = _run("pre", "-l", script, "-c", "ports_observed=1", "-s", "bash")
-  assert code == pre.CONTINUE, output
-  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  for step in ("ports_observed=1", "echo probe >/dev/null", "echo probe > /dev/null"):
+    code, output = _run("pre", "-l", script, "-c", step, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
   mixed = script + "\necho extra"
   for native_command in ("ports_observed=1", "echo '===ARENA_ENTRY==='"):
@@ -440,6 +449,11 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
   store.close()
   changed = script.replace("ports_observed=1", "ports_observed=2")
   code, output = _run("pre", "-l", changed, "-c", "ports_observed=2", "-s", "bash")
+  assert code == pre.BLOCK, output
+  changed = script.replace("echo probe >/dev/null", "echo probe > /dev/null")
+  code, output = _run(
+    "pre", "-l", changed, "-c", "echo probe > /dev/null", "-s", "bash"
+  )
   assert code == pre.BLOCK, output
 
 
@@ -1906,6 +1920,12 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   assert (project / "arena-state" / "state.sqlite3").is_file()
   assert not (outside / "arena-state").exists()
   assert not (tmp_path / "override").exists()
+  store, messages, *_ = cli.open_services(state_dir)
+  pending = messages.pending_ids()
+  assert pending
+  for pending_id in pending:
+    messages.ack(pending_id, "Cleared.")
+  store.close()
 
   zone_env = {key: value for key, value in env.items() if key != "TZ"}
   live_shell = subprocess.run(
@@ -1947,6 +1967,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     assert zone_shell.returncode == 0, zone_shell.stderr
     assert (home / "tz-result").read_text(encoding="utf-8") == expected
 
+  _seed(state_dir, "Pending for push guard.")
   push = subprocess.run(
     [
       "bash",

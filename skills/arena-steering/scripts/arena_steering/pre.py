@@ -238,7 +238,7 @@ def arena_maintenance_call(
   if (
     "===ARENA_ENTRY===" in text
     and "===ARENA_PORTS===" in text
-    and command.strip() in text
+    and command.strip().replace(" > /dev/null", " >/dev/null", 1) in text
     and hashlib.sha256(text.encode()).hexdigest() == ARENA_PROCESS_PROBE_SHA256
   ):
     return True
