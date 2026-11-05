@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.2]
+
+### Changed
+
+- `SKILL.md`: Use self-identifying field labels so acknowledgements linked to tasks produce meaningful details without reopening the report.
+
 ## [2.2.1]
 
 ### Added
