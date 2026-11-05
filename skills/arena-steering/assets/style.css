@@ -1448,7 +1448,8 @@ select,
 
 .message-bubble {
   width: fit-content;
-  max-width: 100%;
+  /* A narrow left gutter keeps even wrapped, body-driven messages inset. */
+  max-width: calc(100% - 20px);
   margin-left: auto;
   padding: 10px var(--message-bubble-padding);
   border: 1px solid hsl(var(--border-faint));
@@ -1477,6 +1478,27 @@ select,
 
 .message-bubble > .message-text {
   text-align: left;
+}
+
+.message-bubble > .message-text:first-child {
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+/* Explicitly multiline Markdown starts at the bubble's left text inset. */
+.message-bubble > .message-text:first-child.message-text-multiline,
+.message-bubble > .message-text:first-child:has(
+  br,
+  > :nth-child(2),
+  ul,
+  ol,
+  blockquote,
+  pre,
+  table
+) {
+  width: 100%;
+  margin-left: 0;
 }
 
 .message-text p {

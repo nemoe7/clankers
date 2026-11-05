@@ -70,6 +70,16 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
   )
   app.messages.ack("bb0007", "An earlier paragraph.")
   app.messages.ack("bb0007", "The final paragraph.")
+  app.messages.send_message(
+    "First line  \nSecond line.", msg_id="bb0008", blocking=False
+  )
+  app.messages.ack("bb0008", "An agent response with more content. " * 45)
+  app.messages.send_message(
+    "First paragraph.\n\nSecond paragraph.", msg_id="bb0009", blocking=False
+  )
+  app.messages.ack("bb0009", "An agent response with more content. " * 45)
+  app.messages.send_message("Short line.\n", msg_id="bb0010", blocking=False)
+  app.messages.ack("bb0010", "An agent response with more content. " * 45)
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -128,6 +138,18 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
                 bodyAlign: getComputedStyle(
                   element.querySelector('.message-bubble > .message-text') || element
                 ).textAlign,
+                bodyLines: (() => {
+                  const body = element.querySelector('.message-bubble > .message-text');
+                  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+                  const lines = new Set();
+                  while (walker.nextNode()) {
+                    if (!walker.currentNode.textContent.trim()) continue;
+                    const range = document.createRange();
+                    range.selectNodeContents(walker.currentNode);
+                    for (const rect of range.getClientRects()) lines.add(Math.round(rect.y));
+                  }
+                  return lines.size;
+                })(),
               };
             }""")
 
@@ -145,6 +167,22 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
             assert shape["bodyAlign"] == "left", shape
             assert shape["bubbleOverflow"] <= 1, shape
           s = boxes(short)
+          assert s["bodyLines"] == 1, s
+          assert s["body"]["x"] > s["bubble"]["x"] + 19, s
+          assert abs(s["body"]["right"] - (s["bubble"]["right"] - 15)) <= 1, s
+          trailing_newline = page.locator('.message[data-msg-id="bb0010"]')
+          trailing_newline.scroll_into_view_if_needed()
+          trailing = boxes(trailing_newline)
+          assert trailing["bodyLines"] == 1, trailing
+          assert "message-text-multiline" not in (
+            trailing_newline.locator(
+              ".message-bubble > .message-text:first-child"
+            ).get_attribute("class")
+            or ""
+          )
+          assert (
+            abs(trailing["body"]["right"] - (trailing["bubble"]["right"] - 15)) <= 1
+          ), trailing
           assert s["bubble"]["width"] <= s["row"]["width"] * 0.72, s
           assert s["ack"]["width"] <= s["row"]["width"] * 2 / 3 + 1, s
           assert abs(s["ack"]["width"] - (s["bubble"]["width"] - 30)) <= 1, s
@@ -199,8 +237,21 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
             for attachment in s["attachments"]
           ), s
           full = boxes(long)
-          assert full["bubble"]["width"] >= full["row"]["width"] - 2, full
+          assert full["bodyLines"] > 1, full
+          assert abs(full["body"]["x"] - (full["bubble"]["x"] + 15)) <= 1, full
+          assert full["bodyAlign"] == "left", full
+          # A wrapped, body-driven bubble remains wide, with the small left
+          # gutter shown in the correct long-message reference.
+          assert full["bubble"]["width"] >= full["row"]["width"] - 22, full
+          assert full["bubble"]["width"] <= full["row"]["width"] - 18, full
           assert full["ack"]["width"] >= full["row"]["width"] * 0.8, full
+          for msg_id in ("bb0008", "bb0009"):
+            forced_multiline = page.locator(f'.message[data-msg-id="{msg_id}"]')
+            forced_multiline.scroll_into_view_if_needed()
+            lines = boxes(forced_multiline)
+            assert lines["bodyLines"] >= 2, lines
+            assert abs(lines["body"]["x"] - (lines["bubble"]["x"] + 15)) <= 1, lines
+            assert lines["bodyAlign"] == "left", lines
           intermediate = boxes(middle)
           assert (
             intermediate["row"]["width"] * 0.72 < intermediate["bubble"]["width"]
@@ -249,11 +300,12 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
   store = SqliteStore()
   app = SteeringApp(store)
   for idx in range(10):
-    app.messages.send_message(
-      f"Message {idx}. " + "Earlier context stays on the page. " * 22,
-      msg_id=f"ac{idx:04d}",
-      blocking=False,
+    body = (
+      "First line  \nSecond line."
+      if idx == 7
+      else f"Message {idx}. " + "Earlier context stays on the page. " * 22
     )
+    app.messages.send_message(body, msg_id=f"ac{idx:04d}", blocking=False)
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -279,8 +331,21 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
           }"""
         )
         source = page.locator('.message[data-msg-id="ac0006"]')
+        multiline = page.locator('.message[data-msg-id="ac0007"]')
         anchor = page.locator('.message[data-msg-id="ac0008"]')
         source.wait_for()
+        assert "message-text-multiline" not in (
+          source.locator(".message-bubble > .message-text:first-child").get_attribute(
+            "class"
+          )
+          or ""
+        )
+        assert "message-text-multiline" in (
+          multiline.locator(
+            ".message-bubble > .message-text:first-child"
+          ).get_attribute("class")
+          or ""
+        )
         anchor.scroll_into_view_if_needed()
         history = page.locator("#history")
         assert (
@@ -308,6 +373,12 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
         }""")
         assert abs(after - offset) <= 30, (transport, offset, after)
         assert geometry["ackWidth"] >= geometry["bubbleWidth"] - 31, geometry
+        assert "message-text-multiline" in (
+          multiline.locator(
+            ".message-bubble > .message-text:first-child"
+          ).get_attribute("class")
+          or ""
+        )
         assert not errors, errors
       finally:
         browser.close()
