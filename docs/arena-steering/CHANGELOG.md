@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- `references/cli-reference.md`: Document direct agent CLI commands, outputs, exits, and task phases in one guide.
+
 - `server.py`, `assets/messages-view.js`, `assets/app.js`, `assets/style.css`: Expose served image URLs, render message thumbnails, and open them in the existing viewer. Leave missing and nonimage files as labels.
 
 - `models.py`, `services.py`, `store.py`, `server.py`, `cli.py`: Store typed message, task, and report parents on child messages. Keep legacy message parent IDs and show all parent types on child reads.
