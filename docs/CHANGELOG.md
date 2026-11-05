@@ -10,6 +10,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### rules
+
+- Replace v1 steering references with v2, require six-call bible rechecks, and use v2 for all reports (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`, `AGENTS.md`).
+
 #### maintenance
 
 - Log Nemoize child commands and exit codes during repo validation (`maintenance/check.py`).
