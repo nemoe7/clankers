@@ -135,6 +135,7 @@ let reportedTimezone = null;
 let lastDataSignature = "";
 let lastReportRenderSignature = null;
 let lastViewportHeight = 0;
+const MOBILE_KEYBOARD_MIN_SHRINK = 120;
 const REPORT_VIEW_INTERVAL = 30_000;
 let lastReportView = { id: null, at: 0 };
 let reportViewTimer = null;
@@ -283,6 +284,18 @@ function syncViewportHeight() {
       `${nextHeight}px`
     );
   }
+  const focused = document.activeElement;
+  const editing = focused?.matches?.(
+    "input:not([type='hidden']):not([readonly]), textarea:not([readonly]), [contenteditable='true']"
+  );
+  const mobile = window.matchMedia?.("(max-width: 60em)")?.matches;
+  document.documentElement.toggleAttribute(
+    "data-mobile-keyboard-open",
+    Boolean(
+      mobile && editing && vvScale <= 1.01 &&
+      Math.max(innerHeight, docHeight) - vvHeight >= MOBILE_KEYBOARD_MIN_SHRINK
+    )
+  );
   if (
     ((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) &&
     typeof window.scrollTo === "function"

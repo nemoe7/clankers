@@ -2803,6 +2803,13 @@ article#report.report img,
   }
 }
 
+@media (max-width: 60em) and (prefers-reduced-motion: no-preference) {
+  :root[data-mobile-keyboard-open] #view-reports[data-scrollable="true"]:has(#report-submit-float)::after,
+  :root[data-mobile-keyboard-open] #view-reports .reports-layout::after {
+    content: none;
+  }
+}
+
 .prose-block {
   width: 100%;
   max-width: none;
