@@ -28,7 +28,7 @@
 ## Component Inventory
 
 - Centered equal-width `.tab-nav` (`grid-auto-columns: 1fr`) with plain-text `.tab-btn` items and `#report-pip` (`--accent: #e5bb8b`) on `Reports` when unseen or unanswered reports exist.
-- `Messages` log toolbar (`#connection` status dot, `#log-search`, `#skip-poll`, `#quiet-msgs`), `.message` cards, `.code-block` copy headers, and `.card.compose`.
+- `Messages` log toolbar (`#connection` status dot, `#last-check` native-tool cadence, `#log-search`, `#skip-poll`, `#quiet-msgs`), `.message` cards, `.code-block` copy headers, and `.card.compose`.
 - `Reports` 3-column layout (`#report-toc`, `#report-main` with two-line `#report-status` under `<h1>` and `.field-card` question cards, and `#report-rail` numbered `#report-picker` with top-right unseen dot and unanswered icon plus `Copy`/`Dismiss` actions).
 - Report selection keeps the picker and rail mounted, refreshes the form and acknowledgement history, and does not replay panel entry.
 - `Tasks` borderless sectioned list (`Current` `18px`, `Upcoming` `18px`, `Finished` `18px`) with `16px` task rows/titles, `14px` badges/details, `.select-wrap` type filter (`#task-type-filter`), and search input.
@@ -39,6 +39,7 @@
 - The static connection dot is gray while connecting, green while connected, blue while polling, amber when idle, and red when disconnected.
 - Text and an accessible label identify each state.
 - Message status dots reflect `sent` (neutral), `seen` (`#7fa7d1`), and `acked` (`#8dc07f`) states alongside boundary-scheduled relative timestamps (`nextRelativeDelay`).
+- `#last-check` names the latest native tool, adds only a nonzero pending-inbox Bash count, and uses compact seconds-resolution Nuu timestamps with the full form in `title`.
 - Copy buttons (`.copy-code`, `#report-copy`) and ID chips (`code.msg-id`) swap to a green check / `data-state="good"` confirmation state on click.
 
 ## Accessibility Contract

@@ -54,6 +54,9 @@ _BIBLE_PATHS = (
   "ARENA.md",
   ".agents/skills/arena-steering/SKILL.md",
 )
+TOOL_NAME_META = "last_tool_name"
+TOOL_AT_META = "last_tool_at"
+TOOL_PROBE_NAMES = frozenset({"read", "edit", "write", "bash"})
 
 
 def with_bible_read(body: str) -> str:
@@ -422,6 +425,32 @@ class MessageService:
     if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
       raise ValueError("Reply revision must be a SHA-256 hex digest")
     return self._messages.mark_replies_seen(msg_id, revision)
+
+  def record_tool(self, name: str) -> None:
+    """Record one agent tool without letting platform probes replace its cadence."""
+    if name not in TOOL_PROBE_NAMES:
+      raise ValueError(f"Unknown tool name: {name}")
+    stamp = self._clock.now_iso()
+    with self._reports.transaction():
+      self._meta.set_meta(TOOL_NAME_META, name)
+      self._meta.set_meta(TOOL_AT_META, stamp)
+    with self._cond:
+      self._cond.notify_all()
+
+  def tool_activity(self) -> dict[str, str] | None:
+    """Return the last agent tool in the shared v1-compatible state shape."""
+    name = self._meta.get_meta(TOOL_NAME_META)
+    stamp = self._meta.get_meta(TOOL_AT_META, "") or ""
+    if name not in TOOL_PROBE_NAMES or not stamp:
+      return None
+    return {"tool": str(name), "at": stamp}
+
+  def calls_since_message(self) -> int:
+    """Return the current pending-inbox Bash count for status display."""
+    try:
+      return max(0, int(self._meta.get_meta(pre_mod.CALL_COUNT_META, "0") or "0"))
+    except ValueError:
+      return 0
 
   def touch_agent(self) -> None:
     """Record an agent call and clear the previous turn-end marker."""

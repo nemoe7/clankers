@@ -21,6 +21,7 @@ const SENDING_SVG = `<svg class="lucide lucide-loader-circle" width="16" height=
 
 const AGENT_QUIET_MS = 180_000;
 const AGENT_CALL_MS = 1_920_000;
+const TOOL_LABELS = { read: "Read", edit: "Edit", write: "Write", bash: "Bash" };
 
 function connectionStamp(value) {
   if (typeof value !== "string" || !value) return null;
@@ -366,9 +367,17 @@ export function renderMessagesView(container, state, handlers) {
 
   const survey = state.survey || {};
   const checkedAt = survey.checked_at || "";
-  const lastCheckHtml = checkedAt
-    ? `Checked <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time>`
-    : "Live steering active.";
+  const lastTool = state.lastTool || null;
+  const toolLabel = TOOL_LABELS[lastTool?.tool] || "";
+  const toolAt = typeof lastTool?.at === "string" ? lastTool.at : "";
+  const rawCalls = Number(state.callsSinceMessage);
+  const calls = Number.isFinite(rawCalls) ? Math.max(0, Math.floor(rawCalls)) : 0;
+  const tally = lastTool?.tool === "bash" && calls > 0 ? ` ${calls}` : "";
+  const lastCheckHtml = toolLabel && toolAt
+    ? `${toolLabel}${tally} <time datetime="${escapeHtml(toolAt)}" data-timestamp="${escapeHtml(toolAt)}" data-include-seconds="true" data-compact="true">${escapeHtml(relativeTime(toolAt, { compact: true, includeSeconds: true }))}</time>`
+    : checkedAt
+      ? `Checked <time datetime="${escapeHtml(checkedAt)}" data-timestamp="${escapeHtml(checkedAt)}">${escapeHtml(relativeTime(checkedAt))}</time>`
+      : "";
 
   const markup = `
     <div class="msgs-layout">
