@@ -1791,22 +1791,30 @@ def watch_hot_reload(
   stop: threading.Event | None = None,
   interval: float = 1.0,
   scripts_dir: str | Path | None = None,
+  quiet_seconds: float = 10.0,
 ) -> None:
-  """Watch Python modules and swap server.RequestHandlerClass without closing TCP socket."""
+  """Swap changed Python modules after a quiet period without closing the TCP socket."""
   baseline = scripts_signature(scripts_dir)
   current_app = app
+  quiet_since: float | None = None
   while stop is None or not stop.is_set():
     if stop is None:
       time.sleep(interval)
     elif stop.wait(interval):
       return
     current = scripts_signature(scripts_dir)
+    now = time.monotonic()
     if current != baseline:
       baseline = current
-      try:
-        current_app = reload_server_handler(server, current_app)
-      except Exception as exc:
-        print(f"Hot-reload skipped: {exc}", file=sys.stderr, flush=True)
+      quiet_since = now
+      continue
+    if quiet_since is None or now - quiet_since < quiet_seconds:
+      continue
+    try:
+      current_app = reload_server_handler(server, current_app)
+    except Exception as exc:
+      print(f"Hot-reload skipped: {exc}", file=sys.stderr, flush=True)
+    quiet_since = None
 
 
 def create_http_server(
