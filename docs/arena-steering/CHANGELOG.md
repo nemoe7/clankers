@@ -46,6 +46,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `assets/reports-view.js`, `test_report_controls.py`: Keep the Reports picker mounted across selections without replaying panel entry. Reset report-bound form and acknowledgement scroll state.
+
 - `assets/app.js`, `assets/style.css`, `test_report_controls.py`: Hide the Reports main-panel bottom fade while a mobile keyboard shrinks the visual viewport. Restore the fade on close without changing desktop, reduced motion, or Submit controls.
 
 - `assets/messages-view.js`, `assets/style.css`, `test_message_bubble_layout.py`: Place one-line message text at the bubble's right inset. Keep wrapped and explicitly multiline text at the left inset, and reserve a narrow gutter beside wide bubbles.

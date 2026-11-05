@@ -422,3 +422,107 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+def test_switching_reports_keeps_picker_mounted_without_panel_flash() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  for index in range(12):
+    report_id = f"report-{index:02d}"
+    body = f"# Report {index:02d}\n\nContent {index}."
+    if index < 2:
+      body += '\n\n<!-- question {"id":"note","label":"Note"} -->\nWhat changed?\n'
+    app.reports.publish_report(report_id, f"Report {index:02d}", body)
+  for index, value in ((0, "Stored zero"), (1, "Stored one")):
+    report_id = f"report-{index:02d}"
+    answer = app.reports.submit_answer(report_id, {"note": value})
+    app.reports.ack_answer(report_id, answer.id, "Acknowledged detail. " * 100)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for width, height in ((1372, 883), (855, 325), (411, 799)):
+          page = browser.new_page(
+            viewport={"width": width, "height": height},
+            is_mobile=width < 1200,
+            has_touch=width < 1200,
+            reduced_motion="no-preference",
+          )
+          errors: list[str] = []
+          page.on("pageerror", lambda error, errors=errors: errors.append(str(error)))
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-reports").click()
+          page.wait_for_function("""() => !document.querySelector('#view-reports')
+            .getAnimations().some(a => a.animationName === 'panel-enter')""")
+          picker = page.locator("#report-picker")
+          picker.evaluate(
+            "el => { el.scrollTop = 25; el.dispatchEvent(new Event('scroll')); }"
+          )
+          before = page.evaluate("""() => {
+            window.initialPicker = document.querySelector('#report-picker');
+            window.initialLink = window.initialPicker.querySelector('[data-report-id="report-00"]');
+            window.panelRestarts = 0;
+            document.querySelector('#view-reports').addEventListener('animationstart', e => {
+              if (e.animationName === 'panel-enter') window.panelRestarts += 1;
+            });
+            return {mask:getComputedStyle(window.initialPicker).maskImage,
+              scroll:window.initialPicker.scrollTop};
+          }""")
+          assert before["scroll"] > 0, before
+          assert before["mask"].count("linear-gradient(") == 1, before
+          assert page.locator(".field-text-input").input_value() == "Stored zero"
+          page.locator(".field-text-input").fill("Draft zero")
+          previous_ack = page.locator("#report-ack-history")
+          previous_ack.evaluate(
+            "el => { el.scrollTop = 80; el.dispatchEvent(new Event('scroll')); }"
+          )
+          assert previous_ack.evaluate("el => el.scrollTop") > 0
+          page.locator('#report-picker [data-report-id="report-01"]').click()
+          page.wait_for_function("""() => document.querySelector(
+            '#report-picker [aria-current="true"]')?.dataset.reportId === 'report-01'""")
+          assert page.locator("#report-ack-history").evaluate("el => el.scrollTop") == 0
+          page.wait_for_timeout(50)
+          after = page.evaluate("""() => {
+            const picker = document.querySelector('#report-picker');
+            const pane = document.querySelector('#view-reports');
+            return {samePicker:picker === window.initialPicker,
+              sameLink:picker.querySelector('[data-report-id="report-00"]') === window.initialLink,
+              restarts:window.panelRestarts,
+              opacity:getComputedStyle(pane).opacity,
+              mask:getComputedStyle(picker).maskImage};
+          }""")
+          assert after["samePicker"] and after["sameLink"], after
+          assert after["restarts"] == 0 and after["opacity"] == "1", after
+          assert after["mask"].count("linear-gradient(") == 1, after
+          assert page.locator(".field-text-input").input_value() == "Stored one"
+          page.locator(".field-text-input").fill("Draft one")
+          page.locator('#report-picker [data-report-id="report-00"]').click()
+          assert page.locator(".field-text-input").input_value() == "Draft zero"
+          ack = page.locator("#report-ack-history")
+          assert ack.locator("p").count() > 0
+          ack.evaluate(
+            "el => { el.scrollTop = 80; el.dispatchEvent(new Event('scroll')); }"
+          )
+          assert ack.evaluate("el => el.scrollTop") > 0
+          assert page.evaluate("window.panelRestarts") == 0
+          assert not errors, errors
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
