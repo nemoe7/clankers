@@ -408,6 +408,7 @@ export function renderReportsView(container, state, handlers) {
   const railEl = container.querySelector("#report-rail");
   const pickerEl = container.querySelector("#report-picker");
   const ackEl = container.querySelector("#report-ack-history");
+  const tocEl = container.querySelector("#report-toc");
   const syncScrollEdges = (element) => {
     if (!element?.isConnected || !element.clientHeight) return;
     element.toggleAttribute("data-scrolled-start", element.scrollTop > 0);
@@ -441,9 +442,13 @@ export function renderReportsView(container, state, handlers) {
   };
   listen(pickerEl, "scroll", syncPickerScroll, { passive: true });
   listen(ackEl, "scroll", () => syncScrollEdges(ackEl), { passive: true });
+  listen(tocEl, "scroll", () => syncScrollEdges(tocEl), { passive: true });
+  listen(window, "resize", () => syncScrollEdges(tocEl), { passive: true });
   restorePickerScroll();
   if (swappedReport || !previousPicker) keepSelectedPickerItemVisible();
+  if (swappedReport && tocEl) tocEl.scrollTop = 0;
   syncScrollEdges(ackEl);
+  syncScrollEdges(tocEl);
 
   const pickerToggleBtn = container.querySelector("#report-picker-toggle");
   listen(pickerToggleBtn, "click", () => {
@@ -457,6 +462,7 @@ export function renderReportsView(container, state, handlers) {
     );
     restorePickerScroll();
     if (!mobilePickerCollapsed) keepSelectedPickerItemVisible();
+    syncScrollState();
   });
 
   const scrollTopBtn = container.querySelector("#report-scroll-top");
@@ -489,6 +495,16 @@ export function renderReportsView(container, state, handlers) {
       const toc = container.querySelector("#report-toc");
       const tocAvailable = toc && !toc.hidden && toc.getClientRects().length > 0;
       scrollTopBtn.hidden = Boolean(tocAvailable) || (container.scrollTop || 0) <= 160;
+    }
+    // Picker scrolling cannot trigger the top fade.
+    // It appears only after report content passes the panel edge.
+    const main = container.querySelector("#report-main");
+    if (main) {
+      const panelTop = container.getBoundingClientRect().top;
+      main.toggleAttribute(
+        "data-scrolled-start",
+        main.getBoundingClientRect().top < panelTop - 2
+      );
     }
     if (!headings.length) return;
     if (tocClickLockId && Date.now() < tocClickLockUntil) {

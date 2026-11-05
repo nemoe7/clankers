@@ -3183,8 +3183,8 @@ def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
 
 
 @pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
 )
 def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
@@ -3204,7 +3204,7 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -3227,7 +3227,7 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
           link.wait_for(state="attached")
           top = page.evaluate("""() => {
             const pane = document.querySelector('#view-reports');
-            const fade = getComputedStyle(document.querySelector('.reports-layout'), '::before');
+            const fade = getComputedStyle(document.querySelector('#report-main'), '::before');
             return { remaining: pane.scrollHeight - pane.clientHeight, opacity: Number(fade.opacity) };
           }""")
           assert top["remaining"] >= 36, top
@@ -3240,7 +3240,7 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
             link.evaluate("element => element.click()")
           page.wait_for_function("""() => {
             const pane = document.querySelector('#view-reports');
-            const fade = getComputedStyle(document.querySelector('.reports-layout'), '::before');
+            const fade = getComputedStyle(document.querySelector('#report-main'), '::before');
             return pane.scrollTop >= 36 && Number(fade.opacity) > 0.99;
           }""")
           result = page.evaluate(
@@ -3251,7 +3251,7 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
               offset: heading.getBoundingClientRect().top - pane.getBoundingClientRect().top,
               fade: parseFloat(getComputedStyle(pane).getPropertyValue('--edge-fade')),
               scrollTop: pane.scrollTop,
-              topOpacity: Number(getComputedStyle(document.querySelector('.reports-layout'), '::before').opacity),
+              topOpacity: Number(getComputedStyle(document.querySelector('#report-main'), '::before').opacity),
             };
           }""",
             target,
@@ -3264,7 +3264,7 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
           page.emulate_media(reduced_motion="reduce")
           assert (
             page.evaluate("""() =>
-            getComputedStyle(document.querySelector('.reports-layout'), '::before').content
+            getComputedStyle(document.querySelector('#report-main'), '::before').content
           """)
             == "none"
           )
@@ -3277,11 +3277,12 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
             const pane = document.querySelector('#view-reports');
             return {
               remaining: pane.scrollHeight - pane.clientHeight,
-              opacity: Number(getComputedStyle(document.querySelector('.reports-layout'), '::before').opacity),
+              mainExists: Boolean(document.querySelector('#report-main')),
+              layoutFade: getComputedStyle(document.querySelector('.reports-layout'), '::before').content,
             };
           }""")
           assert empty["remaining"] == 0, empty
-          assert empty["opacity"] < 0.01, empty
+          assert not empty["mainExists"] and empty["layoutFade"] == "none", empty
           page.close()
       finally:
         browser.close()
@@ -3589,8 +3590,8 @@ def test_long_report_acknowledgements_do_not_hide_the_report_picker(
 
 
 @pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
 )
 @pytest.mark.parametrize("width,height", [(390, 844), (855, 700), (1372, 700)])
 def test_report_picker_keeps_selected_item_visible_and_fades_edges(
@@ -3608,7 +3609,7 @@ def test_report_picker_keeps_selected_item_visible_and_fades_edges(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -3619,6 +3620,7 @@ def test_report_picker_keeps_selected_item_visible_and_fades_edges(
         page.locator("#tab-reports").click()
         picker = page.locator("#report-picker")
         items = picker.locator(".report-picker-link")
+        items.first.wait_for(state="visible")
         assert items.count() == report_count
         last = items.nth(report_count - 1)
         last_id = last.get_attribute("data-report-id")

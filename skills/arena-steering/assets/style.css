@@ -2310,7 +2310,8 @@ code.msg-id {
 }
 
 .report-picker,
-#report-ack-history {
+#report-ack-history,
+.report-toc {
   --rail-fade-start: 0px;
   --rail-fade-end: 0px;
   scroll-padding-block: 20px;
@@ -2326,12 +2327,14 @@ code.msg-id {
 }
 
 .report-picker[data-scrolled-start],
-#report-ack-history[data-scrolled-start] {
+#report-ack-history[data-scrolled-start],
+.report-toc[data-scrolled-start] {
   --rail-fade-start: 20px;
 }
 
 .report-picker[data-scrolled-end],
-#report-ack-history[data-scrolled-end] {
+#report-ack-history[data-scrolled-end],
+.report-toc[data-scrolled-end] {
   --rail-fade-end: 20px;
 }
 
@@ -2362,7 +2365,9 @@ code.msg-id {
 }
 
 .report-picker[data-scrolled-start],
-.report-picker[data-scrolled-end] {
+.report-picker[data-scrolled-end],
+.report-toc[data-scrolled-start],
+.report-toc[data-scrolled-end] {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -2791,21 +2796,25 @@ article#report.report img,
     padding-bottom: calc(var(--reports-submit-bottom) + var(--space-4));
   }
 
-  /* Keep the gradient behind Submit and let it reach the viewport bottom. */
-  #view-reports[data-scrollable="true"]:has(#report-submit-float)::after {
+  /* Keep the Submit gradient within the report content, not over the picker or TOC. */
+  #view-reports[data-scrollable="true"]:has(#report-submit-float) .report-main::after {
     content: "";
-    position: fixed;
-    inset: auto 0 0;
-    height: calc(var(--edge-fade) + var(--row) + var(--reports-submit-bottom));
+    position: sticky;
+    bottom: 0;
     z-index: 5;
+    display: block;
+    height: calc(var(--edge-fade) + var(--row) + var(--reports-submit-bottom));
+    margin-top: calc(-1 * (var(--edge-fade) + var(--row) + var(--reports-submit-bottom)));
+    /* The scroller's end padding otherwise holds this sticky fade above the viewport edge. */
+    transform: translateY(calc(var(--reports-submit-bottom) + var(--space-4)));
     pointer-events: none;
     background: linear-gradient(to top, var(--bg), transparent);
   }
 }
 
 @media (max-width: 60em) and (prefers-reduced-motion: no-preference) {
-  :root[data-mobile-keyboard-open] #view-reports[data-scrollable="true"]:has(#report-submit-float)::after,
-  :root[data-mobile-keyboard-open] #view-reports .reports-layout::after {
+  :root[data-mobile-keyboard-open] #view-reports .report-main::after,
+  :root[data-mobile-keyboard-open] #view-reports:has(#report-submit-float) .report-main::after {
     content: none;
   }
 }
@@ -2937,8 +2946,8 @@ article#report.report img,
       }
     }
 
-    .reports-layout::before,
-    .reports-layout::after,
+    .report-main::before,
+    .report-main::after,
     .tasks-layout::after {
       content: "";
       position: sticky;
@@ -2949,33 +2958,29 @@ article#report.report img,
       pointer-events: none;
     }
 
-    .reports-layout::before {
+    .report-main::before {
       top: 0;
       margin-bottom: calc(-1 * var(--edge-fade));
       background: linear-gradient(to bottom, var(--bg), transparent);
     }
 
-    .reports-layout::after,
+    .report-main::after,
     .tasks-layout::after {
       bottom: 0;
       margin-top: calc(-1 * var(--edge-fade));
       background: linear-gradient(to top, var(--bg), transparent);
     }
 
-    .reports-layout::after {
+    .report-main::after {
       height: var(--space-4);
       margin-top: calc(-1 * var(--space-4));
     }
 
     @media (max-width: 60em) {
-      .reports-layout::after {
+      .report-main::after {
         height: var(--space-2);
         margin-top: calc(-1 * var(--space-2));
       }
-    }
-
-    #view-reports:has(#report-submit-float) .reports-layout::after {
-      content: none;
     }
 
     .tasks-toolbar {
@@ -2992,7 +2997,14 @@ article#report.report img,
       background: linear-gradient(to bottom, var(--bg), transparent);
     }
 
-    .reports-layout::before,
+    .report-main::before {
+      opacity: 0;
+    }
+
+    .report-main[data-scrolled-start]::before {
+      opacity: 1;
+    }
+
     .tasks-toolbar::after {
       opacity: 0;
       animation: content-top-fade linear both;

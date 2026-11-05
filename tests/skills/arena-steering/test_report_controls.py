@@ -84,7 +84,8 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
             styles = page.evaluate("""() => {
               const pane = document.querySelector('#view-reports');
               const layout = document.querySelector('.reports-layout');
-              const fade = getComputedStyle(pane, '::after');
+              const main = document.querySelector('#report-main');
+              const fade = getComputedStyle(main, '::after');
               const submit = getComputedStyle(document.querySelector('#report-submit-float'));
               const top = getComputedStyle(document.querySelector('#report-scroll-top'));
               const newest = getComputedStyle(document.querySelector('#log-newest'));
@@ -98,7 +99,7 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
                 bottomPointerEvents: fade.pointerEvents,
                 bottomZ: parseInt(fade.zIndex),
                 layoutBottomContent: getComputedStyle(layout, '::after').content,
-                topFade: parseFloat(getComputedStyle(layout, '::before').height),
+                topFade: parseFloat(getComputedStyle(main, '::before').height),
                 edgeFade: parseFloat(root.getPropertyValue('--edge-fade')),
                 row: parseFloat(root.getPropertyValue('--row')),
                 space4: parseFloat(root.getPropertyValue('--space-4')),
@@ -114,7 +115,7 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
             }""")
             if motion == "no-preference":
               assert styles["bottomContent"] == '""', styles
-              assert styles["bottomPosition"] == "fixed", styles
+              assert styles["bottomPosition"] == "sticky", styles
               assert styles["bottomInset"] == "0px", styles
               assert "linear-gradient" in styles["bottomBackground"], styles
               assert styles["bottomPointerEvents"] == "none", styles
@@ -186,7 +187,7 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               }""")
               safe_button = float_button.bounding_box()
               safe_report = page.locator("#report").bounding_box()
-              safe_fade = pane.evaluate(
+              safe_fade = page.locator("#report-main").evaluate(
                 "el => parseFloat(getComputedStyle(el, '::after').height)"
               )
               assert safe_button and safe_report
@@ -310,6 +311,187 @@ def test_submit_preserves_label_and_disables_during_request() -> None:
   not os.environ.get("CHROMIUM_BIN"),
   reason="Set CHROMIUM_BIN for the extracted browser",
 )
+def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  long_body = (
+    "# Long report\n\n"
+    + "".join(
+      f"## Section {index}\n\n"
+      + "A paragraph to make this section scroll. " * 8
+      + "\n\n"
+      for index in range(45)
+    )
+    + '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n'
+  )
+  app.reports.publish_report("long", "Long report", long_body)
+  for index in range(25):
+    body = (
+      "# Other\n\n" + "A long unfielded report.\n\n" * 75 if index == 0 else "# Other"
+    )
+    app.reports.publish_report(f"other-{index:02d}", f"Other report {index}", body)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for width, height, motion in (
+          (1372, 883, "no-preference"),
+          (855, 325, "no-preference"),
+          (411, 799, "no-preference"),
+          (411, 799, "reduce"),
+        ):
+          page = browser.new_page(
+            viewport={"width": width, "height": height},
+            reduced_motion=motion,
+          )
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-reports").click()
+          pane = page.locator("#view-reports")
+          picker = page.locator("#report-picker")
+          assert picker.evaluate("el => el.scrollHeight > el.clientHeight + 1")
+          assert picker.get_attribute("data-scrolled-end") is not None
+          assert "linear-gradient(" in picker.evaluate(
+            "el => getComputedStyle(el).maskImage"
+          )
+          pane.evaluate("el => { el.scrollTop = 18; }")
+          page.wait_for_function(
+            "document.querySelector('#view-reports').scrollTop >= 17"
+          )
+          fades = page.evaluate("""() => {
+            const pane = document.querySelector('#view-reports');
+            const layout = document.querySelector('.reports-layout');
+            const main = document.querySelector('#report-main');
+            return {
+              panelBottom: getComputedStyle(pane, '::after').content,
+              layoutTop: getComputedStyle(layout, '::before').content,
+              mainTop: getComputedStyle(main, '::before').content,
+              mainBottom: getComputedStyle(main, '::after').content,
+              mainTopWidth: getComputedStyle(main, '::before').width,
+              mainBottomWidth: getComputedStyle(main, '::after').width,
+              mainWidth: main.getBoundingClientRect().width,
+            };
+          }""")
+          assert fades["panelBottom"] == "none", fades
+          assert fades["layoutTop"] == "none", fades
+          if motion == "no-preference":
+            assert fades["mainTop"] == '""', fades
+            assert fades["mainBottom"] == '""', fades
+            assert (
+              float(fades["mainTopWidth"].removesuffix("px")) <= fades["mainWidth"] + 1
+            )
+            assert (
+              float(fades["mainBottomWidth"].removesuffix("px"))
+              <= fades["mainWidth"] + 1
+            )
+          else:
+            assert fades["mainTop"] == fades["mainBottom"] == "none", fades
+          if motion == "no-preference":
+            # Scroll the *report* to its start, rather than the picker/answer
+            # rail to its start. Their scroll edges must remain independent.
+            pane.evaluate("""el => {
+              const main = document.querySelector('#report-main');
+              el.scrollTop += main.getBoundingClientRect().top -
+                el.getBoundingClientRect().top - 8;
+            }""")
+            page.wait_for_timeout(80)
+            report_start = page.evaluate("""() => {
+              const pane = document.querySelector('#view-reports');
+              const main = document.querySelector('#report-main');
+              return { paneTop: pane.getBoundingClientRect().top,
+                mainTop: main.getBoundingClientRect().top,
+                scrollTop: pane.scrollTop };
+            }""")
+            assert report_start["mainTop"] >= report_start["paneTop"] - 2, (
+              width, height, report_start
+            )
+            assert page.locator("#report-main").get_attribute("data-scrolled-start") is None
+            assert page.evaluate("""() => getComputedStyle(
+              document.querySelector('#report-main'), '::before').opacity""") == "0"
+            pane.evaluate("""el => {
+              const main = document.querySelector('#report-main');
+              el.scrollTop += main.getBoundingClientRect().top -
+                el.getBoundingClientRect().top + 16;
+            }""")
+            page.wait_for_function("""() => document.querySelector(
+              '#report-main')?.hasAttribute('data-scrolled-start')""")
+            assert page.evaluate("""() => getComputedStyle(
+              document.querySelector('#report-main'), '::before').opacity""") == "1"
+            for at_bottom in (False, True):
+              if at_bottom:
+                pane.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+              # A temporary element with the pseudo-element's geometry makes
+              # the sticky fade's *painted* bottom measurable in Chromium.
+              fade_bottom = page.evaluate("""() => {
+                const pane = document.querySelector('#view-reports');
+                const main = document.querySelector('#report-main');
+                const css = getComputedStyle(main, '::after');
+                const marker = document.createElement('div');
+                Object.assign(marker.style, {
+                  display: 'block', position: css.position,
+                  bottom: css.bottom, height: css.height,
+                  marginTop: css.marginTop, transform: css.transform,
+                });
+                main.append(marker);
+                const value = marker.getBoundingClientRect().bottom -
+                  pane.getBoundingClientRect().bottom;
+                marker.remove();
+                return value;
+              }""")
+              assert abs(fade_bottom) <= 1, (width, height, at_bottom, fade_bottom)
+          if width >= 1200:
+            toc = page.locator("#report-toc")
+            assert toc.is_visible()
+            assert toc.evaluate("el => el.scrollHeight > el.clientHeight + 100")
+            assert toc.get_attribute("data-scrolled-end") is not None
+            toc.evaluate(
+              "el => { el.scrollTop = (el.scrollHeight - el.clientHeight) / 2; }"
+            )
+            page.wait_for_function("""() => document.querySelector('#report-toc')
+              ?.hasAttribute('data-scrolled-start')""")
+            assert toc.get_attribute("data-scrolled-end") is not None
+            assert "linear-gradient(" in toc.evaluate(
+              "el => getComputedStyle(el).maskImage"
+            )
+            toc.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+            page.wait_for_function("""() => !document.querySelector('#report-toc')
+              ?.hasAttribute('data-scrolled-end')""")
+          else:
+            assert page.locator("#report-toc").is_hidden()
+          page.locator('#report-picker [data-report-id="other-00"]').click()
+          page.wait_for_function("""() => document.querySelector('#report-picker [aria-current="true"]')
+            ?.dataset.reportId === 'other-00'""")
+          assert page.locator("#report-submit-float").count() == 0
+          pane.evaluate("el => { el.scrollTop = 18; }")
+          no_fields = page.evaluate("""() => ({
+            shared: getComputedStyle(document.querySelector('.reports-layout'), '::after').content,
+            main: getComputedStyle(document.querySelector('#report-main'), '::after').content,
+          })""")
+          assert no_fields["shared"] == "none", no_fields
+          assert no_fields["main"] == ('""' if motion == "no-preference" else "none"), (
+            no_fields
+          )
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
 def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -355,11 +537,13 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
             return page.evaluate("""() => {
               const pane = document.querySelector('#view-reports');
               const layout = document.querySelector('.reports-layout');
+              const main = document.querySelector('#report-main');
               return {
                 panel: getComputedStyle(pane, '::after').content,
                 layoutBottom: getComputedStyle(layout, '::after').content,
-                layoutTop: getComputedStyle(layout, '::before').content,
-                topOpacity: getComputedStyle(layout, '::before').opacity,
+                mainBottom: getComputedStyle(main, '::after').content,
+                mainTop: getComputedStyle(main, '::before').content,
+                topOpacity: getComputedStyle(main, '::before').opacity,
                 scrollTop: pane.scrollTop,
                 keyboard: document.documentElement.hasAttribute('data-mobile-keyboard-open'),
                 inputFocused: document.activeElement?.classList.contains('field-text-input'),
@@ -369,9 +553,10 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
           closed = fades()
           assert closed["inputFocused"], closed
           assert not closed["keyboard"], closed
-          assert closed["panel"] == ('""' if motion == "no-preference" else "none"), (
-            closed
-          )
+          assert closed["panel"] == closed["layoutBottom"] == "none", closed
+          assert closed["mainBottom"] == (
+            '""' if motion == "no-preference" else "none"
+          ), closed
           page.evaluate("""() => {
             const viewport = window.visualViewport;
             window.originalVisualHeight = viewport.height;
@@ -380,7 +565,7 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
             });
             viewport.dispatchEvent(new Event('resize'));
           }""")
-          assert fades()["panel"] == closed["panel"], fades()
+          assert fades()["mainBottom"] == closed["mainBottom"], fades()
           page.evaluate(
             """height => {
             const viewport = window.visualViewport;
@@ -394,15 +579,15 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
           pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
           opened = fades()
           assert opened["scrollTop"] > 36, opened
-          assert opened["layoutTop"] == closed["layoutTop"], (closed, opened)
+          assert opened["mainTop"] == closed["mainTop"], (closed, opened)
+          assert opened["panel"] == opened["layoutBottom"] == "none", opened
           if motion == "no-preference":
             assert float(opened["topOpacity"]) > 0.99, opened
           if width < 1200 and motion == "no-preference":
-            assert opened["panel"] == "none", opened
-            assert opened["layoutBottom"] == "none", opened
+            assert opened["mainBottom"] == "none", opened
             assert opened["keyboard"], opened
           else:
-            assert opened["panel"] == closed["panel"], (closed, opened)
+            assert opened["mainBottom"] == closed["mainBottom"], (closed, opened)
             if width >= 1200:
               assert not opened["keyboard"], opened
           page.evaluate("""() => {
@@ -411,7 +596,7 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
           }""")
           pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
           restored = fades()
-          assert restored["panel"] == closed["panel"], (closed, restored)
+          assert restored["mainBottom"] == closed["mainBottom"], (closed, restored)
           assert not restored["keyboard"], restored
           assert restored["scrollTop"] > 36, restored
           page.close()
