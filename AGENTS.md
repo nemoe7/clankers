@@ -9,7 +9,7 @@
 
 - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - Read maintenance/README.md for the general procedure, the token-measurement note and the steering history.
-- Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
+- Only Arena agents MUST publish a proposal through the `arena-steering` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
 - Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
 
 ## Constitution
@@ -46,7 +46,7 @@
 
 - arena = [ARENA.md](ARENA.md)
 - house = this repository; house rules = root AGENTS.md
-- arena suite = ARENA.md and arena-skill files
+- arena suite = ARENA.md and arena-steering files
 
 Read these first:
 

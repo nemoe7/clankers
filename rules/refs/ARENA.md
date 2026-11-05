@@ -14,12 +14,12 @@
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
 - ALWAYS push verified commits after each task on public repos, and allow small batches (<=3 commits) on private repos.
 - After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
-- In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, NEVER by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
-- After any arena-skill source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
+- In an Arena session, ALWAYS run `steer --version` at every turn start and follow arena-steering's turn-start recipe for installation and server startup, and read the inbox at every cadence point.
+- After any arena-steering source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
-- NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- Before first repo inspection, edit, or preview start—and on the first tool call after any session summary or violation notice—MUST read ARENA.md, root AGENTS.md, and arena-skill SKILL.md in full via read_file; read nested AGENTS.md files via `arena-preview agents <path>` only when working in their directory; a session summary NEVER counts as full text in context.
+- NEVER edit this file nor the `arena-steering` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
+- Before first repo inspection, edit, or preview start—and on the first tool call after any session summary or violation notice—MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file; read nested AGENTS.md files in full via read_file only when working in their directory; a session summary NEVER counts as full text in context.
 - For a corrected routine slip with no impact, give one short receipt line.
 - Suggest an amendment only when an identified rule gap contributed.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
@@ -43,15 +43,15 @@
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
 - At session start, read the bible, then make `10-4: ARENA.md loaded` the first action after that read; run the installer, start the preview, then ask the visibility question.
 - On a resumed or next turn, check whether the preview runs, restart it if needed, read paths in the bible whose current full text is absent from context, then continue an open task or poll if none.
-- Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
-- Use "bible" or "the bible", NEVER "bible files" or "required bible files", to mean ARENA.md, the root AGENTS.md, and the `arena-skill` SKILL.md, plus any nested AGENTS.md in a directory you work in (found via `arena-preview agents <path>`).
+- Load the named skill for Arena work: `arena-steering` for the inbox, the reports, the gates, and GitHub Actions job logs.
+- Use "bible" or "the bible", NEVER "bible files" or "required bible files", to mean ARENA.md, the root AGENTS.md, and the `arena-steering` SKILL.md, plus any nested AGENTS.md in a directory you work in (read in full via read_file).
 - MUST use the read tool, NEVER Bash, to read every required path in the bible in full.
 - After compaction, summary, or context replacement within a turn, read every path in the bible whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
-- Every 10 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-skill SKILL.md in full via read_file before acting, and read nested AGENTS.md files only when working in their directory.
+- Every 6 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file before acting, and read nested AGENTS.md files only when working in their directory.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a path in the bible.
 - MUST batch required bible reads into one call, splitting only where the harness output cap cuts the text.
 - MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
-- Run the arena-skill survey immediately after the initial visibility response and before the first inbox poll. Run it after a preview restart, compaction, summary, or context replacement before queued work.
+- Run `steer survey` immediately after the initial visibility response and before the first inbox poll. Run it after a preview restart, compaction, summary, or context replacement before queued work.
 - Each Markdown file under `references/` is supplementary: read or grep the file a question needs, and no end-to-end read is required; the gate and read cadence mechanics live in `references/commands.md` and `references/cadence.md`. A template copy kept for installation is supplementary too.
 - After any change to a path in the bible, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
 - In saved context, state the applicable start sequence and the duty to read missing-context paths in the bible in full before queued work; no verbatim ARENA.md copy is required.
@@ -217,7 +217,7 @@
 - NEVER cite a session-local artifact or a local-only path in a repository file, commit, PR, task detail, or report: a preview note ID, a report or submission ID, a task ID, an ignored state or scratch path, a sandbox home path, or any other identifier minted for one session.
 - A session-local citation does not persist; ALWAYS strip one on sight.
 - Cite the durable record instead: the CHANGELOG entry, the repository-relative path, or the commit.
-- Publish longer reports through the `arena-skill` skill in the shared preview; NEVER create local report commits for the native diff viewer.
+- Publish all reports through the `arena-steering` skill in the shared preview; NEVER create local report commits for the native diff viewer.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
