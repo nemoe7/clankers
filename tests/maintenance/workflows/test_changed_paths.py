@@ -38,8 +38,7 @@ def init_repo(tmp_path: Path) -> Path:
       "rules/core.md": "core\n",
       "rules/refs/generic.md": "generic\n",
       "docs/readme.md": "docs\n",
-      "maintenance/minify/minify.py": "pass\n",
-      "skills/arena-skill/arena-egress-proxy/Dockerfile": "FROM scratch\n",
+      "skills/arena-steering/scripts/runtime.py": "pass\n",
     },
   )
   git(repo, "add", "-A")
@@ -96,18 +95,15 @@ def test_changed_files_limits_the_diff_to_the_paths(tmp_path):
   assert changed_paths.changed_files(base, ("docs",), repo) == []
 
 
-def test_artifacts_step_reads_the_dispatch_inputs(tmp_path):
+def test_artifacts_step_reads_a_main_dispatch(tmp_path):
   repo = init_repo(tmp_path)
   out = tmp_path / "out.txt"
-  env = {
-    "EVENT_NAME": "workflow_dispatch",
-    "EVENT_REF": "refs/heads/main",
-    "EGRESS_IMAGE": "true",
-  }
+  env = {"EVENT_NAME": "workflow_dispatch", "EVENT_REF": "refs/heads/main"}
   assert changed_paths.step_artifacts(env, out, str(repo)) == 0
   text = outputs(out)
-  assert "package=true\n" in text and "egress=true\n" in text
-  assert "rules=false\n" in text and "preview=false\n" in text
+  assert "package=true\n" in text
+  assert "rules=false\n" in text
+  assert "egress" not in text and "preview" not in text
 
 
 def test_artifacts_step_skips_the_refs_tree(tmp_path):
@@ -119,15 +115,15 @@ def test_artifacts_step_skips_the_refs_tree(tmp_path):
   assert "rules=false\n" in outputs(out)
 
 
-def test_artifacts_step_flags_a_rule_and_an_image_change(tmp_path):
+def test_artifacts_step_flags_a_rule_change(tmp_path):
   repo = init_repo(tmp_path)
   base = base_of(repo)
   commit_change(repo, "rules/core.md", "core  # touched\n")
-  commit_change(repo, "skills/arena-skill/arena-egress-proxy/Dockerfile")
   out = tmp_path / "out.txt"
   assert changed_paths.step_artifacts({"PUSH_BEFORE": base}, out, str(repo)) == 0
   text = outputs(out)
-  assert "rules=true\n" in text and "egress=true\n" in text
+  assert "rules=true\n" in text
+  assert "package=false\n" in text
 
 
 def test_artifacts_step_runs_both_checks_on_a_missing_base(tmp_path, capsys):
@@ -136,7 +132,7 @@ def test_artifacts_step_runs_both_checks_on_a_missing_base(tmp_path, capsys):
   assert changed_paths.step_artifacts({"PUSH_BEFORE": "0" * 40}, out, str(repo)) == 0
   text = outputs(out)
   assert "package=true\n" in text and "rules=true\n" in text
-  assert "egress=false\n" in text and "preview=false\n" in text
+  assert "egress" not in text and "preview" not in text
   groups, notice = changed_paths.artifact_groups(
     {"PUSH_BEFORE": changed_paths.EMPTY_BASE}, str(repo)
   )
@@ -177,8 +173,6 @@ def test_module_matrix_selects_owners_and_shared_changes():
     "tests/gpt-plugins/test_release_artifact.py",
     "tests/github/workflows/test_check_workflows.py",
     "tests/github/workflows/test_gemini_release.py",
-    "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
-    "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
   )
   for path in paths:
     owners = [
@@ -189,7 +183,7 @@ def test_module_matrix_selects_owners_and_shared_changes():
   for doc in (
     "docs/CHANGELOG.md",
     "docs/archive/CHANGELOG.md",
-    "docs/arena-skill/CHANGELOG.md",
+    "docs/archive/arena-skill/docs/CHANGELOG.md",
     "docs/userscripts/arena/CHANGELOG.md",
     "docs/workflows/gemini-release/CHANGELOG.md",
   ):
@@ -224,14 +218,13 @@ def test_browser_test_runs_with_preview_module(path):
 @pytest.mark.parametrize(
   "path",
   [
-    "tests/skills/arena-skill/arena-egress-proxy/test_arena_proxy.py",
-    "tests/skills/arena-skill/arena-preview-proxy/test_preview_proxy.py",
-    "tests/skills/arena-skill/test_future.py",
-    "tests/skills/arena-skill/client.test.cjs",
-    "tests/skills/arena-skill/mermaid.test.cjs",
+    "docs/archive/arena-skill/tests/arena-egress-proxy/test_arena_proxy.py",
+    "docs/archive/arena-skill/tests/arena-preview-proxy/test_preview_proxy.py",
+    "docs/archive/arena-skill/tests/test_minify.py",
+    "docs/archive/arena-skill/tests/client.test.cjs",
   ],
 )
-def test_legacy_arena_skill_tests_never_enter_ci_matrix(path, tmp_path):
+def test_archived_tests_never_enter_ci_matrix(path, tmp_path):
   repo = init_repo(tmp_path)
   commit_change(repo, path)
   changed_paths.check_module_ownership(str(repo))
@@ -263,9 +256,7 @@ def test_module_test_ownership_is_complete_and_unique():
     for directory in ("tests", "maintenance", "skills", "github/workflows")
     if (root / directory).exists()
     for path in (root / directory).rglob("test_*.py")
-    if not str(path.relative_to(root)).startswith(
-      changed_paths.LEGACY_ARENA_SKILL_TEST_PREFIX
-    )
+    if not str(path.relative_to(root)).startswith(changed_paths.ARCHIVED_TEST_PREFIX)
   }
   assert set(owned) == discovered
   assert len(owned) == len(set(owned))

@@ -1,6 +1,17 @@
 set -euo pipefail
 REPOS="${REPOS:-$REPOS_FALLBACK}"
+REMOVE_SKILLS="${REMOVE_SKILLS:-}"
 [ -n "${REPOS// /}" ] || { echo "::error::no target repos configured"; exit 1; }
+for skill in $REMOVE_SKILLS; do
+  [[ "$skill" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || {
+    echo "::error::invalid retired skill name: $skill"; exit 1;
+  }
+  for copied in $SKILLS; do
+    [ "$skill" != "$copied" ] || {
+      echo "::error::retired skill is also copied: $skill"; exit 1;
+    }
+  done
+done
 if [ -n "$RULE_SRC" ]; then
   [ -f "$GITHUB_WORKSPACE/$RULE_SRC" ] || { echo "::error::$RULE_SRC missing"; exit 1; }
   [ -n "$RULE_DEST" ] || { echo "::error::rule-dest is required with rule-src"; exit 1; }
@@ -80,6 +91,10 @@ for repo in $REPOS; do
       )
       find "$work/$SKILL_DEST_ROOT/$skill" -depth -type d -empty -delete
     done
+    # TODO: Remove this one-run deletion path after the first successful sync.
+    for skill in $REMOVE_SKILLS; do
+      rm -rf "$work/$SKILL_DEST_ROOT/$skill"
+    done
     for f in $FILES; do
       mkdir -p "$work/$DEST_ROOT/$(dirname "$f")"
       cp "$GITHUB_WORKSPACE/$SRC_ROOT/$f" "$work/$DEST_ROOT/$f"
@@ -136,6 +151,12 @@ for repo in $REPOS; do
           echo "::error::$repo: $skill/$f differs"; exit 1;
         }
       done
+    done
+    for skill in $REMOVE_SKILLS; do
+      retired=$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$skill")
+      [ -z "$retired" ] || {
+        echo "::error::$repo: retired $skill remains after sync"; exit 1;
+      }
     done
     for f in $FILES; do
       git show "HEAD:$DEST_ROOT/$f" | cmp -s - "$GITHUB_WORKSPACE/$SRC_ROOT/$f" || {

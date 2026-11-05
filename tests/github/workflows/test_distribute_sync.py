@@ -278,8 +278,22 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   )
   git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
   before = git(remote, "rev-parse", "refs/heads/main")
+  retired = seed / ".agents/skills/arena-skill/SKILL.md"
+  retired.parent.mkdir(parents=True)
+  retired.write_text("Retire this skill.\n")
+  commit(
+    seed,
+    "feat: add retired skill",
+    GIT_AUTHOR_NAME="Person",
+    GIT_AUTHOR_EMAIL="person@example.test",
+    GIT_COMMITTER_NAME="Person",
+    GIT_COMMITTER_EMAIL="person@example.test",
+  )
+  git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+  before = git(remote, "rev-parse", "refs/heads/main")
   payload = {
-    "SKILLS": "arena-skill nuu nemoizer",
+    "SKILLS": "arena-steering nuu nemoizer",
+    "REMOVE_SKILLS": "arena-skill",
     "FILES": "gemini-release.yml gemini_release.py",
   }
   source = tmp_path / "source"
@@ -303,6 +317,9 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   assert not git(
     remote, "ls-tree", "-r", "--name-only", after, ".agents/skills/nuu/stale.md"
   )
+  assert not git(
+    remote, "ls-tree", "-r", "--name-only", after, ".agents/skills/arena-skill"
+  )
   for skill in payload["SKILLS"].split():
     assert (
       git(remote, "show", f"{after}:.agents/skills/{skill}/SKILL.md")
@@ -317,6 +334,22 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
       == (source / "github/workflows" / name).read_text().strip()
     )
   assert git(remote, "show", f"{after}:owner.txt") == OWNER_DATA
+
+
+@pytest.mark.parametrize(
+  "payload",
+  (
+    {"REMOVE_SKILLS": "../owner"},
+    {"SKILLS": "arena-steering", "REMOVE_SKILLS": "arena-steering"},
+  ),
+)
+def test_distribution_rejects_unsafe_retirement_before_a_push(tmp_path, payload):
+  remote, seed, before, _ = fixture(tmp_path, "bot")
+  result, pushes = run_action(tmp_path, remote, seed, "bot", payload=payload)
+  assert result.returncode != 0
+  assert ERROR_ANNOTATION in result.stdout
+  assert not pushes
+  assert git(remote, "rev-parse", "refs/heads/main") == before
 
 
 def test_distribution_domain_validation_is_read_only(tmp_path):

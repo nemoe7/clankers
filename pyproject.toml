@@ -10,26 +10,22 @@ pythonpath = [
   "github/workflows",
   "maintenance",
   "maintenance/gpt_plugins",
-  "maintenance/minify",
   "maintenance/pr",
   "maintenance/publish",
   "maintenance/workflows",
   "skills/arena-steering/scripts",
   "skills/nemoizer/scripts",
   "skills/nuu/scripts",
-  "skills/refs/arena-skill/scripts",
 ]
 
 [tool.ruff]
 required-version = "0.17.3"
 indent-width = 2
 # The project does not own vendored third-party code. Do not reformat or lint it.
-# Check generated Python through minify.py. Lint and format its readable refs.
+# Archived v1 code stays readable and outside active lint checks.
 extend-exclude = [
   ".agents/skills",
-  "skills/arena-skill/scripts/mermaid_check.py",
-  "skills/arena-skill/scripts/preview.py",
-  "skills/arena-skill/scripts/survey.py",
+  "docs/archive/arena-skill",
 ]
 
 [tool.ruff.lint]
@@ -51,9 +47,7 @@ extend-exclude = [
   "skills/nuu/data/vendor",
   "skills/refs/nuu/data/vendor",
   "docs/archive/CHANGELOG.md",
-  "skills/arena-skill/**",
-  "skills/refs/arena-skill/**",
-  "tests/skills/arena-skill/**",
+  "docs/archive/arena-skill/**",
   "tests/skills/arena-preview-proxy/**",
   "automations/**/*.md",
   "!automations/**/README.md",

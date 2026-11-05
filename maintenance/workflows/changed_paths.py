@@ -14,8 +14,8 @@ from pathlib import Path
 EMPTY_BASE = "0" * 40
 ARTIFACTS = ".github/workflows/artifacts.yml"
 
-# One rule per artifact path family: the package archive, the rules gist, and the two
-# proxy images. The rules family skips `rules/refs/`, which no target repository sees.
+# One rule per artifact path family: the package archive and the rules gist.
+# The rules family skips `rules/refs/`, which no target repository sees.
 ARTIFACT_RULES = (
   (
     "package",
@@ -36,10 +36,8 @@ ARTIFACT_RULES = (
       ARTIFACTS,
     ),
   ),
-  ("egress", ("skills/arena-skill/arena-egress-proxy/*",)),
-  ("preview", ("skills/arena-skill/arena-preview-proxy/*",)),
 )
-ARTIFACT_ORDER = ("package", "rules", "egress", "preview")
+ARTIFACT_ORDER = ("package", "rules")
 
 
 def write_output(output: Path, name: str, value: str) -> None:
@@ -87,20 +85,15 @@ def changed_files(base: str, paths: Sequence[str], repo: str = ".") -> list[str]
 def artifact_groups(
   env: Mapping[str, str], repo: str = "."
 ) -> tuple[dict[str, bool], str]:
-  """Return the four path-group flags for the artifact jobs, with one note line."""
+  """Return the two path-group flags for the artifact jobs, with one note line."""
   groups = {name: False for name in ARTIFACT_ORDER}
   if env.get("EVENT_NAME") == "workflow_dispatch":
     if env.get("EVENT_REF") == "refs/heads/main":
       groups["package"] = True
-    # An image publishes on its own input, so a dispatch that repackages the
-    # plugins never rebuilds a proxy image.
-    groups["egress"] = env.get("EGRESS_IMAGE") == "true"
-    groups["preview"] = env.get("PREVIEW_IMAGE") == "true"
     return groups, ""
   base = event_base(env, repo)
   if base is None:
-    # A missing base runs both checks instead of skipping silently. An image
-    # publish stays out of it: it writes a registry tag the fallback cannot justify.
+    # A missing base runs both checks instead of skipping silently.
     groups["package"] = True
     groups["rules"] = True
     return groups, "Base commit is missing; run the package and rules checks."
@@ -161,7 +154,6 @@ MODULE_TESTS = {
   ),
   "Gemini Release": ("tests/github/workflows/test_gemini_release.py",),
   "Measurements": ("tests/maintenance/measurements/test_measurements.py",),
-  "Minifier": ("tests/maintenance/minify/test_minify.py",),
   "PR Checks": (
     "tests/maintenance/pr/test_check_pr.py",
     "tests/maintenance/pr/test_commit_msg.py",
@@ -175,21 +167,10 @@ MODULE_TESTS = {
   ),
   "Repository Prose and Validation": ("tests/maintenance/validation/test_check.py",),
 }
-# The legacy arena-skill tests remain runnable locally but are not CI test owners.
-LEGACY_ARENA_SKILL_TEST_PREFIX = "tests/skills/arena-skill/"
-ARENA_SKILL_PATHS = (
-  "skills/refs/arena-skill",
-  "skills/arena-skill",
-  ".agents/skills/arena-skill",
-)
-ARENA_RUNTIME_PATHS = tuple(
-  f"{root}/{directory}/*"
-  for root in ARENA_SKILL_PATHS
-  for directory in ("scripts", "assets", "references")
-)
+# Archived tests remain available for historical reference but are not CI owners.
+ARCHIVED_TEST_PREFIX = "docs/archive/"
 MODULE_PATHS = {
   "Preview": (
-    *ARENA_RUNTIME_PATHS,
     "skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
   ),
@@ -211,11 +192,6 @@ MODULE_PATHS = {
     "tests/github/workflows/test_gemini_release.py",
   ),
   "Measurements": ("maintenance/check.py", "tests/maintenance/measurements/*"),
-  "Minifier": (
-    *ARENA_RUNTIME_PATHS,
-    "maintenance/minify/*",
-    "tests/maintenance/minify/*",
-  ),
   "PR Checks": ("maintenance/pr/*", "tests/maintenance/pr/*"),
   "Rules Publishing": (
     "maintenance/publish/*",
@@ -297,7 +273,7 @@ def check_module_ownership(repo: str) -> None:
     path
     for path in result.stdout.split("\0")
     if path
-    and not path.startswith(LEGACY_ARENA_SKILL_TEST_PREFIX)
+    and not path.startswith(ARCHIVED_TEST_PREFIX)
     and (
       (Path(path).name.startswith("test_") and path.endswith(".py"))
       or path.endswith((".test.cjs", ".checks.cjs"))

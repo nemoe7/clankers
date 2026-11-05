@@ -182,7 +182,7 @@ Rule: hand a file to the PC as text through the clipboard. NEVER report a downlo
 
 The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Observation date unrecorded.
 
-Current setup: [Chromium recipe](../skills/arena-skill/references/recipes/chromium.md).
+Current setup: [Chromium recipe](../skills/arena-steering/references/recipes/chromium.md).
 
 ### Recorded environment
 

@@ -44,10 +44,8 @@ jobs:
       - name: Install Maintenance Dependencies
         run: uv pip install --system -r requirements.txt
 
-      - name: Install Build Dependencies and Check Generated Copies
-        run: |
-          npm ci
-          python maintenance/minify/minify.py
+      - name: Install Build Dependencies
+        run: npm ci
 
       - name: Update and Validate Repository
         run: python maintenance/check.py --update

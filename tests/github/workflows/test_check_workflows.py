@@ -61,7 +61,7 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
   shared = next(row for row in plan["targets"] if row["repos"] == "example/shared")
   assert set(shared["domains"]) == set(overrides)
   assert shared["rule_src"] == "rules/ARENA.md"
-  assert set(shared["skills"].split()) == {"arena-skill", "nuu", "nemoizer"}
+  assert set(shared["skills"].split()) == {"arena-steering", "nuu", "nemoizer"}
   assert "legacy" not in shared
   assert set(shared["files"].split()) == {"gemini-release.yml", "gemini_release.py"}
   for domain, repos in overrides.items():
@@ -90,6 +90,43 @@ def test_distribution_plan_groups_domains_and_keeps_one_writer(monkeypatch):
     calls.clear()
     with pytest.raises((ValueError, TypeError)):
       planner.push_targets(targets, path.with_name("sync.sh"), {})
+    assert not calls
+
+
+def test_distribution_one_run_removal_is_scoped_and_validated(monkeypatch):
+  from types import SimpleNamespace
+
+  import pytest
+
+  planner = distribution_planner()
+  plan = planner.build_plan(
+    {
+      "arena": "example/arena",
+      "gemini": "example/gemini",
+      "nuu": "example/nuu",
+      "nemoizer": "example/nemoizer",
+    }
+  )
+  calls = []
+
+  def run(arguments, *, env, check):
+    calls.append(env)
+    return SimpleNamespace(returncode=0)
+
+  monkeypatch.setattr(planner.subprocess, "run", run)
+  environment = {"ARENA_REMOVE_SKILLS": "arena-skill"}
+  script = gate_workflows.ROOT / ".github/actions/distribute-sync/sync.sh"
+  assert planner.push_targets(plan["targets"], script, environment) == 0
+  assert [env["REMOVE_SKILLS"] for env in calls] == [
+    "arena-skill",
+    "",
+    "",
+    "",
+  ]
+  for value in ("../arena-skill", "arena-steering"):
+    calls.clear()
+    with pytest.raises(ValueError):
+      planner.push_targets(plan["targets"], script, {"ARENA_REMOVE_SKILLS": value})
     assert not calls
 
 
@@ -351,7 +388,7 @@ def test_distribute_triggers_and_inputs():
   assert triggers["push"]["branches"] == ["main"]
   assert triggers["push"]["paths"] == [
     "rules/ARENA.md",
-    "skills/arena-skill/**",
+    "skills/arena-steering/**",
     "skills/nuu/**",
     "skills/nemoizer/**",
     "github/workflows/gemini-release.yml",
@@ -361,7 +398,13 @@ def test_distribute_triggers_and_inputs():
   ]
   assert triggers["schedule"] == [{"cron": "17 3 * * *"}]
   inputs = triggers["workflow_dispatch"]["inputs"]
-  assert set(inputs) == {"repos", "gemini_repos", "nuu_repos", "nemoizer_repos"}
+  assert set(inputs) == {
+    "repos",
+    "remove_skills",
+    "gemini_repos",
+    "nuu_repos",
+    "nemoizer_repos",
+  }
   assert all(value.get("default") == "" for value in inputs.values())
   assert document["concurrency"]["cancel-in-progress"] is False
   assert "${{ github.repository }}" in document["concurrency"]["group"]
@@ -489,7 +532,7 @@ def build_push_document(context: str, image: str) -> dict:
 
 
 def test_a_publish_image_context_carries_the_image_name():
-  document = build_push_document("skills/arena-skill/proxy", "arena-egress-proxy")
+  document = build_push_document("skills/example/proxy", "arena-egress-proxy")
   result = findings(document)
   assert any(
     "arena-egress-proxy" in finding and "context" in finding for finding in result
@@ -498,7 +541,7 @@ def test_a_publish_image_context_carries_the_image_name():
 
 def test_a_matching_publish_image_context_passes():
   document = build_push_document(
-    "skills/arena-skill/arena-egress-proxy", "arena-egress-proxy"
+    "skills/example/arena-egress-proxy", "arena-egress-proxy"
   )
   assert findings(document) == []
 
@@ -510,8 +553,8 @@ def build_matrix_document() -> dict:
       "name": "Build and Push",
       "uses": "docker/build-push-action@v6",
       "with": {
-        "context": "skills/arena-skill/${{ matrix.directory }}",
-        "file": "skills/arena-skill/${{ matrix.directory }}/Dockerfile",
+        "context": "skills/example/${{ matrix.directory }}",
+        "file": "skills/example/${{ matrix.directory }}/Dockerfile",
         "tags": "ghcr.io/${{ github.repository_owner }}/${{ matrix.directory }}:latest",
       },
     }
@@ -599,30 +642,18 @@ def test_guarded_from_pull_request_reads_the_condition():
   )
 
 
-def test_artifacts_push_paths_carry_both_proxy_directories():
+def test_artifacts_excludes_retired_proxy_publishing():
   triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
   pr_paths = triggers["pull_request"]["paths"]
-  for entry in (
-    "skills/arena-skill/arena-egress-proxy/**",
-    "skills/arena-skill/arena-preview-proxy/**",
-  ):
-    assert entry in push_paths
-    # An image publish never runs from a pull request.
-    assert entry not in pr_paths
+  assert not any("arena-skill" in entry for entry in push_paths)
+  assert not any("arena-skill" in entry for entry in pr_paths)
+  assert triggers["workflow_dispatch"] == {}
 
 
-def test_artifacts_dispatch_inputs_name_both_images():
-  triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
-  inputs = triggers["workflow_dispatch"]["inputs"]
-  assert set(inputs) == {"egress_image", "preview_image"}
-  for value in inputs.values():
-    assert value["type"] == "boolean" and value["default"] is False
-
-
-def test_changes_job_reports_the_image_groups():
+def test_changes_job_reports_the_artifact_groups():
   job = load_workflow("artifacts.yml")["jobs"]["changes"]
-  assert set(job["outputs"]) == {"package", "rules", "egress", "preview"}
+  assert set(job["outputs"]) == {"package", "rules"}
   script = "\n".join(step.get("run", "") for step in job["steps"])
   # The path rules moved to one script, so the job carries no path case block.
   assert "maintenance/workflows/changed_paths.py --step artifacts" in script
@@ -643,39 +674,11 @@ def test_artifacts_release_job_keeps_the_release_semantics():
   assert "gh release create" in script and "--clobber" in script
 
 
-def test_artifacts_publishes_both_proxy_images_from_one_matrix():
+def test_artifacts_has_no_proxy_image_job():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  # The two image jobs differ in path, context, and tag alone, so one matrix carries both.
-  assert [name for name in jobs if "image" in name] == ["publish-proxy-images"]
-  job = jobs["publish-proxy-images"]
-  assert "github.event_name != 'pull_request'" in job["if"]
-  assert job["permissions"] == {"contents": "read", "packages": "write"}
-  assert job["concurrency"] == {
-    "group": "Publish-Proxy-Images-${{ github.repository }}",
-    "cancel-in-progress": False,
-  }
-  rows = job["strategy"]["matrix"]["include"]
-  assert [row["directory"] for row in rows] == [
-    "arena-egress-proxy",
-    "arena-preview-proxy",
-  ]
-  assert [row["changed"] for row in rows] == [
-    "${{ needs.changes.outputs.egress }}",
-    "${{ needs.changes.outputs.preview }}",
-  ]
-  # One row builds one image, so every step waits for its own row's flag.
-  assert all(step.get("if") == "matrix.changed == 'true'" for step in job["steps"])
-  build = next(
-    step
-    for step in job["steps"]
-    if str(step.get("uses", "")).startswith("docker/build-push-action@")
-  )
-  assert build["with"]["context"] == "skills/arena-skill/${{ matrix.directory }}"
-  assert build["with"]["file"] == (
-    "skills/arena-skill/${{ matrix.directory }}/Dockerfile"
-  )
-  assert build["with"]["tags"] == (
-    "ghcr.io/${{ github.repository_owner }}/${{ matrix.directory }}:latest"
+  assert not any("image" in name for name in jobs)
+  assert all(
+    job.get("permissions", {}).get("packages") != "write" for job in jobs.values()
   )
 
 
@@ -728,8 +731,8 @@ def test_gitleaks_ignores_installed_agents_and_keeps_default_rules():
   def ignored(path: str) -> bool:
     return any(pattern.search(path) for pattern in patterns)
 
-  assert ignored(".agents/skills/arena-skill/SKILL.md")
-  assert ignored(".agents/skills/arena-skill/assets/mermaid.min.js")
-  assert ignored("skills/arena-skill/assets/mermaid.min.js")
+  assert ignored(".agents/skills/arena-steering/SKILL.md")
+  assert ignored(".agents/skills/arena-steering/assets/mermaid.min.js")
+  assert ignored("skills/arena-steering/assets/mermaid.min.js")
   assert not ignored("skills/arena-steering/scripts/arena_steering/store.py")
   assert not ignored("docs/CHANGELOG.md")

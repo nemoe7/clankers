@@ -61,7 +61,7 @@ def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
   monkeypatch.setattr(
     check,
     "EXPECTED_GROUPS",
-    {"skills/arena-skill": ("UTF-8 file size", ("a.js", "b.css"))},
+    {"skills/example": ("UTF-8 file size", ("a.js", "b.css"))},
   )
   (root / "rules.md").write_text("call", encoding="utf-8")
   (root / "a.js").write_text("fóur", encoding="utf-8")

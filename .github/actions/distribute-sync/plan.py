@@ -14,7 +14,7 @@ PROFILES = (
     ),
     "rule_src": "rules/ARENA.md",
     "rule_dest": "ARENA.md",
-    "skills": "arena-skill",
+    "skills": "arena-steering",
   },
   {
     "domain": "gemini",
@@ -40,6 +40,7 @@ INPUTS = {
   "nemoizer": "NEMOIZER_REPOS",
 }
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
+SKILL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
 def build_plan(overrides=None):
@@ -80,6 +81,12 @@ def build_plan(overrides=None):
 def push_targets(targets, script, environment):
   if not isinstance(targets, list) or not targets:
     raise ValueError("The target plan must be a nonempty array")
+  removal_value = environment.get("ARENA_REMOVE_SKILLS", "")
+  if not isinstance(removal_value, str):
+    raise TypeError("Retired skill names must be a string")
+  removals = tuple(dict.fromkeys(removal_value.split()))
+  if any(not SKILL_NAME.fullmatch(skill) for skill in removals):
+    raise ValueError("Retired skill names must be simple directory names")
   seen = set()
   for target in targets:
     if not isinstance(target, dict) or set(target) != {"repos", "domains", *FIELDS}:
@@ -95,6 +102,8 @@ def push_targets(targets, script, environment):
       or any(not isinstance(domain, str) or domain not in INPUTS for domain in domains)
     ):
       raise ValueError("Target domains are invalid")
+    if "arena" in domains and set(removals) & set(target["skills"].split()):
+      raise ValueError("A retired Arena skill cannot also be copied")
     seen.add(target["repos"].casefold())
   failed = False
   for target in targets:
@@ -108,6 +117,7 @@ def push_targets(targets, script, environment):
       "GITHUB_ACTION_PATH": str(script.parent),
     }
     env.update({field.upper(): target[field] for field in ("repos", *FIELDS)})
+    env["REMOVE_SKILLS"] = " ".join(removals) if "arena" in target["domains"] else ""
     result = subprocess.run(["bash", str(script)], env=env, check=False)
     failed |= result.returncode != 0
   return int(failed)
