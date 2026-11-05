@@ -503,6 +503,28 @@ def test_standalone_mkdir_runs_but_counts_while_inbox_waits(
   store.close()
 
 
+@pytest.mark.parametrize(
+  ("line", "command"),
+  (
+    ("mkdir -p cache", ""),
+    ("/bin/bash -l -c 'mkdir -p cache'", ""),
+    ("mkdir -p cache", "trap ':' DEBUG"),
+    ("mkdir -p cache && printf extra", "mkdir -p cache"),
+  ),
+)
+def test_mkdir_waiver_requires_exact_current_command(
+  _isolate_state: Path, line: str, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert code == pre.BLOCK, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+
+
 def test_quoted_mkdir_profile_mismatch_does_not_count_or_block(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

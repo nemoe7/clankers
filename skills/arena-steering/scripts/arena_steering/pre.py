@@ -291,17 +291,12 @@ class PreContext:
     )
 
   def is_standalone_mkdir(self) -> bool:
-    if (
-      self.line
-      and self.command
-      and shell_line(self.line).strip() != shell_line(self.command).strip()
-    ):
+    current = shell_line(self.command).strip()
+    if not current or (self.line and shell_line(self.line).strip() != current):
       return False
-    if any(
-      mark in shell_line(self.line or self.command) for mark in ("$(", "`", "<", ">")
-    ):
+    if any(mark in current for mark in ("$(", "`", "<", ">")):
       return False
-    pieces = self.pieces()
+    pieces = PreContext(line=current).pieces()
     if len(pieces) != 1 or pieces[0][1] != ";":
       return False
     words = command_words(pieces[0][0])
