@@ -476,6 +476,216 @@ async function metrics(page, selector) {
   }, selector);
 }
 
+// Clause 33 is intentionally scoped to live overlay roots. Generic page-wide
+// sibling-pair overlap analysis stays behind --overlaps (-O).
+async function overlayChecks(page) {
+  return page.evaluate(interactiveSelector => {
+    const EPS = 0.75;
+    const OVERLAY_SELECTOR = [
+      'dialog[open]', '[role="dialog"]', '[role="alertdialog"]',
+      '[role="tooltip"]', '[role="menu"]', '[role="listbox"]', '[popover]',
+      '.drawer', '.modal', '.popover', '.tooltip', '[data-overlay]',
+      '[data-slot*="popover"]', '[data-slot*="tooltip"]', '[data-slot*="drawer"]',
+    ].join(',');
+    const findings = [], seen = new Set();
+    const viewport = {width: innerWidth, height: innerHeight};
+
+    function selectorFor(element) {
+      if (element.id) return `#${CSS.escape(element.id)}`;
+      const parent = element.parentElement;
+      if (!parent) return element.tagName.toLowerCase();
+      const siblings = [...parent.children].filter(node => node.tagName === element.tagName);
+      return `${selectorFor(parent)} > ${element.tagName.toLowerCase()}:nth-of-type(${siblings.indexOf(element) + 1})`;
+    }
+    function bounds(rect) {
+      const round = value => Number(value.toFixed(1));
+      return {x: round(rect.x), y: round(rect.y), width: round(rect.width), height: round(rect.height)};
+    }
+    function visible(element) {
+      for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
+        if (node.hidden || node.inert || node.getAttribute('aria-hidden') === 'true') return false;
+        const style = getComputedStyle(node);
+        if (style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility) ||
+            Number(style.opacity) <= 0.01) return false;
+      }
+      const rect = element.getBoundingClientRect();
+      return rect.width > EPS && rect.height > EPS && rect.right > 0 && rect.bottom > 0 &&
+        rect.left < innerWidth && rect.top < innerHeight;
+    }
+    function activeRoot(element) {
+      if (!visible(element)) return false;
+      if (element.hasAttribute('popover')) {
+        try { if (!element.matches(':popover-open')) return false; } catch { return false; }
+      }
+      // Class/data-slot heuristics are used only for floating surfaces, not
+      // ordinary in-flow content that happens to share a component name.
+      const semantic = element.matches('dialog[open], [role="dialog"], [role="alertdialog"], [role="tooltip"], [role="menu"], [role="listbox"], [popover]');
+      if (!semantic && !['fixed', 'absolute', 'sticky'].includes(getComputedStyle(element).position)) return false;
+      return true;
+    }
+    function painted(element) {
+      const style = getComputedStyle(element);
+      const color = style.backgroundColor;
+      const rgba = color.match(/^rgba?\(([^)]*)\)$/i);
+      const channels = rgba?.[1].match(/\d*\.?\d+/g) || [];
+      const alpha = /^rgba/i.test(color) ? Number(channels[3] ?? 0) : 1;
+      return (color !== 'transparent' && rgba && alpha >= 0.15) ||
+        (style.backgroundImage !== 'none' && style.backgroundImage !== '');
+    }
+    function surface(root) {
+      const computed = getComputedStyle(root).backgroundColor;
+      if (painted(root)) return {computed, effective: computed, source: selectorFor(root), missing: false};
+      const rect = root.getBoundingClientRect();
+      for (const child of root.querySelectorAll('*')) {
+        if (!visible(child) || !painted(child)) continue;
+        const inner = child.getBoundingClientRect();
+        if (inner.left <= rect.left + 1 && inner.top <= rect.top + 1 &&
+            inner.right >= rect.right - 1 && inner.bottom >= rect.bottom - 1) {
+          return {computed, effective: getComputedStyle(child).backgroundColor,
+            source: selectorFor(child), missing: false};
+        }
+      }
+      return {computed, effective: computed, source: selectorFor(root), missing: true};
+    }
+    function add(root, element, rect, issue, ancestor, edges, surfaceInfo, occluder = null) {
+      const selector = selectorFor(element), overlay = selectorFor(root);
+      const key = [overlay, selector, issue, ancestor, edges.join(','), occluder].join(':');
+      if (seen.has(key)) return;
+      seen.add(key);
+      const detail = issue === 'background'
+        ? `Visible overlay ${overlay} has no effective painted surface`
+        : issue === 'occluded'
+          ? `Overlay ${selector} is occluded by ${occluder}`
+          : `Overlay ${selector} extends past ${edges.join(', ')} edge of ${ancestor}`;
+      findings.push({rule: 'ACC203', severity: 'review', criterion: 'clause-33',
+        selector, overlay, viewport, bounds: bounds(rect), clipping_ancestor: ancestor,
+        computed_surface_color: surfaceInfo.computed,
+        effective_surface_color: surfaceInfo.effective,
+        surface_source: surfaceInfo.source,
+        issue, edges, ...(occluder ? {occluder} : {}),
+        evidence: `${detail} (${viewport.width}x${viewport.height}; ${bounds(rect).x},${bounds(rect).y},${bounds(rect).width}x${bounds(rect).height}; surface ${surfaceInfo.computed})`});
+    }
+    function edgesOutside(rect, box, x = true, y = true) {
+      const edges = [];
+      if (x && rect.left < box.left - EPS) edges.push('left');
+      if (y && rect.top < box.top - EPS) edges.push('top');
+      if (x && rect.right > box.right + EPS) edges.push('right');
+      if (y && rect.bottom > box.bottom + EPS) edges.push('bottom');
+      return edges;
+    }
+    function scrollReachable(ancestor, rect, axis) {
+      const style = getComputedStyle(ancestor);
+      const overflow = axis === 'x' ? style.overflowX : style.overflowY;
+      if (!['auto', 'scroll'].includes(overflow)) return false;
+      const client = axis === 'x' ? ancestor.clientWidth : ancestor.clientHeight;
+      const extent = axis === 'x' ? ancestor.scrollWidth : ancestor.scrollHeight;
+      if (extent <= client + EPS) return false;
+      const box = ancestor.getBoundingClientRect();
+      const start = (axis === 'x' ? rect.left - box.left + ancestor.scrollLeft
+        : rect.top - box.top + ancestor.scrollTop);
+      const end = start + (axis === 'x' ? rect.width : rect.height);
+      return start >= -EPS && end <= extent + EPS;
+    }
+    function clipping(element, rect) {
+      const scrollports = [];
+      for (let parent = element.parentElement; parent && parent !== document.body &&
+           parent !== document.documentElement; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        const x = ['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowX) ||
+          style.clipPath !== 'none' || style.contain.includes('paint');
+        const y = ['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowY) ||
+          style.clipPath !== 'none' || style.contain.includes('paint');
+        if (!x && !y) continue;
+        const box = parent.getBoundingClientRect();
+        const clipped = edgesOutside(rect, box, x, y).filter(edge =>
+          !scrollReachable(parent, rect, ['left', 'right'].includes(edge) ? 'x' : 'y'));
+        if (clipped.length) return {ancestor: selectorFor(parent), edges: clipped};
+        scrollports.push(parent);
+      }
+      const outside = edgesOutside(rect, {left: 0, top: 0, right: innerWidth, bottom: innerHeight});
+      const unscrollable = outside.filter(edge => !scrollports.some(parent => {
+        const box = parent.getBoundingClientRect();
+        const axis = ['left', 'right'].includes(edge) ? 'x' : 'y';
+        // Only skip an off-screen fragment when its scrollport itself is on-screen.
+        const onScreen = axis === 'x'
+          ? box.left >= -EPS && box.right <= innerWidth + EPS
+          : box.top >= -EPS && box.bottom <= innerHeight + EPS;
+        return onScreen && scrollReachable(parent, rect, axis);
+      }));
+      return unscrollable.length ? {ancestor: 'viewport', edges: unscrollable} : null;
+    }
+    function hiddenByReachableScroll(element, rect) {
+      for (let parent = element.parentElement; parent && parent !== document.body &&
+           parent !== document.documentElement; parent = parent.parentElement) {
+        const box = parent.getBoundingClientRect();
+        if (edgesOutside(rect, box).some(edge =>
+          scrollReachable(parent, rect, ['left', 'right'].includes(edge) ? 'x' : 'y'))) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function occluderFor(element, rect, root) {
+      for (let node = element; node && root.contains(node); node = node.parentElement) {
+        if (getComputedStyle(node).pointerEvents === 'none') return null;
+      }
+      const left = Math.max(0, rect.left), top = Math.max(0, rect.top);
+      const right = Math.min(innerWidth, rect.right), bottom = Math.min(innerHeight, rect.bottom);
+      if (right - left < 2 || bottom - top < 2) return null;
+      const insetX = Math.min(2, (right - left) / 4), insetY = Math.min(2, (bottom - top) / 4);
+      const points = [
+        [(left + right) / 2, (top + bottom) / 2],
+        [left + insetX, top + insetY], [right - insetX, top + insetY],
+        [left + insetX, bottom - insetY], [right - insetX, bottom - insetY],
+      ];
+      for (const [x, y] of points) {
+        const topmost = document.elementsFromPoint(x, y)[0];
+        if (topmost && topmost !== element && !element.contains(topmost) &&
+            !topmost.contains(element)) return selectorFor(topmost);
+      }
+      return null;
+    }
+
+    const roots = [...document.querySelectorAll(OVERLAY_SELECTOR)].filter(activeRoot);
+    function belongsTo(element, root) {
+      return !roots.some(other => other !== root && root.contains(other) && other.contains(element));
+    }
+    for (const root of roots) {
+      const info = surface(root), rootRect = root.getBoundingClientRect();
+      const rootSelector = selectorFor(root);
+      const isPopup = root.matches('[role="tooltip"], [popover], .tooltip, .popover, [data-slot*="tooltip"], [data-slot*="popover"]');
+      if (isPopup && info.missing) add(root, root, rootRect, 'background', rootSelector, [], info);
+      const rootEdges = edgesOutside(rootRect, {left: 0, top: 0, right: innerWidth, bottom: innerHeight});
+      if (rootEdges.length) add(root, root, rootRect, 'viewport', 'viewport', rootEdges, info);
+      const inspect = (element, rect) => {
+        const clipped = clipping(element, rect);
+        if (clipped) add(root, element, rect, 'clipped', clipped.ancestor, clipped.edges, info);
+        else if (!hiddenByReachableScroll(element, rect)) {
+          const blocker = occluderFor(element, rect, root);
+          if (blocker) add(root, element, rect, 'occluded', blocker, [], info, blocker);
+        }
+      };
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let text;
+      while ((text = walker.nextNode())) {
+        if (!text.nodeValue?.trim()) continue;
+        const parent = text.parentElement;
+        if (!parent || !belongsTo(parent, root) || !visible(parent) ||
+            parent.closest('script, style, noscript')) continue;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        for (const rect of range.getClientRects()) {
+          if (rect.width > EPS && rect.height > EPS) inspect(parent, rect);
+        }
+      }
+      for (const control of root.querySelectorAll(interactiveSelector)) {
+        if (belongsTo(control, root) && visible(control)) inspect(control, control.getBoundingClientRect());
+      }
+    }
+    return {status: 'checked', overlays: roots.map(selectorFor), findings};
+  }, INTERACTIVE_SELECTOR);
+}
+
 async function a11yChecks(page) {
   return page.evaluate(interactiveSelector => {
     function selectorFor(element) {
@@ -1220,32 +1430,35 @@ async function run() {
               await page.locator(request.ready).first().waitFor({state: 'visible', timeout});
             }
             row.measurements = await metrics(page, request.selector);
-            if (captures.length === 1) {
+            // A live audit must open its overlays at each house viewport.
+            // Other commands retain the first-capture-only flow contract.
+            if (captures.length === 1 || (request.command === 'audit' && request.flow?.length)) {
               row.flow = await flow(page, context, request.flow || [], output, timeout, {width, scheme, motion});
-              if (request.edit) {
-                const edit = request.edit;
-                const node = page.locator(edit.selector);
-                if (await node.count() !== 1) throw new Error('Live edit requires exactly one element');
-                row.edit = {status: 'authorized', before: await metrics(page, edit.selector)};
-                row.edit.before_screenshot = path.join(output, 'live-before.png');
-                await page.screenshot({path: row.edit.before_screenshot, fullPage: true, timeout});
-                await node.evaluate((element, edit) => {
-                  if (edit.text !== undefined) element.textContent = String(edit.text);
-                  for (const [name, value] of Object.entries(edit.styles || {})) {
-                    element.style.setProperty(name, String(value));
-                  }
-                }, edit);
-                row.edit.after = await metrics(page, edit.selector);
-                row.edit.after_screenshot = path.join(output, 'live-after.png');
-                await page.screenshot({path: row.edit.after_screenshot, fullPage: true, timeout});
-                row.edit.persistence = 'rendered page only';
-              }
+            }
+            if (captures.length === 1 && request.edit) {
+              const edit = request.edit;
+              const node = page.locator(edit.selector);
+              if (await node.count() !== 1) throw new Error('Live edit requires exactly one element');
+              row.edit = {status: 'authorized', before: await metrics(page, edit.selector)};
+              row.edit.before_screenshot = path.join(output, 'live-before.png');
+              await page.screenshot({path: row.edit.before_screenshot, fullPage: true, timeout});
+              await node.evaluate((element, edit) => {
+                if (edit.text !== undefined) element.textContent = String(edit.text);
+                for (const [name, value] of Object.entries(edit.styles || {})) {
+                  element.style.setProperty(name, String(value));
+                }
+              }, edit);
+              row.edit.after = await metrics(page, edit.selector);
+              row.edit.after_screenshot = path.join(output, 'live-after.png');
+              await page.screenshot({path: row.edit.after_screenshot, fullPage: true, timeout});
+              row.edit.persistence = 'rendered page only';
             }
             row.measurements = await metrics(page, request.selector);
             if (request.overlaps) row.overlaps = await overlaps(page, request.selector);
             if (request.a11y || request.command === 'a11y' || request.command === 'audit') {
               row.a11y = await a11yChecks(page);
             }
+            if (request.command === 'audit') row.overlays = await overlayChecks(page);
             row.screenshot = path.join(output, `${width}-${scheme}-${motion}.png`);
             await page.screenshot({path: row.screenshot, fullPage: true, timeout});
             if (request.wireframe) {
@@ -1267,7 +1480,8 @@ async function run() {
   }
   const findings = [];
   for (const row of captures) {
-    const location = {url: target, width: row.width, scheme: row.scheme, motion: row.motion};
+    const location = {url: target, width: row.width, height: row.height,
+      scheme: row.scheme, motion: row.motion};
     if (row.status === 'failed') findings.push({rule: 'RUN102', severity: 'error', location, evidence: row.error});
     if (row.flow.status === 'failed') findings.push({rule: 'RUN101', severity: 'error', location, evidence: row.flow});
     if (Array.isArray(row.flow?.steps)) {
@@ -1291,11 +1505,15 @@ async function run() {
         findings.push({...item, location});
       }
     }
+    if (row.overlays?.findings?.length) {
+      for (const item of row.overlays.findings) findings.push({...item, location});
+    }
   }
   return {status: findings.length ? 'findings' : 'captured', findings,
     engine: chosen[0], captures,
     report_shots: captures.filter(row => row.report_shot && row.screenshot).map(row => row.screenshot),
-    automated_flow: 'first capture only',
+    automated_flow: request.command === 'audit' && request.flow?.length
+      ? 'every audit capture' : 'first capture only',
     synthesized_input: 'Playwright actions', visual_judgment: 'not_run', participant_research: 'not_run', real_device: 'not_run'};
 }
 
