@@ -56,6 +56,19 @@ def test_run_check_flushes_the_start_line(monkeypatch):
   assert flushed == [True]
 
 
+def test_run_logged_prints_command_and_exit(monkeypatch, capsys):
+  monkeypatch.setattr(
+    check.subprocess,
+    "run",
+    lambda *args, **kwargs: SimpleNamespace(returncode=0),
+  )
+  result = check.run_logged(["python", "script with spaces.py", "."], cwd=check.ROOT)
+  assert result.returncode == 0
+  printed = capsys.readouterr().out
+  assert "$ python 'script with spaces.py' ." in printed
+  assert "exit 0: python 'script with spaces.py' ." in printed
+
+
 def test_lint_count_claims_include_root_agent_guide():
   root = check.ROOT / "AGENTS.md"
   assert any(document == root for document, _ in check.LINT_COUNT_CLAIMS)

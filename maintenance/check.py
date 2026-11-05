@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -202,16 +203,23 @@ def parse_args() -> argparse.Namespace:
   return parser.parse_args()
 
 
+def run_logged(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
+  rendered = shlex.join(command)
+  print(f"$ {rendered}", flush=True)
+  result = subprocess.run(command, check=False, **kwargs)
+  print(f"exit {result.returncode}: {rendered}", flush=True)
+  return result
+
+
 def check_nemoize(errors: list[str]) -> None:
   """Run the vendored nemoizer over the covered prose. Any hard violation is an error."""
-  result = subprocess.run(
+  result = run_logged(
     [sys.executable, str(ROOT / NEMOIZE), *(str(ROOT / doc) for doc in NEMOIZE_DOCS)],
     capture_output=True,
     text=True,
     encoding="utf-8",
     errors="replace",
     env=CHILD_ENV,
-    check=False,
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
@@ -220,7 +228,7 @@ def check_nemoize(errors: list[str]) -> None:
 
 def check_nemoizer(errors: list[str]) -> None:
   """Run nemoize.py over the repository root. Exclusions live in pyproject.toml."""
-  result = subprocess.run(
+  result = run_logged(
     [sys.executable, str(ROOT / NEMOIZE), "."],
     cwd=ROOT,
     capture_output=True,
@@ -228,7 +236,6 @@ def check_nemoizer(errors: list[str]) -> None:
     encoding="utf-8",
     errors="replace",
     env=CHILD_ENV,
-    check=False,
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()

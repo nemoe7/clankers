@@ -1074,10 +1074,12 @@ def format_summary(findings):
   )
 
 
-def scan(targets, ignores, audit=False):
+def scan(targets, ignores, audit=False, verbose=False):
   """Return findings and all exclusion markers with locations and rule IDs."""
   findings, marks = [], []
   for path in walk(targets, ignores):
+    if verbose:
+      print(f"scan {path}", file=sys.stderr, flush=True)
     text = text_file(path)
     if text is None:
       continue
@@ -3110,6 +3112,12 @@ def main(argv=None):
     help="skip a directory or file, relative to the target",
   )
   parser.add_argument(
+    "-v",
+    "--verbose",
+    action="store_true",
+    help="print each file as it is scanned and processed",
+  )
+  parser.add_argument(
     "--ignores", action="store_true", help="list every nonemo marker instead"
   )
   parser.add_argument(
@@ -3169,7 +3177,9 @@ def main(argv=None):
     print(f"{changed} lines rotated", file=sys.stderr)
     return 0
   try:
-    findings, marks = scan(targets, arguments.ignore, audit=arguments.audit)
+    findings, marks = scan(
+      targets, arguments.ignore, audit=arguments.audit, verbose=arguments.verbose
+    )
   except ValueError as error:
     parser.error(str(error))
   if arguments.ignores:
@@ -3225,8 +3235,11 @@ def main(argv=None):
     for _ in range(count):
       if next_index >= len(files):
         return
-      future = pool.submit(process_one, files[next_index])
-      pending[future] = (files[next_index], time.monotonic() + file_timeout)
+      path = files[next_index]
+      if arguments.verbose:
+        print(f"start {path}", file=sys.stderr, flush=True)
+      future = pool.submit(process_one, path)
+      pending[future] = (path, time.monotonic() + file_timeout)
       next_index += 1
 
   pool = ThreadPoolExecutor(max_workers=workers)
@@ -3245,6 +3258,9 @@ def main(argv=None):
     ]
     for future in done | set(expired):
       path = pending[future][0]
+      if arguments.verbose:
+        outcome = "timeout" if future in expired else "done"
+        print(f"{outcome} {path}", file=sys.stderr, flush=True)
       del pending[future]
       if future in expired:
         skipped.append(path)
