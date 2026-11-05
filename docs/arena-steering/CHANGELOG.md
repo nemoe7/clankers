@@ -46,6 +46,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `test_pre.py`: Accept a spaced `> /dev/null` current step for the pinned Arena process probe. Keep altered scripts and later shell commands gated.
+
 - `assets/reports-view.js`, `test_report_controls.py`: Keep the Reports picker mounted across selections without replaying panel entry. Reset report-bound form and acknowledgement scroll state.
 
 - `assets/app.js`, `assets/style.css`, `test_report_controls.py`: Hide the Reports main-panel bottom fade while a mobile keyboard shrinks the visual viewport. Restore the fade on close without changing desktop, reduced motion, or Submit controls.
