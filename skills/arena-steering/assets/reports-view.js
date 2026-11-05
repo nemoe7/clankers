@@ -385,17 +385,15 @@ export function renderReportsView(container, state, handlers) {
       >${ARROW_UP_SVG}</button>
     </div>
   `;
-  if (swappedReport) container.innerHTML = markup;
-  else reconcileView(container, markup);
-
+  // Keep the rail and picker mounted, but reset each report's form and
+  // acknowledgement scroll position when switching between reports.
   if (swappedReport) {
-    container.scrollTop = 0;
-    if (container.style) {
-      container.style.animation = "none";
-      void container.offsetHeight;
-      container.style.animation = "";
-    }
+    container.querySelector("#report-main")?.replaceChildren();
+    container.querySelector("#report-ack-history")?.remove();
   }
+  reconcileView(container, markup);
+
+  if (swappedReport) container.scrollTop = 0;
 
   for (const input of container.querySelectorAll(".field-text-input, .custom-text-input")) {
     const resize = () => {

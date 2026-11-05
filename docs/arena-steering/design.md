@@ -30,6 +30,7 @@
 - Centered equal-width `.tab-nav` (`grid-auto-columns: 1fr`) with plain-text `.tab-btn` items and `#report-pip` (`--accent: #e5bb8b`) on `Reports` when unseen or unanswered reports exist.
 - `Messages` log toolbar (`#connection` status dot, `#log-search`, `#skip-poll`, `#quiet-msgs`), `.message` cards, `.code-block` copy headers, and `.card.compose`.
 - `Reports` 3-column layout (`#report-toc`, `#report-main` with two-line `#report-status` under `<h1>` and `.field-card` question cards, and `#report-rail` numbered `#report-picker` with top-right unseen dot and unanswered icon plus `Copy`/`Dismiss` actions).
+- Report selection keeps the picker and rail mounted, refreshes the form and acknowledgement history, and does not replay panel entry.
 - `Tasks` borderless sectioned list (`Current` `18px`, `Upcoming` `18px`, `Finished` `18px`) with `16px` task rows/titles, `14px` badges/details, `.select-wrap` type filter (`#task-type-filter`), and search input.
 - Shared `<dialog id="modal-shell">` confirmation modal (`createModalManager`) with equal-width `.modal-actions` buttons.
 
