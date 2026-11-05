@@ -23,6 +23,21 @@ def run(*arguments, cwd):
   )
 
 
+def test_verbose_logs_scan_and_worker_progress(tmp_path):
+  note = tmp_path / "note.md"
+  note.write_text("Short.\n", encoding="utf-8")
+  quiet = run(str(note), cwd=tmp_path)
+  assert quiet.returncode == 0
+  for phase in ("scan", "start", "done"):
+    assert f"{phase} {note}" not in quiet.stderr
+  for flag in ("-v", "--verbose"):
+    result = run(flag, str(note), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert f"scan {note}" in result.stderr
+    assert f"start {note}" in result.stderr
+    assert f"done {note}" in result.stderr
+
+
 def test_a_rotation_matches_the_stem_and_prose():
   import tempfile
 

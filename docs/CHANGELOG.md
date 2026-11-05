@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-05
+
+### Changed
+
+#### maintenance
+
+- Log Nemoize child commands and exit codes during repo validation (`maintenance/check.py`).
+- Add optional per-file scan and worker progress logging to Nemoizer (`skills/nemoizer/scripts/nemoize.py`).
+
 ## 2026-11-04
 
 ### Changed
