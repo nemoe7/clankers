@@ -1159,12 +1159,14 @@ def _run_pre(
   if ctx.shell and (reason := flag_reasons.get(result.blocked_by)) is not None:
     flag = messages.flag_violation_once(*reason)
     print(f"Violation flag: {flag.id}", file=out)
-  if parsed.shell and set(result.done) - set(ctx.done):
+  if parsed.shell and result.done != ctx.done:
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.
     print(f'_arena_preview_done="{" ".join(result.done)}"', file=out)
   countable = bool(
-    parsed.shell and "gate" not in ctx.done and pre_mod.bash_command_policy(ctx)[0]
+    parsed.shell
+    and ("gate" not in ctx.done or ctx.is_mixed_line())
+    and pre_mod.bash_command_policy(ctx)[0]
   )
   if pending_ids and countable:
     _bump_call_count(store)

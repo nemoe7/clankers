@@ -77,6 +77,7 @@ def shell_line(text: str) -> str:
 
 ARENA_PROBE_COMMANDS = {"source ~/.profile"}
 PROFILE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c mkdir -p '[^'\r\n]+'")
+NATIVE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c (mkdir -p '(/[^'\r\n]+)')")
 LOGIN_ACK_WRAPPER = re.compile(
   r"""PATH="\$HOME/\.local/bin:\$PATH" steer ack [0-9a-f]{6} '[^'\r\n]+'"""
 )
@@ -132,7 +133,9 @@ def _isolated_reader(line: str, command: str) -> bool:
   return hashlib.sha256(text.encode()).hexdigest() == ISOLATED_READER_SHA256
 
 
-def _checkout_directory_validator(line: str, command: str, root: Path | None) -> bool:
+def _checkout_directory_validator(
+  line: str, command: str, root: Path | None, *, allow_inner: bool = False
+) -> bool:
   """Match each checkout prefix check and reject paths escaping through symlinks."""
   launcher = "/bin/bash -l -c "
   if not line.startswith(launcher + "[ -e '"):
@@ -158,6 +161,12 @@ def _checkout_directory_validator(line: str, command: str, root: Path | None) ->
   except (OSError, RuntimeError, ValueError):
     return False
   expected = []
+  native_commands = {
+    "exit 0",
+    "printf 'DIR\\n'",
+    "printf 'OK\\n'",
+    f"[ -d '{target}' ]",
+  }
   for index in range(1, len(relative.parts)):
     prefix = relative.parts[:index]
     path = checkout.joinpath(*prefix)
@@ -170,10 +179,20 @@ def _checkout_directory_validator(line: str, command: str, root: Path | None) ->
       f"[ -e '{path}' ] && [ ! -d '{path}' ] "
       f"&& {{ printf 'FILE:%s\\n' '{'/'.join(prefix)}'; exit 0; }}"
     )
+    native_commands.update(
+      (
+        f"[ -e '{path}' ]",
+        f"[ ! -d '{path}' ]",
+        f"printf 'FILE:%s\\n' '{'/'.join(prefix)}'",
+      )
+    )
   expected.extend(
     [f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}", "printf 'OK\\n'"]
   )
-  return checks == expected and command.strip() == expected[0].split(" && ", 1)[0]
+  return checks == expected and (
+    command.strip() == expected[0].split(" && ", 1)[0]
+    or (allow_inner and command.strip() in native_commands)
+  )
 
 
 def _platform_stop_process(line: str, command: str) -> bool:
@@ -193,6 +212,8 @@ def arena_maintenance_call(
   line: str, command: str, *, checkout_root: Path | None = None
 ) -> bool:
   """Recognize whole Arena utility calls, not user lines that merely mention them."""
+  if not command.strip():
+    return False
   text = shell_line(line).strip()
   if _isolated_reader(line, command):
     return True
@@ -204,11 +225,20 @@ def arena_maintenance_call(
     line.strip()
   ):
     return True
-  if text == ARENA_PORT_PROBE:
+  mkdir = NATIVE_MKDIR_LAUNCHER.fullmatch(line.strip())
+  if (
+    mkdir
+    and command.strip() == mkdir.group(1)
+    and ".." not in Path(mkdir.group(2)).parts
+    and not any(mark in mkdir.group(2) for mark in ("$(", "`", "\x00"))
+  ):
+    return True
+  if text == ARENA_PORT_PROBE and command.strip() in text:
     return True
   if (
     "===ARENA_ENTRY===" in text
     and "===ARENA_PORTS===" in text
+    and command.strip() in text
     and hashlib.sha256(text.encode()).hexdigest() == ARENA_PROCESS_PROBE_SHA256
   ):
     return True
@@ -228,6 +258,43 @@ def arena_maintenance_call(
     and Path(words[0]).name == "arena-workspace"
     and words[1] in ARENA_WORKSPACE_VERBS
   )
+
+
+def arena_maintenance_step(
+  line: str, command: str, *, checkout_root: Path | None = None
+) -> bool:
+  """Exempt the current native step without waiving later shell commands."""
+  if not command.strip():
+    return False
+  if arena_maintenance_call(line, command, checkout_root=checkout_root):
+    return True
+  text = shell_line(line)
+  launcher = "/bin/bash -l -c " if line.startswith("/bin/bash -l -c ") else ""
+  boundaries = [0, *(index + 1 for index, char in enumerate(text) if char in ";\n")]
+  ends = [*(index for index, char in enumerate(text) if char in ";\n"), len(text)]
+  for start in boundaries:
+    for end in ends:
+      if end <= start:
+        continue
+      segment = text[start:end].strip()
+      current = command.strip()
+      if current == "source ~/.profile":
+        if segment.startswith("[ -e '"):
+          current = segment.split(" && ", 1)[0]
+        elif segment.startswith("echo '===ARENA_STATUS==='"):
+          current = segment.split("\n", 1)[0]
+        else:
+          current = segment
+      if current not in segment:
+        continue
+      candidate = launcher + segment
+      if arena_maintenance_call(candidate, current, checkout_root=checkout_root):
+        return True
+      if segment.startswith("[ -e '") and _checkout_directory_validator(
+        candidate, current, checkout_root, allow_inner=True
+      ):
+        return True
+  return False
 
 
 @dataclass
@@ -286,9 +353,14 @@ class PreContext:
     )
 
   def is_arena_maintenance(self) -> bool:
-    return arena_maintenance_call(
+    return arena_maintenance_step(
       self.line, self.command, checkout_root=self.checkout_root
     )
+
+  def is_mixed_line(self) -> bool:
+    return not arena_maintenance_call(
+      self.line, self.command, checkout_root=self.checkout_root
+    ) and (len(self.pieces()) > 1 or any(c in shell_line(self.line) for c in ";\n"))
 
   def is_standalone_mkdir(self) -> bool:
     current = shell_line(self.command).strip()
@@ -1262,7 +1334,8 @@ PIPELINE: tuple[PreStep, ...] = (
 def run_pipeline(ctx: PreContext) -> PreResult:
   """Run every step in order and stop at the first verdict."""
   messages: list[str] = []
-  finished = list(ctx.done)
+  mixed = ctx.is_mixed_line()
+  finished = [name for name in ctx.done if name != "gate" or not mixed]
   for step in PIPELINE:
     if step.name in finished and not (
       (step.name == "gate" and ctx.is_push())
@@ -1271,14 +1344,14 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     ):
       continue
     if not step.applies(ctx):
-      if step.name == "gate" and ctx.is_arena_maintenance():
+      if step.name == "gate" and ctx.is_arena_maintenance() and not mixed:
         # An exact utility shell still runs profile cleanup before EXIT.
         finished.append(step.name)
       continue
     result = step.run(ctx)
     messages.extend(result.messages)
     if result.verdict == CONTINUE:
-      if step.name not in finished:
+      if step.name not in finished and not (step.name == "gate" and mixed):
         finished.append(step.name)
       continue
     return PreResult(

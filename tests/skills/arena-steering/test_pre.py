@@ -125,8 +125,11 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
     assert _verdict(ctx) == pre.CONTINUE
 
   mixed = pre.PreContext(line="ss -ltnp; printf after", command="ss -ltnp", **base)
-  assert pre.bash_command_policy(mixed) == (True, True)
-  assert _verdict(mixed) == pre.BLOCK
+  assert pre.bash_command_policy(mixed) == (False, False)
+  assert _verdict(mixed) == pre.CONTINUE
+  following = pre.PreContext(line=mixed.line, command="printf after", **base)
+  assert pre.bash_command_policy(following) == (True, True)
+  assert _verdict(following) == pre.BLOCK
 
 
 def test_bash_policy_can_block_without_spending_the_pending_budget(
@@ -423,10 +426,21 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
   assert code == pre.CONTINUE, output
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
-  changed = script + "\necho extra"
-  code, output = _run("pre", "-l", changed, "-c", "ports_observed=1", "-s", "bash")
+  mixed = script + "\necho extra"
+  for native_command in ("ports_observed=1", "echo '===ARENA_ENTRY==='"):
+    code, output = _run("pre", "-l", mixed, "-c", native_command, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  code, output = _run("pre", "-l", mixed, "-c", "echo extra", "-s", "bash")
   assert code == pre.BLOCK, output
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  changed = script.replace("ports_observed=1", "ports_observed=2")
+  code, output = _run("pre", "-l", changed, "-c", "ports_observed=2", "-s", "bash")
+  assert code == pre.BLOCK, output
 
 
 def test_isolated_reader_requires_whole_pinned_script_and_safe_arguments(
@@ -478,6 +492,134 @@ def test_isolated_reader_requires_whole_pinned_script_and_safe_arguments(
 
   code, output = _run("pre", "-l", template, "-c", "python3 -I - <<'PY'", "-s", "bash")
   assert code == pre.BLOCK, output
+
+
+def test_mixed_native_reader_and_probe_keep_following_command_gated(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  launcher = "/bin/bash -l -c "
+  reader = (
+    Path(__file__)
+    .with_name("reader_tool_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+  ).replace(
+    'path = "/checkout/target.txt"',
+    f"path = {json.dumps(str(pre.repo_root() / 'README.md'))}",
+  )
+  for line, command in (
+    (reader + "\nprintf extra", reader.removeprefix(launcher)),
+    ("/bin/bash -l -c ss -ltnH; printf extra", "ss -ltnH"),
+    (
+      "/bin/bash -l -c arena-workspace read /home/user/project/file; printf extra",
+      "arena-workspace read /home/user/project/file",
+    ),
+    (pre.ARENA_PORT_PROBE + "; printf extra", "command -v ss"),
+  ):
+    assert pre.arena_maintenance_step(line, command), (line, command)
+    code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+    assert code == pre.CONTINUE, (line, command, output)
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+    if line.startswith(launcher):
+      code, output = _run("pre", "-l", line, "-c", "source ~/.profile", "-s", "bash")
+      assert code == pre.CONTINUE, output
+      assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+    code, output = _run("pre", "-l", line, "-c", "printf extra", "-s", "bash")
+    assert code == pre.BLOCK, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+    store, _, _, _ = cli.open_services(_isolate_state)
+    store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+    store.close()
+
+
+def test_agent_isolated_python_still_uses_inbox_gate(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  line = "/bin/bash -l -c python3 -I -c 'print(1)'"
+  code, output = _run("pre", "-l", line, "-c", "python3 -I -c 'print(1)'", "-s", "bash")
+  assert code == pre.BLOCK, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+
+
+def test_mixed_counted_command_does_not_waive_next_gate(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  line = "printf first; printf second"
+  code, output = _run("pre", "-l", line, "-c", "printf first", "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert "gate" not in output
+  assert _count(_isolate_state) == "1"
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  code, output = _run("pre", "-l", line, "-c", "printf second", "-s", "bash")
+  assert code == pre.BLOCK, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+
+
+def test_native_mkdir_and_mixed_shell_gate_each_current_command(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  native = "/bin/bash -l -c mkdir -p '/home/user/project/tests'"
+  mkdir = "mkdir -p '/home/user/project/tests'"
+  for line in (native, native + "; printf extra"):
+    code, output = _run("pre", "-l", line, "-c", mkdir, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+    if line != native:
+      assert "gate" not in output.split("_arena_preview_done=")[-1]
+    code, output = _run("pre", "-l", line, "-c", "source ~/.profile", "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  mixed = native + "; printf extra"
+  code, output = _run(
+    "pre", "-l", mixed, "-c", "printf extra", "-s", "bash", "--done", "gate"
+  )
+  assert code == pre.BLOCK, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
+
+  push = native + "; git push origin topic"
+  code, output = _run("pre", "-l", push, "-c", mkdir, "-s", "bash")
+  assert code == pre.BLOCK, output
+  assert "Push blocked" in output
+  trap = native + "; trap ':' DEBUG"
+  code, output = _run("pre", "-l", trap, "-c", "trap ':' DEBUG", "-s", "bash")
+  assert code == pre.BLOCK, output
+
+
+@pytest.mark.parametrize(
+  "command",
+  (
+    "mkdir -pv '/home/user/project'",
+    "mkdir -p 'relative/path'",
+    "mkdir -p '/home/user/../other'",
+    "mkdir -p '/home/user/$(touch marker)'",
+  ),
+)
+def test_native_mkdir_shape_changes_still_spend_inbox_budget(
+  _isolate_state: Path, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  line = "/bin/bash -l -c " + command
+  assert not pre.arena_maintenance_step(line, command)
+  _run("pre", "-l", line, "-c", command, "-s", "bash")
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
 @pytest.mark.parametrize(
@@ -589,10 +731,23 @@ def test_checkout_directory_validator_requires_one_confined_template(
     root, root / "tests" / "x' && echo unsafe; #" / "target.py"
   )
   external, external_command = script(tmp_path, tmp_path / "elsewhere" / "target.py")
+  for mixed in (
+    line.rstrip() + "\necho extra",
+    line.replace("printf 'OK\\n'", "printf 'OK\\n'; echo extra"),
+  ):
+    for native_command in (command, line.split(" && ", 2)[1], "printf 'OK\\n'"):
+      code, output = _run("pre", "-l", mixed, "-c", native_command, "-s", "bash")
+      assert code == pre.CONTINUE, (native_command, output)
+      assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+    code, output = _run("pre", "-l", mixed, "-c", "echo extra", "-s", "bash")
+    assert code == pre.BLOCK, output
+    store, _, _, _ = cli.open_services(_isolate_state)
+    store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+    store.close()
+
   for altered, current in (
-    (line + "\nprintf 'extra\\n'", command),
     (line.replace(" && [ ! -d ", " || [ ! -d ", 1), command),
-    (line.replace("printf 'OK\\n'", "printf 'OK\\n'; echo extra"), command),
+    (line.replace("printf 'OK\\n'", "printf 'NO\\n'"), command),
     (external, external_command),
     (line, "[ -e '/elsewhere' ]"),
     (quoted, quoted_command),
@@ -677,11 +832,7 @@ def test_marked_detached_shell_does_not_spend_inbox_call_budget(
   ("line", "command"),
   (
     ("/bin/bash -l -c 'ss -ltn && printf extra'", "ss -ltn"),
-    (pre.ARENA_PORT_PROBE + "; printf extra", "command -v ss"),
-    (
-      "/bin/bash -l -c 'arena-workspace read /home/user/project/README.md; printf extra'",
-      "arena-workspace read /home/user/project/README.md",
-    ),
+    ("/bin/bash -l -c 'ss -ltn | printf extra'", "ss -ltn"),
   ),
 )
 def test_mixed_platform_probe_remains_inbox_gated(

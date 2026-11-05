@@ -44,6 +44,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `cli.py`, `test_pre.py`: Exempt exact native file-tool and Arena probe steps from the inbox Bash count. Count and gate later commands in mixed shells.
+
 - `assets/style.css`: Extend the Reports fade behind Submit to the viewport bottom while preserving last-line clearance. Keep a separate dock in reduced motion and match Scroll to Top with Messages.
 
 - `assets/messages-view.js`, `assets/style.css`: Let replies fill message-driven bubbles and cap only reply-driven expansion at two-thirds of the row.
