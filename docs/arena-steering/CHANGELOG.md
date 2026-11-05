@@ -110,6 +110,8 @@ This log has no Unreleased section.
 
 - `pre.py`, `scripts/install.sh`: Register DEBUG after login setup and keep approved utility shells unblocked during EXIT cleanup. Recheck pending pushes.
 
+- `scripts/install.sh`, `test_pre.py`: Remove the managed EXIT hook and migrate existing profiles while preserving user traps. Prevent managed EXIT replay from duplicating the final visible Bash command.
+
 ## [2.2.0]
 
 ### Added
