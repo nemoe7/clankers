@@ -50,6 +50,8 @@ This log has no Unreleased section.
 
 - `assets/messages-view.js`, `assets/style.css`: Let replies fill message-driven bubbles and cap only reply-driven expansion at two-thirds of the row.
 
+- `assets/style.css`, `test_message_bubble_layout.py`: Remove trailing paragraph margin from the final acknowledgement. Preserve spacing between earlier replies.
+
 - `assets/style.css`: Align parent chips, message IDs, and receipt contents with the bubble text's right inset.
 
 - `assets/style.css`, `test_web_ui.py`: Match mobile and desktop header tab widths. Keep both Reports markers above the mobile label without crowding header actions.
