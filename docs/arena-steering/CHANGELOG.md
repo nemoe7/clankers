@@ -44,7 +44,7 @@ This log has no Unreleased section.
 
 ### Fixed
 
-- `assets/style.css`: Shorten the Reports bottom fade without changing its top fade. Match Scroll to Top sizing, blur, and hover with Messages.
+- `assets/style.css`: Extend the Reports fade behind Submit to the viewport bottom while preserving last-line clearance. Keep a separate dock in reduced motion and match Scroll to Top with Messages.
 
 - `assets/style.css`: Size short acknowledgements with bubble content and cap their right-side rule at two-thirds. Let full-row bubbles expand replies.
 

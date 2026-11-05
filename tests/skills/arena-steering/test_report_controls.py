@@ -66,8 +66,13 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
             assert top_button.is_hidden()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             pane = page.locator("#view-reports")
-            assert pane.evaluate("el => el.scrollHeight > el.clientHeight + 180")
-            pane.evaluate("el => { el.scrollTop = Math.floor(el.scrollHeight / 2); }")
+            assert pane.evaluate("el => el.scrollHeight > el.clientHeight * 3")
+            scroll_ratio = pane.evaluate("""el => {
+              const maxScroll = el.scrollHeight - el.clientHeight;
+              el.scrollTop = maxScroll / 2;
+              return el.scrollTop / maxScroll;
+            }""")
+            assert 0.4 < scroll_ratio < 0.6
             toc_available = page.locator("#report-toc").is_visible()
             assert toc_available == (width >= 1200)
             if toc_available:
@@ -77,15 +82,30 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               assert top_button.text_content().strip() == ""
               assert top_button.get_attribute("aria-label") == "Scroll to top"
             styles = page.evaluate("""() => {
+              const pane = document.querySelector('#view-reports');
               const layout = document.querySelector('.reports-layout');
+              const fade = getComputedStyle(pane, '::after');
+              const submit = getComputedStyle(document.querySelector('#report-submit-float'));
               const top = getComputedStyle(document.querySelector('#report-scroll-top'));
               const newest = getComputedStyle(document.querySelector('#log-newest'));
               const root = getComputedStyle(document.documentElement);
               return {
-                bottomFade: parseFloat(getComputedStyle(layout, '::after').height),
+                bottomFade: parseFloat(fade.height),
+                bottomContent: fade.content,
+                bottomPosition: fade.position,
+                bottomInset: fade.bottom,
+                bottomBackground: fade.backgroundImage,
+                bottomPointerEvents: fade.pointerEvents,
+                bottomZ: parseInt(fade.zIndex),
+                layoutBottomContent: getComputedStyle(layout, '::after').content,
                 topFade: parseFloat(getComputedStyle(layout, '::before').height),
                 edgeFade: parseFloat(root.getPropertyValue('--edge-fade')),
-                compactFade: parseFloat(root.getPropertyValue('--space-4')),
+                row: parseFloat(root.getPropertyValue('--row')),
+                space4: parseFloat(root.getPropertyValue('--space-4')),
+                submitInset: parseFloat(submit.bottom),
+                submitZ: parseInt(submit.zIndex),
+                panePaddingBottom: parseFloat(getComputedStyle(pane).paddingBottom),
+                paneMarginBottom: getComputedStyle(pane).marginBottom,
                 topPadding: top.padding,
                 messagePadding: newest.padding,
                 topBlur: top.backdropFilter,
@@ -93,10 +113,24 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               };
             }""")
             if motion == "no-preference":
-              assert (
-                0 < styles["bottomFade"] <= styles["compactFade"] < styles["edgeFade"]
+              assert styles["bottomContent"] == '""', styles
+              assert styles["bottomPosition"] == "fixed", styles
+              assert styles["bottomInset"] == "0px", styles
+              assert "linear-gradient" in styles["bottomBackground"], styles
+              assert styles["bottomPointerEvents"] == "none", styles
+              assert styles["bottomZ"] < styles["submitZ"], styles
+              assert styles["layoutBottomContent"] == "none", styles
+              assert styles["bottomFade"] == (
+                styles["edgeFade"] + styles["row"] + styles["submitInset"]
               ), styles
               assert styles["topFade"] == styles["edgeFade"], styles
+              assert styles["paneMarginBottom"] == "0px", styles
+              assert styles["panePaddingBottom"] == (
+                styles["submitInset"] + styles["space4"]
+              ), styles
+            else:
+              assert styles["bottomContent"] == "none", styles
+              assert float(styles["paneMarginBottom"].removesuffix("px")) > 0, styles
             assert styles["topPadding"] == styles["messagePadding"], styles
             assert styles["topBlur"] == styles["messageBlur"], styles
             if not toc_available:
@@ -120,12 +154,45 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               };
             }""")
             pane_box, submit, top = (geometry[key] for key in ("pane", "submit", "top"))
-            assert submit["y"] >= pane_box["y"] + pane_box["height"] + 4, geometry
+            pane_bottom = pane_box["y"] + pane_box["height"]
+            if motion == "no-preference":
+              assert abs(pane_bottom - height) <= 1, geometry
+              assert pane_bottom - styles["bottomFade"] < submit["y"], geometry
+              assert submit["y"] < pane_bottom, geometry
+            else:
+              assert submit["y"] >= pane_bottom + 4, geometry
+            assert (
+              abs(height - (submit["y"] + submit["height"]) - styles["submitInset"])
+              <= 1
+            ), geometry
             assert submit["x"] >= 0 and submit["x"] + submit["width"] <= width, geometry
             if not toc_available:
               assert abs(top["x"] + top["width"] / 2 - width / 2) <= 2, geometry
               assert pane_box["y"] + 4 <= top["y"] <= pane_box["y"] + 80, geometry
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            pane.evaluate("el => { el.scrollTop = el.scrollHeight - el.clientHeight; }")
+            end_report = page.locator("#report").bounding_box()
+            assert (
+              end_report and end_report["y"] + end_report["height"] <= submit["y"] - 4
+            ), (
+              end_report,
+              submit,
+            )
+            if width == 411 and motion == "no-preference":
+              # Simulate a taller device safe area without claiming physical-device coverage.
+              pane.evaluate("""el => {
+                el.style.setProperty('--reports-submit-bottom', '34px');
+                el.scrollTop = el.scrollHeight - el.clientHeight;
+              }""")
+              safe_button = float_button.bounding_box()
+              safe_report = page.locator("#report").bounding_box()
+              safe_fade = pane.evaluate(
+                "el => parseFloat(getComputedStyle(el, '::after').height)"
+              )
+              assert safe_button and safe_report
+              assert abs(height - safe_button["y"] - safe_button["height"] - 34) <= 1
+              assert safe_fade == styles["edgeFade"] + styles["row"] + 34
+              assert safe_report["y"] + safe_report["height"] <= safe_button["y"] - 4
             if toc_available:
               page.locator('#report-picker [data-report-id="no-toc"]').click()
               page.locator("#report-toc").wait_for(state="hidden")

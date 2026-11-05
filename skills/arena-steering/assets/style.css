@@ -2724,15 +2724,16 @@ article#report.report img,
   pointer-events: none;
 }
 
-/* Reserve a dock outside the scrolling report so Submit cannot cover its text. */
+/* Without a fade (reduced motion), keep Submit outside the report text. */
 #view-reports:has(#report-submit-float) {
+  --reports-submit-bottom: max(24px, env(safe-area-inset-bottom));
   margin-bottom: max(48px, calc(env(safe-area-inset-bottom) + 24px));
 }
 
 .report-submit-float {
   position: fixed;
   right: max(16px, calc((100vw - 900px) / 2));
-  bottom: max(24px, env(safe-area-inset-bottom));
+  bottom: var(--reports-submit-bottom);
   z-index: 6;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
 }
@@ -2748,11 +2749,31 @@ article#report.report img,
 
 @media (max-width: 74.99em) {
   #view-reports:has(#report-submit-float) {
-    margin-bottom: max(96px, calc(env(safe-area-inset-bottom) + 32px));
+    --reports-submit-bottom: max(8px, env(safe-area-inset-bottom));
+    margin-bottom: max(36px, calc(env(safe-area-inset-bottom) + 28px));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .main-content:has(> #view-reports:not([hidden])) {
+    padding-bottom: 0;
   }
 
-  .report-submit-float {
-    bottom: max(64px, env(safe-area-inset-bottom));
+  /* The hidden in-report Submit row supplies one button height of end clearance. */
+  #view-reports:has(#report-submit-float) {
+    margin-bottom: 0;
+    padding-bottom: calc(var(--reports-submit-bottom) + var(--space-4));
+  }
+
+  /* Keep the gradient behind Submit and let it reach the viewport bottom. */
+  #view-reports[data-scrollable="true"]:has(#report-submit-float)::after {
+    content: "";
+    position: fixed;
+    inset: auto 0 0;
+    height: calc(var(--edge-fade) + var(--row) + var(--reports-submit-bottom));
+    z-index: 5;
+    pointer-events: none;
+    background: linear-gradient(to top, var(--bg), transparent);
   }
 }
 
@@ -2911,6 +2932,17 @@ article#report.report img,
     .reports-layout::after {
       height: var(--space-4);
       margin-top: calc(-1 * var(--space-4));
+    }
+
+    @media (max-width: 60em) {
+      .reports-layout::after {
+        height: var(--space-2);
+        margin-top: calc(-1 * var(--space-2));
+      }
+    }
+
+    #view-reports:has(#report-submit-float) .reports-layout::after {
+      content: none;
     }
 
     .tasks-toolbar {
