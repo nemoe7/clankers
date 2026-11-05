@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import os
@@ -416,27 +415,35 @@ def test_port_probe_bypasses_inbox_gate_even_if_policy_would_block(
 
 
 def test_exact_arena_process_probe_skips_block_and_call_count(
-  _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
+  _isolate_state: Path,
 ) -> None:
-  script = "ports_observed=1\necho probe >/dev/null\necho '===ARENA_ENTRY==='\necho '===ARENA_PORTS==='"
-  monkeypatch.setattr(
-    pre,
-    "ARENA_PROCESS_PROBE_SHA256",
-    hashlib.sha256(script.encode()).hexdigest(),
-    raising=False,
+  script = (
+    Path(__file__)
+    .with_name("process_probe_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+    .removeprefix("/bin/bash -l -c ")
   )
   _seed(_isolate_state, "Pending work")
   store, _, _, _ = cli.open_services(_isolate_state)
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
 
-  for step in ("ports_observed=1", "echo probe >/dev/null", "echo probe > /dev/null"):
+  for step in (
+    "ports_observed=1",
+    'cat "$dir/pid" 2>/dev/null',
+    'cat "$dir/pid" 2> /dev/null',
+  ):
     code, output = _run("pre", "-l", script, "-c", step, "-s", "bash")
     assert code == pre.CONTINUE, output
     assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
   mixed = script + "\necho extra"
-  for native_command in ("ports_observed=1", "echo '===ARENA_ENTRY==='"):
+  for native_command in (
+    "ports_observed=1",
+    'cat "$dir/pid" 2> /dev/null',
+    "echo '===ARENA_ENTRY==='",
+  ):
     code, output = _run("pre", "-l", mixed, "-c", native_command, "-s", "bash")
     assert code == pre.CONTINUE, output
     assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
@@ -450,9 +457,9 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
   changed = script.replace("ports_observed=1", "ports_observed=2")
   code, output = _run("pre", "-l", changed, "-c", "ports_observed=2", "-s", "bash")
   assert code == pre.BLOCK, output
-  changed = script.replace("echo probe >/dev/null", "echo probe > /dev/null")
+  changed = script.replace('cat "$dir/pid" 2>/dev/null', 'cat "$dir/pid" 2> /dev/null')
   code, output = _run(
-    "pre", "-l", changed, "-c", "echo probe > /dev/null", "-s", "bash"
+    "pre", "-l", changed, "-c", 'cat "$dir/pid" 2> /dev/null', "-s", "bash"
   )
   assert code == pre.BLOCK, output
 
@@ -478,6 +485,8 @@ def test_isolated_reader_requires_whole_pinned_script_and_safe_arguments(
     ("/checkout/target.txt", 1, 10000),
     (str(pre.repo_root() / "README.md"), 70, 260),
     (str(pre.repo_root() / "tests" / "test.py"), 438, 25),
+    (str(pre.repo_root() / "README.md"), None, None),
+    (str(pre.repo_root() / "README.md"), None, 120),
   ):
     line = (
       template.replace('path = "/checkout/target.txt"', f"path = {json.dumps(path)}")
@@ -636,6 +645,90 @@ def test_native_mkdir_shape_changes_still_spend_inbox_budget(
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
+def test_pinned_platform_shells_allow_only_pinned_variables(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  launcher = "/bin/bash -l -c "
+  snapshot_template = (
+    Path(__file__)
+    .with_name("platform_snapshot_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+  )
+  remote_template = (
+    Path(__file__)
+    .with_name("remote_health_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+  )
+  snapshot = snapshot_template.replace(
+    "{base}", "07c8fd2adcb14cbf72ba38a2797600e937d12cbd"
+  )
+  remote = remote_template.replace("{branch}", "arena/topic")
+  for line, native_command in (
+    (
+      snapshot,
+      'git -c core.excludesFile="$CODING_EXCLUDE" read-tree HEAD',
+    ),
+    (
+      remote,
+      "git rev-parse --verify -q 'refs/remotes/origin/arena/topic' >/dev/null",
+    ),
+  ):
+    command = line.removeprefix(launcher)
+    code, output = _run("pre", "-l", line + " ", "-c", command + "\n", "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+    mixed = line + "\nprintf extra"
+    code, output = _run("pre", "-l", mixed, "-c", native_command, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+    code, output = _run("pre", "-l", mixed, "-c", "printf extra", "-s", "bash")
+    assert code == pre.BLOCK, output
+    store, _, _, _ = cli.open_services(_isolate_state)
+    store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+    store.close()
+
+  alternate = remote_template.replace("{branch}", "feature/cadence")
+  code, output = _run(
+    "pre",
+    "-l",
+    alternate,
+    "-c",
+    alternate.removeprefix(launcher),
+    "-s",
+    "bash",
+  )
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  for changed in (
+    snapshot.replace("read-tree HEAD", "read-tree HEAD; printf injected"),
+    snapshot_template.replace("{base}", "deadbeef"),
+    remote.replace("update by push", "update by insert"),
+    remote.replace("arena/topic", "other/topic", 1),
+    remote_template.replace("{branch}", "topic'; printf injected; '"),
+    remote_template.replace("{branch}", "topic$(printf injected)"),
+    remote_template.replace("{branch}", "topic\nprintf injected"),
+  ):
+    code, output = _run(
+      "pre",
+      "-l",
+      changed,
+      "-c",
+      changed.removeprefix(launcher),
+      "-s",
+      "bash",
+    )
+    assert code == pre.BLOCK, output
+
+
 @pytest.mark.parametrize(
   ("line", "command"),
   (
@@ -741,6 +834,11 @@ def test_checkout_directory_validator_requires_one_confined_template(
   assert code == pre.CONTINUE, output
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
+  direct_line, direct_command = script(root, root / "AGENTS.md")
+  code, output = _run("pre", "-l", direct_line, "-c", direct_command, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
   quoted, quoted_command = script(
     root, root / "tests" / "x' && echo unsafe; #" / "target.py"
   )
@@ -759,8 +857,10 @@ def test_checkout_directory_validator_requires_one_confined_template(
     store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
     store.close()
 
+  root_line, root_command = script(root, root)
   for altered, current in (
     (line.replace(" && [ ! -d ", " || [ ! -d ", 1), command),
+    (root_line, root_command),
     (line.replace("printf 'OK\\n'", "printf 'NO\\n'"), command),
     (external, external_command),
     (line, "[ -e '/elsewhere' ]"),

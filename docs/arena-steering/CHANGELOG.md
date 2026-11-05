@@ -14,6 +14,8 @@ This log has no Unreleased section.
 
 - `pre.py`: Allow quoted multiline ACK text and an initial ACK step in mixed shell lines. Recheck pending blockers before later commands without changing Bash counts or push guards.
 
+- `pre.py`, `test_pre.py`: Normalize pinned process-probe stderr redirects, accept native read `None` ranges and direct-child checkout checks, and recognize exact snapshot and remote-health shells. Keep altered templates and later commands gated.
+
 ## [2.2.1]
 
 ### Added
