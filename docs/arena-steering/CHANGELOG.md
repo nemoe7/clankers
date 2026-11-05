@@ -10,6 +10,10 @@ This log has no Unreleased section.
 
 - `SKILL.md`: Use self-identifying field labels so acknowledgements linked to tasks produce meaningful details without reopening the report.
 
+### Fixed
+
+- `pre.py`: Allow quoted multiline ACK text and an initial ACK step in mixed shell lines. Recheck pending blockers before later commands without changing Bash counts or push guards.
+
 ## [2.2.1]
 
 ### Added

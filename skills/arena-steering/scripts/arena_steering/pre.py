@@ -391,7 +391,7 @@ class PreContext:
     )
 
   def is_inbox_recovery(self) -> bool:
-    """Allow an inbox-only line to clear the gate, including a piped ACK."""
+    """Allow inbox-only lines and a current initial ACK step."""
     if (
       self.line
       and self.command
@@ -399,28 +399,64 @@ class PreContext:
       and LOGIN_ACK_WRAPPER.fullmatch(self.command.strip())
     ):
       return True
+
+    def verb(words: list[str]) -> str:
+      if len(words) < 2 or Path(words[0]).name != "steer":
+        return ""
+      return words[1] if words[1] in {"read", "poll", "ack"} else ""
+
+    def has_redirection(text: str) -> bool:
+      lexer = shlex.shlex(text, posix=False, punctuation_chars="<>")
+      lexer.whitespace_split = True
+      lexer.commenters = ""
+      try:
+        words = list(lexer)
+      except ValueError:
+        return True
+      return any(word and all(char in "<>" for char in word) for word in words)
+
     text = shell_line(self.line or self.command)
-    if "\n" in text:
+    pieces = self.pieces()
+    if not pieces:
       return False
-    lexer = shlex.shlex(text, posix=True, punctuation_chars="|;&<>()")
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    try:
-      words = list(lexer)
-    except ValueError:
-      return False
-    if len(words) < 2 or Path(words[0]).name != "steer":
-      return False
-    if words[1] not in {"read", "poll", "ack"}:
-      return False
-    punctuation = [
-      word for word in words[2:] if word and all(c in "|;&<>()" for c in word)
-    ]
-    if not punctuation:
-      return True
-    if words[1] != "ack" or punctuation != ["|"]:
-      return False
-    return not (self.is_push() or PreContext(line=self.command).is_push())
+    first_verb = verb(pieces[0][0])
+    current = PreContext(line=self.command).pieces() if self.command else []
+    if (
+      len(pieces) > 1
+      and first_verb == "ack"
+      and pieces[0][1] in {";", "&&", "||", "\n"}
+      and len(current) == 1
+      and current[0][1] == ";"
+      and current[0][0] == pieces[0][0]
+    ):
+      return not has_redirection(shell_line(self.command))
+    if "\n" not in text:
+      lexer = shlex.shlex(text, posix=True, punctuation_chars="|;&<>()")
+      lexer.whitespace_split = True
+      lexer.commenters = ""
+      try:
+        words = list(lexer)
+      except ValueError:
+        return False
+      if not verb(words):
+        return False
+      punctuation = [
+        word for word in words[2:] if word and all(c in "|;&<>()" for c in word)
+      ]
+      if not punctuation:
+        return True
+      if words[1] != "ack" or punctuation != ["|"]:
+        return False
+      return not (self.is_push() or PreContext(line=self.command).is_push())
+    if len(pieces) == 1 and pieces[0][1] == ";":
+      return bool(first_verb)
+    return bool(
+      len(pieces) == 2
+      and pieces[0][1] == "|"
+      and pieces[1][1] == ";"
+      and first_verb == "ack"
+      and not (self.is_push() or PreContext(line=self.command).is_push())
+    )
 
   def blocked_part(self) -> str:
     """Name the last simple command of a chained line."""
@@ -908,6 +944,8 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
+    if ctx.is_inbox_recovery():
+      return False
     if ctx.pending_ids and ctx.is_push():
       return True
     if ctx.is_arena_maintenance():

@@ -2523,6 +2523,8 @@ def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
     "steer ack ab1234 Done; git push",
     "steer ack ab1234 Done | git push",
     "steer ack ab1234 Done | git -C /workspace push origin topic",
+    "steer read > log",
+    "steer ack ab1234 Done > log",
   ):
     ctx = pre.PreContext(
       line=line,
@@ -2532,6 +2534,100 @@ def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
       call_count=pre.GATE_THRESHOLD,
     )
     assert _verdict(ctx) == pre.BLOCK, line
+
+
+@pytest.mark.parametrize(
+  ("line", "command", "expected"),
+  (
+    (
+      "steer ack ab1234 'first\n> second'",
+      "steer ack ab1234 'first\n> second'",
+      pre.CONTINUE,
+    ),
+    (
+      "steer ack ab1234 'first\n> second'; printf later",
+      "steer ack ab1234 'first\n> second'",
+      pre.CONTINUE,
+    ),
+    (
+      "steer ack ab1234 'a > b'; printf later",
+      "steer ack ab1234 'a > b'",
+      pre.CONTINUE,
+    ),
+    (
+      "printf before; steer ack ab1234 Done; printf later",
+      "steer ack ab1234 Done",
+      pre.BLOCK,
+    ),
+    (
+      "steer ack ab1234 Done | tee log; printf later",
+      "steer ack ab1234 Done",
+      pre.BLOCK,
+    ),
+    (
+      "steer ack ab1234 Done > log; printf later",
+      "steer ack ab1234 Done > log",
+      pre.BLOCK,
+    ),
+    ("steer read; printf later", "steer read", pre.BLOCK),
+    (
+      "steer ack ab1234 Done; git push --dry-run",
+      "steer ack ab1234 Done",
+      pre.CONTINUE,
+    ),
+    (
+      "steer ack ab1234 Done; git push --dry-run",
+      "git push --dry-run",
+      pre.BLOCK,
+    ),
+  ),
+)
+def test_gate_classifies_current_ack_step(
+  line: str, command: str, expected: int
+) -> None:
+  ctx = pre.PreContext(
+    line=line,
+    command=command,
+    shell="bash",
+    pending_ids=["ab1234"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert _verdict(ctx) == expected
+
+
+def test_cleared_initial_ack_allows_later_push() -> None:
+  line = "steer ack ab1234 Done; git push --dry-run"
+  ctx = pre.PreContext(
+    line=line,
+    command="git push --dry-run",
+    shell="bash",
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert _verdict(ctx) == pre.CONTINUE
+
+
+@pytest.mark.parametrize("blocker_count", [1, 2])
+def test_initial_ack_rechecks_pending_state_and_counts(
+  _isolate_state: Path, blocker_count: int
+) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  for index in range(blocker_count):
+    messages.send_message("Blocker", msg_id=f"ab003{index + 1}", blocking=True)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+
+  ack = "steer ack ab0031 'first\nsecond'"
+  line = f"{ack}; printf later"
+  code, _ = _run("pre", "-l", line, "-c", ack, "-s", "bash")
+  assert code == pre.CONTINUE
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  assert _run("ack", "ab0031", "first\nsecond")[0] == 0
+
+  code, _ = _run("pre", "-l", line, "-c", "printf later", "-s", "bash")
+  expected = pre.CONTINUE if blocker_count == 1 else pre.BLOCK
+  assert code == expected
+  expected_count = "0" if blocker_count == 1 else str(pre.GATE_THRESHOLD + 1)
+  assert _count(_isolate_state) == expected_count
 
 
 def test_new_blocker_still_blocks_push_after_gate_step_done() -> None:
