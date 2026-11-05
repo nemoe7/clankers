@@ -212,6 +212,7 @@ class SteeringApp:
     self.tasks = TaskService(
       store,
       store,
+      messages=store,
       gates=FileGateStatus(state_dir) if state_dir is not None else None,
       clean_tree_verifier=tree_check,
       on_dirty_finish=self.messages.flag_dirty_finish
@@ -1164,7 +1165,7 @@ class SteeringApp:
       str(body.get("id", "")),
       str(body.get("title", "")),
       size=body.get("size"),
-      priority=body.get("priority", "P3"),
+      priority=body.get("priority"),
       type=str(body.get("type", "code")),
       types=body.get("types"),
       status=str(body.get("status", "upcoming")),

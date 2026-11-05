@@ -22,6 +22,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `cli.py`, `models.py`, `services.py`, `store.py`, `server.py`: Default tasks to P4 and promote linked attachments to P3. Add home-relative path details while retaining explicit priority overrides.
+
 - `SKILL.md`: Read attached images before acknowledgment, report missing bytes, and limit complete text reads to 4 KiB.
 
 - `SKILL.md`: Omit the task-priority flag unless the user states a priority.

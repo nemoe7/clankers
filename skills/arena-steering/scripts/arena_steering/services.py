@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from functools import wraps
+from pathlib import Path
 from typing import Any
 
 from . import pre as pre_mod
@@ -657,9 +658,11 @@ class TaskService:
     commit_verifier: Callable[[str], str] | None = None,
     clean_tree_verifier: Callable[[], None] | None = None,
     on_dirty_finish: Callable[[], None] | None = None,
+    messages: MessageRepository | None = None,
   ) -> None:
     self._tasks = tasks
     self._reports = reports
+    self._messages = messages
     self._clock = clock or UtcClock()
     self._gates = gates
     self._clean_tree_verifier = clean_tree_verifier
@@ -743,7 +746,7 @@ class TaskService:
     title: str,
     *,
     size: int,
-    priority: str = "P3",
+    priority: str | None = None,
     type: str = "code",
     types: list[str] | None = None,
     status: str = "upcoming",
@@ -765,7 +768,8 @@ class TaskService:
       id=task_id,
       title=title,
       size=size,
-      priority=priority,
+      priority="P4" if priority is None else priority,
+      priority_explicit=priority is not None,
       insertion_order=self._tasks.next_task_insertion_order(),
       type=type,
       types=types,
@@ -780,6 +784,7 @@ class TaskService:
       gate_names=list(gate_names) if gate_names is not None else None,
       modified_at=now,
     )
+    task = self._with_message_attachments(task, task.msg_ids)
     self._validate_details(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
@@ -792,6 +797,29 @@ class TaskService:
     data.update(changes)
     data["modified_at"] = self._clock.now_iso()
     return Task.from_dict(data)
+
+  def _with_message_attachments(self, task: Task, msg_ids: list[str]) -> Task:
+    if self._messages is None:
+      return task
+    details = list(task.details)
+    attached = False
+    for msg_id in msg_ids:
+      message = self._messages.get_message(msg_id)
+      if message is None or message.type != "message":
+        continue
+      for attachment in message.attachments:
+        attached = True
+        path = home_relative(Path(attachment.path).expanduser())
+        if path not in details:
+          details.append(path)
+    if not attached:
+      return task
+    priority = task.priority
+    if not task.priority_explicit and int(priority[1:]) > 3:
+      priority = "P3"
+    if details == task.details and priority == task.priority:
+      return task
+    return self._copy_task(task, details=details, priority=priority)
 
   def _complete_phase(
     self, task: Task, queue: list[Task], commit_hash: str | None = None
@@ -1006,6 +1034,8 @@ class TaskService:
         "gate_names": gate_names,
       },
     )
+    added_msg_ids = [msg_id for msg_id in msg_ids if msg_id not in target.msg_ids]
+    updated = self._with_message_attachments(updated, added_msg_ids)
     self._validate_deps_exist(updated, queue)
     self._replace_in_queue(queue, updated)
     return updated
@@ -1092,6 +1122,8 @@ class TaskService:
     """Apply validated updates and derive queue rank from priority and size."""
     if "position" in changes or "insertion_order" in changes:
       raise ValueError("Task position and insertion_order are not manually editable")
+    if "priority_explicit" in changes:
+      raise ValueError("Task priority provenance is not manually editable")
     queue, target = self._load_queue_and_target(task_id)
     if any(
       key in changes
@@ -1162,9 +1194,14 @@ class TaskService:
       scope=str(changes.get("scope", target.scope)),
       details=list(changes.get("details", target.details)),
       priority=changes.get("priority", target.priority),
+      priority_explicit=target.priority_explicit or "priority" in changes,
       size=changes.get("size", target.size),
       links=merged_links,
     )
+    added_msg_ids = [
+      msg_id for msg_id in updated.msg_ids if msg_id not in target.msg_ids
+    ]
+    updated = self._with_message_attachments(updated, added_msg_ids)
     self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     if finishing:

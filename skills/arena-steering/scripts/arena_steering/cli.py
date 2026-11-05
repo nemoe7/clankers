@@ -74,6 +74,7 @@ def open_services(
   tasks = TaskService(
     store,
     store,
+    messages=store,
     gates=FileGateStatus(state_dir),
     clean_tree_verifier=tree_check,
     on_dirty_finish=messages.flag_dirty_finish if tree_check is not None else None,
@@ -125,7 +126,7 @@ def main(
   ack_p.add_argument("parts", nargs="+", help="[<id> ...] <markdown>")
   ack_p.add_argument("-i", "--id", dest="task_id", default=None)
   ack_p.add_argument("-t", "--title", dest="task_title", default=None)
-  ack_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES, default="P3")
+  ack_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES)
   ack_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES)
   ack_p.add_argument("-T", "--type", dest="task_types", action="append", default=[])
   ack_p.add_argument("-S", "--scope", dest="task_scope", default="")
@@ -574,7 +575,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     new_p = argparse.ArgumentParser(prog="steer task new")
     new_p.add_argument("id")
     new_p.add_argument("title")
-    new_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES, default="P3")
+    new_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES)
     new_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES, required=True)
     new_p.add_argument("-T", "--type", dest="types", action="append", default=[])
     new_p.add_argument("-s", "--status", default="upcoming")

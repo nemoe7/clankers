@@ -122,7 +122,8 @@ class SqliteStore:
 
         CREATE TABLE IF NOT EXISTS tasks (
           position INTEGER NOT NULL,
-          priority TEXT NOT NULL DEFAULT 'P3' CHECK (priority IN ('P1','P2','P3','P4','P5')),
+          priority TEXT NOT NULL DEFAULT 'P4' CHECK (priority IN ('P1','P2','P3','P4','P5')),
+          priority_explicit INTEGER NOT NULL DEFAULT 0 CHECK (priority_explicit IN (0,1)),
           size INTEGER NOT NULL CHECK (size IN (1,2,3,5,8,13,21,34)),
           insertion_order INTEGER NOT NULL CHECK (insertion_order >= 0),
           id TEXT PRIMARY KEY,
@@ -253,6 +254,14 @@ class SqliteStore:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'P3' "
           "CHECK (priority IN ('P1','P2','P3','P4','P5'))"
+        )
+      if "priority_explicit" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN priority_explicit INTEGER NOT NULL DEFAULT 0 "
+          "CHECK (priority_explicit IN (0,1))"
+        )
+        self._conn.execute(
+          "UPDATE tasks SET priority_explicit = 1 WHERE priority != 'P3'"
         )
       if "size" not in task_cols:
         # Existing work needs individual estimates. Never guess a legacy size.
@@ -832,14 +841,15 @@ class SqliteStore:
         self._conn.execute(
           """
           INSERT INTO tasks (
-            position, priority, size, insertion_order, id, title, type, types_json,
-            phase_index, phase_evidence_json, status, scope, details_json, links_json,
-            msg_ids_json, report_ids_json, deps_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            position, priority, priority_explicit, size, insertion_order, id, title, type,
+            types_json, phase_index, phase_evidence_json, status, scope, details_json,
+            links_json, msg_ids_json, report_ids_json, deps_json, modified_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
             task.priority,
+            int(task.priority_explicit),
             task.size,
             task.insertion_order,
             task.id,
@@ -1178,6 +1188,12 @@ class SqliteStore:
               or data["priority"] not in TASK_PRIORITIES
             ):
               raise ValueError(f"Invalid Task.priority: {data['priority']!r}")
+            if "priority_explicit" in data and data["priority_explicit"] not in (0, 1):
+              raise ValueError(
+                f"Invalid Task.priority_explicit: {data['priority_explicit']!r}"
+              )
+            if "priority" in data and "priority_explicit" not in data:
+              data["priority_explicit"] = int(data["priority"] != "P3")
             if "size" in data and (
               not isinstance(data["size"], int)
               or isinstance(data["size"], bool)
@@ -1374,6 +1390,9 @@ class SqliteStore:
       "scope": str(row["scope"]),
       "details": [str(item) for item in json.loads(row["details_json"] or "[]")],
       "priority": row["priority"],
+      "priority_explicit": bool(row["priority_explicit"])
+      if "priority_explicit" in keys
+      else row["priority"] != "P3",
       "size": row["size"],
       "insertion_order": row["insertion_order"],
       "allow_long_details": True,

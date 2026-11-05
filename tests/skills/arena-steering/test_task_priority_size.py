@@ -162,7 +162,7 @@ def test_api_requires_size_and_rejects_position_mutation() -> None:
   )
   status, payload = app.dispatch("POST", "/tasks", {**body, "size": 5})
   assert status == HTTPStatus.CREATED
-  assert (payload["task"]["priority"], payload["task"]["size"]) == ("P3", 5)
+  assert (payload["task"]["priority"], payload["task"]["size"]) == ("P4", 5)
   assert (
     app.dispatch("PATCH", "/tasks/build", {"position": 0})[0] == HTTPStatus.BAD_REQUEST
   )
@@ -262,7 +262,7 @@ def test_state_import_rejects_missing_estimate_but_preserves_it_on_old_peer_edit
   document = source.export_rows()
   target = SqliteStore(":memory:")
   old_row = dict(document["tasks"][0])
-  for field in ("size", "priority", "insertion_order"):
+  for field in ("size", "priority", "priority_explicit", "insertion_order"):
     old_row.pop(field)
   with pytest.raises(ValueError, match="size"):
     target.merge_rows({"tasks": [old_row]})
@@ -276,8 +276,14 @@ def test_state_import_rejects_missing_estimate_but_preserves_it_on_old_peer_edit
   target.merge_rows({"tasks": [old_row]})
   after = target.get_task("work")
   assert after is not None
-  assert (after.priority, after.size, after.insertion_order) == (
+  assert (
+    after.priority,
+    after.priority_explicit,
+    after.size,
+    after.insertion_order,
+  ) == (
     before.priority,
+    before.priority_explicit,
     before.size,
     before.insertion_order,
   )

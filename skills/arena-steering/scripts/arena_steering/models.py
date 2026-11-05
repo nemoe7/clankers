@@ -319,6 +319,7 @@ class Task:
   details: list[str]
   links: dict[str, list[str]]
   priority: str
+  priority_explicit: bool
   size: int
   insertion_order: int | None
   modified_at: str
@@ -334,7 +335,8 @@ class Task:
     links: dict[str, list[str]] | None = None,
     *,
     size: int,
-    priority: str = "P3",
+    priority: str = "P4",
+    priority_explicit: bool = False,
     insertion_order: int | None = None,
     types: list[str] | None = None,
     phase_index: int | None = None,
@@ -354,6 +356,8 @@ class Task:
     self.title = title.strip()
     if priority not in TASK_PRIORITIES or not isinstance(priority, str):
       raise ValueError(f"Invalid Task.priority (P1–P5): {priority!r}")
+    if not isinstance(priority_explicit, bool):
+      raise TypeError(f"Invalid Task.priority_explicit: {priority_explicit!r}")
     if not isinstance(size, int) or isinstance(size, bool) or size not in TASK_SIZES:
       raise ValueError(
         f"Invalid Task.size (Fibonacci 1, 2, 3, 5, 8, 13, 21, 34): {size!r}"
@@ -365,6 +369,7 @@ class Task:
     ):
       raise ValueError(f"Invalid Task.insertion_order: {insertion_order!r}")
     self.priority = priority
+    self.priority_explicit = priority_explicit
     self.size = size
     self.insertion_order = insertion_order
     if type not in TASK_TYPES:
@@ -510,6 +515,7 @@ class Task:
       "scope": self.scope,
       "details": list(self.details),
       "priority": self.priority,
+      "priority_explicit": self.priority_explicit,
       "size": self.size,
       "insertion_order": self.insertion_order,
       "links": {
@@ -538,6 +544,9 @@ class Task:
       scope=str(data.get("scope", "")),
       details=[str(item) for item in data.get("details", [])],
       priority=data.get("priority", "P3"),
+      priority_explicit=data.get(
+        "priority_explicit", data.get("priority", "P3") != "P3"
+      ),
       size=data.get("size"),
       insertion_order=data.get("insertion_order"),
       links=raw_links if isinstance(raw_links, dict) else None,
