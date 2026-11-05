@@ -1170,6 +1170,16 @@ def _run_pre(
   )
   if pending_ids and countable:
     _bump_call_count(store)
+  if not routed and not ctx.is_inbox_recovery():
+    tool_name = pre_mod.native_tool_name(
+      ctx.line, ctx.command, ctx.shell, checkout_root=ctx.checkout_root
+    )
+    if tool_name:
+      try:
+        messages.record_tool(tool_name)
+      except (OSError, sqlite3.Error):
+        # Cadence is advisory and must not change the shell verdict.
+        pass
   if result.route is not None:
     routed_verdict = _run_pre_route(
       result.route, parsed.line or parsed.command_text, store, out

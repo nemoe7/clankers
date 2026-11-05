@@ -354,6 +354,34 @@ def arena_maintenance_step(
   return False
 
 
+def native_tool_name(
+  line: str, command: str, shell: str, *, checkout_root: Path | None = None
+) -> str:
+  """Name the current agent tool, or return an empty string for platform-only steps."""
+  if shell not in SHELL_NAMES or not command.strip():
+    return ""
+  current = shell_line(command).strip()
+  if not current:
+    return ""
+  launcher = "/bin/bash -l -c "
+  if _isolated_reader(launcher + current, current):
+    return "read"
+  if not any(operator in current for operator in (";", "|", "&", "\n", "`", "$(")):
+    try:
+      words = shlex.split(current)
+    except ValueError:
+      words = []
+    if (
+      len(words) >= 2
+      and Path(words[0]).name == "arena-workspace"
+      and words[1] in ARENA_WORKSPACE_VERBS
+    ):
+      return words[1]
+  if arena_maintenance_step(line, command, checkout_root=checkout_root):
+    return ""
+  return "bash"
+
+
 @dataclass
 class PreContext:
   """Everything a step may read for one shell line."""

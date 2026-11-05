@@ -645,6 +645,79 @@ def test_native_mkdir_shape_changes_still_spend_inbox_budget(
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD + 1)
 
 
+def test_pre_records_native_tool_cadence_only_for_agent_tools(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+
+  def activity() -> tuple[str | None, str | None, str | None]:
+    store, _, _, _ = cli.open_services(_isolate_state)
+    values = (
+      store.get_meta("last_tool_name"),
+      store.get_meta("last_tool_at"),
+      store.get_meta(pre.CALL_COUNT_META),
+    )
+    store.close()
+    return values
+
+  def run(line: str, command: str) -> None:
+    code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+    assert code == pre.CONTINUE, output
+
+  run("printf one", "printf one")
+  name, stamp, count = activity()
+  assert name == "bash"
+  assert stamp
+  assert count == "1"
+
+  for verb in ("read", "edit", "write"):
+    line = f"/bin/bash -l -c arena-workspace {verb} /home/user/project/file"
+    run(line, line.removeprefix("/bin/bash -l -c "))
+    name, _, count = activity()
+    assert name == verb
+    assert count == "1"
+
+  launcher = "/bin/bash -l -c "
+  reader = (
+    Path(__file__)
+    .with_name("reader_tool_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+    .replace(
+      'path = "/checkout/target.txt"',
+      f"path = {json.dumps(str(pre.repo_root() / 'README.md'))}",
+    )
+    .replace("offset = 1", "offset = None")
+    .replace("limit = 10000", "limit = None")
+  )
+  run(reader, reader.removeprefix(launcher))
+  name, _, count = activity()
+  assert name == "read"
+  assert count == "1"
+
+  run("printf two", "printf two")
+  name, _, count = activity()
+  assert name == "bash"
+  assert count == "2"
+
+  fixed_stamp = "2000-01-01T00:00:00Z"
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta("last_tool_at", fixed_stamp)
+  store.close()
+  process_probe = (
+    Path(__file__)
+    .with_name("process_probe_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+    .removeprefix(launcher)
+  )
+  run(process_probe, 'cat "$dir/pid" 2> /dev/null')
+  assert activity() == ("bash", fixed_stamp, "2")
+
+  run("steer read", "steer read")
+  assert activity() == ("bash", fixed_stamp, "2")
+
+
 def test_pinned_platform_shells_allow_only_pinned_variables(
   _isolate_state: Path,
 ) -> None:

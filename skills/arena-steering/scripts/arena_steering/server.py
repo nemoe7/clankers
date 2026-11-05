@@ -722,6 +722,8 @@ class SteeringApp:
         "polling_since": self.store.get_meta("polling_since") if polling else None,
         "agent_seen_at": self.store.get_meta("agent_seen_at") or None,
         "turn_ended_at": self.store.get_meta("turn_ended_at") or None,
+        "last_tool": self.messages.tool_activity(),
+        "calls_since_message": self.messages.calls_since_message(),
       },
     )
 

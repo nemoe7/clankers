@@ -1231,6 +1231,70 @@ assert.match(container.innerHTML, /linked-task/);
   assert result.returncode == 0, result.stderr
 
 
+def test_messages_status_shows_native_tool_cadence() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+import { renderMessagesView } from './skills/arena-steering/assets/messages-view.js';
+globalThis.document = { activeElement: null };
+const container = {
+  innerHTML: '',
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+  addEventListener() {},
+};
+const at = new Date(Date.now() - 3000).toISOString();
+function render(lastTool, callsSinceMessage, survey = {}) {
+  container.innerHTML = '';
+  renderMessagesView(container, {
+    messages: [], tasks: [], survey, lastTool, callsSinceMessage,
+  }, {});
+  return container.innerHTML;
+}
+let html = render({ tool: 'read', at }, 4);
+assert.match(html, /<p id="last-check" class="muted">Read <time/);
+assert.doesNotMatch(html, /Read 4/);
+assert.match(html, /data-include-seconds="true"/);
+assert.match(html, /data-compact="true"/);
+for (const [tool, label] of [['edit', 'Edit'], ['write', 'Write']]) {
+  html = render({ tool, at }, 3);
+  assert.match(html, new RegExp(`<p id="last-check" class="muted">${label} <time`));
+  assert.doesNotMatch(html, new RegExp(`${label} 3`));
+}
+html = render({ tool: 'bash', at }, 2);
+assert.match(html, /<p id="last-check" class="muted">Bash 2 <time/);
+html = render({ tool: 'bash', at }, 0);
+assert.match(html, /<p id="last-check" class="muted">Bash <time/);
+assert.doesNotMatch(html, /Bash 0/);
+html = render(null, 0, { checked_at: at });
+assert.match(html, /<p id="last-check" class="muted">Checked <time/);
+html = render(null, 0);
+assert.match(html, /<p id="last-check" class="muted"><\/p>/);
+assert.doesNotMatch(html, /Live steering active/);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert "health.last_tool" in app_js
+  assert "health.calls_since_message" in app_js
+  signature = app_js.partition("const nextSignature = JSON.stringify({")[2].partition(
+    "});"
+  )[0]
+  assert "lastTool," in signature
+  assert "callsSinceMessage," in signature
+  state_update = app_js.partition("lastDataSignature = nextSignature;")[2].partition(
+    "});"
+  )[0]
+  assert "lastTool," in state_update
+  assert "callsSinceMessage," in state_update
+
+
 def test_message_receipts_show_sent_and_seen_and_name_acked_state() -> None:
   script = r"""
 import assert from 'node:assert/strict';

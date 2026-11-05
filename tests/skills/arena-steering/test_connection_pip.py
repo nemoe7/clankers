@@ -21,6 +21,24 @@ def _stamp(seconds_ago: float = 0) -> str:
   return (datetime.now(UTC) - timedelta(seconds=seconds_ago)).isoformat()
 
 
+def test_health_exposes_native_tool_cadence(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  try:
+    store.set_meta("last_tool_name", "bash")
+    store.set_meta("last_tool_at", "2026-01-01T00:00:03Z")
+    store.set_meta("pre_call_count", "4")
+    status, health = app.dispatch("GET", "/health")
+    assert status == 200
+    assert health["last_tool"] == {
+      "tool": "bash",
+      "at": "2026-01-01T00:00:03Z",
+    }
+    assert health["calls_since_message"] == 4
+  finally:
+    store.close()
+
+
 def test_poll_heartbeat_and_wake_across_store_connections(tmp_path: Path) -> None:
   db = tmp_path / "state.sqlite3"
   polling_store = SqliteStore(db)

@@ -445,6 +445,8 @@ async function refreshAll(force = false) {
     const tasks = taskRes.tasks || [];
     const reportSummaries = repRes.reports || [];
     const survey = health.survey || {};
+    const lastTool = health.last_tool || null;
+    const callsSinceMessage = Number(health.calls_since_message || 0);
     trackMessageAcks(messages.filter((msg) => curState.showHidden || !msg.hidden));
     const selectedReportId =
       curState.selectedReportId &&
@@ -464,6 +466,8 @@ async function refreshAll(force = false) {
       tasks,
       reports,
       survey,
+      lastTool,
+      callsSinceMessage,
       selectedReportId,
       replyParentRefs,
       showHidden: Boolean(curState.showHidden),
@@ -476,6 +480,8 @@ async function refreshAll(force = false) {
       tasks,
       reports,
       survey,
+      lastTool,
+      callsSinceMessage,
       selectedReportId,
       replyParentRefs,
     });
