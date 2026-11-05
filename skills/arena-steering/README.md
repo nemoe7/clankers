@@ -333,7 +333,7 @@ The server rejects paths that escape the relevant static directory. The v2 asset
 
 ## v1 and v2 parity
 
-V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table describes the current repo implementations, not identical interfaces.
+V1 is archived at [`arena-skill`](../../docs/archive/arena-skill/SKILL.md). V2 is this skill. This table describes the current repo implementations, not identical interfaces.
 
 | Area | v1 | v2 | Parity |
 | --- | --- | --- | --- |
@@ -359,7 +359,7 @@ V1 is [`arena-skill`](../arena-skill/SKILL.md). V2 is this skill. This table des
 | Appearance and navigation | Theme control, tab state, mobile navigation, and pinch zoom | Responsive tabs and image viewer with touch pinch, wheel zoom, and drag | No v1 theme control. |
 | Proxy and external channel | Separate egress proxy routes and an opt-in external-channel recipe | No egress proxy or external-channel recipe | Separate from the browser steering server. |
 
-V2 rewrites CLI and state formats. Use isolated state, not a v1 database. See [v1 commands](../arena-skill/references/commands.md), [v1 reports](../arena-skill/references/reports.md), and v2 source/tests for edge cases.
+V2 rewrites CLI and state formats. Use isolated state, not a v1 database. See [v1 commands](../../docs/archive/arena-skill/references/commands.md), [v1 reports](../../docs/archive/arena-skill/references/reports.md), and v2 source/tests for edge cases.
 
 ## Implementation and verification
 

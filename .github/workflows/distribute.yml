@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - "rules/ARENA.md"
-      - "skills/arena-skill/**"
+      - "skills/arena-steering/**"
       - "skills/nuu/**"
       - "skills/nemoizer/**"
       - "github/workflows/gemini-release.yml"
@@ -21,6 +21,10 @@ on:
     inputs:
       repos:
         description: Space-separated owner/repo list for the Arena list
+        required: false
+        default: ""
+      remove_skills:
+        description: Space-separated retired Arena skills to delete in one dispatch
         required: false
         default: ""
       gemini_repos:
@@ -91,5 +95,6 @@ jobs:
       - name: Push Each Target Once
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
+          ARENA_REMOVE_SKILLS: ${{ inputs.remove_skills }}
           TARGETS_JSON: ${{ needs.plan.outputs.targets }}
         run: python3 .github/actions/distribute-sync/plan.py --push

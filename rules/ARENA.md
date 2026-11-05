@@ -181,7 +181,7 @@
 
 ## Workspace
 
-- For Chromium work, use the [recipe](.agents/skills/arena-skill/references/recipes/chromium.md).
+- For Chromium work, use the [recipe](.agents/skills/arena-steering/references/recipes/chromium.md).
 - UI work: verify via screenshots from that pinned Chromium package; read rendered result before counting landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
 - Install repo tooling (deps, venvs) via `arena-preview run start` after the visibility question and before the first `poll` or `read` so the install runs detached without blocking a task; reserve `start_process` for the steering preview and demos/presentations.
 - Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
@@ -207,7 +207,7 @@
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs/remote fonts/stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Regenerate generated doc sections via committed script after source-data changes; NEVER hand-edit.
-- For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-skill/references/handoff.md) with no form fields.
+- For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-steering/references/handoff.md) with no form fields.
 
 ## When in doubt
 

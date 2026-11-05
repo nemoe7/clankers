@@ -2487,6 +2487,14 @@ def test_cli_job_log_falls_back_when_signed_redirect_fails(
   assert "test-token" not in out
 
 
+def test_v2_handoff_template_matches_the_archive() -> None:
+  root = Path(__file__).resolve().parents[3]
+  current = root / "skills/arena-steering/references/handoff.md"
+  archived = root / "docs/archive/arena-skill/references/handoff.md"
+  assert current.read_bytes() == archived.read_bytes()
+  assert "{#" not in current.read_text(encoding="utf-8")
+
+
 def test_direct_job_log_recipe_uses_the_fetchable_url() -> None:
   root = Path(__file__).resolve().parents[3]
   recipe = (root / "skills/arena-steering/references/recipes/job-logs.md").read_text()

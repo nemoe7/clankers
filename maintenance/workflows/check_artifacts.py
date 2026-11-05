@@ -68,7 +68,7 @@ def findings_for(document: dict) -> list[str]:
       findings.append(f"push paths miss {entry}")
   if set(pull.get("paths") or []) != set(PULL_PATHS):
     findings.append(f"pull request paths changed, found {pull.get('paths')}")
-  if not triggers.get("workflow_dispatch"):
+  if "workflow_dispatch" not in triggers:
     findings.append("workflow_dispatch is missing")
 
   jobs = document.get("jobs") or {}

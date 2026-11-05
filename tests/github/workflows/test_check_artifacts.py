@@ -44,6 +44,12 @@ def test_the_command_reports_the_workflow(capsys):
   assert not output.err
 
 
+def test_manual_dispatch_without_inputs_is_valid():
+  document = workflow()
+  document["on"]["workflow_dispatch"] = {}
+  assert findings(document) == []
+
+
 def test_a_push_that_leaves_main_fails():
   document = workflow()
   document["on"]["push"]["branches"] = ["release"]

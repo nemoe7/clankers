@@ -10,12 +10,12 @@
 6. A skill specializes a default. It NEVER weakens an explicit requirement, a convention, or an acceptance criterion.
 7. Keep the skill resources on demand, and keep their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification, with recorded provenance (see Skill rules).
-9. Keep this repository light, with no new CI workflow, dependency manifest, or test scaffolding unless requested (except the approved preview minifier manifest). Review changes directly, and never claim a check that did not run.
+9. Keep this repository light, with no new CI workflow, dependency manifest, or test scaffolding unless requested. Review changes directly, and never claim a check that did not run.
 10. Keep full wording in `rules/refs/` and compressed wording in the live files (see Baselines). On a removal, attempt one squash and keep the lower budget.
 
 ### Arena file
 
-Arena uses the `arena-skill` skill for one Notes / Reports preview. Keep reports and session state ignored and uncommitted. The steering migration reference records former ntfy and local-report-commit workflows, neither an automatic fallback. Preview permanence is not guaranteed.
+Arena uses `arena-steering` for the shared Messages, Reports, and Tasks preview. Keep reports and session state ignored and uncommitted. The steering migration reference records former ntfy and local-report-commit workflows, neither an automatic fallback. Preview permanence is not guaranteed.
 
 Compress wording and sections, not meaning. Keep every negation, condition, command, number, and caveat. Match the generic core in meaning, not byte for byte, except for push, PR, and merge authorization.
 
@@ -27,7 +27,7 @@ Activation is a human step, and delivery is not activation. `.github/workflows/d
 
 Put this exact line in the first message of the session. Put it in the custom-instructions field of the platform: `Read and apply AGENTS.md and ARENA.md at the repository root before your first edit. confirm in one line.` The preamble of the file then requires an Arena agent that reads it to apply it. It also requires an agent that did not receive it in context to open it before the first edit.
 
-After each amendment, run `cp rules/ARENA.md ARENA.md`. `.github/workflows/distribute.yml` pushes the root copy to target repositories. `maintenance/check.py` rejects missing or different root copies.
+Root `ARENA.md` is a symlink to `rules/ARENA.md`. Edit the source file only. `.github/workflows/distribute.yml` pushes that source to target repositories. `maintenance/check.py` rejects a missing or different root target.
 
 ### Emphasis
 
@@ -95,8 +95,7 @@ Core defines Python style (Ruff E4, E7, E9, F), with no managed Ruff dependency.
 ```mermaid
 flowchart TB
   E[edit rules/refs] --> S[squash the live line]
-  S --> M[minify.py --update]
-  M --> C[check.py]
+  S --> C[check.py]
   C --> P[push]
 ```
 
@@ -113,7 +112,7 @@ The checker reports every problem it finds in:
 - A license declaration on every skill that records `metadata.upstream`, and the `LICENSE.txt` file that the declaration points at.
 - The markdownlint scope, recomputed from `.markdownlint-cli2.jsonc` and compared with the counts this repository documents.
 - Refs/live rule parity: identical section headings in the same order, and each live section holding no more rule lines than its refs baseline.
-- The byte identity of the root `ARENA.md` copy and `rules/ARENA.md`.
+- The byte identity of the root `ARENA.md` link target and `rules/ARENA.md`.
 - Tracked Git paths whose names differ only by letter case.
 
 ## Prose lint
@@ -159,28 +158,7 @@ It reads all context pages and selects the latest run for each check and workflo
 
 ## Preview gate hooks
 
-The profile gate and EXIT hook have case labels in `skills/refs/arena-skill/scripts/install.sh` that match the hook tables below.
-
-## Minified assets and scripts
-
-The preview ships minified JavaScript, CSS, HTML, and Python in two distributed copies, including all four `scripts/` files. Edit readable `skills/refs/arena-skill/` sources, never generated copies. Markdown compression is separate.
-
-A dispatch workflow writes the `.agents/skills/arena-skill/` copy in each target repository. `.github/workflows/distribute.yml` carries it, so markdown drift there ends at the next dispatch. Compact Python gives less useful traceback line numbers.
-
-```bash
-npm ci
-python3 -m pip install -r requirements.txt
-python3 maintenance/minify/minify.py            # report drift, write nothing
-python3 maintenance/minify/minify.py --update   # write both distributed copies
-```
-
-`package.json` pins `terser` for JavaScript/CommonJS, `clean-css` for CSS, and `html-minifier-terser` for HTML. Build and CI pin `python-minifier==3.3.0`, not a server dependency. CI uses Python 3.11 for stable output. The script rejects unparseable JavaScript, unbalanced CSS braces, and HTML missing ids or visible words.
-
-Python must compile with the same parsed tree and Python 3.11 syntax. Names, annotations, assertions, and shebangs remain. Ordinary comments and docstrings go, so a shipped script keeps no prose. Help text that a script prints lives in a string constant, not in a docstring.
-
-`check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 -m pytest tests/maintenance/minify/test_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime.
-
-It uses readable assets for exact page assertions, then shipped assets for page assembly. Ruff checks readable Python refs, not generated copies.
+The profile gate and EXIT hook have case labels in `skills/arena-steering/scripts/install.sh` that match the hook tables below.
 
 ## The gate's cases
 

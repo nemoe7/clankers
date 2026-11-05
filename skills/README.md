@@ -4,7 +4,6 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 
 | Skill | Purpose |
 | --- | --- |
-| [arena-skill](arena-skill/SKILL.md) | Steer Arena agents through the shared preview inbox. Publish rendered reports and read privileged data beyond the sandbox through the owner-run proxy backend. |
 | [arena-steering](arena-steering/SKILL.md) | Steer Arena agents through the modular `steer` CLI, dependency task queue, and fielded Markdown reports. |
 | [nuu](nuu/SKILL.md) | Build and revise web pages in a settled house style, from the typed sheet and the annotated examples to the measured result |
 | [nemoizer](nemoizer/SKILL.md) | Replace AI-flavored synonyms with the plain word, from one rotation table and a bundled linter with reviewable ignore markers |
@@ -59,7 +58,7 @@ After setup, ask the agent to name an installed `SKILL.md` and its conditional r
 
 | Skill | When needed |
 | --- | --- |
-| [arena-skill](arena-skill/SKILL.md) | Arena sessions needing mid-turn messages or rendered reports, and reads of a source the sandbox cannot reach |
+| [arena-steering](arena-steering/SKILL.md) | Arena sessions needing mid-turn messages, dependency tasks, or rendered fielded reports |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 
 Skills stand alone, independent of the rule files in [rules/](../rules/).

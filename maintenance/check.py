@@ -56,8 +56,6 @@ EXPECTED_BUDGETS = {
   "rules/COMMIT-SPEC.txt": "o200k_base",
   "system-prompts/NEMOGPT.md": "o200k_base",
   "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
-  "skills/arena-skill/SKILL.md": "o200k_base",
-  "skills/arena-skill/references/reference.md": "o200k_base",
   "skills/nuu/SKILL.md": "o200k_base",
   "skills/nemoizer/SKILL.md": "o200k_base",
   "skills/squash/SKILL.md": "o200k_base",
@@ -69,29 +67,11 @@ EXPECTED_BUDGETS = {
   "gpt-plugins/skills/gpt-question/SKILL.md": "o200k_base",
 }
 
-# This table lists the arena suite except proxies. Minify budgets reject asset and script growth until a table update.
-# Non-clause arena-skill files share one row. This script ignores byte-identical `.agents/skills/` twins.
-EXPECTED_GROUPS = {
-  "skills/arena-skill": (
-    "UTF-8 file size",
-    (
-      "skills/arena-skill/assets/app.js",
-      "skills/arena-skill/assets/index.html",
-      "skills/arena-skill/assets/markdown-it.min.js",
-      "skills/arena-skill/assets/mermaid.min.js",
-      "skills/arena-skill/assets/message-markdown.js",
-      "skills/arena-skill/assets/style.css",
-      "skills/arena-skill/references/survey.json",
-      "skills/arena-skill/scripts/arena-preview",
-      "skills/arena-skill/scripts/install.sh",
-      "skills/arena-skill/scripts/preview.py",
-      "skills/arena-skill/scripts/survey.py",
-    ),
-  ),
-}
+# No grouped asset budgets remain after the v1 archive.
+EXPECTED_GROUPS = {}
 
-# Root `ARENA.md` is the copy `.github/workflows/distribute.yml` pushes to
-# the target repositories, so it must stay byte-identical to its source.
+# Root `ARENA.md` links to the source that distribution pushes to target repos.
+# The byte check still guards the link target and any accidental replacement.
 ROOT_COPIES = ("ARENA.md",)
 
 REFS = RULES / "refs"
@@ -125,7 +105,6 @@ NEMOIZE_DOCS = (
   "docs/userscripts/chatgpt/README.md",
   "maintenance/README.md",
   "skills/README.md",
-  "docs/arena-skill/README.md",
   "docs/nemoizer/README.md",
   "docs/nuu/README.md",
   "docs/squash/README.md",
@@ -137,7 +116,6 @@ NEMOIZE_DOCS = (
   "rules/refs/README.md",
   "docs/gpt-plugins/README.md",
   "docs/CHANGELOG.md",
-  "docs/arena-skill/CHANGELOG.md",
   "docs/nemoizer/CHANGELOG.md",
   "docs/nuu/CHANGELOG.md",
   "docs/squash/CHANGELOG.md",

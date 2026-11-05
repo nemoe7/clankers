@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import check
@@ -74,12 +75,15 @@ def test_lint_count_claims_include_root_agent_guide():
   assert any(document == root for document, _ in check.LINT_COUNT_CLAIMS)
 
 
-def test_arena_budget_includes_survey_runtime():
-  _, files = check.EXPECTED_GROUPS["skills/arena-skill"]
-  assert {
-    "skills/arena-skill/scripts/survey.py",
-    "skills/arena-skill/references/survey.json",
-  } <= set(files)
+def test_grouped_budgets_are_empty_after_v1_archive():
+  assert check.EXPECTED_GROUPS == {}
+
+
+def test_root_arena_symlinks_to_rule_source():
+  root = check.ROOT / "ARENA.md"
+  assert root.is_symlink()
+  assert root.readlink() == Path("rules/ARENA.md")
+  assert root.read_bytes() == (check.RULES / "ARENA.md").read_bytes()
 
 
 def test_core_source_installs_to_agents(tmp_path):
@@ -155,8 +159,6 @@ def test_main_enforces_rotation_findings(monkeypatch, capsys):
 def test_ste_docs_cover_moved_module_docs_and_changelogs():
   expected = {
     "docs/CHANGELOG.md",
-    "docs/arena-skill/README.md",
-    "docs/arena-skill/CHANGELOG.md",
     "docs/nemoizer/README.md",
     "docs/nemoizer/CHANGELOG.md",
     "docs/nuu/README.md",

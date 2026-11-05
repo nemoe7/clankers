@@ -1773,7 +1773,7 @@ function checkTabTitle(api, logging) {
     [liveLabel(null), null],
     [polls("arena-preview poll --max 1"), true],
     [polls("python preview.py poll"), true],
-    [polls("cat skills/arena-skill/README.md | grep polling"), false],
+    [polls("cat skills/arena-steering/README.md | grep polling"), false],
     // Title writes through syncTitle, and line carries row anchors.
     [setPriorTitle("ChatGPT"), undefined],
     [expireHold(), null],
@@ -2960,7 +2960,7 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
   );
   const surveySpec = JSON.parse(
     fs.readFileSync(
-      path.join(__dirname, "../../skills/refs/arena-skill/references/survey.json"),
+      path.join(__dirname, "../../docs/archive/arena-skill/references/survey.json"),
       "utf8",
     ),
   );
