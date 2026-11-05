@@ -14,12 +14,12 @@
 - Before pushing, ALWAYS check `origin/main`; if moved, rebase, then push `--force-with-lease`.
 - ALWAYS push verified commits after each task on public repos; allow small batches (<=3 commits) on private repos.
 - After each push, confirm `git ls-remote origin <branch>` = `git rev-parse HEAD`; report remote landing (subject + short hash). After sandbox reset: fetch, confirm HEAD = remote branch before edits.
-- ALWAYS install `arena-skill` via its installer from repo root before activation, NEVER by hand or background-process tool, even with ntfy/no steering; read inbox at every cadence point.
-- After any arena-skill source change, MUST rerun installer from repo root before next CLI call/preview start.
+- ALWAYS run `steer --version` at every turn start and follow arena-steering's turn-start recipe for installation and server startup; read the inbox at every cadence point.
+- After any arena-steering source change, MUST rerun its installer from the repo root before the next CLI call or preview start.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
-- NEVER edit this file or `arena-skill`, installed copies included; suggest amendments only, unless home repo waives protection.
-- Before first repo inspection, edit, or preview start—and on the first tool call after any session summary or violation notice—MUST read ARENA.md, root AGENTS.md, and arena-skill SKILL.md in full via read_file; read nested AGENTS.md via `arena-preview agents <path>` only when working in their directory; a session summary NEVER counts as full text in context.
+- NEVER edit this file or `arena-steering`, installed copies included; suggest amendments only, unless home repo waives protection.
+- Before first repo inspection, edit, or preview start—and on the first tool call after any session summary or violation notice—MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file; read nested AGENTS.md in full via read_file only when working in their directory; a session summary NEVER counts as full text in context.
 - Give one short receipt for a corrected routine no-impact slip.
 - Suggest amendments only for an identified contributing rule gap.
 - Corrected routine command-input/process slips (e.g. late read) alone are not rule violations.
@@ -39,15 +39,15 @@
 
 - Session start: read bible; next action `10-4: ARENA.md loaded`; install; start preview; ask visibility.
 - Resumed/next turn: check preview (restart if needed); read missing-context paths in the bible; continue open task or poll.
-- Load `arena-skill` for inbox, reports, gate, proxy routes to sandbox-unreachable sources.
-- Bible ("bible" or "the bible", NEVER "bible files" or "required bible files"): ARENA.md, root AGENTS.md, and arena-skill SKILL.md, plus any nested AGENTS.md in a directory you work in (via `arena-preview agents <path>`).
+- Load `arena-steering` for inbox, reports, gates, and GitHub Actions job logs.
+- Bible ("bible" or "the bible", NEVER "bible files" or "required bible files"): ARENA.md, root AGENTS.md, and arena-steering SKILL.md, plus any nested AGENTS.md in a directory you work in (read in full via read_file).
 - MUST read required paths in the bible fully via read tool, NEVER Bash.
 - After mid-turn compaction/summary/context replacement, read missing-context paths in the bible end-to-end before other tools; resumed/next turns use their start sequence.
-- Every 10 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-skill SKILL.md in full via read_file before acting, plus nested AGENTS.md only when working in their directory.
+- Every 6 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file before acting, plus nested AGENTS.md only when working in their directory.
 - NEVER count filename, receipt, summary, remembered rule, or partial read (head/tail/grep) as current full text.
 - MUST batch required bible reads in one call; split only at harness output caps.
 - MUST finish required reads end-to-end (all continuations) before queued work/pending push.
-- Run arena-skill survey immediately after initial visibility response, before first inbox poll, and after a preview restart or compaction/summary/context replacement, before queued work.
+- Run `steer survey` immediately after initial visibility response, before first inbox poll, and after a preview restart or compaction/summary/context replacement, before queued work.
 - Each Markdown file under `references/` is supplementary: read/grep only needed files; no end-to-end read; gate/read-cadence mechanics live in `references/commands.md` and `references/cadence.md`. Installation template copies are supplementary too.
 - In saved context, state the start sequence and full missing-context bible reads before queued work; no verbatim ARENA.md copy required.
 - After bible changes (incl. rebase/`main` update), MUST read full diff from last-read version before next work; unavailable/unclear → read full file.
@@ -165,7 +165,7 @@
 - Follow project convention first; else Conventional Commits: `<type>[optional scope]: <description>`, imperative, specific, lowercase after colon, no period, <=72 chars, no body, `!` = breaking. Types: `feat fix refactor perf style docs test build chore` (prefer history); reuse scopes, add only if none fits.
 - Reports/audits/preview state/inboxes/receipts live in Git-ignored workspace dirs outside transient caches; NEVER commit/push.
 - NEVER cite session-local IDs (note/report/submission/task/session-minted) or local-only paths (ignored state/scratch or sandbox home) in repo files, commits, PRs, task details, or reports; strip on sight; cite CHANGELOG/repo path/commit instead.
-- Longer reports use the `arena-skill` skill, not diff-viewer commits; mark each finding's disposition where it is recorded.
+- All reports use the `arena-steering` skill, not diff-viewer commits; mark each finding's disposition where it is recorded.
 - `GH_TOKEN` can expire mid-turn, repo unchanged: `gh auth status` = invalid, push fails, `gh auth setup-git` won't help.
 - Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; NEVER end silently.
 - Prove recovery with `git ls-remote origin <branch>` before pushing again.
@@ -181,7 +181,7 @@
 
 ## Workspace
 
-- For Chromium work, use the [recipe](.agents/skills/arena-skill/references/recipes/chromium.md).
+- For Chromium work, use the [recipe](.agents/skills/arena-steering/references/recipes/chromium.md).
 - UI work: verify via screenshots from that pinned Chromium package; read rendered result before counting landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
 - Install repo tooling (deps, venvs) via `arena-preview run start` after the visibility question and before the first `poll` or `read` so the install runs detached without blocking a task; reserve `start_process` for the steering preview and demos/presentations.
 - Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
@@ -207,7 +207,7 @@
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs/remote fonts/stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Regenerate generated doc sections via committed script after source-data changes; NEVER hand-edit.
-- For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-skill/references/handoff.md) with no form fields.
+- For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-steering/references/handoff.md) with no form fields.
 
 ## When in doubt
 
