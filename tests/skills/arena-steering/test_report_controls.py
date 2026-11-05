@@ -304,3 +304,121 @@ def test_submit_preserves_label_and_disables_during_request() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  body = (
+    "# Keyboard fade\n\n"
+    + ("A real report needs enough text for scrolling. " * 10 + "\n\n") * 28
+    + '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n'
+  )
+  app.reports.publish_report("keyboard", "Keyboard fade", body)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        for width, height, motion in (
+          (411, 799, "no-preference"),
+          (855, 325, "no-preference"),
+          (1372, 883, "no-preference"),
+          (411, 799, "reduce"),
+        ):
+          page = browser.new_page(
+            viewport={"width": width, "height": height},
+            is_mobile=width < 1200,
+            has_touch=width < 1200,
+            reduced_motion=motion,
+          )
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator("#tab-reports").click()
+          page.locator(".field-text-input").focus()
+          pane = page.locator("#view-reports")
+          pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
+          assert pane.evaluate("el => el.scrollHeight > el.clientHeight * 2")
+          assert pane.evaluate("el => el.scrollTop > 36")
+
+          def fades(page=page):
+            return page.evaluate("""() => {
+              const pane = document.querySelector('#view-reports');
+              const layout = document.querySelector('.reports-layout');
+              return {
+                panel: getComputedStyle(pane, '::after').content,
+                layoutBottom: getComputedStyle(layout, '::after').content,
+                layoutTop: getComputedStyle(layout, '::before').content,
+                topOpacity: getComputedStyle(layout, '::before').opacity,
+                scrollTop: pane.scrollTop,
+                keyboard: document.documentElement.hasAttribute('data-mobile-keyboard-open'),
+                inputFocused: document.activeElement?.classList.contains('field-text-input'),
+              };
+            }""")
+
+          closed = fades()
+          assert closed["inputFocused"], closed
+          assert not closed["keyboard"], closed
+          assert closed["panel"] == ('""' if motion == "no-preference" else "none"), (
+            closed
+          )
+          page.evaluate("""() => {
+            const viewport = window.visualViewport;
+            window.originalVisualHeight = viewport.height;
+            Object.defineProperty(viewport, 'height', {
+              configurable: true, value: viewport.height - 60,
+            });
+            viewport.dispatchEvent(new Event('resize'));
+          }""")
+          assert fades()["panel"] == closed["panel"], fades()
+          page.evaluate(
+            """height => {
+            const viewport = window.visualViewport;
+            Object.defineProperty(viewport, 'height', {
+              configurable: true, value: window.originalVisualHeight - height,
+            });
+            viewport.dispatchEvent(new Event('resize'));
+          }""",
+            min(240, height // 2),
+          )
+          pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
+          opened = fades()
+          assert opened["scrollTop"] > 36, opened
+          assert opened["layoutTop"] == closed["layoutTop"], (closed, opened)
+          if motion == "no-preference":
+            assert float(opened["topOpacity"]) > 0.99, opened
+          if width < 1200 and motion == "no-preference":
+            assert opened["panel"] == "none", opened
+            assert opened["layoutBottom"] == "none", opened
+            assert opened["keyboard"], opened
+          else:
+            assert opened["panel"] == closed["panel"], (closed, opened)
+            if width >= 1200:
+              assert not opened["keyboard"], opened
+          page.evaluate("""() => {
+            delete window.visualViewport.height;
+            window.visualViewport.dispatchEvent(new Event('resize'));
+          }""")
+          pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
+          restored = fades()
+          assert restored["panel"] == closed["panel"], (closed, restored)
+          assert not restored["keyboard"], restored
+          assert restored["scrollTop"] > 36, restored
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
