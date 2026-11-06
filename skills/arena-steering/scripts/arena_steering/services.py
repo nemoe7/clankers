@@ -813,6 +813,8 @@ class TaskService:
       gate_names=list(gate_names) if gate_names is not None else None,
       modified_at=now,
     )
+    if priority is None and "report" in task.types:
+      task.priority = "P3"
     task = self._with_message_attachments(task, task.msg_ids)
     self._validate_details(task)
     queue = self._tasks.list_tasks()

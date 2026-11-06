@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `services.py`, `test_task_priority_size.py`: Default new tasks with a report phase to P3 unless priority is explicit.
+
 - `pre.py`, `test_pre.py`: Exempt selected Steering commands from the pending-inbox count and gate, or from the count only.
 
 - `test_reports_nuu_flows.py`: Move Reports audit fixtures out of the skill references.

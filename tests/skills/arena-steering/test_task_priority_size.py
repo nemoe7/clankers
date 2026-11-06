@@ -29,6 +29,55 @@ def test_task_rejects_invalid_priority(priority: object) -> None:
     Task("work", "Work", size=3, priority=priority)
 
 
+@pytest.mark.parametrize(
+  ("task_type", "types", "priority", "expected"),
+  [
+    ("report", None, None, "P3"),
+    ("code", ["code", "report"], None, "P3"),
+    ("code", ["report", "code"], None, "P3"),
+    ("code", None, None, "P4"),
+    ("report", None, "P5", "P5"),
+    ("report", None, "P1", "P1"),
+  ],
+)
+def test_new_report_phase_priority_default(
+  task_type: str, types: list[str] | None, priority: str | None, expected: str
+) -> None:
+  store = SqliteStore(":memory:")
+  tasks = TaskService(store, store)
+  task = tasks.create_task(
+    "work",
+    "Work",
+    size=1,
+    type=task_type,
+    types=types,
+    priority=priority,
+    details=["Work."],
+  )
+  assert task.priority == expected
+  assert task.priority_explicit is (priority is not None)
+  store.close()
+
+
+def test_report_phase_default_applies_to_task_api() -> None:
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  status, payload = app.dispatch(
+    "POST",
+    "/tasks",
+    {
+      "id": "work",
+      "title": "Work",
+      "size": 1,
+      "types": ["code", "report"],
+      "details": ["Work."],
+    },
+  )
+  assert status == HTTPStatus.CREATED
+  assert payload["task"]["priority"] == "P3"
+  store.close()
+
+
 def test_task_fields_round_trip_and_persist_across_edits_and_reopen(
   tmp_path: Path,
 ) -> None:
