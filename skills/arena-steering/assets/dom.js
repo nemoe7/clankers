@@ -30,6 +30,9 @@ function updateNode(current, next) {
     if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue;
     return;
   }
+  const previousMarkdownKey = current.getAttribute("data-markdown-key");
+  const nextMarkdownKey = next.getAttribute("data-markdown-key");
+  const sameMarkdown = previousMarkdownKey && previousMarkdownKey === nextMarkdownKey;
   const textControl = current instanceof HTMLTextAreaElement ||
     (current instanceof HTMLInputElement && !["checkbox", "radio", "file"].includes(current.type));
   const oldValue = textControl ? current.value : null;
@@ -47,7 +50,10 @@ function updateNode(current, next) {
       current.setAttribute(attribute.name, attribute.value);
     }
   }
-  updateChildren(current, next);
+  if (!sameMarkdown) {
+    if (previousMarkdownKey || nextMarkdownKey) current.replaceChildren(...next.childNodes);
+    else updateChildren(current, next);
+  }
   if (textControl) current.value = wasDirty ? oldValue : next.value;
   if (checkControl) current.checked = checkedWasDirty ? oldChecked : next.checked;
 }
@@ -84,7 +90,7 @@ function updateChildren(current, next) {
   }
 }
 
-export function reconcileView(container, markup) {
+export function reconcileView(container, markup, prepare = null) {
   const doc = container.ownerDocument;
   if (!doc) {
     container.innerHTML = markup;
@@ -92,6 +98,7 @@ export function reconcileView(container, markup) {
   }
   const template = doc.createElement("template");
   template.innerHTML = markup;
+  prepare?.(template.content);
   updateChildren(container, template.content);
 }
 

@@ -762,3 +762,113 @@ def test_survey_old_fetch_does_not_replace_a_reopened_modal() -> None:
     assert (
       page.locator(".survey-modal-content").get_by_text("OLD", exact=True).count() == 0
     )
+
+
+def test_markdown_dom_cache_preserves_nodes_and_invalidates() -> None:
+  with composer_page(1200) as page:
+    result = page.evaluate("""async () => {
+      const { createMarkdownBatch } = await import('/static/assets/markdown-dom-cache.js');
+      const { reconcileView } = await import('/static/assets/dom.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      function render(html, variant = '') {
+        const batch = createMarkdownBatch();
+        const markup = batch.slot(html, 'prose-block', variant);
+        reconcileView(root, markup, node => batch.mount(node));
+        return root.firstElementChild;
+      }
+      const original = render('<p>Hello <strong>world</strong></p>');
+      const strong = original.querySelector('strong');
+      strong.dataset.retained = 'yes';
+      const unchanged = render('<p>Hello <strong>world</strong></p>');
+      const reused = unchanged.querySelector('strong') === strong;
+      const changed = render('<p>Hello <strong>other</strong></p>');
+      const invalidated = changed.querySelector('strong') !== strong && changed.textContent === 'Hello other';
+      const changedStrong = changed.querySelector('strong');
+      const differentOption = render('<p>Hello <strong>other</strong></p>', 'different');
+      const variantInvalidated = differentOption.querySelector('strong') !== changedStrong;
+      const batch = createMarkdownBatch();
+      const large = batch.slot('x'.repeat(32769), 'prose-block');
+      const copies = createMarkdownBatch();
+      const holder = document.createElement('div');
+      holder.innerHTML = copies.slot('<b>independent</b>', 'prose-block') +
+        copies.slot('<b>independent</b>', 'prose-block');
+      copies.mount(holder);
+      holder.firstElementChild.firstElementChild.textContent = 'mutated';
+      const isolated = holder.lastElementChild.textContent === 'independent';
+      const first = createMarkdownBatch().slot('evict-me', 'prose-block');
+      for (let i = 0; i < 128; i++) createMarkdownBatch().slot(`unique-${i}`, 'prose-block');
+      const afterEviction = createMarkdownBatch().slot('evict-me', 'prose-block');
+      root.remove();
+      return { reused, invalidated, variantInvalidated, isolated,
+        evicted: first !== afterEviction, largeBypassed: !large.includes('data-markdown-key') };
+    }""")
+    assert result == {
+      "reused": True,
+      "invalidated": True,
+      "variantInvalidated": True,
+      "isolated": True,
+      "evicted": True,
+      "largeBypassed": True,
+    }
+
+
+def test_markdown_dom_reused_on_message_updates_and_search() -> None:
+  with composer_page(1200) as page:
+    result = page.evaluate("""async () => {
+      const { renderMessagesView } = await import('/static/assets/messages-view.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      const msg = {id: 'abc123', body: 'hello world',
+        body_html: '<p>hello <strong>world</strong></p>', acks: [],
+        status: 'sent', modified_at: '2026-01-01T00:00:00Z'};
+      const state = {messages: [msg], tasks: []};
+      renderMessagesView(root, state, {});
+      const original = root.querySelector('.message-text strong');
+      msg.status = 'seen';
+      renderMessagesView(root, state, {});
+      const retained = root.querySelector('.message-text strong') === original;
+      state.searchQuery = 'world';
+      renderMessagesView(root, state, {});
+      const searchHit = root.querySelector('.message-text mark.search-hit')?.textContent === 'world';
+      state.searchQuery = '';
+      renderMessagesView(root, state, {});
+      const cleared = !root.querySelector('.message-text mark.search-hit');
+      msg.body = 'hello changed'; msg.body_html = '<p>hello <strong>changed</strong></p>';
+      renderMessagesView(root, state, {});
+      const changed = root.querySelector('.message-text strong')?.textContent === 'changed';
+      root.remove();
+      return { retained, searchHit, cleared, changed };
+    }""")
+    assert result == {
+      "retained": True,
+      "searchHit": True,
+      "cleared": True,
+      "changed": True,
+    }
+
+
+def test_markdown_dom_reused_in_report_refresh() -> None:
+  with composer_page(1200) as page:
+    result = page.evaluate("""async () => {
+      const { renderReportsView } = await import('/static/assets/reports-view.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      const report = {id: 'cache-report', title: 'Cache', body: 'hello **world**',
+        fields: [], answers: []};
+      const state = {reports: [report], selectedReportId: report.id};
+      renderReportsView(root, state, {});
+      const original = root.querySelector('.prose-block strong');
+      report.answers.push({id: 'abc123', values: {}, ack: 'reply **ok**'});
+      renderReportsView(root, state, {});
+      const retained = root.querySelector('.prose-block strong') === original;
+      const ack = root.querySelector('.report-ack-markdown strong');
+      renderReportsView(root, state, {});
+      const retainedAck = !!ack && root.querySelector('.report-ack-markdown strong') === ack;
+      report.body = 'hello **changed**';
+      renderReportsView(root, state, {});
+      const changed = root.querySelector('.prose-block strong')?.textContent === 'changed';
+      root.remove();
+      return {retained, retainedAck, changed};
+    }""")
+    assert result == {"retained": True, "retainedAck": True, "changed": True}

@@ -3,6 +3,7 @@
 import { reconcileView } from "./dom.js";
 import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
+import { createMarkdownBatch } from "./markdown-dom-cache.js";
 
 const COPY_SVG = `<svg class="lucide lucide-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`;
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
@@ -220,6 +221,7 @@ export function renderReportsView(container, state, handlers) {
     ? 'disabled aria-busy="true"'
     : "";
   const headings = [];
+  const markdownBatch = createMarkdownBatch();
 
   const answerValues = storedValuesFor(activeReport);
   const draftValues = readDrafts();
@@ -240,9 +242,9 @@ export function renderReportsView(container, state, handlers) {
             headings.push(h);
           }
         }
-        return `<div class="prose-block">${block.html}</div>`;
+        return markdownBatch.slot(block.html, "prose-block");
       }
-      return `<div class="prose-block">${renderMarkdownBlock(block.markdown, { headings })}</div>`;
+      return markdownBatch.slot(renderMarkdownBlock(block.markdown, { headings }), "prose-block");
     })
     .join("");
 
@@ -307,7 +309,7 @@ export function renderReportsView(container, state, handlers) {
           return `
             <div class="${idx > 0 ? "reply-block" : ""}">
               <p><strong>Answer <code class="msg-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> · ${escapeHtml(entries)}</p>
-              ${ans.pending ? `<p class="muted" role="status">Sending answer…</p>` : ans.ack ? ans.ack_html || renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
+              ${ans.pending ? `<p class="muted" role="status">Sending answer…</p>` : ans.ack ? markdownBatch.slot(ans.ack_html || renderMarkdownBlock(ans.ack), "report-ack-markdown") : `<p class="muted">Awaiting agent acknowledgement.</p>`}
             </div>
           `;
         })
@@ -412,7 +414,7 @@ export function renderReportsView(container, state, handlers) {
     container.querySelector("#report-main")?.replaceChildren();
     container.querySelector("#report-ack-history")?.remove();
   }
-  reconcileView(container, markup);
+  reconcileView(container, markup, root => markdownBatch.mount(root));
 
   if (swappedReport) container.scrollTop = 0;
 

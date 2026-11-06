@@ -6,6 +6,7 @@ import {
   renderMarkdownBlock,
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
+import { createMarkdownBatch } from "./markdown-dom-cache.js";
 import { reconcileElement } from "./dom.js";
 import { readComposerDraft, writeComposerDraft } from "./state.js";
 
@@ -206,6 +207,13 @@ function updateHistory(history, nextHistory, signatures) {
     const signature = signatures.get(node.dataset.msgId);
     const old = existing.get(node.dataset.msgId);
     const use = old && renderedMessageSignatures.get(old) === signature ? old : node;
+    if (old && use === node) {
+      const previous = Array.from(old.querySelectorAll("[data-markdown-key]"));
+      for (const next of node.querySelectorAll("[data-markdown-key]")) {
+        const index = previous.findIndex(item => item.dataset.markdownKey === next.dataset.markdownKey);
+        if (index !== -1) next.replaceWith(previous.splice(index, 1)[0]);
+      }
+    }
     renderedMessageSignatures.set(use, signature);
     return use;
   });
@@ -302,6 +310,7 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
+  const markdownBatch = createMarkdownBatch();
   const messageSignatures = new Map();
   const historyHtml = visibleMessages.length
     ? visibleMessages
@@ -315,7 +324,7 @@ export function renderMessagesView(container, state, handlers) {
             ? `<div class="answer reply message-text">${acks
                 .map(
                   (ack, idx) =>
-                    `<div class="${idx > 0 ? "reply-block" : ""}">${acksHtmlList[idx] || renderMarkdownBlock(ack)}</div>`
+                    markdownBatch.slot(acksHtmlList[idx] || renderMarkdownBlock(ack), idx > 0 ? "reply-block" : "", query)
                 )
                 .join("")}</div>`
             : "";
@@ -363,7 +372,7 @@ export function renderMessagesView(container, state, handlers) {
                 ${msg.optimistic ? `<code class="msg-id" aria-label="Pending message ID">xxxxxx</code>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
               </div>
               <div class="message-bubble">
-                <div class="message-text${bodyClass}">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
+                ${markdownBatch.slot(msg.body_html || renderMarkdownBlock(msg.body), `message-text${bodyClass}`, query)}
                 ${acksHtml}
               </div>
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
@@ -545,6 +554,7 @@ export function renderMessagesView(container, state, handlers) {
   if (prevHistory) {
     const template = document.createElement("template");
     template.innerHTML = markup;
+    markdownBatch.mount(template.content);
     const nextHistory = template.content.querySelector("#history");
     const replaceSelectors = [".log-toolbar", "#log-edited", "#log-newest", "#log-empty", "#compose"];
     const canUpdate = nextHistory && replaceSelectors.every(
@@ -561,6 +571,7 @@ export function renderMessagesView(container, state, handlers) {
     }
   } else {
     container.innerHTML = markup;
+    markdownBatch.mount(container);
   }
   if (!reusedHistory) {
     container.querySelectorAll("#history > .message").forEach((node) => {

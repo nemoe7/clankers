@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Reuse bounded, content-keyed browser Markdown DOM during message and report updates.
+
 - Keep pending message ID placeholders the same width as confirmed IDs.
 
 - Prefer placing remaining tooltips above their targets when space allows.
