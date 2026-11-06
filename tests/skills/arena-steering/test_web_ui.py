@@ -2055,7 +2055,8 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
           ".report-toc-title": 12,
           ".report-picker-link": 12,
           "#report-status": 12,
-          "#report-ack-history": 13,
+          "#report-ack-history": 14,
+          "#report-ack-history .answer.reply": 13,
           "#report-submit-float": 14,
         }
         measured = page.evaluate(
@@ -2184,7 +2185,7 @@ def test_fenced_markdown_code_uses_one_smaller_type_token(
             "fence": "#report .code-block pre > code",
             "label": "#report .code-block-header",
             "inline": "#report p > code",
-            "ack_prose": "#report-ack-history p",
+            "ack_prose": "#report-ack-history .report-ack-markdown p",
             "ack_fence": "#report-ack-history .code-block pre > code",
             "ack_label": "#report-ack-history .code-block-header",
           }
