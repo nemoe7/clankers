@@ -56,7 +56,6 @@ export function paintConnection(container, connection) {
   dot.dataset.state = current.state;
   dot.setAttribute("aria-label", current.label);
   text.textContent = current.text;
-  text.title = current.text;
 }
 
 const MESSAGE_PAGE_SIZE = 15;
@@ -457,7 +456,7 @@ export function renderMessagesView(container, state, handlers) {
             <li role="alert" ${state.messagesError ? "" : "hidden"}>${escapeHtml(state.messagesError || "")}</li>
             ${historyHtml}
           </ol>
-          <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" title="Scroll to bottom" hidden>
+          <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" hidden>
             <svg class="lucide lucide-arrow-down" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
           </button>
         </div>

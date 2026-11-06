@@ -118,10 +118,6 @@ export function mountRelativeTimers(root = document) {
       }
       const stateLabel = node.getAttribute("data-state-label");
       if (stateLabel) node.setAttribute("aria-label", `${stateLabel}, ${nextText}`);
-      const nextTitle = stamp.toLocaleString(undefined, { hourCycle: "h23" });
-      if (node.title !== nextTitle) {
-        node.title = nextTitle;
-      }
       const delay = nextRelativeDelay(stampMs, { includeSeconds, now });
       if (delay < minDelay) {
         minDelay = delay;

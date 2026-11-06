@@ -4870,11 +4870,11 @@ def test_seen_reply_receipt_keeps_message_height(
           .startswith("Status: acked, ")
         )
         card.locator(".receipt-status").hover()
-        tooltip = page.locator("#arena-title-tooltip")
-        tooltip.wait_for(state="visible")
-        assert "Status:" not in tooltip.inner_text()
-        assert not re.search(r"\b(?:AM|PM)\b", tooltip.inner_text(), re.IGNORECASE)
-        page.screenshot(path=str(tmp_path / f"receipt-tooltip-{width}-{transport}.png"))
+        assert card.locator(".receipt-status").get_attribute("title") is None
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.screenshot(
+          path=str(tmp_path / f"receipt-no-tooltip-{width}-{transport}.png")
+        )
         assert bool(sockets) == (transport == "ws")
       finally:
         release_receipt.set()
@@ -5562,16 +5562,13 @@ def test_asset_reload_waits_for_quiet_period_while_state_updates(
     store.close()
 
 
-def test_timestamp_tooltip_uses_24_hour_time_without_receipt_status() -> None:
+def test_timestamp_timer_does_not_add_tooltips() -> None:
   script = r"""
 import assert from 'node:assert/strict';
 import { mountRelativeTimers } from './skills/arena-steering/assets/timestamps.js';
 
 globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
-for (const [stamp, time] of [
-  ['2026-11-06T19:16:41Z', '19:16:41'],
-  ['2026-11-06T00:03:04Z', '00:03:04'],
-]) {
+for (const stamp of ['2026-11-06T19:16:41Z', '2026-11-06T00:03:04Z']) {
   for (const state of [null, 'Status: acked']) {
     const attrs = { 'data-timestamp': stamp, 'data-state-label': state };
     const node = {
@@ -5580,9 +5577,7 @@ for (const [stamp, time] of [
       setAttribute(name, value) { attrs[name] = value; },
     };
     const stop = mountRelativeTimers({ querySelectorAll: () => [node] });
-    assert.ok(node.title.includes(time), node.title);
-    assert.ok(!node.title.includes('Status:'), node.title);
-    assert.ok(!/\b(?:AM|PM)\b/i.test(node.title), node.title);
+    assert.equal(node.title, '');
     if (state) assert.ok(attrs['aria-label'].startsWith(`${state}, `));
     stop();
   }
@@ -5597,3 +5592,73 @@ for (const [stamp, time] of [
     check=False,
   )
   assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_selected_tooltips_are_absent_but_control_labels_remain(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("Tooltip test", msg_id="ab1234")
+  app.reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"q","label":"Question"} -->\nQuestion\n'
+    '- (x) Yes <!-- option {"label":"Yes"} -->\n',
+  )
+  app.reports.publish_report("other", "Other", "# Other")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('.message[data-msg-id="ab1234"]').wait_for()
+        for selector in (
+          "#connection-text",
+          "#log-newest",
+          "#report-needs-answer",
+          "#report-pip",
+          "#modal-close",
+        ):
+          assert page.locator(selector).get_attribute("title") is None, selector
+        assert (
+          page.locator("#log-newest").get_attribute("aria-label") == "Scroll to bottom"
+        )
+        assert (
+          page.locator("#modal-close").get_attribute("aria-label") == "Close dialog"
+        )
+        assert page.locator(".receipt-status").get_attribute("title") is None
+        page.locator("#tab-reports").click()
+        page.locator(".report-picker-unanswered").wait_for()
+        for selector in (
+          ".report-picker-unanswered",
+          ".report-picker-unseen-dot",
+          ".report-scroll-top",
+        ):
+          assert page.locator(selector).get_attribute("title") is None, selector
+        assert (
+          page.locator(".report-picker-unanswered").get_attribute("aria-label")
+          == "Needs answers"
+        )
+        for timestamp in page.locator("time").all():
+          assert timestamp.get_attribute("title") is None
+        page.screenshot(path=str(tmp_path / f"no-selected-tooltips-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

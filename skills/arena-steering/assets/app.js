@@ -995,7 +995,6 @@ function renderApp(state) {
     const label = hasUnreadReport
       ? "Unread report"
       : hasUnseenAck ? "Unseen answer acknowledgement" : "No unread reports";
-    reportPip.title = label;
     reportPip.setAttribute("aria-label", label);
   }
 

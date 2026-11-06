@@ -286,7 +286,7 @@ export function renderReportsView(container, state, handlers) {
       const unseenLabel = isUnseen ? "Unseen report" : "Unseen answer acknowledgement";
       const markersHtml =
         isUnseen || hasUnseenAck || needsAnswer
-          ? `<span class="report-picker-markers">${needsAnswer ? `<span class="report-picker-unanswered" title="Needs answers" aria-label="Needs answers">${UNANSWERED_SVG}</span>` : ""}${isUnseen || hasUnseenAck ? `<span class="report-picker-unseen-dot ${!isUnseen && hasUnseenAck ? "is-unseen-ack" : ""}" title="${unseenLabel}" aria-label="${unseenLabel}"></span>` : ""}</span>`
+          ? `<span class="report-picker-markers">${needsAnswer ? `<span class="report-picker-unanswered" aria-label="Needs answers">${UNANSWERED_SVG}</span>` : ""}${isUnseen || hasUnseenAck ? `<span class="report-picker-unseen-dot ${!isUnseen && hasUnseenAck ? "is-unseen-ack" : ""}" aria-label="${unseenLabel}"></span>` : ""}</span>`
           : "";
       return `
         <button
@@ -402,7 +402,6 @@ export function renderReportsView(container, state, handlers) {
         id="report-scroll-top"
         class="report-scroll-top"
         aria-label="Scroll to top"
-        title="Scroll to top"
         hidden
       >${ARROW_UP_SVG}</button>
     </div>

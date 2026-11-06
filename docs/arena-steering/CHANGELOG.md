@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Remove selected status, timestamp, modal-close, and scroll tooltips.
+
 - Limit new task and report IDs to 64 characters and reject cross-type ID collisions.
 
 - Keep message parent and task chips aligned without expanding single-line rows.
