@@ -91,7 +91,8 @@ def test_saved_report_answer_can_be_edited_during_refresh(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_hidden_answer_and_live_report_replies(tmp_path: Path) -> None:
+@pytest.mark.parametrize("width", [390, 1200])
+def test_hidden_answer_and_live_report_replies(tmp_path: Path, width: int) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Answer storage check")
@@ -118,7 +119,7 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path) -> None:
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
       try:
-        page = browser.new_page(viewport={"width": 1200, "height": 760})
+        page = browser.new_page(viewport={"width": width, "height": 760})
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(
@@ -139,6 +140,17 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path) -> None:
         )
         assert status == 200
         history.get_by_text("Reviewed answer").wait_for(timeout=8000)
+        entry = history.locator('.report-answer-entry[data-answer-id="ab9002"]')
+        assert entry.locator(".message-heading .msg-id").inner_text() == "ab9002"
+        assert (
+          "Choice?: A"
+          in entry.locator(".message-bubble > .message-text").first.inner_text()
+        )
+        assert (
+          "Reviewed answer"
+          in entry.locator(".message-bubble > .answer.reply").inner_text()
+        )
+        assert entry.locator(".receipt time").count() == 1
         page.screenshot(path=str(tmp_path / "report-answer.png"))
         assert not errors
       finally:

@@ -2613,6 +2613,14 @@ article#report.report img,
   line-height: 1.35;
 }
 
+#report-ack-history .report-answer-entry {
+  --message-row-width: 100%;
+}
+
+#report-ack-history .message-heading strong {
+  font-weight: inherit;
+}
+
 #report-ack-history {
   min-height: 0;
   max-height: 320px;

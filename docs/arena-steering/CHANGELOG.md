@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Format report answer history as message-style entries.
+
 - Preserve selected parents and completed uploads across reloads, discarding unfinished uploads.
 
 - Remove selected status, timestamp, modal-close, and scroll tooltips.

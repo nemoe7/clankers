@@ -303,8 +303,8 @@ export function renderReportsView(container, state, handlers) {
     .join("");
 
   const answersHtml = (activeReport.answers || []).length
-    ? `<div id="report-ack-history" class="answer reply message-text">${activeReport.answers
-        .map((ans, idx) => {
+    ? `<div id="report-ack-history">${activeReport.answers
+        .map((ans) => {
           const iso = escapeHtml(ans.modified_at || "");
           const rel = escapeHtml(relativeTime(ans.modified_at));
           const entries = Object.entries(ans.values || {})
@@ -317,10 +317,16 @@ export function renderReportsView(container, state, handlers) {
               return `${label}: ${Array.isArray(v) ? v.join(", ") : v}`;
             })
             .join(" · ");
+          const status = ans.pending ? "Sending" : ans.status === "sent" ? "Sent" : ans.status === "seen" ? "Seen" : "";
+          const stateLabel = escapeHtml(`Status: ${ans.pending ? "sending" : ans.status}`);
           return `
-            <div class="${idx > 0 ? "reply-block" : ""}">
-              <p><strong>Answer <code class="msg-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> · ${escapeHtml(entries)}</p>
-              ${ans.pending ? `<p class="muted" role="status">Sending answer…</p>` : ans.ack ? markdownBatch.slot(ans.ack_html || renderMarkdownBlock(ans.ack), "report-ack-markdown") : `<p class="muted">Awaiting agent acknowledgement.</p>`}
+            <div class="message report-answer-entry" data-answer-id="${escapeHtml(ans.id)}">
+              <div class="message-heading"><strong><code class="msg-id" aria-label="Answer ${escapeHtml(ans.id)}">${escapeHtml(ans.id)}</code></strong></div>
+              <div class="message-bubble">
+                <div class="message-text"><p>${escapeHtml(entries)}</p></div>
+                ${ans.pending ? `<div class="answer reply" role="status">Sending answer…</div>` : ans.ack ? `<div class="answer reply message-text">${markdownBatch.slot(ans.ack_html || renderMarkdownBlock(ans.ack), "report-ack-markdown")}</div>` : `<div class="answer reply">Awaiting agent acknowledgement.</div>`}
+              </div>
+              <p class="receipt"><time role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" datetime="${iso}" data-timestamp="${iso}" data-prefix="${status}">${status ? `${status} ` : ""}${rel}</time></p>
             </div>
           `;
         })
