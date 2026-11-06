@@ -39,6 +39,7 @@ export function createMarkdownBatch() {
       return `<div class="${className}" data-markdown-key="${entry.key}" data-markdown-slot="${token}"></div>`;
     },
     mount(root) {
+      if (!pending.size) return;
       for (const node of root.querySelectorAll("[data-markdown-slot]")) {
         const entry = pending.get(node.dataset.markdownSlot);
         if (entry) node.replaceChildren(entry.content.cloneNode(true));
