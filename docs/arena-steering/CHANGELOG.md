@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `pre.py`, `test_pre.py`: Exempt selected Steering commands from the pending-inbox count and gate, or from the count only.
+
 - `test_reports_nuu_flows.py`: Move Reports audit fixtures out of the skill references.
 
 - `SKILL.md`: Document ordered task phases, completion evidence, and phase blocking.

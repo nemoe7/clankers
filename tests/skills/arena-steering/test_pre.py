@@ -137,6 +137,65 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
   assert _verdict(following) == pre.BLOCK
 
 
+@pytest.mark.parametrize(
+  ("verb", "blocked"),
+  [(verb, False) for verb in ("msg", "survey", "skills", "ren", "serve")]
+  + [(verb, True) for verb in ("tasks", "task", "reports", "report", "worktree")],
+)
+def test_steering_command_inbox_exemptions(verb: str, blocked: bool) -> None:
+  line = f"steer {verb} --help"
+  ctx = pre.PreContext(
+    line=line,
+    command=line,
+    shell="bash",
+    pending_ids=["abc123"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.bash_command_policy(ctx) == (False, blocked)
+  assert _verdict(ctx) == (pre.BLOCK if blocked else pre.CONTINUE)
+
+
+@pytest.mark.parametrize(
+  "line",
+  (
+    "steer msg x; printf after",
+    "steer survey | cat",
+    "steer skills > out",
+    "steer msg $(printf x)",
+    "steer msg `printf x`",
+    "steer msg x && git push",
+    "/tmp/steer msg x",
+    "env steer msg x",
+  ),
+)
+def test_steering_command_exemptions_reject_shell_composition(line: str) -> None:
+  ctx = pre.PreContext(
+    line=line,
+    command=line,
+    shell="bash",
+    pending_ids=["abc123"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.bash_command_policy(ctx) == (True, True)
+  assert _verdict(ctx) == pre.BLOCK
+
+
+def test_steering_exemptions_preserve_the_pending_counter(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Pending work")
+  for line in ("steer msg --help", "steer task --help"):
+    assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == pre.CONTINUE
+    _finish_outer(line)
+    assert _count(_isolate_state) in (None, "0")
+  store, *_ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  for line, verdict in (
+    ("steer msg --help", pre.CONTINUE),
+    ("steer task --help", pre.BLOCK),
+  ):
+    assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == verdict
+
+
 def test_bash_policy_can_block_without_spending_the_pending_budget(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
