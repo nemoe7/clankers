@@ -66,6 +66,7 @@ steer report unpin ID
 steer report rm <id|--stale>
 ```
 
+- Publish agent handoffs and cross-session specifications as unfielded Steering reports.
 - Every report field requires a statement `label` before its options (`- ( )`, `- (x)`, `- [ ]`, `- [x]`) or after `label: ___`.
 - Give each report field and option a specific, self-identifying label, not generic answers such as Approve or Reject.
 - Field IDs default to kebab-case of `label` with trailing `-` stripped, or come from an optional `<!-- field-id -->` comment above the field.

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `SKILL.md`: Publish handoffs and cross-session specifications as unfielded Steering reports.
+
 - `markdown.py`, `services.py`, `test_server_cli.py`: Render standalone two-space-indented blocks as code and preserve acknowledgement indentation.
 
 - `services.py`, `test_task_priority_size.py`: Default new tasks with a report phase to P3 unless priority is explicit.

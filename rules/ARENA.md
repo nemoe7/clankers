@@ -200,14 +200,13 @@
 
 ## Deliverables
 
-- Save/open the main deliverable.
 - Other formats remain request-only.
 - If preview delivery fails, report it and agree on a replacement.
 - A local commit is not an automatic fallback.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs/remote fonts/stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Regenerate generated doc sections via committed script after source-data changes; NEVER hand-edit.
-- For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-steering/references/handoff.md) with no form fields.
+- For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-steering/references/handoff.md) and publish an unfielded Steering report.
 
 ## When in doubt
 
