@@ -44,11 +44,11 @@ An attached message adds each file path as a home-relative task detail without a
 | `steer task rm ID` | `Removed task ID` | 0 on removal, 1 on error |
 | `steer ren OLD_ID NEW_ID` | Renamed task or report | 0 on rename, 1 on conflict or error |
 
-Task sizes are 1, 2, 3, 5, 8, 13, 21, or 34. Priority accepts P1–P5. Without `-p`, new tasks default to P4.
+Task sizes are 1, 2, 3, 5, 8, 13, 21, or 34. Priority accepts P1–P5. Without `-p`, report-only tasks default to P3; all others default to P4.
 
 Runnable tasks sort by priority, size, and insertion order. Links to unfinished dependencies or unanswered reports block applicable phases.
 
-`task new -m` and `task mod links msg` apply the same attachment behavior. Explicit priorities stay unchanged. `-T`, `-d`, `-m`, `-r`, `-k`, and `-g` accept repeated values.
+`task new -m` and `task mod links msg` add attachment paths without changing priority. `-T`, `-d`, `-m`, `-r`, `-k`, and `-g` accept repeated values.
 
 Repeated `-T` options define ordered phases, such as `-T report -T code`. A report phase needs a linked published report or a received answer.
 
