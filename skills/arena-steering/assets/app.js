@@ -1247,6 +1247,102 @@ function initEvents() {
   });
 }
 
+let activeTooltip = null;
+
+function hideTitleTooltip() {
+  if (!activeTooltip) return;
+  const { target, title, describedBy, addedLabel, tip } = activeTooltip;
+  if (!target.hasAttribute("title")) target.setAttribute("title", title);
+  if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
+  if (describedBy === null) target.removeAttribute("aria-describedby");
+  else target.setAttribute("aria-describedby", describedBy);
+  tip.remove();
+  activeTooltip = null;
+}
+
+function positionTitleTooltip(target, tip) {
+  const rect = target.getBoundingClientRect();
+  const box = tip.getBoundingClientRect();
+  const left = Math.max(8, Math.min(rect.left + rect.width / 2 - box.width / 2, innerWidth - box.width - 8));
+  const below = rect.bottom + 8;
+  const above = below + box.height > innerHeight - 8;
+  tip.classList.toggle("above", above);
+  tip.style.left = `${left}px`;
+  tip.style.top = `${above ? Math.max(8, rect.top - box.height - 8) : below}px`;
+  tip.style.setProperty("--arrow-left", `${Math.max(8, Math.min(box.width - 8, rect.left + rect.width / 2 - left))}px`);
+}
+
+function showTitleTooltip(target) {
+  if (!target || target.dataset.tooltip || activeTooltip?.target === target) return;
+  hideTitleTooltip();
+  const title = target.getAttribute("title")?.trim();
+  if (!title) return;
+  const describedBy = target.getAttribute("aria-describedby");
+  const addedLabel = !target.getAttribute("aria-label") && !target.getAttribute("aria-labelledby") &&
+    !target.textContent.trim() && !target.getAttribute("alt") && !target.querySelector("img[alt]") &&
+    !target.labels?.length && !(target instanceof HTMLInputElement && target.value);
+  if (addedLabel) target.setAttribute("aria-label", title);
+  const tip = document.createElement("div");
+  tip.id = "arena-title-tooltip";
+  tip.className = "arena-tooltip";
+  tip.setAttribute("role", "tooltip");
+  tip.textContent = title;
+  target.removeAttribute("title");
+  target.setAttribute("aria-describedby", [describedBy, tip.id].filter(Boolean).join(" "));
+  (target.closest("dialog[open]") || document.body).append(tip);
+  positionTitleTooltip(target, tip);
+  activeTooltip = { target, title, describedBy, addedLabel, tip };
+}
+
+function positionSurveyTooltip(trigger) {
+  const tip = trigger?.querySelector(".survey-answer-tooltip");
+  const body = trigger?.closest(".modal-body");
+  if (!tip || !body) return;
+  tip.classList.remove("above");
+  if (tip.getBoundingClientRect().bottom > body.getBoundingClientRect().bottom) tip.classList.add("above");
+}
+
+document.addEventListener("mouseover", (event) => {
+  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
+  const target = event.target.closest?.("[title]");
+  if (target) showTitleTooltip(target);
+  else if (activeTooltip && !activeTooltip.target.contains(event.target)) hideTitleTooltip();
+});
+document.addEventListener("mouseout", (event) => {
+  if (activeTooltip && !(event.relatedTarget instanceof Node && activeTooltip.target.contains(event.relatedTarget)) && document.activeElement !== activeTooltip.target) hideTitleTooltip();
+});
+document.addEventListener("focusin", (event) => {
+  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
+  if (event.target.matches?.(":focus-visible")) showTitleTooltip(event.target.closest?.("[title]"));
+});
+document.addEventListener("focusout", () => hideTitleTooltip());
+document.addEventListener("click", () => hideTitleTooltip(), true);
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideTitleTooltip(); });
+window.addEventListener("resize", hideTitleTooltip);
+document.addEventListener("scroll", () => {
+  hideTitleTooltip();
+  positionSurveyTooltip(document.querySelector(".survey-id-wrap:hover, .survey-cap-pill:hover, .survey-id-wrap:focus-within, .survey-cap-pill:focus-within"));
+}, true);
+new MutationObserver(() => {
+  if (!activeTooltip) return;
+  const { target, tip, addedLabel } = activeTooltip;
+  if (!target.isConnected) {
+    hideTitleTooltip();
+    return;
+  }
+  if (!target.hasAttribute("title")) return;
+  const title = target.getAttribute("title").trim();
+  if (!title) {
+    hideTitleTooltip();
+    return;
+  }
+  activeTooltip.title = title;
+  if (addedLabel) target.setAttribute("aria-label", title);
+  target.removeAttribute("title");
+  tip.textContent = title;
+  positionTitleTooltip(target, tip);
+}).observe(document.body, { attributes: true, attributeFilter: ["title"], childList: true, subtree: true });
+
 store.subscribe(renderApp);
 initEvents();
 refreshAll(true);

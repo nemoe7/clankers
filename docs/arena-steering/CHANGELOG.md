@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Match hover surfaces and tooltips to Arena while preserving status colors and keyboard access.
+
 - Hide the composer scrollbar when the draft fits, and retain scrolling for long drafts.
 
 - Replace browser-owned retry and navigation prompts with HTML dialogs.

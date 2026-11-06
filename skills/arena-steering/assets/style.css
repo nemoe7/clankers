@@ -624,13 +624,13 @@ code.msg-id[data-state="good"] {
   padding: 0;
   margin: 0 -6px;
   border: 0;
-  border-radius: 9999px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
 }
 
 #survey-open:hover {
-  background-color: hsl(var(--surface-raised));
+  background-color: hsl(var(--surface-tertiary));
 }
 
 #connection-dot {
@@ -865,27 +865,47 @@ mark.search-hit {
 .survey-answer-tooltip {
   position: absolute;
   left: 0;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 6px);
   z-index: 20;
   display: none;
   min-width: min(220px, calc(100vw - 72px));
   max-width: min(320px, calc(100vw - 72px));
   padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid hsl(var(--border-strong));
-  background: hsl(var(--surface-floating));
-  box-shadow: 0 8px 20px rgb(0 0 0 / 0.45);
+  background: #fff;
+  color: #181818;
+  pointer-events: none;
 }
 
-.survey-cap-pill .survey-answer-tooltip {
-  inset: 1px;
-  min-width: 0;
-  max-width: none;
-  padding: 5px 7px;
-  border: 0;
-  border-radius: 5px;
-  box-shadow: none;
-  pointer-events: none;
+.survey-answer-tooltip::before {
+  position: absolute;
+  bottom: 100%;
+  left: 12px;
+  border: 5px solid transparent;
+  border-bottom-color: #fff;
+  content: "";
+}
+
+.survey-answer-tooltip.above {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.survey-answer-tooltip.above::before {
+  top: 100%;
+  bottom: auto;
+  border-bottom-color: transparent;
+  border-top-color: #fff;
+}
+
+.survey-cap-pill:last-child .survey-answer-tooltip {
+  right: 0;
+  left: auto;
+}
+
+.survey-cap-pill:last-child .survey-answer-tooltip::before {
+  right: 12px;
+  left: auto;
 }
 
 .survey-id-wrap:hover .survey-answer-tooltip,
@@ -903,20 +923,13 @@ mark.search-hit {
   font-size: 12px;
 }
 
-.survey-cap-pill .survey-answer-row {
-  flex-direction: column;
-  gap: 0;
-  padding: 0;
-  font-size: 11px;
-}
-
 .survey-answer-key {
-  color: hsl(var(--text-secondary));
+  color: #444;
   font-family: var(--font-basel-grotesk-mono);
 }
 
 .survey-answer-val {
-  color: hsl(var(--text-primary));
+  color: #181818;
   font-family: var(--font-basel-grotesk-mono);
   text-align: right;
   word-break: break-word;
@@ -1313,7 +1326,38 @@ select,
 }
 
 .icon-button:hover:not(:disabled) {
-  background-color: hsl(var(--surface-raised));
+  background-color: hsl(var(--surface-tertiary));
+}
+
+.arena-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff;
+  color: #181818;
+  font-size: 12px;
+  line-height: 1.2;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
+.arena-tooltip::before {
+  position: absolute;
+  bottom: 100%;
+  left: var(--arrow-left);
+  border: 5px solid transparent;
+  border-bottom-color: #fff;
+  transform: translateX(-50%);
+  content: "";
+}
+
+.arena-tooltip.above::before {
+  top: 100%;
+  bottom: auto;
+  border-bottom-color: transparent;
+  border-top-color: #fff;
 }
 
 .icon-button svg,
@@ -1854,19 +1898,32 @@ code.msg-id {
   left: 50%;
   z-index: 3;
   transform: translateX(-50%);
-  padding: 4px 8px;
-  border: 1px solid hsl(var(--border-faint));
-  border-radius: 4px;
-  background: hsl(var(--surface-secondary));
-  color: hsl(var(--text-primary));
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff;
+  color: #181818;
   font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 4px 6px rgb(0 0 0 / 25%);
 }
 
-:is(#attach-file, #preview-msg, #composer-expand):hover:not(:disabled),
+#preview-msg[data-tooltip]::before {
+  position: absolute;
+  bottom: calc(100% - 4px);
+  left: 50%;
+  z-index: 3;
+  border: 5px solid transparent;
+  border-top-color: #fff;
+  transform: translateX(-50%);
+  content: "";
+  pointer-events: none;
+}
+
+:is(#attach-file, #preview-msg, #composer-expand):hover:not(:disabled) {
+  background: hsl(var(--surface-tertiary));
+}
+
 #preview-msg[aria-pressed="true"], #composer-expand[aria-expanded="true"] {
   background: hsl(var(--surface-raised));
 }
@@ -3311,6 +3368,17 @@ article#report.report img,
   object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(.tab-btn, .icon-button, .btn-secondary, .preview-code-mermaid, .preview-code-md,
+    .copy-code, .log-edited, .log-newest, .survey-id-trigger, .survey-cap-pill,
+    .message-attachment-preview, .reply-parent-chip, .composer-reply-chip,
+    .composer-attachment-chip button, .parent-id-button, .task-title,
+    .report-toc-link, .report-picker-toggle, .report-scroll-top, .report-picker-link):hover:not(:disabled) {
+    background-color: hsl(var(--surface-tertiary));
+    border-radius: 6px;
+  }
 }
 
 /* A visible end marker records a rendered reply list, not a reply count. */

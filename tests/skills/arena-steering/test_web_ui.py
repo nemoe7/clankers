@@ -535,7 +535,13 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
             pillTop: pill.top, headingTop: heading.top, headingBottom: heading.bottom
           };
         }""")
-        assert first["background"].startswith("rgb(")
+        assert first["background"] == "rgb(255, 255, 255)"
+        assert (
+          page.locator(
+            ".survey-cap-pill:first-child .survey-answer-val"
+          ).first.evaluate("el => getComputedStyle(el).color")
+          == "rgb(24, 24, 24)"
+        )
         assert first["tooltipTop"] >= first["pillTop"] - 1
         assert (
           first["tooltipTop"] >= first["headingBottom"] - 1
@@ -557,10 +563,24 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         }""")
         assert sizes["tooltipLeft"] >= sizes["shellLeft"] - 1
         assert sizes["tooltipRight"] <= sizes["shellRight"] + 1
+        last_tip = page.locator(".survey-cap-pill:last-child .survey-answer-tooltip")
+        assert last_tip.evaluate(
+          "el => el.getBoundingClientRect().bottom <= innerHeight"
+        )
         assert sizes["footerTop"] >= 0
         assert sizes["footerBottom"] <= height
         if height < 400:
           assert sizes["contentHeight"] > sizes["bodyHeight"]
+        page.locator(".survey-id-trigger").last.hover()
+        bounds = page.locator(".survey-id-wrap:hover .survey-answer-tooltip").evaluate(
+          """el => {
+            const tip = el.getBoundingClientRect();
+            const body = el.closest('.modal-body').getBoundingClientRect();
+            return {top: tip.top, bottom: tip.bottom, bodyTop: body.top, bodyBottom: body.bottom};
+          }"""
+        )
+        assert bounds["top"] >= bounds["bodyTop"]
+        assert bounds["bottom"] <= bounds["bodyBottom"]
         page.locator('#modal-actions button[value="cancel"]').click()
         assert not page.locator("#modal-shell").is_visible()
       finally:
@@ -2841,7 +2861,7 @@ def test_displayed_ids_choose_typed_composer_parents(
         assert "task-parent" not in task_row.inner_text()
         task_title = task_row.locator('button.task-title[data-parent-type="task"]')
         task_title.hover()
-        assert task_title.get_attribute("title") == "task-parent"
+        assert page.get_by_role("tooltip").filter(has_text="task-parent").is_visible()
         assert "task-parent" in (task_title.get_attribute("aria-label") or "")
         page.screenshot(path=str(tmp_path / f"task-id-hover-{width}.png"))
         task_title.click()

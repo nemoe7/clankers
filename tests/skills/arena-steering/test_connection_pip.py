@@ -424,3 +424,76 @@ def test_connection_states_and_survey_modal(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        button = page.locator("#survey-open")
+        dot = page.locator("#connection-dot")
+        dot_color = dot.evaluate("el => getComputedStyle(el).backgroundColor")
+        button.hover()
+        tip = page.get_by_role("tooltip").filter(has_text="Open survey results")
+        assert tip.is_visible()
+        styles = tip.evaluate("""el => ({
+          bg: getComputedStyle(el).backgroundColor,
+          color: getComputedStyle(el).color,
+          top: el.getBoundingClientRect().top,
+          triggerBottom: document.querySelector('#survey-open').getBoundingClientRect().bottom,
+          arrow: getComputedStyle(el, '::before').borderBottomColor,
+        })""")
+        assert styles["bg"] == "rgb(255, 255, 255)"
+        assert styles["color"] == "rgb(24, 24, 24)"
+        assert styles["top"] >= styles["triggerBottom"]
+        assert styles["arrow"] == styles["bg"]
+        assert button.get_attribute("aria-describedby") == "arena-title-tooltip"
+        assert dot.evaluate("el => getComputedStyle(el).backgroundColor") == dot_color
+        button.evaluate("el => el.title = 'Updated survey status'")
+        updated = page.get_by_role("tooltip").filter(has_text="Updated survey status")
+        updated.wait_for()
+        page.mouse.move(600, 700)
+        assert not tip.is_visible()
+        assert button.get_attribute("title") == "Updated survey status"
+        button.evaluate("el => el.title = 'Open survey results'")
+        button.click()
+        page.get_by_role("heading", name="Survey Verification").wait_for()
+        page.get_by_role("button", name="Close dialog").click()
+        page.keyboard.press("Tab")
+        button.focus()
+        assert tip.is_visible()
+        page.keyboard.press("Escape")
+        assert tip.is_hidden()
+        page.evaluate("""() => {
+          const target = document.createElement('button');
+          target.id = 'image-tooltip-probe';
+          target.title = 'Helpful details';
+          target.style.cssText = 'position:fixed;top:180px;left:180px';
+          target.innerHTML = '<img alt="Existing name">';
+          document.body.append(target);
+        }""")
+        image_button = page.get_by_role("button", name="Existing name")
+        image_button.hover()
+        assert page.get_by_role("button", name="Existing name").is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
