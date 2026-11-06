@@ -7,6 +7,7 @@ import json
 import os
 import re
 import runpy
+import shutil
 import struct
 import subprocess
 import threading
@@ -245,6 +246,53 @@ def test_reports_copy_in_isolated_browser_selects_full_markdown(
   finally:
     server.shutdown()
     server.server_close()
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_survey_modal_survives_asset_hot_reload(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  assets = tmp_path / "assets"
+  shutil.copytree(ASSETS_DIR, assets)
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, assets_dir=assets)
+  app.messages.submit_survey(survey.template())
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.goto(f"http://127.0.0.1:{server.server_port}/")
+        page.locator('#connection-dot[data-state="ok"]').wait_for()
+        page.locator("#survey-open").click()
+        page.locator(".survey-cap-pill").first.wait_for()
+        with (
+          page.expect_navigation(wait_until="load", timeout=10000),
+          (assets / "style.css").open("a", encoding="utf-8") as css,
+        ):
+          css.write("\n/* asset reload test */\n")
+          css.flush()
+        page.locator("#modal-shell[open]").wait_for(timeout=8000)
+        assert page.locator(".survey-cap-pill").count() == 3
+        page.locator('#modal-actions button[value="cancel"]').click()
+        page.reload()
+        assert not page.locator("#modal-shell").is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
     store.close()
 
 

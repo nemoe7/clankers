@@ -1780,6 +1780,11 @@ def reload_server_handler(server: ThreadingHTTPServer, app: SteeringApp) -> Stee
     assets_dir=app.assets_dir,
     repo_name=app.repo_name,
   )
+  with app.messages._cond, new_app.messages._cond:
+    new_app.messages._survey_answers = dict(app.messages._survey_answers)
+    new_app.messages._survey_results = list(app.messages._survey_results)
+    new_app.messages._survey_checked_at = app.messages._survey_checked_at
+    new_app.messages._survey_pending = app.messages._survey_pending
   after_reload = getattr(app, "_after_reload", None)
   if after_reload is not None:
     after_reload(new_app)

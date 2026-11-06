@@ -116,6 +116,18 @@ function renderSurveyModalContent(survey) {
 
 const store = createStore();
 const modal = createModalManager();
+const SURVEY_RELOAD_KEY = "steer-survey-open-on-reload";
+let surveyOpen = false;
+
+function reloadPreservingSurvey() {
+  try {
+    if (surveyOpen) sessionStorage.setItem(SURVEY_RELOAD_KEY, "1");
+    else sessionStorage.removeItem(SURVEY_RELOAD_KEY);
+  } catch {
+    // Reload normally if session storage is unavailable.
+  }
+  window.location.reload();
+}
 const reportCache = new Map();
 const pendingReportLoads = new Map();
 const ackSeenRequests = new Set();
@@ -412,7 +424,7 @@ async function refreshAll(force = false) {
     ]);
     if (health.asset_version) {
       if (knownAssetVersion && knownAssetVersion !== health.asset_version) {
-        window.location.reload();
+        reloadPreservingSurvey();
         return;
       }
       knownAssetVersion = health.asset_version;
@@ -670,11 +682,17 @@ const handlers = {
     const res = await api.getSurvey().catch(() => ({ survey: store.getState().survey || {} }));
     const survey = res.survey || {};
     const rowsHtml = renderSurveyModalContent(survey);
-    const decision = await modal.open("survey-results", {
-      title: "Survey Verification",
-      htmlSlots: { content: rowsHtml },
-      trigger,
-    });
+    surveyOpen = true;
+    let decision;
+    try {
+      decision = await modal.open("survey-results", {
+        title: "Survey Verification",
+        htmlSlots: { content: rowsHtml },
+        trigger,
+      });
+    } finally {
+      surveyOpen = false;
+    }
     if (decision === "bible-check") {
       await api.triggerBibleCheck(true).catch(() => {});
       await refreshAll(true);
@@ -1226,11 +1244,19 @@ function initEvents() {
 store.subscribe(renderApp);
 initEvents();
 refreshAll(true);
+try {
+  if (sessionStorage.getItem(SURVEY_RELOAD_KEY) === "1") {
+    sessionStorage.removeItem(SURVEY_RELOAD_KEY);
+    void handlers.onOpenSurvey(null);
+  }
+} catch {
+  // A reload without session storage starts with the modal closed.
+}
 // Agent heartbeats live in a separate process, so refresh only this small health signal.
 setInterval(() => { void getHealthWithConnection().catch(() => {}); }, 3000);
 
 connectWebSocket({
   onChange: () => refreshAll(false),
-  onReload: () => window.location.reload(),
+  onReload: reloadPreservingSurvey,
   onReportAcked: handleReportAcked,
 });

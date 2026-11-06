@@ -8,9 +8,10 @@ import threading
 from pathlib import Path
 
 import pytest
+from _reload_isolation import run_reload_in_child
 from arena_steering import cli, survey
 from arena_steering.cli import main as cli_main
-from arena_steering.server import SteeringApp, create_http_server
+from arena_steering.server import SteeringApp, create_http_server, reload_server_handler
 from arena_steering.store import SqliteStore
 
 
@@ -161,6 +162,26 @@ def test_survey_again_sends_hidden_blocking_request_without_clearing_results(
   app.messages.submit_survey(survey.template())
   assert not app.messages.get_survey()["pending"]
   store.close()
+
+
+def test_survey_results_survive_hot_reload(
+  tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+  if run_reload_in_child(request):
+    return
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(survey.template())
+  app.messages.trigger_bible_check(active=True)
+  before = app.messages.get_survey()
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  try:
+    reloaded = reload_server_handler(server, app)
+    assert reloaded.messages.get_survey() == before
+    reloaded.store.close()
+  finally:
+    server.server_close()
+    store.close()
 
 
 def test_survey_results_stay_in_memory(tmp_path: Path) -> None:
