@@ -468,6 +468,9 @@ async function refreshAll(force = false) {
       await ensureReportCached(selectedReportId, selectedSummary?.modified_at);
     }
     const reports = hydrateReportsWithCache(reportSummaries);
+    const latestSelection = store.getState().selectedReportId;
+    const currentSelectedReportId = reports.some((report) => report.id === latestSelection)
+      ? latestSelection : selectedReportId;
     const replyParentRefs = curState.replyParentRefs || [];
     const nextSignature = JSON.stringify({
       messages,
@@ -476,7 +479,7 @@ async function refreshAll(force = false) {
       survey,
       lastTool,
       callsSinceMessage,
-      selectedReportId,
+      selectedReportId: currentSelectedReportId,
       replyParentRefs,
       showHidden: Boolean(curState.showHidden),
     });
@@ -490,7 +493,7 @@ async function refreshAll(force = false) {
       survey,
       lastTool,
       callsSinceMessage,
-      selectedReportId,
+      selectedReportId: currentSelectedReportId,
       replyParentRefs,
     });
   } catch (err) {
@@ -500,6 +503,8 @@ async function refreshAll(force = false) {
 
 const composerUploads = createComposerUploads(store, (file, options) => api.uploadFile(file, options));
 let replySelectionRevision = 0;
+let reportSelectionRevision = 0;
+let confirmedReportId = null;
 
 const handlers = {
   onRenderDraft(markdown) {
@@ -740,10 +745,23 @@ const handlers = {
     }
   },
   async onSelectReport(reportId) {
-    const target = (store.getState().reports || []).find((r) => r.id === reportId);
-    await ensureReportCached(reportId, target?.modified_at);
-    const hydrated = hydrateReportsWithCache(store.getState().reports || []);
-    store.setState({ selectedReportId: reportId, reports: hydrated });
+    const current = store.getState();
+    const target = (current.reports || []).find((r) => r.id === reportId);
+    if (!target) return;
+    if (!current.loadingReportId) confirmedReportId = current.selectedReportId;
+    const revision = ++reportSelectionRevision;
+    store.setState({ selectedReportId: reportId, loadingReportId: reportId, reportSelectionError: "" });
+    try {
+      const report = await ensureReportCached(reportId, target.modified_at);
+      if (!report) throw new Error("Report unavailable");
+      if (revision !== reportSelectionRevision) return;
+      confirmedReportId = reportId;
+      const hydrated = hydrateReportsWithCache(store.getState().reports || []);
+      store.setState({ reports: hydrated, loadingReportId: null });
+    } catch (error) {
+      if (revision !== reportSelectionRevision) return;
+      store.setState({ selectedReportId: confirmedReportId, loadingReportId: null, reportSelectionError: `Could not load report: ${error.message || error}` });
+    }
   },
   async onDismissReport(reportId, trigger) {
     const decision = await modal.open("confirm-delete", {
@@ -812,7 +830,8 @@ function handleReportAcked(event) {
 }
 
 function markVisibleReport(state) {
-  const id = state.activeTab === "reports" && !document.hidden ? state.selectedReportId : null;
+  const id = state.activeTab === "reports" && !document.hidden && state.loadingReportId !== state.selectedReportId
+    ? state.selectedReportId : null;
   if (!id) {
     if (reportViewTimer !== null) window.clearTimeout(reportViewTimer);
     reportViewTimer = null;
@@ -906,7 +925,7 @@ function renderApp(state) {
       delete visible.last_viewed_at;
       return visible;
     });
-    const signature = JSON.stringify([state.selectedReportId, visibleReports, state.replyParentRefs]);
+    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, visibleReports, state.replyParentRefs]);
     if (signature !== lastReportRenderSignature) {
       lastReportRenderSignature = signature;
       renderReportsView(reportsEl, state, handlers);

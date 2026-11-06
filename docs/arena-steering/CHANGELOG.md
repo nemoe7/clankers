@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Select reports immediately while their contents load, and restore the previous selection on failure.
+
 - Show outgoing messages immediately, and preserve drafts and retry IDs after failed sends.
 
 - Cache Mermaid diagrams in the browser and server, and fit thumbnails within their code-block footprint.

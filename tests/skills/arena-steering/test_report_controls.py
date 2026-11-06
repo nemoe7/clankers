@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+from pathlib import Path
 
 import pytest
 from arena_steering.server import SteeringApp, create_http_server
@@ -716,6 +717,172 @@ def test_switching_reports_keeps_picker_mounted_without_panel_flash() -> None:
           page.close()
       finally:
         browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("width", [1200, 390])
+def test_report_selection_is_immediate_during_delayed_fetch(
+  fail: bool, width: int, tmp_path: Path
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  for name in ("first", "second"):
+    app.reports.publish_report(
+      name,
+      name.title(),
+      f"# {name.title()}\n\n{name.title()} body\n\n"
+      '<!-- question {"id":"decision","label":"Decision"} -->\n'
+      'Choose one.\n- (x) Continue <!-- option {"label":"Continue"} -->\n',
+    )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": width, "height": 800})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      current = page.locator('#report-picker [aria-current="true"]')
+      current.wait_for()
+      original_id = current.get_attribute("data-report-id")
+      target = "second" if original_id == "first" else "first"
+      page.evaluate(
+        """({target, fail}) => {
+        const original = window.fetch.bind(window);
+        window.targetSeenCalls = 0;
+        window.fetch = async (...args) => {
+          if (String(args[0]) === `/reports/${target}/seen`) window.targetSeenCalls++;
+          if (String(args[0]) === `/reports/${target}`) {
+            await new Promise(resolve => { window.releaseReport = resolve; });
+            if (fail) return new Response(JSON.stringify({error:'offline'}), {
+              status:503, headers:{'content-type':'application/json'}
+            });
+          }
+          return original(...args);
+        };
+      }""",
+        {"target": target, "fail": fail},
+      )
+      page.locator(f'#report-picker [data-report-id="{target}"]').evaluate(
+        "el => el.click()"
+      )
+      page.wait_for_function("typeof window.releaseReport === 'function'")
+      assert (
+        page.locator(f'#report-picker [data-report-id="{target}"]').get_attribute(
+          "aria-current"
+        )
+        == "true"
+      )
+      assert page.get_by_role("status").filter(has_text="Loading report").is_visible()
+      assert (
+        page.locator(f'#report-picker [data-report-id="{target}"]')
+        .get_attribute("class")
+        .find("is-unseen")
+        >= 0
+      )
+      assert page.locator("#report-submit-float").count() == 0
+      assert page.evaluate("window.targetSeenCalls") == 0
+      page.screenshot(path=str(tmp_path / f"report-selection-{width}.png"))
+      page.evaluate("window.releaseReport()")
+      if fail:
+        page.get_by_role("alert").filter(has_text="Could not load report").wait_for()
+        assert (
+          page.locator(
+            f'#report-picker [data-report-id="{original_id}"]'
+          ).get_attribute("aria-current")
+          == "true"
+        )
+      else:
+        page.locator("#report").get_by_text(f"{target.title()} body").wait_for()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+def test_report_selection_ignores_out_of_order_fetches() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  for report_id in ("first", "second", "third"):
+    app.reports.publish_report(
+      report_id, report_id.title(), f"# {report_id.title()}\n\n{report_id} body"
+    )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": 1200, "height": 800})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      current = page.locator('#report-picker [aria-current="true"]')
+      current.wait_for()
+      targets = [
+        item
+        for item in ("first", "second", "third")
+        if item != current.get_attribute("data-report-id")
+      ]
+      page.evaluate(
+        """targets => {
+        const original = window.fetch.bind(window);
+        window.releaseReports = {};
+        window.finishedReports = {};
+        window.fetch = async (...args) => {
+          const id = targets.find(item => String(args[0]) === `/reports/${item}`);
+          if (id) await new Promise(resolve => { window.releaseReports[id] = resolve; });
+          const response = await original(...args);
+          if (id) window.finishedReports[id] = true;
+          return response;
+        };
+      }""",
+        targets,
+      )
+      for target in targets:
+        page.locator(f'#report-picker [data-report-id="{target}"]').evaluate(
+          "el => el.click()"
+        )
+        page.wait_for_function(
+          "target => typeof window.releaseReports[target] === 'function'", arg=target
+        )
+      page.evaluate("target => window.releaseReports[target]()", targets[1])
+      page.locator("#report").get_by_text(f"{targets[1]} body").wait_for()
+      page.evaluate("target => window.releaseReports[target]()", targets[0])
+      page.wait_for_function("target => window.finishedReports[target]", arg=targets[0])
+      assert (
+        page.locator(f'#report-picker [data-report-id="{targets[1]}"]').get_attribute(
+          "aria-current"
+        )
+        == "true"
+      )
+      assert page.locator("#report").get_by_text(f"{targets[1]} body").is_visible()
+      browser.close()
   finally:
     server.shutdown()
     server.server_close()

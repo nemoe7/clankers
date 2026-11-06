@@ -86,6 +86,8 @@ export function createStore(initial = {}) {
     optimisticMessage: null,
     sending: false,
     selectedReportId: savedReportId || null,
+    loadingReportId: null,
+    reportSelectionError: "",
     ...initial,
   };
   const listeners = new Set();

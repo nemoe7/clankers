@@ -191,6 +191,7 @@ export function renderReportsView(container, state, handlers) {
       : reports[0].id;
   const activeReport =
     reports.find((r) => r.id === selectedId) || reports[0];
+  const loadingReport = state.loadingReportId === activeReport.id && !Array.isArray(activeReport.blocks);
   const swappedReport =
     lastRenderedReportId !== null && lastRenderedReportId !== activeReport.id;
   lastRenderedReportId = activeReport.id;
@@ -198,7 +199,7 @@ export function renderReportsView(container, state, handlers) {
   const blocks = activeReport.blocks || [
     { type: "markdown", markdown: activeReport.body || "" },
   ];
-  const hasFields = (activeReport.fields || []).length > 0;
+  const hasFields = !loadingReport && (activeReport.fields || []).length > 0;
   const submitBusyAttrs = pendingReportSubmissions.has(activeReport.id)
     ? 'disabled aria-busy="true"'
     : "";
@@ -309,9 +310,11 @@ export function renderReportsView(container, state, handlers) {
       <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
     </div>
   `;
-  const renderedWithMeta = renderedBlocks.includes("</h1>")
-    ? renderedBlocks.replace("</h1>", `</h1>${statusBlockHtml}`)
-    : `<div class="prose-block"><h1>${escapeHtml(activeReport.title)}</h1>${statusBlockHtml}</div>${renderedBlocks}`;
+  const reportBody = loadingReport ? '<p role="status">Loading report…</p>' : renderedBlocks;
+  const selectionError = state.reportSelectionError ? `<p role="alert">${escapeHtml(state.reportSelectionError)}</p>` : "";
+  const renderedWithMeta = (reportBody.includes("</h1>")
+    ? reportBody.replace("</h1>", `</h1>${statusBlockHtml}`)
+    : `<div class="prose-block"><h1>${escapeHtml(activeReport.title)}</h1>${statusBlockHtml}</div>${reportBody}`) + selectionError;
 
   const markup = `
     <div class="reports-layout">
@@ -341,6 +344,7 @@ export function renderReportsView(container, state, handlers) {
               data-copy-report="${escapeHtml(activeReport.id)}"
               aria-label="Copy report ${escapeHtml(activeReport.id)}"
               title="Copy report Markdown"
+              ${loadingReport ? "disabled" : ""}
             >${COPY_SVG}</button>
             <button
               type="button"
@@ -349,6 +353,7 @@ export function renderReportsView(container, state, handlers) {
               data-dismiss-report="${escapeHtml(activeReport.id)}"
               aria-label="Dismiss report ${escapeHtml(activeReport.id)}"
               title="Dismiss report"
+              ${loadingReport ? "disabled" : ""}
             >${DISMISS_SVG}</button>
           </div>
         </div>
