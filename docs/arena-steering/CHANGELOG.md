@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Rename the CLI reference to `cli.md`.
+
 - Show report answers immediately, preserve edits after failures, and reconcile retries by request ID.
 
 - Open survey results immediately, and refresh them without reopening a closed dialog.
@@ -106,7 +108,7 @@ This log has no Unreleased section.
 
 - `references/nuu/reports-*.json`, `test_reports_nuu_flows.py`: Audit empty Reports and a fielded report at the top and after scrolling, across the required viewports and both motion preferences. Capture screenshots without editing or submitting answers.
 
-- `references/cli-reference.md`: Document direct agent CLI commands, outputs, exits, and task phases in one guide.
+- `references/cli.md`: Document direct agent CLI commands, outputs, exits, and task phases in one guide.
 
 - `server.py`, `assets/messages-view.js`, `assets/app.js`, `assets/style.css`: Expose served image URLs, render message thumbnails, and open them in the existing viewer. Leave missing and nonimage files as labels.
 
