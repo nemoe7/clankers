@@ -888,3 +888,73 @@ def test_report_selection_ignores_out_of_order_fetches() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+def test_stretched_report_picker_pads_its_bottom_without_changing_compact_modes() -> (
+  None
+):
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  body = (
+    '<!-- question {"id":"choice","label":"Choice?"} -->\n'
+    'Choice?\n- (x) A <!-- option {"label":"A"} -->\n'
+  )
+  app.reports.publish_report("r-00", "Report 0", body)
+  for index in range(1, 30):
+    app.reports.publish_report(f"r-{index:02d}", f"Report {index}", "Report text.")
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      for width in (390, 1372):
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        picker = page.locator("#report-picker")
+        picker.locator(".report-picker-link").last.wait_for()
+        geometry = picker.evaluate("""el => {
+          el.scrollTop = el.scrollHeight;
+          const last = el.querySelector('.report-picker-link:last-child').getBoundingClientRect();
+          const rect = el.getBoundingClientRect();
+          return {padding: parseFloat(getComputedStyle(el).paddingBottom),
+                  gap: rect.bottom - last.bottom, scrollable: el.scrollHeight > el.clientHeight};
+        }""")
+        assert geometry["scrollable"]
+        if width >= 1200:
+          assert geometry["padding"] >= 20
+          assert geometry["gap"] >= geometry["padding"] - 1
+        else:
+          assert geometry["padding"] == 0
+        if os.environ.get("ARENA_STEERING_SCREENSHOT"):
+          page.screenshot(path=f"{os.environ['ARENA_STEERING_SCREENSHOT']}-{width}.png")
+        page.close()
+      app.reports.submit_answer("r-00", {"choice": "A"})
+      page = browser.new_page(viewport={"width": 1372, "height": 800})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      page.locator('#report-picker [data-report-id="r-00"]').click()
+      page.locator("#report-ack-history").wait_for()
+      assert (
+        page.locator("#report-picker").evaluate(
+          "el => parseFloat(getComputedStyle(el).paddingBottom)"
+        )
+        == 0
+      )
+      page.close()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

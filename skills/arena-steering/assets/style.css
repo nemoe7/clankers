@@ -2599,6 +2599,10 @@ article#report.report img,
     max-height: none;
   }
 
+  .report-rail:not(:has(#report-ack-history)) .report-picker {
+    padding-bottom: 20px;
+  }
+
   .report-rail:has(#report-ack-history) .report-picker {
     flex: 0 0 auto;
     max-height: min(320px, 45dvh);
