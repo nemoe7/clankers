@@ -4,6 +4,7 @@ import { reconcileView } from "./dom.js";
 import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
+import { copyText } from "./copy.js";
 
 const COPY_SVG = `<svg class="lucide lucide-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`;
 const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
@@ -74,24 +75,6 @@ let mobilePickerCollapsed = false;
 let pickerScrollTop = 0;
 let activeScrollCleanup = null;
 let reportRenderEvents = null;
-
-function copyReportMarkdown(text) {
-  const field = document.createElement("textarea");
-  field.value = text;
-  field.setAttribute("readonly", "");
-  try {
-    document.body.append(field);
-    field.select();
-    return (
-      typeof document.execCommand === "function" &&
-      document.execCommand("copy") === true
-    );
-  } catch {
-    return false;
-  } finally {
-    field.remove();
-  }
-}
 
 function renderFieldBlock(field, headings, stored) {
   const fieldId = escapeHtml(field.id);
@@ -616,10 +599,10 @@ export function renderReportsView(container, state, handlers) {
   const copyBtn = container.querySelector("#copy-report-btn");
   let copyResetTimer;
   listen(copyBtn, "click", () => {
-    const copied = copyReportMarkdown(activeReport.body || "");
+    const copied = copyText(activeReport.body || "", copyBtn);
     const originalLabel = `Copy report ${activeReport.id}`;
     const resultLabel = copied
-      ? "Copied through the selection fallback"
+      ? "Report Markdown copied"
       : "Copy failed. Browser did not copy report Markdown.";
     clearTimeout(copyResetTimer);
     copyBtn.dataset.state = copied ? "good" : "bad";

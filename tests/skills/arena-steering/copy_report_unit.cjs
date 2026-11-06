@@ -5,14 +5,12 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const asset = fs.readFileSync(
-  path.resolve(__dirname, "../../../skills/arena-steering/assets/reports-view.js"),
+  path.resolve(__dirname, "../../../skills/arena-steering/assets/copy.js"),
   "utf8",
 );
-const start = asset.indexOf("function copyReportMarkdown(");
-const end = asset.indexOf("\nfunction renderFieldBlock(", start);
-assert.ok(start >= 0 && end > start, "Reports selection-copy helper is present");
-assert.ok(!asset.includes("navigator.clipboard"), "Reports Copy does not use the Clipboard API");
-const helper = asset.slice(start, end);
+assert.ok(asset.includes("export function copyText("), "selection-copy helper is present");
+assert.ok(!asset.includes("navigator.clipboard"), "Copy does not use the Clipboard API");
+const helper = asset.replace("export function", "function");
 
 for (const outcome of [true, false, "throw", "missing", "append-throw"]) {
   let appended = false;
@@ -21,6 +19,7 @@ for (const outcome of [true, false, "throw", "missing", "append-throw"]) {
   let apiCalls = 0;
   const field = {
     value: "",
+    style: {},
     setAttribute(name, value) {
       assert.equal(name, "readonly");
       assert.equal(value, "");
@@ -29,6 +28,8 @@ for (const outcome of [true, false, "throw", "missing", "append-throw"]) {
     remove() { removed = true; },
   };
   const document = {
+    activeElement: null,
+    getSelection() { return null; },
     createElement(name) {
       assert.equal(name, "textarea");
       return field;
@@ -54,8 +55,8 @@ for (const outcome of [true, false, "throw", "missing", "append-throw"]) {
     },
   };
   const copied = vm.runInNewContext(
-    `${helper}\ncopyReportMarkdown("v1-copy-probe")`,
-    { document, navigator },
+    `${helper}\ncopyText("v1-copy-probe")`,
+    { document, navigator, HTMLElement: class {} },
   );
   assert.equal(copied, outcome === true, `unexpected result: ${outcome}`);
   assert.ok(appended && removed, `missing cleanup: ${outcome}`);

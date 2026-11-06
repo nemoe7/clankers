@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Use temporary textarea selection for all copy controls, including in embedded previews.
+
 - Reuse bounded, content-keyed browser Markdown DOM during message and report updates.
 
 - Keep pending message ID placeholders the same width as confirmed IDs.

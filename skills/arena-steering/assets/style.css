@@ -455,6 +455,7 @@ code.msg-id[data-state="good"] {
 }
 
 .copy-code[data-state="bad"],
+code.msg-id[data-state="bad"],
 .icon-button[data-state="bad"] {
   color: hsl(var(--interactive-negative));
   border-color: hsl(var(--interactive-negative));

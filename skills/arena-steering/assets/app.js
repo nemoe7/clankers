@@ -1,4 +1,5 @@
 import { createComposerUploads } from "./composer-uploads.js";
+import { copyText } from "./copy.js";
 // Main ES module controller for Arena Steering.
 
 import { api, connectWebSocket, setPendingWriteChooser } from "./api.js";
@@ -1406,12 +1407,18 @@ function initEvents() {
       const { parentType, parentId } = parent.dataset;
       const idCode = parent.querySelector("code.msg-id");
       if (event.shiftKey && idCode) {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(parentId).catch(() => {});
-        }
-        idCode.dataset.state = "good";
-        setTimeout(() => {
-          if (idCode.isConnected) delete idCode.dataset.state;
+        const copied = copyText(parentId, parent);
+        const originalLabel = parent.dataset.copyOriginalLabel ?? parent.getAttribute("aria-label") ?? "";
+        parent.dataset.copyOriginalLabel = originalLabel;
+        idCode.dataset.state = copied ? "good" : "bad";
+        parent.setAttribute("aria-label", copied ? "ID copied" : "Copy ID failed");
+        clearTimeout(parent.copyResetTimer);
+        parent.copyResetTimer = setTimeout(() => {
+          if (!idCode.isConnected) return;
+          delete idCode.dataset.state;
+          if (originalLabel) parent.setAttribute("aria-label", originalLabel);
+          else parent.removeAttribute("aria-label");
+          delete parent.dataset.copyOriginalLabel;
         }, 1000);
         return;
       }
@@ -1430,16 +1437,20 @@ function initEvents() {
     const copyBtn = event.target.closest?.(".copy-code");
     if (copyBtn) {
       const code = (copyBtn.dataset.code || "").replace(/&#10;/g, "\n");
-      const originalHtml = copyBtn.innerHTML;
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(code).catch(() => {});
-      }
-      copyBtn.dataset.state = "good";
-      copyBtn.innerHTML = CHECK_SVG;
-      setTimeout(() => {
+      const originalHtml = copyBtn.copyOriginalHtml ?? copyBtn.innerHTML;
+      copyBtn.copyOriginalHtml = originalHtml;
+      const copied = copyText(code, copyBtn);
+      copyBtn.dataset.state = copied ? "good" : "bad";
+      copyBtn.setAttribute("aria-label", copied ? "Code copied" : "Copy code failed");
+      if (copied) copyBtn.innerHTML = CHECK_SVG;
+      else copyBtn.innerHTML = originalHtml;
+      clearTimeout(copyBtn.copyResetTimer);
+      copyBtn.copyResetTimer = setTimeout(() => {
         if (copyBtn.isConnected) {
           delete copyBtn.dataset.state;
           copyBtn.innerHTML = originalHtml;
+          copyBtn.setAttribute("aria-label", "Copy code");
+          delete copyBtn.copyOriginalHtml;
         }
       }, 1400);
       return;

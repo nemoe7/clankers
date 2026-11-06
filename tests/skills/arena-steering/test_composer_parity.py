@@ -872,3 +872,42 @@ def test_markdown_dom_reused_in_report_refresh() -> None:
       return {retained, retainedAck, changed};
     }""")
     assert result == {"retained": True, "retainedAck": True, "changed": True}
+
+
+def test_code_and_id_copy_use_textarea_and_report_failures() -> None:
+  with composer_page(1200) as page:
+    page.evaluate("""() => {
+      window.copyCalls = [];
+      document.execCommand = command => {
+        const field = document.activeElement;
+        window.copyCalls.push({command, value: field.value,
+          selected: field.value.slice(field.selectionStart, field.selectionEnd)});
+        return [true, false, true, false][window.copyCalls.length - 1];
+      };
+      const code = document.createElement('button');
+      code.className = 'copy-code'; code.dataset.code = 'first\\nsecond';
+      code.setAttribute('aria-label', 'Copy code'); code.textContent = 'copy';
+      code.style.cssText = 'position:fixed;top:100px;left:100px;z-index:10000';
+      document.body.append(code);
+      const parent = document.createElement('button');
+      parent.dataset.parentType = 'message'; parent.dataset.parentId = 'abc123';
+      parent.setAttribute('aria-label', 'Message abc123 as message parent');
+      parent.style.cssText = 'position:fixed;top:150px;left:100px;z-index:10000';
+      parent.innerHTML = '<code class="msg-id">abc123</code>';
+      document.body.append(parent);
+    }""")
+    code = page.locator(".copy-code").last
+    code.click()
+    assert code.get_attribute("data-state") == "good"
+    assert page.evaluate("window.copyCalls[0].selected") == "first\nsecond"
+    code.click()
+    assert code.get_attribute("data-state") == "bad"
+    assert "failed" in (code.get_attribute("aria-label") or "").lower()
+    parent = page.locator('button[data-parent-id="abc123"]')
+    parent.click(modifiers=["Shift"])
+    assert page.evaluate("window.copyCalls[2].selected") == "abc123"
+    assert parent.locator("code").get_attribute("data-state") == "good"
+    parent.click(modifiers=["Shift"])
+    assert parent.locator("code").get_attribute("data-state") == "bad"
+    assert "failed" in (parent.get_attribute("aria-label") or "").lower()
+    assert page.locator("textarea[readonly]").count() == 0
