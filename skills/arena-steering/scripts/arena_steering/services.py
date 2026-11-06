@@ -829,6 +829,7 @@ class TaskService:
     self._validate_details(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
+    self._validate_dependency_priorities(queue, [*queue, task])
     ordered = self._enforce_dependency_order([*queue, task])
     self._tasks.save_task_queue(ordered)
     return task
@@ -1248,6 +1249,7 @@ class TaskService:
     if finishing:
       updated = self._complete_phase(updated, queue, changes.get("commit_hash"))
     new_queue = [updated if item.id == task_id else item for item in queue]
+    self._validate_dependency_priorities(queue, new_queue)
     ordered = self._enforce_dependency_order(new_queue)
     self._tasks.save_task_queue(ordered)
     return updated
@@ -1263,6 +1265,7 @@ class TaskService:
   def _replace_in_queue(self, queue: list[Task], updated: Task) -> None:
     self._validate_details(updated)
     replaced = [updated if item.id == updated.id else item for item in queue]
+    self._validate_dependency_priorities(queue, replaced)
     ordered = self._enforce_dependency_order(replaced)
     self._tasks.save_task_queue(ordered)
 
@@ -1299,6 +1302,24 @@ class TaskService:
         raise ValueError(f"Task {task.id!r} cannot depend on itself")
       if dep_id not in known_ids:
         raise ValueError(f"Unknown dependency task ID: {dep_id!r}")
+
+  @staticmethod
+  def _validate_dependency_priorities(before: list[Task], after: list[Task]) -> None:
+    def invalid_edges(tasks: list[Task]) -> set[tuple[str, str]]:
+      by_id = {task.id: task for task in tasks}
+      return {
+        (task.id, dep_id)
+        for task in tasks
+        for dep_id in task.deps
+        if dep_id in by_id and int(by_id[dep_id].priority[1]) > int(task.priority[1])
+      }
+
+    added = invalid_edges(after) - invalid_edges(before)
+    if added:
+      task_id, dep_id = min(added)
+      raise ValueError(
+        f"Task {task_id!r} cannot depend on lower-priority task {dep_id!r}"
+      )
 
   @staticmethod
   def _apply_age_priority(task: Task, now: str) -> None:

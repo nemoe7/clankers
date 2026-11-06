@@ -2285,13 +2285,17 @@ def test_priority_then_size_then_insertion_order_with_dependency_precedence() ->
   tasks.patch_task("small-b", {"priority": "P1", "size": 1})
   assert ids() == ["small-b", "urgent", "second", "small-a", "big"]
   assert tasks.get_task("small-b")[0].insertion_order == original_order
+  with pytest.raises(ValueError, match="lower-priority"):
+    tasks.mod_deps_add("small-b", "big")
+  tasks.patch_task("big", {"priority": "P1"})
   tasks.mod_deps_add("small-b", "big")
   assert ids().index("big") < ids().index("small-b")
   tasks.mod_deps_rm("small-b", "big")
   assert ids()[0] == "small-b"
+  before_invalid_position = ids()
   with pytest.raises(ValueError, match="position"):
     tasks.patch_task("big", {"position": 0})
-  assert ids()[-1] == "big"
+  assert ids() == before_invalid_position
   store.close()
 
 
@@ -2557,3 +2561,24 @@ assert.match(markup, /Work &lt;now&gt;/);
     text=True,
   )
   assert result.returncode == 0, result.stderr
+
+
+def test_dependency_priority_rejects_lower_priority_but_not_larger_size():
+  store = SqliteStore(":memory:")
+  tasks = TaskService(store, store)
+  tasks.create_task("urgent", "Urgent", priority="P2", size=1, details=["Work."])
+  tasks.create_task("later", "Later", priority="P3", size=21, details=["Work."])
+  with pytest.raises(ValueError, match="priority"):
+    tasks.mod_deps_add("urgent", "later")
+  with pytest.raises(ValueError, match="priority"):
+    tasks.create_task(
+      "new", "New", priority="P1", size=1, details=["Work."], deps=["later"]
+    )
+  tasks.mod_deps_add("later", "urgent")
+  with pytest.raises(ValueError, match="priority"):
+    tasks.patch_task("urgent", {"priority": "P4"})
+  with pytest.raises(ValueError, match="priority"):
+    tasks.patch_task("later", {"priority": "P1"})
+  assert tasks.get_task("urgent")[0].priority == "P2"
+  assert tasks.get_task("later")[0].priority == "P3"
+  store.close()
