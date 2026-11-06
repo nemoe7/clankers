@@ -1514,21 +1514,145 @@ def post_push_watch(line: str) -> bool:
   return False
 
 
+def _mixed_route(line: str, command: str) -> RouteRequest | None:
+  text = shell_line(line).strip()
+  if "\n" in text:
+    return None
+  quote = ""
+  escaped = False
+  chunks: list[str] = []
+  connectors: list[str] = []
+  start = 0
+  index = 0
+  while index < len(text):
+    char = text[index]
+    if escaped:
+      escaped = False
+    elif char == "\\" and quote != "'":
+      escaped = True
+    elif quote:
+      if char == quote:
+        quote = ""
+      elif quote == '"' and char in "$`":
+        return None
+    elif char in "'\"":
+      quote = char
+    elif char in "$`*?[]~#\n<>()":
+      return None
+    elif char in ";&|":
+      connector = text[index : index + 2] if char in "&|" else char
+      if connector not in {";", "&&", "||"}:
+        return None
+      chunks.append(text[start:index])
+      connectors.append(connector)
+      index += len(connector) - 1
+      start = index + 1
+    index += 1
+  if quote or escaped or not connectors:
+    return None
+  chunks.append(text[start:])
+  try:
+    parts = [shlex.split(chunk) for chunk in chunks]
+  except ValueError:
+    return None
+  if any(not part for part in parts):
+    return None
+  forbidden = {
+    "if",
+    "then",
+    "else",
+    "elif",
+    "fi",
+    "for",
+    "while",
+    "until",
+    "do",
+    "done",
+    "case",
+    "esac",
+    "function",
+    "select",
+    "time",
+    "!",
+    "{",
+    "}",
+  }
+  if any(
+    re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", part[0])
+    or part[0] in forbidden
+    or embedded_pieces(part)
+    for part in parts
+  ):
+    return None
+  if command and shell_line(command).strip() != text:
+    try:
+      if shlex.split(shell_line(command)) != parts[0]:
+        return None
+    except ValueError:
+      return None
+  scripts: list[str] = []
+  routes: list[RouteRequest] = []
+  for part in parts:
+    route = _test_route(part) or _github_route(part)
+    if route and route.kind in {"pr-update-manual", "pr-update-possible"}:
+      return None
+    if route:
+      routes.append(route)
+    if route and route.kind == "job-log":
+      part = [
+        "steer",
+        "job-log",
+        "-j" if route.args[0] == "jobs" else "-r",
+        route.args[1],
+      ]
+    elif route and route.kind == "pr-update":
+      part = [
+        "steer",
+        "pr-update",
+        "-n",
+        route.args[0],
+        "-t",
+        route.args[1],
+        "-f",
+        route.args[2],
+      ]
+    scripts.append(shlex.join(part))
+  if not routes:
+    return None
+  script = scripts[0] + "".join(
+    f" {connector} {part}" for connector, part in zip(connectors, scripts[1:])
+  )
+  background = next((route.args[0] for route in routes if route.kind == "run"), "")
+  return RouteRequest("mixed", (script, background))
+
+
 class RouteGuard:
   """Route single test, check-wait, PR-update, and job-log lines safely."""
 
   name = "route"
 
   def applies(self, ctx: PreContext) -> bool:
-    return not ctx.routed and any(
-      _test_route(words) or _github_route(words)
-      for words in _line_commands(ctx, unwrap_timeout=True)
+    if ctx.routed:
+      return False
+    commands = _line_commands(ctx, unwrap_timeout=True)
+    commands.extend(_line_commands(PreContext(line=ctx.command), unwrap_timeout=True))
+    commands.extend(
+      words[1:]
+      for words in commands[:]
+      if words and words[0] in {"if", "then", "elif", "do"}
     )
+    return any(_test_route(words) or _github_route(words) for words in commands)
 
   def run(self, ctx: PreContext) -> PreResult:
     pieces = ctx.pieces()
+    if len(pieces) > 1 and (route := _mixed_route(ctx.line, ctx.command)):
+      return PreResult(verdict=END_CALL, route=route)
+    mixed_syntax = ctx.is_mixed_line() and not (
+      len(pieces) == 1 and _mixed_route(f"{shell_line(ctx.line)}; true", "")
+    )
     if (
-      len(pieces) != 1
+      mixed_syntax
+      or len(pieces) != 1
       or pieces[0][1] != ";"
       or (ctx.command and shell_line(ctx.line) != shell_line(ctx.command))
     ):

@@ -78,7 +78,7 @@ _steer_gate() {
   if [ "${_steer_gate_running:-}" = 1 ]; then return 0; fi
   if [ "${_steer_single_push_approved:-}" = 1 ]; then return 0; fi
   _steer_gate_running=1
-  local command=$BASH_COMMAND reply status line
+  local command=$BASH_COMMAND reply status line _steer_route_rc=0
   if [ -z "${TZ:-}" ] && [ -n "${_steer_repo_root:-}" ] && [ -s "$_steer_repo_root/arena-state/display_tz" ]; then
     IFS= read -r TZ < "$_steer_repo_root/arena-state/display_tz" || :
     [ -n "$TZ" ] && export TZ
@@ -92,9 +92,27 @@ _steer_gate() {
   else
     status=$?
   fi
+  if [ "$status" = 2 ]; then
+    local route_marker=${reply##*$'\n'} route_rc
+    if [[ $route_marker =~ ^_steer_route_rc=([0-9]{1,3})$ ]]; then
+      route_rc=${BASH_REMATCH[1]}
+      if (( 10#$route_rc <= 255 )); then
+        _steer_route_rc=$((10#$route_rc))
+        if [[ $reply == *$'\n'* ]]; then reply=${reply%$'\n'*}; else reply=; fi
+      fi
+    fi
+  fi
   if [ -n "$reply" ]; then
+    local route_output=0
     while IFS= read -r line; do
+      if [ "$route_output" = 1 ]; then
+        printf '%s\n' "$line"
+        continue
+      fi
       case "$line" in
+        _steer_route_output=1)
+          if [ "$status" = 2 ]; then route_output=1; else printf '%s\n' "$line"; fi
+          ;;
         _arena_preview_done=*)
           _arena_preview_done=${line#_arena_preview_done=}
           _arena_preview_done=${_arena_preview_done#\"}
@@ -109,7 +127,7 @@ _steer_gate() {
   fi
   _steer_gate_running=
   case $status in
-    2) exit 0 ;;
+    2) exit "$_steer_route_rc" ;;
     130) exit 130 ;;
     0) return 0 ;;
     *)

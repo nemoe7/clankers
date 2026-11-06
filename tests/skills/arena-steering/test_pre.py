@@ -1231,7 +1231,6 @@ def test_owner_supplied_pre_notices_have_only_conditional_violation_guidance(
     ("sleep 1; cat runner.log", "VIOLATION: Sleep log read BANNED."),
     ("sleep 60", "VIOLATION: Sleep BANNED over"),
     ("rg -n needle AGENTS.md", "VIOLATION: Partial read blocked:"),
-    ("pytest -q; echo status", "VIOLATION: Mixed shell blocked for auto detach."),
   ),
 )
 def test_other_immediate_violations_show_conditional_bible_guidance(
@@ -3132,20 +3131,121 @@ def test_test_and_check_waits_route_to_background(
 
 
 @pytest.mark.parametrize(
+  "line",
+  (
+    "printf ready && pytest -q; printf done",
+    "false || pytest -q",
+    "printf 'a b' && gh api repos/o/r/actions/jobs/123/logs",
+    "gh api repos/o/r/pulls/42 -X PATCH -f title='New title' -F body=@pr.md && printf done",
+  ),
+)
+def test_safe_mixed_routes_intercept_before_first_command(line: str) -> None:
+  first = line.split(" && ")[0].split(" || ")[0].split("; ")[0]
+  result = pre.run_pipeline(pre.PreContext(line=line, command=first))
+  assert result.verdict == pre.END_CALL
+  assert result.route is not None and result.route.kind == "mixed"
+
+
+@pytest.mark.parametrize("line", ("pytest -k 'a;b'", "pytest -q > output"))
+def test_standalone_route_behavior_is_preserved(line: str) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.END_CALL
+  assert result.route == pre.RouteRequest("run", ("pytest",))
+
+
+def test_mixed_route_preserves_literal_operator_arguments() -> None:
+  line = "printf '%s' '&&' && pytest -q"
+  result = pre.run_pipeline(pre.PreContext(line=line, command="printf '%s' '&&'"))
+  assert result.verdict == pre.END_CALL
+  assert result.route is not None and result.route.kind == "mixed"
+  assert "'&&'" in result.route.args[0]
+
+
+@pytest.mark.parametrize(
+  "line",
+  (
+    "pytest -q | cat",
+    "printf ready && pytest -q > output",
+    "printf $HOME && pytest -q",
+    "NAME=value pytest -q; printf done",
+    "(pytest -q); printf done",
+    "pytest -q & printf done",
+    "if true; then pytest -q; fi",
+    "/bin/bash -l -c bash -c 'printf nested'; pytest -q",
+  ),
+)
+def test_unsafe_mixed_route_syntax_is_blocked(line: str) -> None:
+  assert pre._mixed_route(line, "") is None
+  assert pre.run_pipeline(pre.PreContext(line=line, command=line)).verdict == pre.BLOCK
+
+
+def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
+  root = Path(__file__).resolve().parents[3]
+  installer = (root / "skills/arena-steering/scripts/install.sh").read_text(
+    encoding="utf-8"
+  )
+  gate = installer.split("# arena-steering-gate\n", 1)[1].split("\nEOF\n", 1)[0]
+  home = tmp_path / "home"
+  command = home / ".local/bin/steer"
+  command.parent.mkdir(parents=True)
+  command.write_text(
+    "#!/bin/sh\nprintf '%s\\n' '_steer_route_output=1' '_steer_route_rc=123' "
+    "'_arena_preview_done=literal' 'helper output' '_steer_route_rc=7'\nexit 2\n",
+    encoding="utf-8",
+  )
+  command.chmod(0o755)
+  shell = subprocess.run(
+    ["bash", "-c", gate + '\ntrap "_steer_gate :" DEBUG\nprintf original'],
+    env={**os.environ, "HOME": str(home)},
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert shell.returncode == 7
+  assert "_steer_route_rc=123" in shell.stdout
+  assert "_arena_preview_done=literal" in shell.stdout
+  assert "_steer_route_output=1" not in shell.stdout
+  assert "helper output" in shell.stdout
+  assert "original" not in shell.stdout
+
+
+def test_mixed_helper_route_preserves_connectors_and_status(
+  _isolate_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  helper = tmp_path / "steer"
+  helper.write_text("#!/bin/sh\nprintf 'helper\\n'\nexit 7\n", encoding="utf-8")
+  helper.chmod(0o755)
+  monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+  marker = tmp_path / "prefix-log"
+  prefix = tmp_path / "prefix"
+  prefix.write_text(
+    f"#!/bin/sh\nprintf 'ran\\n' >> {shlex.quote(str(marker))}\n", encoding="utf-8"
+  )
+  prefix.chmod(0o755)
+  line = f"{shlex.quote(str(prefix))} && gh api repos/o/r/actions/jobs/123/logs || printf recovered"
+  code, out = _run("pre", "-l", line, "-c", shlex.quote(str(prefix)), "-s", "bash")
+  assert code == pre.END_CALL
+  assert marker.read_text(encoding="utf-8").splitlines() == ["ran"]
+  assert "helper" in out and "recovered" in out
+  assert "_steer_route_rc=0" in out
+  failing = "gh api repos/o/r/actions/jobs/123/logs && printf skipped"
+  code, out = _run("pre", "-l", failing, "-c", failing.split(" && ")[0], "-s", "bash")
+  assert code == pre.END_CALL
+  assert "helper" in out and "skipped" not in out
+  assert "_steer_route_rc=7" in out
+
+
+@pytest.mark.parametrize(
   ("line", "command"),
   (
     ("printf ready && pytest -q", "pytest -q"),
     ("printf ready && gh pr checks 124 --watch", "gh pr checks 124 --watch"),
     ("gh pr checks 124 --watch | tee checks.log", "gh pr checks 124 --watch"),
     (
-      "gh pr checks 124 --json name,state && printf done",
-      "gh pr checks 124 --json name,state",
-    ),
-    (
       "steer run logs pr-checks -n 8; gh pr checks 124 --json name,state",
       "gh pr checks 124 --json name,state",
     ),
-    ("pytest -q; printf done", "pytest -q"),
   ),
 )
 def test_mixed_test_wait_lines_refuse_replay(
@@ -3275,7 +3375,6 @@ def test_routing_failure_blocks_original_line(
   "line",
   (
     "curl -X PATCH https://api.github.com/repos/o/r/pulls/42 -d title=Incomplete",
-    "printf ready && gh api repos/o/r/actions/jobs/123/logs",
     "gh api repos/o/r/pulls/42 -X PATCH -f title=Updated -F body=@pr.md | cat",
     "jq -n --arg title Updated --rawfile body pr.md '{}' | gh api repos/o/r/pulls/42 -X PATCH --input -",
   ),

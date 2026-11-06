@@ -1066,8 +1066,35 @@ def _run_pre_route(
   route: pre_mod.RouteRequest, line: str, store: SqliteStore, out: TextIO
 ) -> int:
   """Complete a routed line before the trap ends the shell call."""
+  route_status = 0
   try:
-    if route.kind == "run":
+    if route.kind == "mixed":
+      script, name = route.args
+      if name:
+        _start_detached_run(
+          Path(store.db_path).parent, name, ["bash", "-c", script], out=out
+        )
+        print(f"routed {name}: background run. Verdict on later call.", file=out)
+      else:
+        env = {**os.environ, "ARENA_STEER_ROUTE": "1"}
+        result = subprocess.run(
+          ["bash", "-c", script], env=env, capture_output=True, text=True, check=False
+        )
+        print("_steer_route_output=1", file=out)
+        if result.stdout:
+          print(
+            result.stdout, end="" if result.stdout.endswith("\n") else "\n", file=out
+          )
+        if result.stderr:
+          print(
+            result.stderr,
+            end="" if result.stderr.endswith("\n") else "\n",
+            file=sys.stderr,
+          )
+        route_status = (
+          result.returncode if result.returncode >= 0 else 128 - result.returncode
+        )
+    elif route.kind == "run":
       name = route.args[0]
       _start_detached_run(
         Path(store.db_path).parent,
@@ -1102,6 +1129,8 @@ def _run_pre_route(
     else:
       print(f"Run failed: {exc}. Original did not run. Fix and retry safely.", file=out)
     return pre_mod.BLOCK
+  if route.kind == "mixed" and not route.args[1]:
+    print(f"_steer_route_rc={route_status}", file=out)
   return pre_mod.END_CALL
 
 

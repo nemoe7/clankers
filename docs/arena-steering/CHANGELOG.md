@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `pre.py`, `cli.py`, `install.sh`: Route safe mixed command lines while preserving connectors and exit status.
+
 - `resume-turn.md`, `install.sh`: Remove redundant login-shell instructions.
 
 - `SKILL.md`: Publish handoffs and cross-session specifications as unfielded Steering reports.
