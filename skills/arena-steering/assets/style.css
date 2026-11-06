@@ -1494,6 +1494,7 @@ select,
 }
 
 .message-heading {
+  min-height: 21px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1617,6 +1618,7 @@ select,
 }
 
 .message > .receipt {
+  min-height: 21px;
   justify-content: flex-end;
   padding-right: calc(var(--message-bubble-padding) + 1px);
   text-align: right;
@@ -1763,17 +1765,6 @@ code.msg-id {
     color var(--fast) var(--ease),
     border-color var(--fast) var(--ease),
     background-color var(--fast) var(--ease);
-}
-
-.message-heading .reply-parent-chip,
-.receipt-task-links .reply-parent-chip {
-  padding-block: 0;
-  line-height: 1.28;
-}
-
-.message .reply-parent-chip > code:not(.msg-id) {
-  padding: 0;
-  background: none;
 }
 
 .reply-parent-chip > code:not(.msg-id),

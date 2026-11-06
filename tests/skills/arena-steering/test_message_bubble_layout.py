@@ -587,7 +587,20 @@ def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
               const box = range.getBoundingClientRect();
               return box.top + box.height / 2;
             };
+            const parent = el('cc0002', '.reply-parent-chip');
+            const task = el('cc0003', '.reply-parent-chip');
+            const sharedHeight = chip => {
+              const shared = chip.cloneNode(true);
+              document.body.append(shared);
+              const result = height(shared);
+              shared.remove();
+              return result;
+            };
             return {
+              parentChip: height(parent),
+              parentShared: sharedHeight(parent),
+              taskChip: height(task),
+              taskShared: sharedHeight(task),
               plainHeading: height(el('cc0001', '.message-heading')),
               parentHeading: height(el('cc0002', '.message-heading')),
               plainReceipt: height(el('cc0001', '.receipt')),
@@ -598,6 +611,10 @@ def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
                 textCenter(el('cc0003', '.receipt-status'))),
             };
           }""")
+          assert geometry["parentChip"] == pytest.approx(
+            geometry["parentShared"], abs=0.5
+          )
+          assert geometry["taskChip"] == pytest.approx(geometry["taskShared"], abs=0.5)
           assert abs(geometry["plainHeading"] - geometry["parentHeading"]) <= 0.5, (
             geometry
           )

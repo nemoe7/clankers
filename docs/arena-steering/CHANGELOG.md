@@ -16,7 +16,7 @@ This log has no Unreleased section.
 
 - Limit new task and report IDs to 64 characters and reject cross-type ID collisions.
 
-- Keep message parent and task chips aligned without expanding single-line rows.
+- Keep message parent and task chips aligned at shared chip dimensions.
 
 - Keep floating scroll and reply controls neutral and retain their shape on hover.
 
