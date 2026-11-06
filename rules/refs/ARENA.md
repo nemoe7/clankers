@@ -176,7 +176,7 @@
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - MUST assert relations (growth, presence, or absence) for pixel values, configuration values, and implementation measurements.
-- MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks. No frameworks, no fixtures, no per-function suites beyond it.
+- MUST add each non-trivial runnable check (branch, loop, parser, money, or security) to its mirrored module test. Create one only when absent, keep assets in fixtures/, and NEVER add per-fix files, frameworks, or per-function suites.
 - Mechanical changes get proportional checks.
 - After every file edit, grep-verify the change actually landed before building on it.
 - Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.

@@ -54,7 +54,7 @@ NEVER default while material ambiguity remains.
 
 WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
 If the user insists on the full version, build it without re-arguing.
-MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
+MUST add each non-trivial runnable check (branch, loop, parser, money, or security) to its mirrored module test. Create a new module test file only when absent, and NEVER add per-fix test files.
 Before editing, MUST grep every caller of the function you are about to touch, and fix once where all callers route through.
 For bugs, failures, and regressions: reproduce, isolate, hypothesize, verify, fix the root cause rather than the symptom, cover it, and recheck.
 NEVER lazy about understanding: read the code and trace the flow first.

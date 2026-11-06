@@ -83,8 +83,7 @@
 - Keep exact-text tests for executable interface or protocol contracts.
 - Test public interfaces and integration boundaries.
 - Reuse the project's existing frameworks, fixtures, helpers, and conventions.
-- MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file.
-  - It is the smallest thing that fails if the logic breaks; no frameworks, no fixtures, no per-function suites beyond it.
+- MUST add each non-trivial runnable check (branch, loop, parser, money, or security) to its mirrored module test. Create a new module test file only when absent, and NEVER add per-fix test files.
 - Mechanical-only changes: proportional verification.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
