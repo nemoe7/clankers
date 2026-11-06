@@ -3147,11 +3147,9 @@ article#report.report img,
     animation: none;
   }
 
-  .topbar:has(~ main #view-reports[data-loading="true"]:not([hidden]))::after {
-    width: 100%;
-    opacity: 0.45;
-    animation: none;
-    transform: none;
+  .topbar:has(~ main #view-reports[data-loading="true"]:not([hidden]))::after,
+  .topbar:has(~ main #view-reports[data-loading="done"]:not([hidden]))::after {
+    content: none;
   }
 }
 

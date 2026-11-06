@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Hide the Reports loading bar when reduced motion is enabled.
+
 - Pad the bottom of the full-height desktop report picker.
 
 - Remove the misleading checkpoint label from non-blocking message receipts.

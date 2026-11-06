@@ -958,3 +958,49 @@ def test_stretched_report_picker_pads_its_bottom_without_changing_compact_modes(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+@pytest.mark.parametrize("motion", ["reduce", "no-preference"])
+def test_report_loading_bar_respects_reduced_motion(motion: str) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.reports.publish_report("test", "Test", "A report.")
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(reduced_motion=motion)
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      page.locator("#report").wait_for()
+      for phase in ("true", "done"):
+        content = page.evaluate(
+          """phase => {
+          document.querySelector('#view-reports').dataset.loading = phase;
+          return getComputedStyle(document.querySelector('.topbar'), '::after').content;
+        }""",
+          phase,
+        )
+        assert (content == "none") == (motion == "reduce")
+        if phase == "true" and os.environ.get("ARENA_STEERING_SCREENSHOT"):
+          page.wait_for_timeout(300)
+          page.screenshot(
+            path=f"{os.environ['ARENA_STEERING_SCREENSHOT']}-{motion}.png"
+          )
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
