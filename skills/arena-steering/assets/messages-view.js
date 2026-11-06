@@ -824,6 +824,7 @@ export function renderMessagesView(container, state, handlers) {
     const border = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
     const nextHeight = !msgEl.value || composerExpanded || msgEl.hidden ? 0 : msgEl.scrollHeight + border;
     msgEl.style.height = nextHeight ? `${nextHeight}px` : "";
+    msgEl.style.overflowY = msgEl.scrollHeight > msgEl.clientHeight ? "auto" : "hidden";
     if (expandBtn) expandBtn.hidden = !multiline && !composerExpanded;
     const nextHistoryHeight = historyEl?.clientHeight || 0;
     const heightDrop = priorHistoryHeight > nextHistoryHeight
@@ -837,6 +838,7 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
+  listen(window, "resize", growComposer);
   listen(msgEl, "input", () => {
     draftRevision += 1;
     writeComposerDraft(msgEl.value);

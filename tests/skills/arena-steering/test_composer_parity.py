@@ -122,6 +122,37 @@ def test_composer_grows_previews_and_expands_like_v1(width: int) -> None:
 
 
 @pytest.mark.parametrize("width", [1200, 390])
+def test_composer_scrolls_only_when_content_overflows(width: int) -> None:
+  with composer_page(width) as page:
+    draft = page.locator("#msg")
+    draft.fill("One line")
+    assert draft.evaluate("el => el.scrollHeight <= el.clientHeight")
+    assert draft.evaluate("el => getComputedStyle(el).overflowY") == "hidden"
+    draft.fill("Long line\n" * 100)
+    assert draft.evaluate("el => el.scrollHeight > el.clientHeight")
+    assert draft.evaluate("el => getComputedStyle(el).overflowY") == "auto"
+    page.locator("#composer-expand").click()
+    assert draft.evaluate("el => el.scrollHeight > el.clientHeight")
+    assert draft.evaluate("el => getComputedStyle(el).overflowY") == "auto"
+    draft.fill("One line")
+    assert draft.evaluate("el => el.scrollHeight <= el.clientHeight")
+    assert draft.evaluate("el => getComputedStyle(el).overflowY") == "hidden"
+
+
+def test_composer_reflows_when_the_viewport_narrows() -> None:
+  with composer_page(1200) as page:
+    draft = page.locator("#msg")
+    draft.fill("A sentence that fits on a wide screen but wraps on a narrow screen.")
+    page.set_viewport_size({"width": 390, "height": 800})
+    page.wait_for_function(
+      """() => {
+        const el = document.querySelector('#msg');
+        return el.scrollHeight <= el.clientHeight || getComputedStyle(el).overflowY === 'auto';
+      }"""
+    )
+
+
+@pytest.mark.parametrize("width", [1200, 390])
 def test_staged_files_use_v1_layout_and_image_thumbnails(width: int) -> None:
   image = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmGQAAAAASUVORK5CYII="

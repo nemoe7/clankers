@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Hide the composer scrollbar when the draft fits, and retain scrolling for long drafts.
+
 - Replace browser-owned retry and navigation prompts with HTML dialogs.
 
 - Add an on-demand Chromium installer that reports runtime paths.
