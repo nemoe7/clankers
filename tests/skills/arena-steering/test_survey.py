@@ -128,6 +128,41 @@ def test_survey_rejects_ungraded_submissions_without_changing_results(
   store.close()
 
 
+def test_survey_again_sends_hidden_blocking_request_without_clearing_results(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(survey.template())
+  before = app.messages.get_survey()
+  status, payload = app.dispatch("POST", "/survey/interrupt", {"active": True})
+  assert status == 200
+  after = payload["survey"]
+  assert after["answers"] == before["answers"]
+  assert after["results"] == before["results"]
+  assert after["checked_at"] == before["checked_at"]
+  assert after["pending"]
+  assert app.messages.list_messages(include_hidden=False) == []
+  messages = app.messages.list_messages(include_hidden=True)
+  assert len(messages) == 1
+  message = messages[0]
+  assert message.hidden and message.blocking and message.requires_ack
+  assert message.body == (
+    "Survey again\n"
+    "Answer the survey, ack this msg, and continue.\n"
+    "For the survey, use existing knowledge only. Run `steer survey` and read "
+    "the image path it prints, in JSON order.\n"
+    "Do not search, fetch, open other files, run code, or ask another system for answers.\n"
+    "Give your best effort. Guesses are allowed; use extremely low confidence "
+    "when very unsure. Boolean answers need true or false.\n"
+    "Use unknown with confidence 0 only if the whole question is unknown."
+  )
+  assert app.messages.read_pending()["messages"][0].id == message.id
+  app.messages.submit_survey(survey.template())
+  assert not app.messages.get_survey()["pending"]
+  store.close()
+
+
 def test_survey_results_stay_in_memory(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)

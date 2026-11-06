@@ -619,6 +619,19 @@ class MessageService:
       next_state = (not cur) if active is None else bool(active)
       self._meta.set_meta("bible_interrupt", "1" if next_state else "0")
       if next_state:
+        self.send_message(
+          "Survey again\n"
+          "Answer the survey, ack this msg, and continue.\n"
+          "For the survey, use existing knowledge only. Run `steer survey` and read "
+          "the image path it prints, in JSON order.\n"
+          "Do not search, fetch, open other files, run code, or ask another system for answers.\n"
+          "Give your best effort. Guesses are allowed; use extremely low confidence "
+          "when very unsure. Boolean answers need true or false.\n"
+          "Use unknown with confidence 0 only if the whole question is unknown.",
+          hidden=True,
+          blocking=True,
+        )
+        self._survey_pending = True
         self._meta.set_meta("skip_poll", "1")
       self._cond.notify_all()
     return self.get_survey()

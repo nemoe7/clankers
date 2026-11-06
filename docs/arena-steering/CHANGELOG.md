@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Send a hidden blocking survey request from Survey Again while preserving results.
+
 - Make bare `steer survey` print the image question and path, and retire `-i`.
 
 - Require graded JSON survey submissions and remove the ungraded results fallback.
