@@ -9,14 +9,16 @@ import contextlib
 import fnmatch
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import tokenize
 import tomllib
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, Future, wait
 from pathlib import Path
 
 try:
@@ -3236,6 +3238,23 @@ def main(argv=None):
   file_timeout = 10.0
   pending = {}
   next_index = 0
+  jobs = queue.Queue(maxsize=workers)
+
+  def worker():
+    while True:
+      job = jobs.get()
+      if job is None:
+        return
+      future, path = job
+      if not future.set_running_or_notify_cancel():
+        continue
+      try:
+        future.set_result(process_one(path))
+      except BaseException as error:
+        future.set_exception(error)
+
+  for _ in range(workers):
+    threading.Thread(target=worker, daemon=True).start()
 
   def submit_more(count):
     nonlocal next_index
@@ -3245,11 +3264,11 @@ def main(argv=None):
       path = files[next_index]
       if arguments.verbose:
         print(f"start {path}", file=sys.stderr, flush=True)
-      future = pool.submit(process_one, path)
+      future = Future()
+      jobs.put_nowait((future, path))
       pending[future] = (path, time.monotonic() + file_timeout)
       next_index += 1
 
-  pool = ThreadPoolExecutor(max_workers=workers)
   submit_more(workers)
   done_count = 0
   while pending:
@@ -3270,6 +3289,7 @@ def main(argv=None):
         print(f"{outcome} {path}", file=sys.stderr, flush=True)
       del pending[future]
       if future in expired:
+        future.cancel()
         skipped.append(path)
       else:
         try:
@@ -3285,13 +3305,24 @@ def main(argv=None):
       print(".", end="", file=sys.stderr, flush=True)
       if done_count % 25 == 0 or done_count == total:
         print(f" [{done_count * 100 // total:>3}%]", file=sys.stderr, flush=True)
-      submit_more(1)
+    retained = []
+    while True:
+      try:
+        job = jobs.get_nowait()
+      except queue.Empty:
+        break
+      if not job[0].cancelled():
+        retained.append(job)
+    for job in retained:
+      jobs.put_nowait(job)
+    submit_more(len(done) + len(expired))
   if skipped:
     print(
       "\nSkipped (no result within 10s):\n" + "\n".join(str(path) for path in skipped),
       file=sys.stderr,
     )
-  pool.shutdown(wait=False)
+  for _ in range(workers):
+    jobs.put_nowait(None)
   for path in files:
     result = results.get(path) or {
       "test": None,

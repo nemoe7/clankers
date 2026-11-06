@@ -15,6 +15,7 @@ This log has no Unreleased section.
 ### Fixed
 
 - Reject missing targets before scanning or formatting.
+- Let timed-out workers exit without blocking the process.
 - Cover `naming` and restricted `named` verb forms in `NMO901`.
 
 ## [0.1.14]
