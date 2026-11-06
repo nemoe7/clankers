@@ -718,10 +718,23 @@ export function renderMessagesView(container, state, handlers) {
 
   const skipBtn = container.querySelector("#skip-poll");
   listen(skipBtn, "click", async () => {
+    try {
+      await handlers.onSkipPoll?.();
+    } catch (error) {
+      if (error?.message !== "Action canceled") {
+        skipBtn.dataset.state = "bad";
+        skipBtn.title = `Could not end the wait: ${error?.message || error}`;
+        setTimeout(() => {
+          if (!skipBtn.isConnected) return;
+          delete skipBtn.dataset.state;
+          skipBtn.title = "Ask the agent to end its wait now";
+        }, 1000);
+      }
+      return;
+    }
     skipPollFeedbackUntil = Date.now() + 1000;
     skipBtn.dataset.state = "good";
     skipBtn.innerHTML = CHECK_SVG;
-    await handlers.onSkipPoll?.();
     setTimeout(() => {
       const curBtn = container.querySelector("#skip-poll");
       if (curBtn && Date.now() >= skipPollFeedbackUntil) {

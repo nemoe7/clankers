@@ -165,7 +165,14 @@ function socketRequest(method, path, bodyStr, timeoutMs = 15000) {
 }
 
 const PENDING_WRITES_KEY = "steer:pendingWrites";
+let choosePendingWrite = async () => "cancel";
+
+export function setPendingWriteChooser(chooser) {
+  choosePendingWrite = chooser;
+}
+
 const activeWrites = new Set();
+const pendingChoices = new Set();
 let pendingWrites = [];
 let pendingStorageAvailable = true;
 try {
@@ -184,15 +191,25 @@ function savePendingWrites() {
   }
 }
 
-function beginWrite(key, interactive = false) {
+async function beginWrite(key, interactive = false) {
   if (!pendingStorageAvailable) throw new Error("Cannot safely send: browser session storage is unavailable");
+  if (pendingChoices.has(key)) throw new Error("A retry decision is already open");
   const pending = pendingWrites.find((item) => item.key === key && !activeWrites.has(item.id));
   let id = pending?.id;
-  if (id && interactive && !window.confirm("This action may already have succeeded. Retry the same action?")) {
-    if (!window.confirm("Start a separate action instead? This may repeat the earlier action.")) {
+  if (id && interactive) {
+    activeWrites.add(id);
+    pendingChoices.add(key);
+    let decision;
+    try {
+      decision = await choosePendingWrite();
+    } finally {
+      activeWrites.delete(id);
+      pendingChoices.delete(key);
+    }
+    if (decision === "cancel" || !["retry", "new"].includes(decision)) {
       throw new Error("Action canceled");
     }
-    id = null;
+    if (decision === "new") id = null;
   }
   if (!id) {
     id = crypto.randomUUID();
@@ -213,7 +230,7 @@ function finishWrite(id, confirmed) {
 
 async function requestJson(method, path, body = undefined, interactive = false) {
   const write = ["POST", "PATCH", "DELETE"].includes(method) && path !== "/markdown";
-  const id = write ? beginWrite(JSON.stringify([method, path, body || {}]), interactive) : null;
+  const id = write ? await beginWrite(JSON.stringify([method, path, body || {}]), interactive) : null;
   const requestBody = write ? { ...(body || {}), _request_id: id } : body;
   const bodyStr = requestBody !== undefined ? JSON.stringify(requestBody) : undefined;
   let confirmed = false;
@@ -245,7 +262,7 @@ async function requestJson(method, path, body = undefined, interactive = false) 
 async function requestForm(path, formData, file, { automaticRetry = false } = {}) {
   const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const id = beginWrite(JSON.stringify(["POST", path, file.name, digest]), !automaticRetry);
+  const id = await beginWrite(JSON.stringify(["POST", path, file.name, digest]), !automaticRetry);
   formData.append("_request_id", id);
   let confirmed = false;
   try {

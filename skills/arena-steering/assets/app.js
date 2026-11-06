@@ -1,7 +1,7 @@
 import { createComposerUploads } from "./composer-uploads.js";
 // Main ES module controller for Arena Steering.
 
-import { api, connectWebSocket } from "./api.js";
+import { api, connectWebSocket, setPendingWriteChooser } from "./api.js";
 import { expandMessageHistory, messageQueryKey, paintConnection, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
@@ -116,6 +116,9 @@ function renderSurveyModalContent(survey) {
 
 const store = createStore();
 const modal = createModalManager();
+setPendingWriteChooser(() => modal.open("retry-write", {
+  title: "Unconfirmed action",
+}));
 const SURVEY_RELOAD_KEY = "steer-survey-open-on-reload";
 let surveyOpen = false;
 
@@ -585,7 +588,10 @@ const handlers = {
       }
     } catch (error) {
       console.error(error);
-      window.alert(`Could not open ${type} ${id}.`);
+      await modal.open("navigation-error", {
+        title: "Could not open reference",
+        slots: { message: `Could not open ${type} ${id}.` },
+      });
     }
   },
   async onMarkRepliesSeen(id, revision) {

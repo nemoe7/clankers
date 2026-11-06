@@ -249,6 +249,128 @@ def test_reports_copy_in_isolated_browser_selects_full_markdown(
     store.close()
 
 
+def test_assets_do_not_use_browser_owned_prompts() -> None:
+  for script in ASSETS_DIR.glob("*.js"):
+    if script.name.endswith(".min.js"):
+      continue
+    source = script.read_text(encoding="utf-8")
+    assert not re.search(
+      r"\b(?:window|globalThis)\.(?:alert|confirm|prompt)\s*\(", source
+    )
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("decision", ["retry", "new", "cancel"])
+def test_unconfirmed_write_uses_html_dialog(tmp_path: Path, decision: str) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.add_init_script("""(() => {
+          const key = JSON.stringify(['POST', '/poll/skip', {}]);
+          sessionStorage.setItem('steer:pendingWrites', JSON.stringify([
+            {key, id: '550e8400-e29b-41d4-a716-446655440000'}
+          ]));
+        })();""")
+        writes = []
+        page.route(
+          "**/poll/skip",
+          lambda route: (
+            writes.append(route.request.post_data_json),
+            route.fulfill(
+              status=200, content_type="application/json", body='{"skip_poll":true}'
+            ),
+          ),
+        )
+        native = []
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on("dialog", lambda dialog: (native.append(dialog.type), dialog.dismiss()))
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#skip-poll").click()
+        dialog = page.locator("#modal-shell[open]")
+        dialog.wait_for()
+        button = dialog.locator(f'#modal-actions button[value="{decision}"]')
+        if decision == "cancel":
+          button.click()
+          page.wait_for_timeout(200)
+          assert not writes
+          assert page.locator("#skip-poll").get_attribute("data-state") != "good"
+        else:
+          with page.expect_response("**/poll/skip"):
+            button.click()
+          assert len(writes) == 1
+          reused = writes[0]["_request_id"] == "550e8400-e29b-41d4-a716-446655440000"
+          assert reused == (decision == "retry")
+        assert not native
+        assert not errors
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_missing_reference_uses_html_dialog(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        native = []
+        page.on("dialog", lambda dialog: (native.append(dialog.type), dialog.dismiss()))
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          const button = document.createElement('button');
+          button.dataset.referenceType = 'message';
+          button.dataset.referenceId = 'ff0001';
+          document.body.append(button);
+          button.click();
+        }""")
+        dialog = page.locator("#modal-shell[open]")
+        dialog.get_by_text("Could not open message ff0001.").wait_for(timeout=8000)
+        assert not native
+        dialog.get_by_role("button", name="Close", exact=True).click()
+        assert not dialog.is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 @pytest.mark.skipif(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",

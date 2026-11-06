@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Replace browser-owned retry and navigation prompts with HTML dialogs.
+
 - Add an on-demand Chromium installer that reports runtime paths.
 
 - Protect a running Steering preview from unnecessary restarts.
