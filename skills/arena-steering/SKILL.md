@@ -47,6 +47,7 @@ steer task unlink <id> [msg|report|task] <link-id>
 steer task rm <id>
 ```
 
+- Estimate each task's Fibonacci size against a known reference task, combining effort, complexity, and uncertainty, not time or cost.
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
 - Blocking state derives automatically from unanswered `links.report_ids[]` and unfinished `links.task_ids[]`.
 - When creating a task, omit `-p` unless the user states a priority.
