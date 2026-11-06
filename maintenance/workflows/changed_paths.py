@@ -136,23 +136,19 @@ MODULE_TESTS = {
   ),
   "Userscripts": (),
   "GPT Plugins": (
-    "tests/gpt-plugins/test_individual_assets.py",
-    "tests/gpt-plugins/test_release_artifact.py",
+    "tests/maintenance/gpt_plugins/test_gate_gpt_plugins.py",
+    "tests/github/workflows/test_artifacts.py",
   ),
   "Gemini Release": ("tests/github/workflows/test_gemini_release.py",),
-  "Measurements": ("tests/maintenance/measurements/test_measurements.py",),
-  "PR Checks": (
-    "tests/maintenance/pr/test_check_pr.py",
-    "tests/maintenance/pr/test_commit_msg.py",
-  ),
+  "PR Checks": ("tests/maintenance/pr/test_gate_pr.py",),
   "Rules Publishing": ("tests/maintenance/publish/test_publish.py",),
   "Workflow and Distribution": (
     "tests/maintenance/workflows/test_changed_paths.py",
-    "tests/github/workflows/test_check_artifacts.py",
-    "tests/github/workflows/test_check_workflows.py",
-    "tests/github/workflows/test_distribute_sync.py",
+    "tests/maintenance/workflows/test_check_artifacts.py",
+    "tests/maintenance/workflows/test_gate_workflows.py",
+    "tests/github/actions/test_distribute_sync.py",
   ),
-  "Repository Prose and Validation": ("tests/maintenance/validation/test_check.py",),
+  "Repository Prose and Validation": ("tests/maintenance/test_check.py",),
 }
 # Archived tests remain available for historical reference but are not CI owners.
 ARCHIVED_TEST_PREFIX = "docs/archive/"
@@ -172,13 +168,13 @@ MODULE_PATHS = {
     "gpt-plugins/*",
     "maintenance/gpt_plugins/*",
     ".github/workflows/artifacts.yml",
-    "tests/gpt-plugins/*",
+    "tests/maintenance/gpt_plugins/*",
+    "tests/github/workflows/test_artifacts.py",
   ),
   "Gemini Release": (
     "github/workflows/*",
     "tests/github/workflows/test_gemini_release.py",
   ),
-  "Measurements": ("maintenance/check.py", "tests/maintenance/measurements/*"),
   "PR Checks": ("maintenance/pr/*", "tests/maintenance/pr/*"),
   "Rules Publishing": (
     "maintenance/publish/*",
@@ -191,9 +187,9 @@ MODULE_PATHS = {
     "maintenance/workflows/check_artifacts.py",
     "maintenance/workflows/gate_workflows.py",
     "tests/maintenance/workflows/*",
-    "tests/github/workflows/test_check_artifacts.py",
-    "tests/github/workflows/test_check_workflows.py",
-    "tests/github/workflows/test_distribute_sync.py",
+    "tests/maintenance/workflows/test_check_artifacts.py",
+    "tests/maintenance/workflows/test_gate_workflows.py",
+    "tests/github/actions/test_distribute_sync.py",
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
@@ -203,18 +199,17 @@ MODULE_PATHS = {
     "README.md",
     "rules/*",
     "skills/*/SKILL.md",
-    "tests/maintenance/validation/*",
+    "tests/maintenance/test_check.py",
   ),
 }
 MODULE_NODE_TESTS = {
   "Userscripts": (
-    "tests/userscripts/userscripts.checks.cjs",
-    "tests/userscripts/userscripts.test.cjs",
+    "tests/userscripts/arena.test.cjs",
+    "tests/userscripts/chatgpt.test.cjs",
   ),
 }
 MODULE_COMMANDS = {
   "Userscripts": ("node userscripts/arena.user.js", "node userscripts/chatgpt.user.js"),
-  "PR Checks": ("python tests/maintenance/pr/test_commit_msg.py",),
 }
 SHARED_TEST_PATHS = (
   "requirements.txt",
@@ -242,8 +237,6 @@ def module_matrix(files: Sequence[str] | None) -> list[dict[str, str]]:
     commands = ["python -m pytest -q " + shlex.join(tests)] if tests else []
     if node_tests := MODULE_NODE_TESTS.get(name):
       arguments = ["node", "--test"]
-      if name == "Preview":
-        arguments += ["--test-reporter=dot", "--test-concurrency=4"]
       commands.append(shlex.join([*arguments, *node_tests]))
     commands.extend(MODULE_COMMANDS.get(name, ()))
     rows.append({"name": name, "command": "\n".join(commands)})

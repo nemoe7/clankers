@@ -1,4 +1,4 @@
-"""Tests for the paragraph cap gate."""
+"""Regression tests."""
 
 from __future__ import annotations
 
@@ -208,3 +208,120 @@ def test_nemoizer_scope_is_root_config_and_one_stage(monkeypatch, capsys):
   assert check.main() == 0
   assert calls == [True]
   assert capsys.readouterr().out.count("== Nemoizer") == 1  # nonemo: NMO100
+
+
+def test_budget_updates_handle_additions_removals_and_measurements(
+  tmp_path: Path, monkeypatch
+):
+  root = tmp_path
+  monkeypatch.setattr(check, "ROOT", root)
+  monkeypatch.setattr(check, "README", root / "README.md")
+  monkeypatch.setattr(
+    check,
+    "EXPECTED_BUDGETS",
+    {"Zed.md": "UTF-8 file size", "alpha.md": "UTF-8 file size"},
+  )
+  monkeypatch.setattr(check, "EXPECTED_GROUPS", {})
+  (root / "Zed.md").write_text("one", encoding="utf-8")
+  (root / "alpha.md").write_text("two!", encoding="utf-8")
+  check.README.write_text(
+    "# Example\n\nLatest measurements as of 2000-01-01.\n\n"
+    "| File | Measure | Current |\n| --- | --- | --- |\n"
+    "| `retired.md` | `UTF-8 file size` | 10 `B` |\n\nKeep this paragraph.\n",
+    encoding="utf-8",
+  )
+  assert check.update_readme_measurements()
+  text = check.README.read_text(encoding="utf-8")
+  assert "retired.md" not in text
+  expected = sorted(check.EXPECTED_BUDGETS, key=str.casefold)
+  assert list(check.read_budget_table()) == expected
+  for relative in expected:
+    type = check.EXPECTED_BUDGETS[relative]
+    size = len((root / relative).read_bytes())
+    assert f"| [`{relative}`]({relative}) | `{type}` | {size} `B` |" in text
+    assert check.read_budget_table()[relative] == (type, f"{size} B")
+  assert text.endswith("Keep this paragraph.\n")
+  assert not check.update_readme_measurements()
+  del check.EXPECTED_BUDGETS["Zed.md"]
+  assert check.update_readme_measurements()
+  assert "Zed.md" not in check.README.read_text(encoding="utf-8")
+  before = check.README.read_bytes()
+  check.EXPECTED_BUDGETS["missing.md"] = "UTF-8 file size"
+  try:
+    check.update_readme_measurements()
+    raise AssertionError("A missing source was accepted")
+  except RuntimeError:
+    assert check.README.read_bytes() == before
+  check.EXPECTED_BUDGETS = {"tok.md": "o200k_base"}
+  (root / "tok.md").write_text("hello world", encoding="utf-8")
+  assert check.measure(root / "tok.md", "o200k_base") > 0
+  assert check.format_unit("o200k_base") == "tok"
+
+
+def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
+  root = tmp_path
+  monkeypatch.setattr(check, "ROOT", root)
+  monkeypatch.setattr(check, "README", root / "README.md")
+  monkeypatch.setattr(check, "EXPECTED_BUDGETS", {"rules.md": "UTF-8 file size"})
+  monkeypatch.setattr(
+    check,
+    "EXPECTED_GROUPS",
+    {"skills/example": ("UTF-8 file size", ("a.js", "b.css"))},
+  )
+  (root / "rules.md").write_text("call", encoding="utf-8")
+  (root / "a.js").write_text("fóur", encoding="utf-8")
+  (root / "b.css").write_text("sixsix", encoding="utf-8")
+  check.README.write_text(
+    "Latest measurements as of 2000-01-01.\n\n"
+    "| File | Measure | Current |\n| --- | --- | --- |\n",
+    encoding="utf-8",
+  )
+  assert check.update_readme_measurements()
+  text = check.README.read_text(encoding="utf-8")
+  # One row carries every non-clause file, so the table stays readable.
+  assert "a.js" not in text and "b.css" not in text
+  group, (unit, members) = next(iter(check.EXPECTED_GROUPS.items()))
+  size = sum((root / member).stat().st_size for member in members)
+  assert size > sum(
+    len((root / member).read_text(encoding="utf-8")) for member in members
+  )
+  assert f"| [`{group}`]({group}) | `{unit}` | {size:,} `B` |" in text
+  assert check.read_budget_table()[group] == (unit, f"{size:,} B")
+  assert not check.update_readme_measurements()
+  with (root / "b.css").open("a", encoding="utf-8") as file:
+    file.write("!")
+  assert check.update_readme_measurements()
+  grown = sum((root / member).stat().st_size for member in members)
+  assert grown > size
+  assert check.read_budget_table()[group] == (unit, f"{grown:,} B")
+  before = check.README.read_bytes()
+  (root / "a.js").unlink()
+  try:
+    check.update_readme_measurements()
+    raise AssertionError("A missing group file was accepted")
+  except RuntimeError:
+    assert check.README.read_bytes() == before
+
+
+def test_check_case_collisions_rejects_case_only_tracked_duplicates(
+  tmp_path: Path, monkeypatch
+):
+  import subprocess
+
+  (tmp_path / ".git").mkdir()
+
+  def fake_run(cmd, **kwargs):
+    assert cmd[:3] == ["git", "-C", str(tmp_path)]
+    return subprocess.CompletedProcess(
+      cmd,
+      0,
+      stdout=".github/PULL_REQUEST_TEMPLATE.md\n.github/pull_request_template.md\nREADME.md\n",
+      stderr="",
+    )
+
+  monkeypatch.setattr(check.subprocess, "run", fake_run)
+  errors: list[str] = []
+  check.check_case_collisions(errors, root=tmp_path)
+  assert errors == [
+    "case-colliding tracked paths: .github/PULL_REQUEST_TEMPLATE.md, .github/pull_request_template.md"
+  ]

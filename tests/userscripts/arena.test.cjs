@@ -2,542 +2,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { test } = require("node:test");
+const { bundles, runBundle, loadChecks } = require("./fixtures/vm_harness.cjs");
 
-const chatgptTargets = {
-  "hide-claim-offer": "Hide - Claim offer",
-  "hide-free-offer": "Hide - Free offer",
-  "hide-mode-toggle": "Hide - mode toggle",
-  "hide-codex": "Hide - Codex",
-  "hide-images": "Hide - Images",
-  "hide-library": "Hide - Library",
-  "hide-free-badge": "Hide - Free badge",
-  "hide-prompt-header": "Hide - prompt header",
-  "hide-header-upgrade": "Hide - header Upgrade",
-  "hide-header-share": "Hide - header Share",
-  "hide-sidebar-upgrade": "Hide - sidebar Upgrade",
-  "hide-plus-upsell": "Hide - Upgrade to Plus",
-};
+runBundle("arena");
 
-const bundles = {
-  arena: {
-    features: { "auto-wake": 1, "keep-working": 1, "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
-    labels: {
-      "auto-wake": "Composer - auto-send wake up",
-      "keep-working": "Composer - keep working",
-      "prompt-fill": "Composer - fill",
-      "open-steering": "Steering - open",
-      "preview-sandbox": "Steering - new tabs and downloads",
-      "hide-composer": "Composer - hide",
-      "auto-scroll": "Transcript - auto-scroll",
-      "transcript-trim": "Transcript - auto trim",
-      "transcript-alerts": "Transcript - hide generation alerts",
-      "tab-title": "Page - tab title",
-      "state-download": "State - download",
-      "keep-awake": "Page - keep awake",
-    },
-    // Every Arena entry leads with its module and carries no role word. A switch ends in (ON)/(OFF).
-    moduleSwitch: true,
-    offByDefault: ["transcript-trim"],
-    // The prompt fill owns the four proxy entries. The state download owns its two. The auto
-    // trim gates its interval line behind the switch alone.
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 2, "tab-title": 1 },
-    // Keep-rows plan, trim cap, and trim-now press stay on menu regardless of switch state.
-    alwaysMenus: { "transcript-trim": 3 },
-    // Logging, global pause, and show-settings-button stay outside the feature switches.
-    globalMenus: 3,
-    countMenu: "Transcript - keep ",
-    countKey: "clankers-arena-trim-keep",
-    baseObservers: 1,
-    // Prompt fill owns two timers: paint and key watch. Both ride one switch.
-    featureIntervals: {
-      "tab-title": 1,
-      "prompt-fill": 2,
-      "state-download": 1,
-      "transcript-trim": 1,
-      "keep-awake": 1,
-    },
-  },
-  chatgpt: {
-    features: { "hide-elements": 1, "auto-think": 0 },
-    labels: { "hide-elements": "Hide elements", "auto-think": "Auto Think" },
-    alwaysMenus: { "hide-elements": Object.keys(chatgptTargets).length },
-    baseObservers: 0,
-    featureIntervals: { "auto-think": 1 },
-  },
-};
-
-for (const [domain, bundle] of Object.entries(bundles)) {
-  const { features, labels, countMenu, countKey, baseObservers, featureIntervals } = bundle;
-  const offByDefault = new Set(bundle.offByDefault || []);
-  const extraMenus = bundle.extraMenus || {};
-  const source = fs.readFileSync(
-    path.join(__dirname, "../../userscripts", `${domain}.user.js`), "utf8",
-  );
-  const header = /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/.exec(source)[0];
-  if (/^\/\/ @grant\s+GM_xmlhttpRequest\s*$/m.test(header)) {
-    assert.match(header, /^\/\/ @connect\s+arena\.site\s*$/m, `${domain}: the connect tag names the preview host only`);
-  }
-
-  const keys = Object.keys(features);
-  const stored = new Map();
-  let refuseWrite = false;
-  let promptAnswer = null;
-  const alwaysMenus = bundle.alwaysMenus || {};
-  const alwaysTotal = keys.reduce((total, key) => total + (alwaysMenus[key] || 0), 0);
-
-  function isOn(saved, key) {
-    return offByDefault.has(key) ? saved.get(key) === true : saved.get(key) !== false;
-  }
-  const observersFor = (saved) => baseObservers + keys.reduce((total, key) => total + (isOn(saved, key) ? features[key] : 0), 0);
-  const intervalsFor = (saved) => keys.reduce((total, key) => total + (isOn(saved, key) ? (featureIntervals[key] || 0) : 0), 0);
-  const pauseKey = "clankers-arena-userscript-paused";
-  const menusFor = (saved) =>
-    (bundle.globalMenus || 0) +
-    keys.length +
-    alwaysTotal +
-    keys.reduce((total, key) => total + (isOn(saved, key) ? (extraMenus[key] || 0) : 0), 0);
-
-  function load(documentOverride) {
-    const menus = new Map();
-    const logs = [];
-    const intervals = [];
-    const active = { observers: 0, intervals: 0, clicks: 0 };
-    let nextId = 1;
-    const pill = {
-      textContent: "Think",
-      click() { active.clicks += 1; },
-    };
-    const context = {
-      console: Object.fromEntries(["log", "warn", "error"].map((level) => [level, (...args) => logs.push(args)])), URL,
-      location: { href: `https://${domain === "arena" ? "arena.ai/agent" : "chatgpt.com/"}`, pathname: "/agent" },
-      document: documentOverride || {
-        documentElement: {},
-        querySelector() { return null; },
-        querySelectorAll(selector) { return selector.includes('aria-pressed="false"') ? [pill] : []; },
-      },
-      window: { addEventListener() {}, removeEventListener() {} },
-      sessionStorage: { getItem() { return null; } },
-      MutationObserver: class {
-        observe() { active.observers += 1; }
-        disconnect() { active.observers -= 1; }
-      },
-      setInterval(callback, ms) {
-        assert.ok(
-          (Number.isInteger(ms) && ms >= 1000 && ms <= 60000) || ms === 900000,
-          `An interval stays inside the 1 s to 60 s owner range or the 15 min key rotation, not ${ms} ms`,
-        );
-        active.intervals += 1;
-        intervals.push(callback);
-      },
-      clearInterval() { active.intervals -= 1; },
-      setTimeout() { throw new Error("No steering button should schedule a click"); },
-      clearTimeout() {},
-      prompt() { return promptAnswer; },
-      GM_getValue(key, fallback) {
-        if (stored.has(key)) return stored.get(key);
-        if (key === "clankers-arena-show-settings-button" && !testMasterSwitchDefault) return false;
-        return fallback;
-      },
-      GM_setValue(key, value) {
-        if (refuseWrite) throw new Error("Storage write failed");
-        assert.ok(
-          typeof value === "boolean" || Number.isInteger(value) || typeof value === "string",
-          "A saved setting is a switch, a count or a plan",
-        );
-        stored.set(key, value);
-      },
-      GM_registerMenuCommand(label, callback) {
-        const id = nextId++;
-        menus.set(id, { label, callback });
-        return id;
-      },
-      GM_unregisterMenuCommand(id) { assert.ok(menus.delete(id)); },
-    };
-    vm.runInNewContext(source, context, { filename: `${domain}.user.js` });
-    return { menus, active, logs, intervals };
-  }
-
-  let testMasterSwitchDefault = false;
-  const moduleSwitch = bundle.moduleSwitch === true;
-  function menuFor(page, key) {
-    return [...page.menus.values()].find((item) =>
-      item.label.startsWith(labels[key] + (moduleSwitch ? " (" : ":")));
-  }
-  // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON - toggle` for ChatGPT.
-  const reads = (label, on) => label.includes(moduleSwitch ? (on ? "(ON)" : "(OFF)") : (on ? ": ON" : ": OFF"));
-
-  if (domain === "arena") {
-    testMasterSwitchDefault = true;
-    const masterDefault = load();
-    assert.deepEqual(
-      [...masterDefault.menus.values()].map((item) => item.label),
-      ["Userscript - show settings button (ON)"],
-      "When show settings button is ON, Tampermonkey hides all other menu items",
-    );
-    masterDefault.menus.values().next().value.callback();
-    assert.equal(stored.get("clankers-arena-show-settings-button"), false);
-    assert.ok(
-      masterDefault.menus.size > 1,
-      "Disabling show settings button reveals all other Tampermonkey menu items",
-    );
-    stored.clear();
-    testMasterSwitchDefault = false;
-  }
-
-  const defaults = load();
-  assert.equal(defaults.menus.size, menusFor(stored));
-  if (domain === "arena") {
-    // The owner's shape decision: one module's entries share a prefix, a switch names its state in parentheses. No entry carries a role word.
-    // The modules sit in one order, and one module's entries stay together: Composer, Proxy, Steering, Transcript, State, Page, Userscript.
-    const expected = [
-      "Composer - fill (ON)",
-      "Composer - hide (ON)",
-      "Composer - auto-send wake up (ON)",
-      "Composer - keep working (ON)",
-      "Proxy - host",
-      "Proxy - preview host",
-      "Proxy - master key",
-      "Proxy - post key now",
-      "Steering - open (ON)",
-      "Steering - new tabs and downloads (ON)",
-      "Transcript - auto-scroll (ON)",
-      "Transcript - auto trim (OFF)",
-      "Transcript - keep 50 rows",
-      "Transcript - trim cap 200 rows",
-      "Transcript - trim now",
-      "Transcript - hide generation alerts (ON)",
-      "State - download (ON)",
-      "State - force save",
-      "State - reset-window overwrite (ON)",
-      "Page - keep awake (ON)",
-      "Page - tab title (ON)",
-      "Tab title - every 1 s",
-      "Userscript - log level (INFO)",
-      "Userscript - pause all",
-      "Userscript - show settings button (OFF)",
-    ];
-    assert.deepEqual(
-      [...defaults.menus.values()].map((item) => item.label),
-      expected,
-      "Every entry leads with its module, and one module's entries sit together",
-    );
-  }
-  assert.equal(defaults.active.observers, observersFor(stored));
-  assert.equal(defaults.active.intervals, intervalsFor(stored));
-  assert.equal(defaults.active.clicks, domain === "chatgpt" ? 1 : 0);
-  assert.equal(stored.size, 0, "Reading defaults must not overwrite settings");
-
-  for (const key of keys) {
-    const startsOn = isOn(new Map(), key);
-    stored.clear();
-    stored.set(key, !startsOn);
-    const page = load();
-    assert.equal(page.active.observers, observersFor(stored));
-    assert.equal(page.active.intervals, intervalsFor(stored));
-    assert.equal(page.active.clicks, key === "auto-think" ? 0 : defaults.active.clicks);
-    const menu = menuFor(page, key);
-    assert.ok(menu, `Missing menu for ${key}`);
-    assert.ok(reads(menu.label, !startsOn), `The ${key} menu shows the saved switch`);
-    menu.callback();
-    assert.equal(stored.get(key), startsOn, "A toggle returns the feature to its default");
-    assert.equal(page.active.observers, observersFor(stored));
-    assert.equal(page.active.intervals, intervalsFor(stored));
-    assert.equal(page.menus.size, menusFor(stored));
-    assert.deepEqual(page.active, defaults.active, "The default state returns");
-    assert.ok(reads(menuFor(page, key).label, startsOn));
-    assert.deepEqual(load().active, defaults.active, "Reload must apply the saved switch");
-  }
-
-  if (domain === "arena") {
-    stored.clear();
-    const loggingPage = load();
-    const wakeLines = () => loggingPage.logs.filter((args) => args[0] === "[NemoUtils][wake][warn] unavailable").length;
-    const initialWake = wakeLines();
-    assert.equal(initialWake, 0);
-    const wakeTick = loggingPage.intervals.find((callback) => callback.name === "sync");
-    assert.ok(wakeTick);
-    wakeTick(); wakeTick();
-    assert.equal(wakeLines(), initialWake + 2, "repeated events must not be suppressed");
-    const loggingMenu = [...loggingPage.menus.values()].find((item) => item.label === "Userscript - log level (INFO)");
-    assert.ok(loggingMenu);
-    loggingMenu.callback();
-    assert.equal(stored.get("clankers-arena-log-level"), "debug");
-    assert.deepEqual(loggingPage.active, defaults.active, "Logging settings must not change feature activity");
-    assert.ok([...load().menus.values()].some((item) => item.label === "Userscript - log level (DEBUG)"));
-    refuseWrite = true;
-    try {
-      assert.doesNotThrow(() => loggingMenu.callback());
-      assert.equal(stored.get("clankers-arena-log-level"), "debug");
-    } finally {
-      refuseWrite = false;
-    }
-    stored.clear();
-  }
-
-  if (domain === "chatgpt") {
-    for (const [key, label] of Object.entries(chatgptTargets)) {
-      stored.clear();
-      let page = load();
-      const targetMenu = () => [...page.menus.values()].find((item) => item.label.startsWith(label + ":"));
-      assert.ok(targetMenu(), `Every managed target has a menu: ${key}`);
-      assert.ok(reads(targetMenu().label, true), `${key} ships on`);
-      const beforeFailure = { ...page.active };
-      refuseWrite = true;
-      try {
-        try { targetMenu().callback(); }
-        catch (error) { assert.match(error.message, /Storage write failed/); }
-      } finally { refuseWrite = false; }
-      assert.equal(stored.has(key), false, "A failed write keeps the saved preference");
-      assert.ok(reads(targetMenu().label, true), "A failed write keeps the target switch on");
-      assert.deepEqual(page.active, beforeFailure, "A failed write keeps feature activity");
-      targetMenu().callback();
-      assert.equal(stored.get(key), false);
-      assert.ok(reads(targetMenu().label, false));
-      assert.equal(page.active.observers, observersFor(stored), "Individual switches share the existing observer");
-      page = load();
-      assert.ok(reads(targetMenu().label, false), "Reload keeps each target preference");
-      menuFor(page, "hide-elements").callback();
-      assert.equal(page.active.observers, observersFor(stored));
-      assert.ok(targetMenu(), "Individual preferences stay available while the master is off");
-      targetMenu().callback();
-      assert.equal(stored.get(key), true);
-      assert.equal(page.active.observers, observersFor(stored), "A target switch cannot enable the master");
-      menuFor(page, "auto-think").callback();
-      assert.equal(page.active.intervals, intervalsFor(stored), "The master leaves Auto Think independent");
-      menuFor(page, "hide-elements").callback();
-      assert.equal(page.active.observers, observersFor(stored));
-      assert.equal(page.active.intervals, intervalsFor(stored));
-      assert.ok(reads(targetMenu().label, true));
-    }
-    stored.clear();
-    function managedNode(hidden) {
-      const attrs = new Map();
-      if (hidden !== undefined) attrs.set("hidden", hidden);
-      return {
-        hasAttribute(name) { return attrs.has(name); },
-        getAttribute(name) { return attrs.has(name) ? attrs.get(name) : null; },
-        setAttribute(name, value) { attrs.set(name, String(value)); },
-        removeAttribute(name) { attrs.delete(name); },
-      };
-    }
-    const mode = managedNode();
-    const codex = managedNode();
-    const prehidden = [managedNode(""), managedNode("until-found")];
-    const scoped = load({
-      documentElement: {},
-      querySelector(selector) {
-        return selector === "div.\\@container\\/home-mode-toggle" ? mode : null;
-      },
-      querySelectorAll(selector) {
-        if (selector === 'button[data-sidebar-destination="builtin:codex"]') return [codex];
-        if (selector === 'button[data-sidebar-destination="builtin:images"]') return prehidden;
-        return [];
-      },
-    });
-    const modeMenu = () => [...scoped.menus.values()].find((item) =>
-      item.label.startsWith(chatgptTargets["hide-mode-toggle"] + ":"));
-    assert.ok(mode.hasAttribute("hidden") && codex.hasAttribute("hidden"));
-    modeMenu().callback();
-    assert.equal(mode.hasAttribute("hidden"), false, "An individual switch restores its own target");
-    assert.equal(codex.hasAttribute("hidden"), true, "Other managed targets stay hidden");
-    const thinkIntervals = scoped.active.intervals;
-    menuFor(scoped, "hide-elements").callback();
-    assert.equal(codex.hasAttribute("hidden"), false, "The master restores owned hides");
-    assert.equal(scoped.active.intervals, thinkIntervals, "The master does not stop Auto Think");
-    modeMenu().callback();
-    assert.equal(mode.hasAttribute("hidden"), false, "The master still wins over an individual switch");
-    menuFor(scoped, "hide-elements").callback();
-    assert.ok(mode.hasAttribute("hidden") && codex.hasAttribute("hidden"));
-    assert.deepEqual(prehidden.map((node) => node.getAttribute("hidden")), ["", "until-found"],
-      "The userscript does not restore or rewrite hides it did not own");
-    stored.clear();
-  }
-
-  if (countMenu) {
-    stored.clear();
-    const counted = load();
-    const toggle = menuFor(counted, "transcript-trim");
-    assert.ok(toggle, "Missing the transcript trim toggle");
-    assert.ok(reads(toggle.label, false), "Transcript trim ships OFF");
-    // The plan menu is the one that names rows. The switch menu reads ": ON/OFF".
-    const findCount = () => [...counted.menus.values()].find((item) => item.label.includes(countMenu));
-    const findNow = () =>
-      [...counted.menus.values()].find((item) => item.label === "Transcript - trim now");
-    // The manual entries answer the switch whatever it reads: a trim now runs with the auto
-    // trim still off.
-    assert.ok(findCount(), "The count menu stays while the auto trim is off");
-    assert.ok(findNow(), "The trim now button stays while the auto trim is off");
-    findNow().callback();
-    assert.ok(
-      findCount().label.includes("50 rows"),
-      "The count menu shows the default row limit",
-    );
-    toggle.callback();
-    assert.equal(stored.get("transcript-trim"), true);
-
-    // The count line belongs to the Transcript group.
-    // So it sits with its two switches rather than at the bottom the manager appends it to.
-    assert.deepEqual(
-      [...counted.menus.values()].map((item) => item.label),
-      [
-        "Composer - fill (ON)",
-        "Composer - hide (ON)",
-        "Composer - auto-send wake up (ON)",
-        "Composer - keep working (ON)",
-        "Proxy - host",
-        "Proxy - preview host",
-        "Proxy - master key",
-        "Proxy - post key now",
-        "Steering - open (ON)",
-        "Steering - new tabs and downloads (ON)",
-        "Transcript - auto-scroll (ON)",
-        "Transcript - auto trim (ON)",
-        "Transcript - keep 50 rows",
-        "Transcript - trim cap 200 rows",
-        "Transcript - trim now",
-        "Transcript - hide generation alerts (ON)",
-        "Transcript - auto trim interval 5 s",
-        "State - download (ON)",
-        "State - force save",
-        "State - reset-window overwrite (ON)",
-        "Page - keep awake (ON)",
-        "Page - tab title (ON)",
-        "Tab title - every 1 s",
-        "Userscript - log level (INFO)",
-        "Userscript - pause all",
-        "Userscript - show settings button (OFF)",
-      ],
-      "The keep-rows line sits in the Transcript group",
-    );
-    const findEvery = () =>
-      [...counted.menus.values()].find((item) =>
-        item.label.startsWith("Transcript - auto trim interval"));
-    assert.ok(findEvery(), "The interval menu shows once the auto trim is on");
-    assert.ok(findEvery().label.includes("5 s"), "The interval line shows the default tick");
-    promptAnswer = "3";
-    findEvery().callback();
-    promptAnswer = null;
-    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 3000, "The prompt sets the trim tick");
-    assert.ok(findEvery().label.includes("3 s"), "The interval line shows the saved tick");
-    promptAnswer = "120";
-    findEvery().callback();
-    promptAnswer = null;
-    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "A huge answer clamps to a minute");
-    promptAnswer = "zero";
-    findEvery().callback();
-    promptAnswer = null;
-    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "Garbage keeps the saved tick");
-    findEvery().callback();
-    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "A cancel keeps the saved tick");
-    const findTitleEvery = () =>
-      [...counted.menus.values()].find((item) => item.label.startsWith("Tab title - every"));
-    assert.ok(findTitleEvery(), "Missing the tab title interval menu");
-    promptAnswer = "2";
-    findTitleEvery().callback();
-    promptAnswer = null;
-    assert.equal(stored.get("clankers-arena-title-interval-ms"), 2000, "The prompt sets the title tick");
-    assert.ok(findTitleEvery().label.includes("2 s"), "The title line shows the saved tick");
-    findCount().callback();
-    assert.equal(stored.has(countKey), false, "A cancel keeps the plan unset");
-    stored.set(countKey, "2,120");
-    findCount().callback();
-    assert.equal(stored.get(countKey), "120", "A saved legacy plan keeps its row limit");
-    assert.ok(findCount().label.includes("120 rows"));
-    promptAnswer = "100";
-    findCount().callback();
-    assert.equal(stored.get(countKey), "100", "One value sets the global row limit");
-    assert.ok(findCount().label.includes("100 rows"));
-    promptAnswer = "5";
-    findCount().callback();
-    assert.equal(stored.get(countKey), "100", "Rows below the floor keep the old plan");
-    promptAnswer = "0,100";
-    findCount().callback();
-    assert.equal(stored.get(countKey), "100", "An invalid legacy plan keeps the old plan");
-    promptAnswer = "later";
-    findCount().callback();
-    assert.equal(stored.get(countKey), "100", "A bad plan keeps the old plan");
-    promptAnswer = null;
-    // The switch gates the interval line alone, so the manual entries stay when it flips
-    // back to OFF.
-    toggle.callback();
-    assert.equal(stored.get("transcript-trim"), false);
-    assert.ok(!findEvery(), "The interval line leaves with the switch");
-    assert.ok(findCount(), "The count menu stays once the auto trim is off again");
-    assert.ok(findNow(), "The trim now button stays once the auto trim is off again");
-  }
-
-  stored.clear();
-  for (const key of keys) stored.set(key, false);
-  const allOff = load();
-  assert.equal(allOff.active.observers, baseObservers);
-  assert.equal(allOff.active.intervals, 0);
-  assert.equal(allOff.menus.size, keys.length + (bundle.globalMenus || 0) + alwaysTotal);
-  assert.ok(
-    keys.every((key) => reads(menuFor(allOff, key).label, false)),
-    "Every disabled feature switch reads OFF; independent target preferences stay unchanged",
-  );
-  assert.deepEqual(allOff.active, { observers: baseObservers, intervals: 0, clicks: 0 });
-
-  refuseWrite = true;
-  const labelsBefore = [...allOff.menus.values()].map((item) => item.label);
-  assert.throws(() => allOff.menus.values().next().value.callback(), /Storage write failed/);
-  assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labelsBefore);
-  assert.ok([...stored.values()].every((value) => value === false));
-// The global pause stops every feature where it stands.
-    // With no reload, the resume brings back the features whose own switch is ON.
-  if (domain === "arena") {
-    // Storage-failure check above keeps write rejection active. Pause writes again.
-    refuseWrite = false;
-    stored.clear();
-    const live = load();
-    const pauseMenu = () => [...live.menus.values()].find((item) => item.label.includes("pause all"));
-    const resumeMenu = () => [...live.menus.values()].find((item) => item.label.includes("resume all"));
-    assert.ok(pauseMenu(), "Missing the pause-all menu entry");
-    assert.equal(live.menus.size, menusFor(stored), "The running set carries the global entry beside the switches");
-    pauseMenu().callback();
-    assert.equal(stored.get(pauseKey), true, "The pause press is stored, so a reload keeps it");
-    assert.deepEqual(
-      { observers: live.active.observers, intervals: live.active.intervals },
-      { observers: 0, intervals: 0 },
-      "The pause stops every observer and timer where it stands",
-    );
-    assert.equal(live.menus.size, keys.length + bundle.globalMenus + alwaysTotal, "Every feature switch stays usable while paused");
-    assert.ok(reads(menuFor(live, "tab-title").label, true), "A paused feature keeps its own switch label");
-    assert.ok(resumeMenu(), "The pause entry flips to resume");
-    menuFor(live, "tab-title").callback();
-    assert.equal(stored.get("tab-title"), false, "A switch flips while paused");
-    resumeMenu().callback();
-    assert.equal(stored.get(pauseKey), false, "The resume clears the stored pause");
-    assert.deepEqual(
-      { observers: live.active.observers, intervals: live.active.intervals },
-      {
-        observers: observersFor(stored),
-        intervals: intervalsFor(stored),
-      },
-      "The resume brings back the features whose own switch is ON",
-    );
-    assert.ok(pauseMenu(), "The resume entry flips back to pause");
-    // A reload while paused starts with nothing running and still offers the resume.
-    stored.set(pauseKey, true);
-    const reloaded = load();
-    assert.equal(reloaded.active.observers, 0, "A reload keeps the pause");
-    assert.equal(reloaded.active.intervals, 0, "A paused reload runs no timer");
-    assert.ok(
-      [...reloaded.menus.values()].some((item) => item.label.includes("resume all")),
-      "A paused reload offers the resume",
-    );
-    // Pause leaves switches alone, so next unpaused load runs them again.
-    stored.set(pauseKey, false);
-    const after = load();
-    assert.deepEqual(
-      { observers: after.active.observers, intervals: after.active.intervals },
-      { observers: observersFor(stored), intervals: intervalsFor(stored) },
-      "The switches survive the pause",
-    );
-  }
-
-  console.log(`ok ${domain}: switches, defaults, storage failure, live switches, and disabled startup`);
-}
 {
   const source = fs.readFileSync(path.join(__dirname, '../../userscripts/arena.user.js'), 'utf8');
   const events = new Map();
@@ -657,6 +126,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(events.has('scroll'), false, 'Removed transcript releases its listener');
   console.log('ok auto-scroll: growth, resize, navigation, toggle button, menu sync, cleanup');
 }
+
 {
   const { test } = require("node:test");
   // Security check owns page while visible: fill, steering click, and proxy posts wait.
@@ -883,6 +353,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     console.log("ok captcha hold: fill, steering click, proxy posts wait for the check");
   });
 }
+
 {
   const { test } = require("node:test");
 // The tab title reads the last message root: the newest row's type carries the mark.
@@ -3003,7 +2474,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   });
 }
 
-  {
+{
     const { test } = require("node:test");
     test("tab title inserts Greek symbol when board is enabled on session", async () => {
       const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
@@ -4847,6 +4318,2561 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     });
   }
 
+function checkArenaLogging(api, menus) {
+  assert.equal(typeof api.setLogLevel, "function");
+  assert.equal(api.getLogLevel(), "info");
+  const lines = [];
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  for (const method of Object.keys(original)) {
+    console[method] = (...args) => lines.push({ method, text: JSON.stringify(args) });
+  }
+  try {
+    const fields = {
+      count: 2, repo: "private-repo", filename: "private.ndjson",
+      key: "secret-key", message: "secret-message", url: "secret-url", error: "raw-error",
+    };
+    api.logEvent("state", "saved", fields);
+    api.logEvent("state", "saved", fields);
+    assert.equal(lines.length, 2, "identical events must remain visible");
+    assert.match(lines[0].text, /\[NemoUtils\]\[state\]\[info\] saved/);
+    assert.match(lines[0].text, /count/);
+    assert.doesNotMatch(lines[0].text, /private|secret|raw-error/);
+    api.logEvent("state", "compare", fields, "debug");
+    assert.equal(lines.length, 2, "debug must be off by default");
+    assert.equal(api.setLogLevel("debug"), true);
+    api.logEvent("state", "compare", fields, "debug");
+    assert.match(lines.at(-1).text, /private-repo/);
+    assert.match(lines.at(-1).text, /private.ndjson/);
+    assert.doesNotMatch(lines.at(-1).text, /secret|raw-error/);
+    const safeCount = lines.length;
+    assert.equal(api.logEvent("state", "secret-message", fields), false);
+    assert.equal(lines.length, safeCount, "unknown event names must not reach the console");
+    api.logEvent("state", "saved", Object.create({ repo: "secret-message", filename: "secret-key", count: 666 }));
+    assert.doesNotMatch(lines.at(-1).text, /secret|666/);
+    api.logEvent("state", "saved", { count: "secret-message", code: "raw-error" });
+    assert.doesNotMatch(lines.at(-1).text, /secret|raw-error/);
+    assert.equal(api.setLogLevel("warn"), true);
+    const count = lines.length;
+    api.logEvent("state", "saved", fields);
+    api.logEvent("state", "failed", fields, "warn");
+    api.logEvent("state", "failed", fields, "error");
+    assert.equal(lines.length, count + 2);
+    assert.equal(lines.at(-2).method, "warn");
+    assert.equal(lines.at(-1).method, "error");
+    assert.equal(api.setLogLevel("invalid"), false);
+    assert.equal(api.getLogLevel(), "warn");
+    api.setLogLevel("info");
+    let ran = false;
+    api.menuItem([], "State - secret-message", () => { ran = true; });
+    menus.findLast((entry) => entry.label === "State - secret-message").run();
+    assert.equal(ran, true);
+    assert.doesNotMatch(lines.at(-1).text, /secret-message/);
+    api.registerLogMenu();
+    menus.findLast((entry) => entry.label.startsWith("Userscript - log level")).run();
+    assert.equal(api.getLogLevel(), "debug");
+    for (const method of Object.keys(original)) console[method] = () => { throw Error("closed"); };
+    assert.doesNotThrow(() => api.logEvent("state", "failed", fields, "error"));
+  } finally {
+    Object.assign(console, original);
+    api.setLogLevel("info");
+  }
+  console.log("ok arena logging");
+}
 
+function checkTranscriptAlerts(api) {
+  assert.ok(api, "the independent alert submodule must be exposed");
+  const selector = '[role="alert"][class~="border-red-500/30"][class~="bg-red-500/10"]';
+  assert.equal(api.ALERT_SELECTOR, selector);
+  function alert(value = "", priority = "", visible = true) {
+    return {
+      isConnected: true,
+      target: true,
+      hidden: false,
+      getClientRects() { return visible ? [{}] : []; },
+      matches(s) { assert.equal(s, selector); return this.target; },
+      style: {
+        getPropertyValue() { return value; },
+        getPropertyPriority() { return priority; },
+        setProperty(key, next, rank) { assert.equal(key, "display"); value = next; priority = rank; },
+        removeProperty(key) { assert.equal(key, "display"); value = ""; priority = ""; },
+      },
+    };
+  }
+  const first = alert("flex", "important");
+  const priorHidden = alert("none", "", false);
+  const unrelated = alert(); unrelated.target = false;
+  let nodes = [first, priorHidden, unrelated];
+  const sync = api.alertVisibility({
+    querySelectorAll(s) { assert.equal(s, selector); return nodes.filter((n) => n.target); },
+  });
+  sync(false);
+  assert.equal(first.style.getPropertyValue("display"), "flex");
+  sync(true);
+  assert.equal(first.style.getPropertyValue("display"), "none");
+  assert.equal(first.style.getPropertyPriority("display"), "important");
+  assert.equal(priorHidden.style.getPropertyPriority("display"), "");
+  assert.equal(unrelated.style.getPropertyValue("display"), "");
+  const later = alert(); nodes.push(later);
+  first.textContent = "A different error message";
+  sync(true); sync(true);
+  assert.equal(later.style.getPropertyValue("display"), "none");
+  sync(false);
+  assert.equal(first.style.getPropertyValue("display"), "flex");
+  assert.equal(first.style.getPropertyPriority("display"), "important");
+  assert.equal(later.style.getPropertyValue("display"), "");
+  assert.equal(priorHidden.style.getPropertyValue("display"), "none");
+  const externalHidden = alert("inline", "");
+  nodes.push(externalHidden);
+  sync(true);
+  externalHidden.style.setProperty("display", "none", "");
+  sync(false);
+  assert.equal(externalHidden.style.getPropertyValue("display"), "none");
+  assert.equal(externalHidden.style.getPropertyPriority("display"), "");
+  nodes = nodes.filter((n) => n !== externalHidden);
+  sync(true);
+  later.style.setProperty("display", "grid", "");
+  first.target = false;
+  sync(true);
+  assert.equal(first.style.getPropertyValue("display"), "flex");
+  sync(false);
+  assert.equal(later.style.getPropertyValue("display"), "grid", "preserve an external style change");
+  sync(true); later.isConnected = false; sync(true);
+  assert.equal(later.style.getPropertyValue("display"), "grid");
+}
 
+function checkPromptFill(api) {
+  var isComposerUrl = api.isComposerUrl;
+  var slugFromOwnerRepo = api.slugFromOwnerRepo;
+  var promptForSlug = api.promptForSlug;
+  var shouldWrite = api.shouldWrite;
+  var ARENA_MD_URL = api.ARENA_MD_URL;
+  var proxyHost = api.proxyHost;
+  var keyUrl = api.keyUrl;
+  var agentKeyFrom = api.agentKeyFrom;
+  var previewBase = api.previewBase;
+  var rotateUrl = api.rotateUrl;
+  var keyPostUrl = api.keyPostUrl;
+  var KEY_WATCH_MS = api.KEY_WATCH_MS;
+  var keyNote = api.keyNote;
+  var keyChanged = api.keyChanged;
+  var keyPostDue = api.keyPostDue;
+  var NOTED_KEY = api.NOTED_KEY;
+  var fetchJson = api.fetchJson;
+  var PREVIEW_FRAME_TITLE = api.PREVIEW_FRAME_TITLE;
+  var ROTATE_MIN_SECONDS = api.ROTATE_MIN_SECONDS;
+  var ROTATE_DUE_KEY = api.ROTATE_DUE_KEY;
+  var rotationDueAt = api.rotationDueAt;
+  var rotationWaitMs = api.rotationWaitMs;
+  var KEY43 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
+  var PROMPT_FILL_URL = api.PROMPT_FILL_URL;
+  assert.equal(PROMPT_FILL_URL,
+    "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt");
+  var promptFillText = fs.readFileSync(
+    path.join(__dirname, "../../userscripts/arena-prompt-fill.txt"), "utf8").trimEnd();
+  var promptSource = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+  assert.equal(promptSource.includes("TEMPLATE_TAIL"), false);
+  assert.equal(promptForSlug("clankers", ""), null);
+  var prompt = promptForSlug("clankers", promptFillText);
+  var promptWithRules = promptForSlug("clankers", promptFillText, "# Rules\n");
 
+  function frames(rows) {
+    return {
+      querySelectorAll: function (selector) {
+        if (selector !== "iframe[title]") return [];
+        return rows.map(function (row) {
+          return {
+            getAttribute: function () {
+              return row[0];
+            },
+            src: row[1],
+          };
+        });
+      },
+    };
+  }
+
+  var cases = [
+    [isComposerUrl("https://arena.ai/agent"), true],
+    [isComposerUrl("https://www.arena.ai/agent"), true],
+    [isComposerUrl("https://arena.ai/agent?x=1"), true],
+    [isComposerUrl("https://arena.ai/agent#x"), true],
+    [isComposerUrl("https://arena.ai/agent/"), true],
+    [isComposerUrl("https://arena.ai/agent//"), true],
+    [isComposerUrl("https://arena.ai/agent/foo"), false],
+    [isComposerUrl("https://arena.ai/agent/foo/"), false],
+    [isComposerUrl("https://other.example/agent"), false],
+    [slugFromOwnerRepo("nemoe7/clankers"), "clankers"],
+    [slugFromOwnerRepo("  org/repo  "), "repo"],
+    [slugFromOwnerRepo("main"), null],
+    [slugFromOwnerRepo("a/"), null],
+    [slugFromOwnerRepo("/b"), null],
+    [slugFromOwnerRepo("a/b/c"), null],
+    // Repo name leads fetched template. Rules file follows when available.
+    [prompt.split("\n")[0],
+      "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
+    [prompt.includes(promptFillText), true],
+    [prompt.indexOf("here is ARENA.md"), -1],
+    [prompt.indexOf("Pareto"), -1],
+    [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
+    [promptWithRules.indexOf("here is ARENA.md:\n# Rules\n") > 0, true],
+    [shouldWrite("", "clankers", null, null), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null, null), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), true],
+    [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null, null), true],
+    [shouldWrite(prompt, "clankers", null, null), true],
+    [shouldWrite("draft", "clankers", null, null), false],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers", null), true],
+    [shouldWrite("draft", "clankers", "clankers", null), false],
+    [shouldWrite(promptForSlug("other", promptFillText), "clankers", "other", "other"), true],
+    // One fill per repo per page: the observer sees no second write. This holds even when the
+    // editor hands the text back with different whitespace or the send clears it.
+    [shouldWrite(prompt, "clankers", "clankers", "clankers"), false],
+    [shouldWrite("clankers read ARENA.md AGENTS.md in full before your first edit, and follow both.\n", "clankers", "clankers", "clankers"), false],
+    [shouldWrite("", "clankers", "clankers", "clankers"), false],
+    [shouldWrite("draft", "clankers", "clankers", "clankers"), false],
+    [proxyHost("https://arena-proxy.example.ts.net/"), "https://arena-proxy.example.ts.net"],
+    [proxyHost("https://arena-proxy.example.ts.net/v1"), "https://arena-proxy.example.ts.net"],
+    [proxyHost("https://arena-proxy.example.ts.net/v1/"), "https://arena-proxy.example.ts.net"],
+    [proxyHost(" https://arena-proxy.example.ts.net "), "https://arena-proxy.example.ts.net"],
+    [proxyHost("http://arena-proxy.example.ts.net"), null],
+    [proxyHost("https://arena-proxy.example.ts.net/path"), null],
+    [proxyHost(""), null],
+    [keyUrl("https://h.example", "m k"), "https://h.example/v1/key?master=m%20k"],
+    [agentKeyFrom({ key: KEY43 }), KEY43],
+    [agentKeyFrom({ key: "short" }), null],
+    [agentKeyFrom({ key: "has spaces in it aaaaaaaaaaaaa" }), null],
+    [agentKeyFrom(null), null],
+    // Composer carries only prompt fill. Proxy rides preview.
+    [prompt.indexOf("http"), -1],
+    [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
+    [ROTATE_MIN_SECONDS, 900],
+    [ROTATE_DUE_KEY, "clankers-arena-rotate-due"],
+    // A saved due time carries the countdown across reloads and tabs.
+    [rotationDueAt(1000000, 0, 900), 1900000],
+    [rotationDueAt(1000000, 895, 900), 1005000],
+    [rotationDueAt(1000000, 900, 900), 1000000],
+    [rotationDueAt(1000000, 2000, 900), 1000000],
+    [rotationWaitMs(1900000, 1000000), 900000],
+    [rotationWaitMs(1000000, 1900000), 0],
+    [previewBase(frames([["App preview on port 8000", "https://sbx.example/"]])),
+      "https://sbx.example"],
+    [previewBase(frames([["Website", "https://x.example/"], ["App preview on port 8000", "https://sbx.example"]]))
+      ? "https://sbx.example" : null, "https://sbx.example"],
+    [previewBase(frames([["Website", "https://x.example/"]])) , null],
+    [previewBase(frames([["App preview on port 8000", ""]])), null],
+    [rotateUrl("https://h.example", "m k", 900), "https://h.example/v1/rotate?master=m%20k&min=900"],
+    [keyPostUrl("https://sbx.example"), "https://sbx.example/api/key"],
+    [KEY_WATCH_MS, 60000],
+    [keyChanged("old", "new"), "new"],
+    [keyChanged("same", "same"), null],
+    [keyChanged("old", null), null],
+    // Key posts when frame appears, and each minute tick posts it again.
+    [keyPostDue(null, null, true), false],
+    [keyPostDue("https://sbx.example", null, false), true],
+    [keyPostDue("https://sbx.example", "https://sbx.example", false), false],
+    [keyPostDue("https://sbx.example", "https://sbx.example", true), true],
+    [NOTED_KEY, "clankers-arena-noted-key"],
+    // Note names host and expiry countdown while omitting raw secret.
+    [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example", Date.parse("2026-10-03T15:03:00+00:00")),
+      "Proxy https://h.example key replaced (expires in 12m). Run arena-preview key to read it."],
+    [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example", Date.parse("2026-10-03T15:18:00+00:00")),
+      "Proxy https://h.example key ready (expired 3m ago). Run arena-preview key to read it."],
+    // The older two-line fill is rebuilt once, without the rules text.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", null), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "clankers"), false],
+  ];
+  var failed = 0;
+  var i;
+  var promised;
+  for (i = 0; i < cases.length; i += 1) {
+    if (cases[i][0] !== cases[i][1]) {
+      console.error("check fail", i, cases[i][0], cases[i][1]);
+      failed += 1;
+    }
+  }
+  if (failed) {
+    throw new Error(failed + " checks failed");
+  }
+  // fetchJson maps a status and a parsed body, and it must survive a refused fetch.
+  globalThis.fetch = function () {
+    return Promise.resolve({
+      status: 200,
+      json: function () {
+        return Promise.resolve({ rotated: true, key: KEY43 });
+      },
+    });
+  };
+  promised = new Promise(function (resolve, reject) {
+    fetchJson("https://h.example/v1/rotate", function (status, body) {
+      if (status === 200 && body && body.rotated === true && body.key === KEY43) {
+        resolve();
+        return;
+      }
+      reject(new Error("fetchJson lost the answer"));
+    });
+  });
+  globalThis.fetch = function () {
+    return Promise.reject(new Error("offline"));
+  };
+  promised = promised.then(function () {
+    return new Promise(function (resolve, reject) {
+      fetchJson("https://h.example/v1/rotate", function (status, body) {
+        if (status === 0 && body === null) {
+          resolve();
+          return;
+        }
+        reject(new Error("fetchJson hid a refused fetch"));
+      });
+    });
+  }).finally(function () {
+    delete globalThis.fetch;
+  });
+  console.log("ok prompt fill " + cases.length);
+  return promised;
+}
+
+function checkOpenSteering(api) {
+  function steeringRowText(rows, expectedSlug) {
+    var buttons = rows.map(function (row) {
+      return {
+        textContent: row[0] + " " + row[1],
+        getAttribute: function (name) {
+          return name === "aria-label" && row[2] ? row[2] : null;
+        },
+        querySelectorAll: function (selector) {
+          return selector === "span" ? [{ textContent: row[0] }, { textContent: row[1] }] : [];
+        },
+      };
+    });
+    var doc = {
+      querySelectorAll: function () {
+        return buttons;
+      },
+    };
+    var found = findSteeringButton(doc, expectedSlug);
+    return found ? found.textContent : null;
+  }
+
+  var isSessionUrl = api.isSessionUrl;
+  var slugFromOwnerRepo = api.slugFromOwnerRepo;
+  var steeringSlugFromLabel = api.steeringSlugFromLabel;
+  var isSteeringLabel = api.isSteeringLabel;
+  var isSteeringPort = api.isSteeringPort;
+  var buttonMatchesSteering = api.buttonMatchesSteering;
+  var findSteeringButton = api.findSteeringButton;
+  var CLICK_DELAY_MS = api.CLICK_DELAY_MS;
+
+  var cases = [
+    [isSessionUrl("https://arena.ai/agent/foo"), true],
+    [isSessionUrl("https://www.arena.ai/agent/foo/bar"), true],
+    [isSessionUrl("https://arena.ai/agent/foo?x=1"), true],
+    [isSessionUrl("https://arena.ai/agent"), false],
+    [isSessionUrl("https://arena.ai/agent/"), false],
+    [isSessionUrl("https://other.example/agent/foo"), false],
+    [slugFromOwnerRepo("nemoe7/clankers"), "clankers"],
+    [steeringSlugFromLabel("daedalus - Steering"), "daedalus"],
+    [steeringSlugFromLabel("clankers - preview"), "clankers"],
+    [steeringSlugFromLabel("clankers preview"), "clankers"],
+    [steeringSlugFromLabel("arena"), null],
+    [steeringSlugFromLabel("Steering"), null],
+    [steeringSlugFromLabel("daedalus - Website"), null],
+    [isSteeringLabel("CLANKERS - PREVIEW"), true],
+    [isSteeringLabel("daedalus - Website"), false],
+    [buttonMatchesSteering("CLANKERS - steering", ":8000", "clankers"), true],
+    [buttonMatchesSteering("Steering", ":8000", "clankers"), true],
+    [buttonMatchesSteering("daedalus - Steering", ":8000", "clankers"), false],
+    [buttonMatchesSteering("clankers - STEERING", ":8001", "CLANKERS"), false],
+    [buttonMatchesSteering("daedalus - Preview", ":8000", null), true],
+    [buttonMatchesSteering("daedalus - Website", ":8000", null), false],
+    [isSteeringPort(":8000"), true],
+    [isSteeringPort("8000"), false],
+    [steeringRowText([["Website", ":3000"], ["daedalus - Steering", ":8000"]], "clankers"),
+      "daedalus - Steering :8000"],
+    [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+      "clankers"), "clankers - Steering :8000"],
+    [steeringRowText([["Website", ":3000"], ["arena - preview", ":8000"]], "clankers"),
+      "arena - preview :8000"],
+    // A Start row is a transcript card. A click on one opens nothing, so it never counts.
+    [steeringRowText([["Start clankers - Steering", ":8000"]], "clankers"), null],
+    [steeringRowText([["Arena preview", ":8000", "Switch preview port"]], null), null],
+    [steeringRowText([["Arena preview", ":8000", "Switch preview port"],
+      ["clankers - Steering", ":8000"]], "clankers"), "clankers - Steering :8000"],
+    [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+      "clankers"), "daedalus - preview :8000"],
+    // The running row wins over history cards, wherever they sit.
+    [steeringRowText([["Start clankers - Steering", ":8000"], ["clankers - Steering", ":8000"]],
+      "clankers"), "clankers - Steering :8000"],
+    [steeringRowText([["clankers - Steering", ":8000"], ["Start clankers - Steering", ":8000"]],
+      "clankers"), "clankers - Steering :8000"],
+    [steeringRowText([["clankers - Steering", ":8000"], ["Start preview", ":8000"]],
+      "clankers"), "clankers - Steering :8000"],
+    // This project's running row outranks a newer row for another project. A nameless
+    // running row outranks a named one for another project.
+    [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+      "clankers"), "clankers - Steering :8000"],
+    [steeringRowText([["Steering", ":8000"], ["daedalus - preview", ":8000"]], "clankers"),
+      "Steering :8000"],
+    // A renamed live row still wins, and it is the only running row here.
+    [steeringRowText([["Start clankers - Steering", ":8000"],
+      ["daedalus - preview", ":8000"], ["arena - preview", ":8000"]], "clankers"),
+      "arena - preview :8000"],
+    [CLICK_DELAY_MS, 1000],
+  ];
+  var failed = 0;
+  var i;
+  for (i = 0; i < cases.length; i += 1) {
+    if (cases[i][0] !== cases[i][1]) {
+      console.error("check fail", i, cases[i][0], cases[i][1]);
+      failed += 1;
+    }
+  }
+  if (failed) {
+    throw new Error(failed + " checks failed");
+  }
+  assert.equal(api.steeringLabelViolation("clankers - Steering :8000", "clankers"), null);
+  assert.equal(api.steeringLabelViolation("clankers - Steering :8000", null), null);
+  assert.equal(api.steeringLabelViolation("Start Preview server :8000", "clankers"), null);
+  var violation = api.steeringLabelViolation("Preview server :8000", "clankers");
+  assert.equal(violation.actual, "Preview server");
+  assert.equal(violation.expected, "clankers - Steering");
+  var payload = api.interruptPayloadForSteering("Preview server :8000", "clankers");
+  assert.equal(payload.armed, true);
+  assert.equal(payload.tab, "notes");
+  assert.equal(payload.reason, "process-violation");
+  assert.equal(payload.clause_file, "ARENA.md");
+  assert.match(payload.note, /Preview server/);
+  assert.match(payload.note, /clankers - Steering/);
+  var sent = [];
+  var violationDoc = {
+    querySelectorAll: function (selector) {
+      if (selector === 'button[type="button"]') {
+        return [
+          {
+            textContent: "Preview server :8000",
+            getAttribute: function () { return null; },
+            querySelectorAll: function (sel) {
+              return sel === "span"
+                ? [{ textContent: "Preview server" }, { textContent: ":8000" }]
+                : [];
+            },
+          },
+        ];
+      }
+      if (selector === "iframe[title]") {
+        return [
+          {
+            title: "App preview on port 8000",
+            src: "https://sbx-port8000.arena.site/",
+            getAttribute: function (name) {
+              return name === "title" ? "App preview on port 8000" : null;
+            },
+          },
+        ];
+      }
+      return [];
+    },
+  };
+  api.resetFlaggedSteering();
+  assert.equal(
+    api.flagSteeringLabelViolation(violationDoc, "clankers", function (url, body, done) {
+      sent.push({ url: url, body: body });
+      done(200);
+    }),
+    true,
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, "https://sbx-port8000.arena.site/api/agent-interrupt");
+  assert.equal(sent[0].body.reason, "process-violation");
+  assert.equal(sent[0].body.clause_file, "ARENA.md");
+  assert.equal(
+    api.flagSteeringLabelViolation(violationDoc, "clankers", function (url, body, done) {
+      sent.push({ url: url, body: body });
+      done(200);
+    }),
+    false,
+  );
+  assert.equal(sent.length, 1);
+  console.log("ok open steering " + cases.length);
+}
+
+function checkAutoScrollToggle(api) {
+  function hasToggleClass(classes, name) {
+    return classes.split(" ").indexOf(name) !== -1;
+  }
+
+  var AUTO_TOGGLE_CLASS = api.AUTO_TOGGLE_CLASS;
+  var autoToggleClasses = api.autoToggleClasses;
+  var findComposerActionButton = api.findComposerActionButton;
+
+  var stopBtn = {
+    getAttribute: function (name) {
+      return name === "aria-label" ? "Stop generating" : null;
+    },
+  };
+  var sendBtn = {
+    getAttribute: function (name) {
+      return name === "aria-label" ? "Send message" : null;
+    },
+  };
+  var submitBtn = {
+    getAttribute: function (name) {
+      return name === "type" ? "submit" : null;
+    },
+  };
+  var injectedBtn = {
+    getAttribute: function (name) {
+      return name === "data-clankers-settings-toggle"
+        ? "true"
+        : name === "type"
+          ? "submit"
+          : null;
+    },
+  };
+  var docWithStop = {
+    querySelectorAll: function (sel) {
+      return sel === "button[aria-label]" ? [sendBtn, stopBtn] : [sendBtn, stopBtn];
+    },
+  };
+  var docWithSend = {
+    querySelectorAll: function (sel) {
+      return sel === "button[aria-label]" ? [sendBtn] : [sendBtn];
+    },
+  };
+  var docWithSubmit = {
+    querySelectorAll: function (sel) {
+      return sel === "button[aria-label]" ? [] : [injectedBtn, submitBtn];
+    },
+  };
+
+  var on = autoToggleClasses(true);
+  var off = autoToggleClasses(false);
+  var cases = [
+    [hasToggleClass(on, "bg-surface-raised"), true],
+    [hasToggleClass(on, "bg-transparent"), false],
+    [hasToggleClass(off, "bg-transparent"), true],
+    [hasToggleClass(off, "bg-surface-raised"), false],
+    [hasToggleClass(on, "hover:bg-interactive-cta-active"), true],
+    [hasToggleClass(off, "hover:bg-surface-raised"), true],
+    [hasToggleClass(AUTO_TOGGLE_CLASS, "h-8"), true],
+    [hasToggleClass(AUTO_TOGGLE_CLASS, "w-8"), true],
+    [findComposerActionButton(docWithStop), stopBtn],
+    [findComposerActionButton(docWithSend), sendBtn],
+    [findComposerActionButton(docWithSubmit), submitBtn],
+  ];
+  var failed = 0;
+  var i;
+  for (i = 0; i < cases.length; i += 1) {
+    if (cases[i][0] !== cases[i][1]) {
+      console.error("check fail", i, cases[i][0], cases[i][1]);
+      failed += 1;
+    }
+  }
+  if (failed) {
+    throw new Error(failed + " checks failed");
+  }
+  console.log("ok transcript auto-scroll " + cases.length);
+}
+
+function checkTranscriptTrim(api) {
+  var normalizePlan = api.normalizePlan;
+  var planParts = api.planParts;
+  var countLabel = api.countLabel;
+  var messageRoots = api.messageRoots;
+  var rowsOfRoot = api.rowsOfRoot;
+  var trimPlan = api.trimPlan;
+  var trimRows = api.trimRows;
+  var isSettled = api.isSettled;
+  var quietReady = api.quietReady;
+  var ACTION_SELECTOR = api.ACTION_SELECTOR;
+  var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
+  var MIN_ROWS = api.MIN_ROWS;
+  var DEFAULT_ROWS = api.DEFAULT_ROWS;
+  var DEFAULT_TRIM_CAP = api.DEFAULT_TRIM_CAP;
+
+  function rows(count) {
+    var list = [];
+    var i;
+    for (i = 0; i < count; i += 1) {
+      var row = {
+        parentElement: {},
+        removed: false,
+        textContent: "row",
+        remove: function () {
+          this.removed = true;
+          this.parentElement = null;
+        },
+      };
+      row.classList = {
+        names: {},
+        add: function (name) {
+          this.names[name] = true;
+        },
+        contains: function (name) {
+          return Boolean(this.names[name]);
+        },
+      };
+      list.push(row);
+    }
+    return list;
+  }
+  function cleared(row) {
+    return row.classList.contains("hidden") && row.textContent === "";
+  }
+  function actionContainer() {
+    return {
+      removed: false,
+      parentElement: {},
+      remove: function () {
+        this.removed = true;
+        this.parentElement = null;
+      },
+    };
+  }
+  var BOX = "div.flex.flex-col.gap-2";
+  function rowBox(pageRows, nested) {
+    var element = {
+      children: pageRows,
+      closest: function (selector) {
+        return selector === BOX ? element : null;
+      },
+      parentElement: {
+        closest: function (selector) {
+          return selector === BOX ? nested || null : null;
+        },
+      },
+    };
+    return element;
+  }
+  function messageRoot(boxes, actions, connected) {
+    actions = actions || [];
+    var root = {
+      isConnected: connected !== false,
+      removed: false,
+      hiddenClass: false,
+      remove: function () {
+        this.removed = true;
+        this.parentElement = null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === BOX) return boxes;
+        return selector === ACTION_SELECTOR ? actions : [];
+      },
+    };
+    root.classList = {
+      add: function (name) {
+        if (name === "hidden") root.hiddenClass = true;
+      },
+    };
+    root.parentElement = { children: [root] };
+    return root;
+  }
+  function logDoc(roots, withLog) {
+    var log = {
+      querySelectorAll: function (selector) {
+        return selector === '[data-agent-transcript-message="true"]' ? roots : [];
+      },
+    };
+    return {
+      querySelectorAll: function (selector) {
+        if (selector === '[role="log"]') return withLog ? [log] : [];
+        if (selector === '[data-agent-transcript-message="true"]') return withLog ? [] : roots;
+        return [];
+      },
+    };
+  }
+  var rootActions = [actionContainer(), actionContainer()];
+  var rootRows = [rows(25), rows(25)];
+  var rootNodes = [
+    messageRoot([rowBox(rootRows[0])], [rootActions[0]]),
+    messageRoot([rowBox(rootRows[1])], [rootActions[1]]),
+  ];
+  var rootRowsRemoved = trimPlan(logDoc(rootNodes, true), "20");
+  var emptyAction = actionContainer();
+  var emptyRoot = messageRoot([rowBox([])], [emptyAction]);
+  var emptyTrim = trimPlan(logDoc([emptyRoot], true), "50");
+  var globalActions = [actionContainer(), actionContainer(), actionContainer()];
+  var globalRows = [rows(25), rows(20), rows(25)];
+  var globalNodes = [
+    messageRoot([rowBox(globalRows[0])], [globalActions[0]]),
+    messageRoot([rowBox(globalRows[1])], [globalActions[1]]),
+    messageRoot([rowBox(globalRows[2])], [globalActions[2]]),
+  ];
+  var globalRemoved = trimPlan(logDoc(globalNodes, true), "40");
+  var sparseRows = [rows(30), rows(1)];
+  var sparseRoots = sparseRows.map(function (items) {
+    return messageRoot([rowBox(items)]);
+  });
+  assert.equal(trimPlan(logDoc(sparseRoots, true), "50"), 0);
+  assert.equal(cleared(sparseRows[0][29]), false);
+  var staleRows = rows(3);
+  var staleAction = actionContainer();
+  var k;
+  for (k = 0; k < staleRows.length; k += 1) staleRows[k].parentElement = null;
+  var staleRoot = messageRoot([rowBox(staleRows)], [staleAction]);
+  var staleRemoved = trimPlan(logDoc([staleRoot], true), "50");
+  var goneRows = rows(30);
+  var goneAction = actionContainer();
+  var goneRoot = messageRoot([rowBox(goneRows)], [goneAction], false);
+  var goneRemoved = trimPlan(logDoc([goneRoot], true), "20");
+  // An answered question appends a fresh empty root behind the rows. The keep
+  // budget must stay with those rows instead of clearing the page.
+  var questionRows = rows(30);
+  var questionAction = actionContainer();
+  var questionRoot = messageRoot([rowBox(questionRows)], [questionAction]);
+  var questionTail = messageRoot([rowBox([])], []);
+  var questionRemoved = trimPlan(logDoc([questionRoot, questionTail], true), "20");
+  var detached = rows(4);
+  detached[0].parentElement = null;
+  // One pass cuts at most the cap, so a large backlog drains in steps. The page
+  // then never reconciles one blocking burst at once.
+  var cappedTrim = trimRows(rows(300), 50);
+  var outerBox = rowBox(rows(1));
+  var nestedBox = rowBox(rows(2), outerBox);
+  var cases = [
+    [trimRows(rows(5), 3), 2],
+    [trimRows(rows(3), 3), 0],
+    [trimRows(rows(2), 10), 0],
+    [trimRows(detached, 2), 1],
+    [cappedTrim, DEFAULT_TRIM_CAP],
+    [normalizePlan("50"), "50"],
+    [normalizePlan(" 50 "), "50"],
+    [normalizePlan("5,80"), "80"],
+    [normalizePlan("5"), null],
+    [normalizePlan("5,5"), null],
+    [normalizePlan("0,80"), null],
+    [normalizePlan("80 rows"), null],
+    [normalizePlan("later"), null],
+    [normalizePlan(null), null],
+    [planParts("").rows, DEFAULT_ROWS],
+    [planParts("4,75").rows, 75],
+    [MIN_ROWS, 20],
+    [countLabel("50", 0), "Transcript - keep 50 rows"],
+    [countLabel("50", 3), "Transcript - keep 50 rows (3 removed)"],
+    [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
+    [QUESTION_SELECTOR, '[role="radiogroup"]'],
+    [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
+    [rowsOfRoot(messageRoot([outerBox, nestedBox])).length, 1],
+    [rowsOfRoot(messageRoot([rowBox(rows(2), outerBox)])).length, 2],
+    [messageRoots(logDoc([messageRoot([])], true)).length, 1],
+    [messageRoots(logDoc([messageRoot([])], false)).length, 1],
+    [messageRoots(logDoc([], true)).length, 0],
+    // A lone root is the newest: under its own keep count nothing leaves.
+    [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "50"), 0],
+    // The newest root keeps exactly its K newest rows: the ten oldest hide and empty.
+    [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "20"), 10],
+    [rootRowsRemoved, 30],
+    // Cut rows stay as hidden empty shells: the page reinstates removed nodes. The trim hides and empties instead of deleting.
+    // The older root hides in full while the newest root keeps its 20 newest rows.
+    [cleared(rootRows[0][24]), true],
+    [rootRows[0][24].parentElement !== null, true],
+    [rootNodes[0].hiddenClass, true],
+    [cleared(rootRows[1][0]), true],
+    [cleared(rootRows[1][4]), true],
+    [cleared(rootRows[1][5]), false],
+    [rootRows[1][5].textContent, "row"],
+    [rootNodes[1].hiddenClass, false],
+    [rootActions[0].removed, true],
+    // The action container leaves only with a root that lost every row. The newest
+    // root keeps its rows, so its actions, and the newest rows inside them, stay.
+    [rootActions[1].removed, false],
+    // A lone root is the newest one: it keeps every row and never hides.
+    [emptyTrim, 0],
+    [emptyAction.removed, false],
+    [emptyRoot.hiddenClass, false],
+    [emptyRoot.parentElement !== null, true],
+    // The newest root keeps 25 rows, and the previous root keeps 15.
+    [globalRemoved, 30],
+    [cleared(globalRows[0][24]), true],
+    [globalNodes[0].hiddenClass, true],
+    [cleared(globalRows[1][4]), true],
+    [globalNodes[1].hiddenClass, false],
+    [cleared(globalRows[2][0]), false],
+    [globalNodes[2].hiddenClass, false],
+    [globalActions[0].removed, true],
+    [globalActions[1].removed, false],
+    [globalActions[2].removed, false],
+    [staleRemoved, 0],
+    [staleAction.removed, false],
+    [goneRemoved, 0],
+    [goneRows[0].removed, false],
+    [goneRows[24].removed, false],
+    [goneAction.removed, false],
+    [goneRoot.parentElement !== null, true],
+    // The empty root an answered question appends takes no keep budget. The rows
+    // behind it keep their 20 newest, their action stays, and the page does not clear.
+    [questionRemoved, 10],
+    [cleared(questionRows[0]), true],
+    [cleared(questionRows[9]), true],
+    [cleared(questionRows[10]), false],
+    [questionRows[29].textContent, "row"],
+    [questionAction.removed, false],
+    [questionRoot.hiddenClass, false],
+    [questionTail.hiddenClass, true],
+    [globalNodes[0].parentElement !== null, true],
+    [globalNodes[1].parentElement !== null, true],
+    [globalNodes[2].parentElement !== null, true],
+    // No stop control means no turn, and the trim aborts. It runs only while a turn
+    // is up. A question card aborts too. The pulsing icon no longer gates anything.
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), false],
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
+    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), true],
+    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), false],
+    // Quiet means the whole page holding still, not the row count alone. The page streams into existing
+    // rows after the last row lands. A fresh mutation keeps the trim waiting even while the count holds.
+    [quietReady({ rows: null, rowsAt: 0, mutationAt: 0 }, 10, 100000), false],
+    [quietReady({ rows: 10, rowsAt: 100000, mutationAt: 0 }, 10, 100500), false],
+    [(function () {
+      var state = { rows: 10, rowsAt: 0, mutationAt: 100900 };
+      return quietReady(state, 10, 101500);
+    })(), false],
+    [(function () {
+      var state = { rows: 10, rowsAt: 0, mutationAt: 0 };
+      return quietReady(state, 10, 101500);
+    })(), true],
+  ];
+  var failed = 0;
+  var i;
+  for (i = 0; i < cases.length; i += 1) {
+    if (cases[i][0] !== cases[i][1]) {
+      console.error("check fail", i, cases[i][0], cases[i][1]);
+      failed += 1;
+    }
+  }
+  if (failed) {
+    throw new Error(failed + " checks failed");
+  }
+  console.log("ok transcript trim " + cases.length);
+}
+
+function checkHideComposer(api) {
+  var isSessionUrl = api.isSessionUrl;
+  var isStopGeneratingLabel = api.isStopGeneratingLabel;
+  var shouldHideComposer = api.shouldHideComposer;
+  var isSpacerElement = api.isSpacerElement;
+  var isSpacerSibling = api.isSpacerSibling;
+  var isTranscriptColumn = api.isTranscriptColumn;
+  var hasSpacerHeight = api.hasSpacerHeight;
+  var enforceSpacerHeight = api.enforceSpacerHeight;
+  var TRANSCRIPT_COLUMN_SELECTOR = api.TRANSCRIPT_COLUMN_SELECTOR;
+  var SPACER_SELECTOR = api.SPACER_SELECTOR;
+  var SPACER_HEIGHT = api.SPACER_HEIGHT;
+
+  var styleState = { height: SPACER_HEIGHT, priority: "", writes: 0 };
+  var spacerStyle = {
+    getPropertyValue: function (name) {
+      return name === "height" ? styleState.height : "";
+    },
+    getPropertyPriority: function (name) {
+      return name === "height" ? styleState.priority : "";
+    },
+    setProperty: function (name, value, priority) {
+      if (name === "height") {
+        styleState.height = value;
+        styleState.priority = priority;
+        styleState.writes += 1;
+      }
+    },
+  };
+  var spacer = {
+    tagName: "DIV",
+    classList: {
+      contains: function (name) {
+        return name === "shrink-0";
+      },
+    },
+    textContent: "",
+    style: spacerStyle,
+    getAttribute: function (name) {
+      return name === "style" ? "height: 24px;" : null;
+    },
+  };
+  var columnClasses = [
+    "flex",
+    "w-full",
+    "shrink-0",
+    "flex-col",
+    "gap-4",
+    "mx-auto",
+    "max-w-3xl",
+    "px-4",
+    "pt-14",
+    "md:pt-12",
+  ];
+  var transcriptColumn = {
+    tagName: "DIV",
+    classList: {
+      contains: function (name) {
+        return columnClasses.indexOf(name) !== -1;
+      },
+    },
+    textContent: "message",
+  };
+  var siblingStyleState = { height: "706px", priority: "", writes: 0 };
+  var siblingSpacer = {
+    tagName: "DIV",
+    classList: {
+      contains: function (name) {
+        return name === "shrink-0";
+      },
+    },
+    textContent: "",
+    style: {
+      getPropertyValue: function (name) {
+        return name === "height" ? siblingStyleState.height : "";
+      },
+      getPropertyPriority: function (name) {
+        return name === "height" ? siblingStyleState.priority : "";
+      },
+      setProperty: function (name, value, priority) {
+        if (name === "height") {
+          siblingStyleState.height = value;
+          siblingStyleState.priority = priority;
+          siblingStyleState.writes += 1;
+        }
+      },
+    },
+    getAttribute: function (name) {
+      return name === "style" ? "height: 706px;" : null;
+    },
+  };
+  var scrollParent = { children: [transcriptColumn, siblingSpacer] };
+  transcriptColumn.parentElement = scrollParent;
+  siblingSpacer.parentElement = scrollParent;
+
+  var spacerDoc = {
+    querySelectorAll: function (selector) {
+      if (selector === SPACER_SELECTOR) return [spacer];
+      if (selector === TRANSCRIPT_COLUMN_SELECTOR) return [transcriptColumn];
+      if (selector === "div.shrink-0") return [transcriptColumn, siblingSpacer, spacer];
+      return [];
+    },
+  };
+  var candidate = isSpacerElement(spacer) && hasSpacerHeight(spacer.getAttribute("style"));
+  enforceSpacerHeight(spacerDoc);
+  var initialPriority = styleState.priority;
+  var initialSiblingHeight = siblingStyleState.height;
+  var initialSiblingPriority = siblingStyleState.priority;
+  styleState.height = "18px";
+  styleState.priority = "";
+  siblingStyleState.height = "706px";
+  siblingStyleState.priority = "";
+  enforceSpacerHeight(spacerDoc, [
+    {
+      type: "attributes",
+      attributeName: "style",
+      oldValue: "height: 24px !important;",
+      target: spacer,
+    },
+    {
+      type: "attributes",
+      attributeName: "style",
+      oldValue: "height: 706px;",
+      target: siblingSpacer,
+    },
+  ]);
+  var cases = [
+    [isSessionUrl("https://arena.ai/agent/foo"), true],
+    [isSessionUrl("https://www.arena.ai/agent/foo/bar"), true],
+    [isSessionUrl("https://arena.ai/agent/foo?x=1"), true],
+    [isSessionUrl("https://arena.ai/agent"), false],
+    [isSessionUrl("https://arena.ai/agent/"), false],
+    [isSessionUrl("https://other.example/agent/foo"), false],
+    [isStopGeneratingLabel("Stop generating"), true],
+    [isStopGeneratingLabel("Stop Generating"), true],
+    [isStopGeneratingLabel("stop generating"), true],
+    [isStopGeneratingLabel("Send"), false],
+    [shouldHideComposer(true, true), true],
+    [shouldHideComposer(true, false), false],
+    [shouldHideComposer(false, true), false],
+    [
+      TRANSCRIPT_COLUMN_SELECTOR,
+      "div.flex.w-full.shrink-0.flex-col.gap-4.mx-auto.max-w-3xl.px-4.pt-14.md\\:pt-12",
+    ],
+    [SPACER_SELECTOR, 'div.shrink-0[style*="height: 24px"]'],
+    [SPACER_HEIGHT, "24px"],
+    [candidate, true],
+    [isTranscriptColumn(transcriptColumn), true],
+    [isTranscriptColumn(siblingSpacer), false],
+    [isSpacerSibling(siblingSpacer), true],
+    [isSpacerSibling(spacer), false],
+    [hasSpacerHeight("height: 24px;"), true],
+    [hasSpacerHeight("height: 24px !important;"), true],
+    [hasSpacerHeight("height: 25px;"), false],
+    [hasSpacerHeight("height: 10675px;"), false],
+    [initialPriority, "important"],
+    [initialSiblingHeight, SPACER_HEIGHT],
+    [initialSiblingPriority, "important"],
+    [styleState.height, SPACER_HEIGHT],
+    [styleState.priority, "important"],
+    [styleState.writes, 2],
+    [siblingStyleState.height, SPACER_HEIGHT],
+    [siblingStyleState.priority, "important"],
+    [siblingStyleState.writes, 2],
+  ];
+  var failed = 0;
+  var i;
+  for (i = 0; i < cases.length; i += 1) {
+    if (cases[i][0] !== cases[i][1]) {
+      console.error("check fail", i, cases[i][0], cases[i][1]);
+      failed += 1;
+    }
+  }
+  if (failed) {
+    throw new Error(failed + " checks failed");
+  }
+  console.log("ok hide composer " + cases.length);
+}
+
+function checkTabTitle(api, logging) {
+  // Bundle hooks change state. Cases compare each call result to null.
+  function expireHold() {
+    api.expireHold();
+    return null;
+  }
+
+  function forgetPath() {
+    api.forgetPath();
+    return null;
+  }
+
+  var repoFromLink = api.repoFromLink;
+  var repoForTitle = api.repoForTitle;
+  var desiredTitle = api.desiredTitle;
+  var syncTitle = api.syncTitle;
+  var liveLabel = api.liveLabel;
+  var stopSignal = api.stopSignal;
+  var childChain = api.childChain;
+  var lastRoot = api.lastRoot;
+  var userRoot = api.userRoot;
+  var rowContainer = api.rowContainer;
+  var newestRow = api.newestRow;
+  var rowKind = api.rowKind;
+  var summaryCard = api.summaryCard;
+  var BASH_EMOJI = api.BASH_EMOJI;
+  var PLAY_SELECTOR = api.PLAY_SELECTOR;
+  var AGENT_EMOJI = api.AGENT_EMOJI;
+  var REASONING_EMOJI = api.REASONING_EMOJI;
+  var waitingSignal = api.waitingSignal;
+  var emojiForRow = api.emojiForRow;
+  var actionEmoji = api.actionEmoji;
+  var TITLE_PREFIX = api.TITLE_PREFIX;
+  var vtag = "";
+  var EMOJI_HOLD_MS = api.EMOJI_HOLD_MS;
+  var MESSAGE_SELECTOR = api.MESSAGE_SELECTOR;
+  var LIVE_ICON_SELECTOR = api.LIVE_ICON_SELECTOR;
+  var LIVE_LABEL_SELECTOR = api.LIVE_LABEL_SELECTOR;
+  var GROUP_LABEL_SELECTOR = api.GROUP_LABEL_SELECTOR;
+  var LABEL_SPAN_SELECTOR = api.LABEL_SPAN_SELECTOR;
+  var REPO_LINK_SELECTOR = api.REPO_LINK_SELECTOR;
+  var WAITING_SELECTOR = api.WAITING_SELECTOR;
+  var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
+  var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
+  var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
+  var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
+  var captchaSignal = api.captchaSignal;
+  var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
+  var QUESTION_EMOJI = api.QUESTION_EMOJI;
+  var questionSignal = api.questionSignal;
+  var openDialog = api.openDialog;
+  var setPriorTitle = api.setPriorTitle;
+
+  function link(href, label) {
+    return {
+      getAttribute: function (name) {
+        if (name === "href") return href;
+        if (name === "aria-label") return label;
+        return null;
+      },
+    };
+  }
+  function docWith(element, title) {
+    return {
+      title: title,
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? element : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === "button[aria-label]" ? [stopButton("Stop generating")] : [];
+      },
+    };
+  }
+  function stopButton(label) {
+    return {
+      getAttribute: function (name) {
+        return name === "aria-label" ? label : null;
+      },
+    };
+  }
+  // The root-bounded model reads a real tree, so the checks build one. Every node answers
+  // the selectors the feature uses, and the chain walks land on real children.
+  function matches(node, selector) {
+    if (!node || !node.attrs) {
+      return false;
+    }
+    if (selector === MESSAGE_SELECTOR) {
+      return node.attrs["data-agent-transcript-message"] !== undefined;
+    }
+    if (selector === PLAY_SELECTOR) {
+      return node.tagName === "SVG" && api.classOf(node, "lucide-play");
+    }
+    if (selector === LIVE_LABEL_SELECTOR) {
+      return String(node.attrs.style || "").indexOf("text-shimmer") !== -1;
+    }
+    if (selector === LIVE_ICON_SELECTOR) {
+      return api.classOf(node, "animate-pulse");
+    }
+    if (selector === GROUP_LABEL_SELECTOR) {
+      return node.tagName === "SPAN" && api.classOf(node, "text-text-secondary");
+    }
+    if (selector === LABEL_SPAN_SELECTOR) {
+      return node.tagName === "SPAN" && api.classOf(node, "body-sm");
+    }
+    if (selector === "a") return node.tagName === "A";
+    if (selector === "button") return node.tagName === "BUTTON";
+    if (selector === "p") return node.tagName === "P";
+    if (selector === "pre") return node.tagName === "PRE";
+    if (selector === "button[aria-label]") {
+      return node.tagName === "BUTTON" && node.attrs["aria-label"] !== undefined;
+    }
+    return false;
+  }
+  function findAll(root, selector) {
+    var hits = [];
+    (function walk(item) {
+      var kids = item.children || [];
+      var i;
+      for (i = 0; i < kids.length; i += 1) {
+        if (matches(kids[i], selector)) hits.push(kids[i]);
+        walk(kids[i]);
+      }
+    })(root);
+    return hits;
+  }
+  function node(tag, className, kids) {
+    var el = {
+      tagName: String(tag).toUpperCase(),
+      className: className || "",
+      children: kids || [],
+      parentElement: null,
+      textContent: "",
+      attrs: {},
+    };
+    el.getAttribute = function (name) {
+      return Object.prototype.hasOwnProperty.call(el.attrs, name) ? el.attrs[name] : null;
+    };
+    el.querySelector = function (selector) {
+      var hits = findAll(el, selector);
+      return hits.length ? hits[0] : null;
+    };
+    el.querySelectorAll = function (selector) {
+      return findAll(el, selector);
+    };
+    el.contains = function (candidate) {
+      if (candidate === el) return true;
+      var i;
+      for (i = 0; i < el.children.length; i += 1) {
+        if (el.children[i].contains && el.children[i].contains(candidate)) return true;
+      }
+      return false;
+    };
+    el.closest = function (selector) {
+      var current = el;
+      while (current) {
+        if (matches(current, selector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    };
+    Object.defineProperty(el, "firstElementChild", {
+      get: function () {
+        return el.children.length ? el.children[0] : null;
+      },
+    });
+    var i;
+    for (i = 0; i < el.children.length; i += 1) el.children[i].parentElement = el;
+    return el;
+  }
+  var ROW_CONTAINER_CLASS = "flex flex-col gap-2";
+  // Session dump agent root: bubble card, then `px-3 pb-3`, then row container.
+  // Every root carries transcript attributes.
+  function agentRoot(rows) {
+    var container = node("div", ROW_CONTAINER_CLASS, rows);
+    var root = node("div", "", [
+      node("div", "relative overflow-hidden bg-surface-primary rounded-xl border w-full border-transparent", [
+        node("div", "px-3 pb-3", [container]),
+      ]),
+    ]);
+    root.attrs["data-agent-transcript-message"] = "true";
+    root.attrs["data-chat-message-id"] = "chat-agent";
+    return root;
+  }
+  // Session dump user root: layout div, body row, raised card, then `px-3`,
+  // container, and `prose` body. Agent root negates this chain.
+  function userRootNode() {
+    var body = node("div", "prose prose-pre:bg-transparent text-wrap break-words", []);
+    var card = node("div", "relative overflow-hidden bg-surface-raised rounded-lg w-fit max-w-[min(70%,768px)] border-transparent ms-0", [
+      node("div", "px-3 text-text-primary body-base py-2", [
+        node("div", ROW_CONTAINER_CLASS, [body]),
+      ]),
+    ]);
+    var root = node("div", "", [
+      node("div", "", [node("div", "group flex min-w-0 flex-col items-end gap-1", [card])]),
+    ]);
+    root.attrs["data-agent-transcript-message"] = "true";
+    root.attrs["data-chat-message-id"] = "chat-user";
+    return root;
+  }
+  function actionRow(label) {
+    var span = node("span", "text-text-secondary body-sm", []);
+    span.textContent = label;
+    var button = node("button", "flex w-full", [span]);
+    button.attrs["aria-label"] = "Collapse";
+    return node("div", "", [button]);
+  }
+  function commandRow(label, command, stderr) {
+    var row = actionRow(label);
+    if (command) {
+      var pre = node("pre", "", []);
+      pre.textContent = command;
+      row.children[0].children.push(pre);
+    }
+    if (stderr) {
+      var errPre = node("pre", "", []);
+      errPre.textContent = stderr;
+      row.children[0].children.push(errPre);
+    }
+    return row;
+  }
+  // The buttonless rows: a size-4 icon beside a single body-sm span. The fetch row keeps the
+  // page's URL in an anchor inside that span. The anchor's copy never joins the label.
+  function fetchRow(iconClass, text, url) {
+    var icon = node("svg", iconClass, []);
+    var span = node("span", "body-sm text-text-tertiary min-w-0 flex-1 truncate leading-4", []);
+    if (url) {
+      var linkNode = node("a", "text-interactive-link hover:underline", []);
+      linkNode.textContent = url;
+      span.children.push(linkNode);
+    }
+    span.textContent = url ? text + " " + url : text;
+    return node("div", "flex items-center gap-1.5", [icon, span]);
+  }
+  function fetchRunningRow() {
+    var icon = node("svg", "text-text-tertiary size-4 shrink-0 animate-pulse", []);
+    var p = node("p", "relative inline-block", []);
+    p.attrs.style = "animation: 2s linear 0s infinite normal none running text-shimmer;";
+    p.textContent = "Fetching";
+    var linkNode = node("a", "text-interactive-link ms-1 hover:underline", []);
+    linkNode.textContent = "https://example.test/page";
+    var span = node("span", "body-sm min-w-0 flex-1 truncate leading-4", [p, linkNode]);
+    span.textContent = "Fetching https://example.test/page";
+    return node("div", "flex items-center gap-1.5", [icon, span]);
+  }
+  // The process-output row: a size-3 icon beside a plain secondary span, no button.
+  function processOutputRow() {
+    var icon = node("svg", "text-text-tertiary size-3 shrink-0", []);
+    var label = node("span", "text-text-secondary", []);
+    label.textContent = "get_process_output";
+    return node("div", "body-sm flex items-center gap-1.5", [icon, label]);
+  }
+  function loneSearchRow(label) {
+    var span = node("span", "body-sm text-text-tertiary min-w-0 truncate leading-4", []);
+    span.textContent = label;
+    var inner = node("span", "flex min-w-0 items-center gap-1.5", [node("svg", "text-text-tertiary size-4 shrink-0", []), span]);
+    var head = node("div", "flex select-none items-center gap-1", [inner]);
+    head.attrs["aria-expanded"] = "false";
+    return node("div", "", [head]);
+  }
+  function batchFetchRow() {
+    var chevron = node("svg", "text-text-tertiary size-3 shrink-0 transition-transform duration-200 rotate-90", []);
+    var icon = node("svg", "text-text-tertiary size-4 shrink-0", []);
+    var pulse = node("span", "animate-pulse", []);
+    pulse.textContent = "Searching the web";
+    var label = node("span", "text-text-secondary shrink-0", [pulse]);
+    var button = node("button", "body-sm group flex w-full cursor-pointer items-center gap-1.5 leading-[1]", [chevron, icon, label]);
+    button.attrs["aria-expanded"] = "true";
+    var body = node("div", "flex flex-col gap-2 py-1 ps-[22px]", [fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")]);
+    return node("div", "", [button, body]);
+  }
+  function batchFetchDoneRow() {
+    var chevron = node("svg", "text-text-tertiary size-3 shrink-0 transition-transform duration-200", []);
+    var icon = node("svg", "text-text-tertiary size-4 shrink-0", []);
+    var label = node("span", "text-text-secondary shrink-0", []);
+    label.textContent = "Searched the web";
+    var button = node("button", "body-sm group flex w-full cursor-pointer items-center gap-1.5 leading-[1]", [chevron, icon, label]);
+    button.attrs["aria-expanded"] = "false";
+    return node("div", "", [button]);
+  }
+  function chatRow() {
+    var row = node("div", "prose", []);
+    row.textContent = "A chat answer";
+    return row;
+  }
+  function reasoningRow() {
+    var row = node("div", "not-prose", []);
+    row.textContent = "Thinking it over";
+    return row;
+  }
+  function playRow() {
+    var play = node("svg", "lucide-play size-4", []);
+    var name = node("span", "text-text-secondary", []);
+    name.textContent = "Start PR checks";
+    var button = node("button", "flex w-full", [play, name]);
+    return node("div", "", [button]);
+  }
+  function summaryRow() {
+    var label = node("span", "text-text-secondary", []);
+    label.textContent = "Summary";
+    var button = node("button", "", [label]);
+    return node("div", "", [button]);
+  }
+  function page(roots, options) {
+    options = options || {};
+    return {
+      title: options.title || "ChatGPT",
+      querySelector: function (selector) {
+        if (selector !== REPO_LINK_SELECTOR) return null;
+        return options.repo === undefined ? repoLink : options.repo;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return roots || [];
+        if (selector === "button[aria-label]") {
+          return options.stop === false ? [] : [stopButton(options.stopLabel || "Stop generating")];
+        }
+        if (selector === WAITING_SELECTOR) return options.canvas ? [options.canvas] : [];
+        if (selector === CAPTCHA_SELECTOR) return options.captcha ? [options.captcha] : [];
+        if (selector === QUESTION_SELECTOR) return options.question ? [options.question] : [];
+        return [];
+      },
+    };
+  }
+  // The waiting line is a spinner canvas beside the rotating monospace text.
+  // An action row also uses the spinner canvas as its icon. The canvas alone does not prove an action row. Require text beside it.
+  function pageTree(text, children) {
+    var el = {
+      text: text || "",
+      textContent: text || "",
+      children: children || [],
+      querySelectorAll: function (selector) {
+        var hits = [];
+        if (selector !== WAITING_TEXT_SELECTOR) return hits;
+        (function walk(item) {
+          var i;
+          for (i = 0; i < item.children.length; i += 1) {
+            if (item.children[i].text || item.children[i].span) hits.push(item.children[i]);
+            walk(item.children[i]);
+          }
+        })(el);
+        return hits;
+      },
+    };
+    var i;
+    for (i = 0; i < el.children.length; i += 1) el.children[i].parentElement = el;
+    return el;
+  }
+  function rowCanvas(withText, blank) {
+    var canvas = pageTree("", []);
+    var icon = pageTree("", [pageTree("", [canvas])]);
+    var kids = [icon];
+    if (withText) {
+      var span = pageTree(blank ? "" : "The cat sat on the", []);
+      if (blank) span.span = true;
+      kids.push(pageTree("", [span]));
+    }
+    return { canvas: canvas, row: pageTree("", kids) };
+  }
+  function waitingDoc() {
+    // The row carries no mark of its own, so the waiting line is the only news.
+    return page([agentRoot([summaryRow()])], { canvas: rowCanvas(true).canvas });
+  }
+  function blankWaitingDoc() {
+    return page([agentRoot([summaryRow()])], { canvas: rowCanvas(true, true).canvas });
+  }
+  function actionCanvasDoc() {
+    return page([agentRoot([actionRow("Bash sleep 25")])], { canvas: rowCanvas(false).canvas });
+  }
+  function questionCard(label) {
+    return {
+      getAttribute: function (name) {
+        return name === "aria-label" ? label || "Select one" : null;
+      },
+    };
+  }
+  function questionDoc(card, withCaptcha) {
+    var options = { question: card || null };
+    if (withCaptcha) options.captcha = captchaFrame();
+    return page([agentRoot([chatRow()])], options);
+  }
+  function captchaFrame(state, parked) {
+    var frame = {
+      title: "reCAPTCHA",
+      getAttribute: function () {
+        return null;
+      },
+    };
+    if (parked) {
+      // A parked node keeps its place in the page after the widget closes: no box renders.
+      frame.getClientRects = function () {
+        return [];
+      };
+    }
+    if (state) {
+      // Radix keeps the dialog in the page after it closes, one data-state away.
+      var dialog = {
+        getAttribute: function (name) {
+          return name === "data-state" ? state : null;
+        },
+      };
+      var middle = { parentElement: dialog, getAttribute: function () { return null; } };
+      frame.parentElement = middle;
+    }
+    return frame;
+  }
+  function captchaDoc(state, parked) {
+    return page([agentRoot([chatRow()])], { captcha: captchaFrame(state, parked) });
+  }
+  function looseStopDoc() {
+    return page([agentRoot([chatRow()])], { stopLabel: "Stop response" });
+  }
+
+  var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
+  var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
+  var emptyLink = link("", "");
+  var setDoc = docWith(repoLink, "ChatGPT");
+  // One message per fixture: the same mark read twice would resurface as the hold.
+  var chatPage = page([agentRoot([chatRow()])]);
+  var reasoningPage = page([agentRoot([reasoningRow()])]);
+  var bashPage = page([agentRoot([commandRow("Bash sleep 25", "$ npm test")])]);
+  var editPage = page([agentRoot([commandRow("Edit main.py")])]);
+  var readPage = page([agentRoot([commandRow("Read main.py")])]);
+  var searchPage = page([agentRoot([commandRow("Searching the web")])]);
+  var fetchPage = page([agentRoot([commandRow("Fetching web page")])]);
+  // The buttonless rows and the group three batched fetches collapse into.
+  var fetchDonePage = page([agentRoot([fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")])]);
+  var fetchFailedPage = page([agentRoot([fetchRow("text-text-tertiary size-4 shrink-0", "Fetch failed", null)])]);
+  var searchLonePage = page([agentRoot([loneSearchRow('Searched for "node test runner"')])]);
+  var processOutputPage = page([agentRoot([processOutputRow()])]);
+  var outputPage = page([agentRoot([commandRow("get_process_output")])]);
+  var gearPage = page([agentRoot([commandRow("Agent chat")])]);
+  var questionsPage = page([agentRoot([commandRow("Generating questions\u2026")])]);
+  var pollPage = page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])]);
+  var playPage = page([agentRoot([playRow()])]);
+  var summaryPage = page([agentRoot([summaryRow()])]);
+  var userPage = page([userRootNode()]);
+  var endedPage = page([agentRoot([chatRow()])], { stop: false });
+  var quietPage = page([]);
+  // `:nth-last-of-type(2)`: the trailing div is never the row.
+  var trailingPage = page([agentRoot([commandRow("Bash sleep 25", "$ npm test"), chatRow()])]);
+  var thirdPage = page([agentRoot([commandRow("Bash sleep 25", "$ npm test"), chatRow(), reasoningRow()])]);
+  var olderRootPage = page([agentRoot([chatRow()]), agentRoot([commandRow("Bash sleep 25", "$ npm test")])]);
+  var bashLogLine = loggedTitleLine(bashPage);
+  var chatLogLine = loggedTitleLine(chatPage);
+  var questionsLogLine = loggedTitleLine(questionsPage);
+  var reasoningLogLine = loggedTitleLine(reasoningPage);
+  var pollLogLine = loggedTitleLine(pollPage);
+  var syncChatPage = page([agentRoot([chatRow()])]);
+  var directChat = chatRow();
+  var directReasoning = reasoningRow();
+  var directAction = commandRow("Bash sleep 25");
+  var directPoll = commandRow("running Bash", "$ arena-preview poll");
+  var twoRows = [commandRow("Bash sleep 25"), chatRow()];
+  var twoRowRoot = agentRoot(twoRows);
+  var agentShape = agentRoot([]);
+  var userShape = userRootNode();
+  var headerChat = chatRow();
+  var headerShape = agentRoot([headerChat, node("div", "flex w-fit items-center", [])]);
+  var headerCard = headerShape.firstElementChild;
+  var headerBody = headerCard.firstElementChild;
+  var header = node("div", "flex min-h-[40px] items-center", [node("div", "flex size-4", [])]);
+  header.parentElement = headerCard;
+  headerCard.children.unshift(header);
+  var originalHeaderQuery = headerShape.querySelector;
+  headerShape.querySelector = function (selector) {
+    if (selector === ":scope > div > div.px-3.pb-3 > div.flex.flex-col.gap-2") {
+      return headerBody.firstElementChild;
+    }
+    return originalHeaderQuery(selector);
+  };
+  assert.equal(rowContainer(headerShape), headerBody.firstElementChild);
+  assert.equal(newestRow(headerShape), headerChat);
+  expireHold();
+  assert.equal(desiredTitle(page([headerShape])), TITLE_PREFIX + "clankers " + AGENT_EMOJI);
+
+  var promptPage = docWith(null, "Arena");
+  promptPage.location = { href: "https://arena.ai/agent/session" };
+  promptPage.querySelectorAll = function (selector) {
+    return selector.includes('aria-haspopup')
+      ? [{ textContent: "daedalus read ARENA.md AGENTS.md in full" }]
+      : [];
+  };
+  assert.equal(repoForTitle(promptPage), "daedalus");
+  promptPage.querySelector = function (selector) {
+    return selector === REPO_LINK_SELECTOR ? repoLink : null;
+  };
+  assert.equal(repoForTitle(promptPage), "clankers");
+
+  var cases = [
+    // Repo name still comes from GitHub link, with memory answering while path holds.
+    [repoFromLink(repoLink), "clankers"],
+    [repoFromLink(labelOnly), "clankers"],
+    [repoFromLink(emptyLink), null],
+    [repoFromLink(null), null],
+    [repoForTitle(docWith(repoLink, "ChatGPT")), "clankers"],
+    [forgetPath(), null],
+    [repoForTitle(docWith(null, "ChatGPT")), null],
+    [repoForTitle(docWith(repoLink, "ChatGPT")), "clankers"],
+    [repoForTitle(docWith(null, "ChatGPT")), "clankers"],
+    // Root reads: agent root negates user-root chain. Row container and newest row
+    // come from last root alone.
+    [userRoot(userShape), true],
+    [userRoot(agentShape), false],
+    [lastRoot(page([agentShape])), agentShape],
+    [lastRoot(quietPage), null],
+    [rowContainer(userShape), null],
+    [rowContainer(agentShape) === childChain(agentShape, 3), true],
+    [newestRow(twoRowRoot) === twoRows[0], true],
+    [rowKind(directChat), "chat"],
+    [rowKind(directReasoning), "reasoning"],
+    [rowKind(directAction), "action"],
+    [rowKind(null), "none"],
+    // Row type carries its mark: chat body takes balloon, reasoning block takes
+    // thinking mark, and action rows keep label words.
+    [expireHold(), null],
+    [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(reasoningPage), TITLE_PREFIX + "clankers" + vtag + " " + REASONING_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(bashPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(editPage), TITLE_PREFIX + "clankers" + vtag + " \u270F\uFE0F"],
+    [expireHold(), null],
+    [desiredTitle(readPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCD6"],
+    [expireHold(), null],
+    [desiredTitle(searchPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(fetchPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(fetchDonePage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(fetchFailedPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(searchLonePage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(processOutputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
+    [expireHold(), null],
+    [desiredTitle(outputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
+    [expireHold(), null],
+    [desiredTitle(gearPage), TITLE_PREFIX + "clankers" + vtag + " \u2699\uFE0F"],
+    [expireHold(), null],
+    [desiredTitle(questionsPage), TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(pollPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
+    [expireHold(), null],
+    [desiredTitle(playPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    // The trailing div is never the row: with two rows the first one marks. The
+    // third row lands only when it takes the second-to-last place.
+    [expireHold(), null],
+    [desiredTitle(trailingPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(thirdPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    // Every row read starts at the last root, so an older root never marks.
+    [expireHold(), null],
+    [desiredTitle(olderRootPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    // The user root carries no mark, and a finished turn drops every row mark.
+    [expireHold(), null],
+    [desiredTitle(userPage), TITLE_PREFIX + "clankers" + vtag],
+    [desiredTitle(endedPage), TITLE_PREFIX + "clankers" + vtag],
+    // The answered question card raises no mark of its own.
+    [expireHold(), null],
+    [summaryCard(summaryRow()), true],
+    [desiredTitle(summaryPage), TITLE_PREFIX + "clankers" + vtag],
+    // The emoji selector and structured logs identify the row type.
+    [emojiForRow(directChat), AGENT_EMOJI],
+    [emojiForRow(directReasoning), REASONING_EMOJI],
+    [emojiForRow(directPoll), "\uD83D\uDCA4"],
+    [
+      emojiForRow(
+        commandRow(
+          "running Bash",
+          "$ arena-preview poll",
+          "poll max 1799 s; bash timeout 1800 s.\nrun suite-readme-shot running 39s\n"
+        )
+      ),
+      BASH_EMOJI,
+    ],
+    [
+      emojiForRow(
+        commandRow(
+          "running Bash",
+          "$ arena-preview poll",
+          "poll max 1799 s; bash timeout 1800 s.\n"
+        )
+      ),
+      "\uD83D\uDCA4",
+    ],
+    [emojiForRow(null), null],
+    [chatLogLine.data.type, "chat"],
+    [reasoningLogLine.data.type, "reasoning"],
+    [bashLogLine.data.type, "action"],
+    [pollLogLine.data.type, "poll"],
+    // Hold bridges gaps inside a turn and ends with stop control.
+    [expireHold(), null],
+    [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag],
+    // A drifted stop label still opens the gate. The exact wording does not.
+    [stopSignal(looseStopDoc()), true],
+    [stopSignal(page([], { stop: false })), false],
+    // The waiting line is a turn mark too: no control, no hourglass.
+    [expireHold(), null],
+    [desiredTitle(page([agentRoot([chatRow()])], { stop: false, canvas: rowCanvas(true).canvas })),
+      TITLE_PREFIX + "clankers" + vtag],
+    // A named action outranks the line, so the poll row keeps its own emoji. The row read
+    // runs before the waiting line on the same page.
+    [expireHold(), null],
+    [
+      desiredTitle(page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])], {
+        canvas: rowCanvas(true).canvas,
+      })),
+      TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4",
+    ],
+    [expireHold(), null],
+    [waitingSignal(waitingDoc()), true],
+    [waitingSignal(blankWaitingDoc()), true],
+    // The owner's action row carries the very same canvas as its icon. The canvas alone
+    // never reads as a waiting line and never outranks the Bash row.
+    [waitingSignal(actionCanvasDoc()), false],
+    [waitingSignal(setDoc), false],
+    [expireHold(), null],
+    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
+    [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
+    // The ask_user card holds the title with a question mark, and the security check beats
+    // it, like every other mark.
+    [questionSignal(questionDoc(questionCard())), true],
+    [questionSignal(questionDoc(null)), false],
+    [expireHold(), null],
+    [desiredTitle(questionDoc(questionCard())), TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(questionDoc(questionCard(), true)), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
+    [captchaSignal(captchaDoc()), true],
+    [captchaSignal(captchaDoc("closed")), false],
+    [captchaSignal(captchaDoc(null, true)), false],
+    [openDialog(node("div", "", [])), true],
+    // Every mark keeps its own label words, so the map stands.
+    [actionEmoji("running Bash"), BASH_EMOJI],
+    [actionEmoji("used Bash"), BASH_EMOJI],
+    [actionEmoji("Running commands"), BASH_EMOJI],
+    [actionEmoji("Ran commands"), BASH_EMOJI],
+    [actionEmoji("Reading files"), "\uD83D\uDCD6"],
+    [actionEmoji("Explored"), "\uD83D\uDCD6"],
+    [actionEmoji("Edit"), "\u270F\uFE0F"],
+    [actionEmoji("Writing"), "\u270F\uFE0F"],
+    [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
+    [actionEmoji("Fetching web page"), "\uD83D\uDD0D"],
+    [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
+    [actionEmoji("Waiting"), "\uD83D\uDCA4"],
+    [actionEmoji("get_process_output"), "\uD83D\uDCDC"],
+    [actionEmoji("Agent chat"), "\u2699\uFE0F"],
+    [actionEmoji(null), null],
+    [liveLabel(directAction), "Bash sleep 25"],
+    // The buttonless rows keep their label in a body-sm span. The fetch row's URL anchor
+    // never joins the label words.
+    [liveLabel(fetchRunningRow()), "Fetching"],
+    [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")), "Fetched"],
+    [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "Fetch failed", null)), "Fetch failed"],
+    [liveLabel(loneSearchRow('Searched for "node test runner"')), 'Searched for "node test runner"'],
+    [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "https://example.test/page", "https://example.test/page")), null],
+    [liveLabel(batchFetchRow()), "Searching the web"],
+    [liveLabel(batchFetchDoneRow()), "Searched the web"],
+    [liveLabel(processOutputRow()), "get_process_output"],
+    [liveLabel(null), null],
+    [polls("arena-preview poll --max 1"), true],
+    [polls("python preview.py poll"), true],
+    [polls("cat skills/arena-steering/README.md | grep polling"), false],
+    // Title writes through syncTitle, and line carries row anchors.
+    [setPriorTitle("ChatGPT"), undefined],
+    [expireHold(), null],
+    [syncTitle(syncChatPage), true],
+    [syncChatPage.title, TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [syncTitle(syncChatPage), false],
+    // The hold is still warm from the mark above. The quiet write needs its own window.
+    [expireHold(), null],
+    [syncTitle(quietPage), true],
+    [quietPage.title, TITLE_PREFIX + "clankers" + vtag],
+    [bashLogLine.text, "[NemoUtils][title][info] changed"],
+    [bashLogLine.data.type, "action"],
+    [bashLogLine.data.emoji, BASH_EMOJI],
+    [bashLogLine.data.repo, undefined],
+    [chatLogLine.text, "[NemoUtils][title][info] changed"],
+    [chatLogLine.data.type, "chat"],
+    [chatLogLine.data.emoji, AGENT_EMOJI],
+    [questionsLogLine.text, "[NemoUtils][title][info] changed"],
+    [questionsLogLine.data.type, "action"],
+    [questionsLogLine.data.emoji, QUESTION_EMOJI],
+    [api.VERSION, undefined],
+  ];
+  // Title writes through syncTitle, which logs winning signal. Capture keeps host
+  // console clean and returns last line.
+  function loggedTitle(doc) {
+    var lines = [];
+    var original = console.log;
+    console.log = function (text, data) {
+      lines.push({ text: text, data: JSON.parse(JSON.stringify(data || {})) });
+    };
+    try {
+      doc.title = "ChatGPT";
+      api.syncTitle(doc);
+    } finally {
+      console.log = original;
+    }
+    return lines;
+  }
+  function loggedTitleLine(doc) {
+    var lines = loggedTitle(doc);
+    assert.equal(lines.length, 1, "normal title output must omit debug conditions");
+    return lines[0];
+  }
+
+  function polls(text) {
+    return api.POLL_RE.test(text.toLowerCase());
+  }
+  var failed = 0;
+  var i;
+  for (i = 0; i < cases.length; i += 1) {
+    if (cases[i][0] !== cases[i][1]) {
+      console.error("check fail", i, cases[i][0], cases[i][1]);
+      failed += 1;
+    }
+  }
+  if (failed) {
+    throw new Error(failed + " checks failed");
+  }
+  api.setPriorTitle(quietPage.title);
+  var restoreLines = [];
+  var restoreConsole = console.log;
+  console.log = (...args) => restoreLines.push(args);
+  try {
+    assert.equal(api.restoreTitle(quietPage), false);
+    assert.equal(restoreLines.length, 0, "restoring an equal title must stay silent");
+    quietPage.title = "External title";
+    api.syncTitle(quietPage);
+    api.setPriorTitle("Original title");
+    restoreLines.length = 0;
+    assert.equal(api.restoreTitle(quietPage), true);
+    assert.equal(quietPage.title, "Original title");
+    assert.equal(restoreLines.length, 1);
+    assert.equal(restoreLines[0][0], "[NemoUtils][title][info] restored");
+    api.syncTitle(quietPage);
+  } finally {
+    console.log = restoreConsole;
+  }
+  // One line per change stays, and the plain unchanged line is gone. A second
+  // sync with the title already in place writes nothing at all.
+  var quiet = [];
+  var louder = console.log;
+  console.log = function () {
+    quiet.push(Array.prototype.join.call(arguments, " "));
+  };
+  try {
+    api.syncTitle(quietPage);
+    logging.setLogLevel("debug");
+    api.syncTitle(quietPage);
+  } finally {
+    console.log = louder;
+    logging.setLogLevel("info");
+  }
+  if (quiet.length) {
+    console.error("check fail", "unchanged title line", quiet.join(" | "));
+    throw new Error("the unchanged title line still fires: " + quiet.join(" | "));
+  }
+  logging.setLogLevel("debug");
+  try {
+    expireHold();
+    var firstChange = loggedTitle(bashPage);
+    var secondChange = loggedTitle(bashPage);
+    assert.equal(firstChange.length, 2);
+    assert.equal(secondChange.length, 2, "real title changes must not use a time throttle");
+    assert.equal(firstChange[1].text, "[NemoUtils][title][debug] conditions");
+    assert.deepEqual(firstChange[1].data, { captcha: false, question: false, live: true });
+    assert.doesNotMatch(JSON.stringify(firstChange), /Bash sleep|row=/);
+  } finally {
+    logging.setLogLevel("info");
+  }
+  console.log("ok tab title " + cases.length);
+}
+
+function checkKeepAwake(api) {
+  var wakeLockPlan = api.wakeLockPlan;
+  assert.equal(wakeLockPlan(true, false, true), "acquire");
+  assert.equal(wakeLockPlan(true, true, true), "none", "A held lock stays");
+  assert.equal(wakeLockPlan(true, false, false), "none", "A hidden page cannot take the lock");
+  assert.equal(wakeLockPlan(false, true, true), "release", "A finished turn drops the lock");
+  assert.equal(wakeLockPlan(false, true, false), "release", "A hidden page drops a held lock");
+  assert.equal(wakeLockPlan(false, false, true), "none");
+  console.log("ok keep awake 6");
+}
+
+function run(name, check) {
+  try {
+    check();
+  } catch (error) {
+    throw new Error(`${name}: ${error.message}`);
+  }
+}
+
+function checkStateDownload(api, session, logging) {
+  var stateFileName = api.stateFileName;
+  var stateDownload = api.stateDownload;
+  var stateMemory = api.stateMemory;
+  var stateRemembered = api.stateRemembered;
+  var saveMoved = api.saveMoved;
+  var overwriteAsk = api.overwriteAsk;
+  var overwriteLine = api.overwriteLine;
+  var panelNeeded = api.panelNeeded;
+  var stateScope = api.stateScope;
+  var stateRepo = api.stateRepo;
+  var stateBranch = api.stateBranch;
+  var stateScopeKey = api.stateScopeKey;
+  var readSlug = api.readSlug;
+  var slugFromBare = api.slugFromBare;
+  var getLine = api.getLine;
+  var proxyStateFailLine = api.proxyStateFailLine;
+  var stateError = api.stateError;
+  assert.equal(api.computeStateDiff, undefined);
+  assert.equal(api.applyStateDiff, undefined);
+  assert.equal(api.backupTextForOffer, undefined);
+  assert.equal(api.pagePicker, undefined);
+  assert.equal(api.writeToHandle, undefined);
+  assert.equal(api.writeStateDownload, undefined);
+  assert.equal(api.handleMatchesScope, undefined);
+  var counts = { notes: 12, tasks: 4 };
+  var repo = "clankers";
+  var branch = "main";
+  // The name carries the repository, then the branch, then the server's stamp and the record
+  // counts. Two repos and their branches never collide in one folder.
+  assert.equal(
+    stateFileName(repo, branch, "2026-10-06T06:12:33.123456+00:00", counts),
+    "clankers-main-20261006T061233-n12-t4.ndjson",
+  );
+  assert.equal(
+    stateFileName("my repo", "feat/x", "2026-10-06T06:12:33", counts),
+    "my-repo-feat-x-20261006T061233-n12-t4.ndjson",
+  );
+  assert.equal(
+    stateFileName("", "", "2026-10-06T06:12:33", counts),
+    "arena-20261006T061233-n12-t4.ndjson",
+  );
+  assert.equal(
+    stateFileName(repo, branch, "2026-10-06T06:12:33", { notes: 0, tasks: 0 }),
+    "clankers-main-20261006T061233-n0-t0.ndjson",
+  );
+  assert.equal(stateFileName(repo, branch, null, counts), "clankers-main-n12-t4.ndjson");
+  // Only a stamp that differs from the last write fills the file.
+  assert.equal(stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "").type, "download");
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-05T20:00:00").type,
+    "download",
+  );
+  var repeated = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
+  assert.equal(repeated.type, "unchanged");
+  assert.equal(repeated.name, "clankers-main-20261006T061233-n12-t4.ndjson");
+  assert.match(repeated.message, /unchanged since the last write/);
+  // A stamp that goes backward is a wiped or replaced preview. Nothing overwrites the
+  // owner's file with an older state.
+  var stale = stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33");
+  assert.equal(stale.type, "stale");
+  assert.match(stale.message, /Stale preview state/);
+  // A payload with no stamp says so instead of writing an undated file.
+  var unstamped = stateDownload(repo, branch, null, counts, "");
+  assert.equal(unstamped.type, "error");
+  assert.match(unstamped.message, /carries no stamp/);
+  // The approved pair: the newest note stamp and the newest task stamp.
+  // A rollback leaves older records while a new note moves the state stamp. The pair rejects that write. The owner keeps the newer state.
+  var memory = stateMemory("2026-10-05T20:00:00", {
+    note: "2026-10-05T20:00:00",
+    task: "2026-10-05T19:00:00",
+  });
+  assert.equal(memory.stamp, "2026-10-05T20:00:00");
+  assert.equal(memory.note, "2026-10-05T20:00:00");
+  assert.equal(memory.task, "2026-10-05T19:00:00");
+  var restored = stateRemembered(JSON.stringify(memory));
+  assert.equal(restored.stamp, memory.stamp);
+  assert.equal(restored.note, memory.note);
+  assert.equal(restored.task, memory.task);
+  var legacy = stateRemembered("2026-10-05T20:00:00");
+  assert.equal(legacy.stamp, "2026-10-05T20:00:00");
+  assert.equal(legacy.note, "");
+  assert.equal(legacy.task, "");
+  var rolledBackTask = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    memory,
+    { note: "2026-10-06T06:12:33", task: "2026-10-05T18:00:00" },
+  );
+  assert.equal(rolledBackTask.type, "stale");
+  assert.match(rolledBackTask.message, /task stamp went backward/);
+  // A forced save takes the state whatever the memory says. The same stamp, an older
+  // stamp and a rolled-back pair all write, and the write moves the reference.
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33", null, true).type,
+    "download",
+  );
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33", null, true).type,
+    "download",
+  );
+  assert.equal(
+    stateDownload(
+      repo,
+      branch,
+      "2026-10-06T06:12:33",
+      counts,
+      memory,
+      { note: "2026-10-06T06:12:33", task: "2026-10-05T18:00:00" },
+      true,
+    ).type,
+    "download",
+  );
+  var rolledBackNote = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    memory,
+    { note: "2026-10-05T18:00:00", task: "2026-10-06T06:00:00" },
+  );
+  assert.equal(rolledBackNote.type, "stale");
+  assert.match(rolledBackNote.message, /note stamp went backward/);
+  // Both stamps of the pair move forward: the write lands.
+  var pairForward = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    memory,
+    { note: "2026-10-06T06:12:33", task: "2026-10-06T06:00:00" },
+  );
+  assert.equal(pairForward.type, "download");
+  var deletion = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    {
+      stamp: "2026-10-06T06:12:33",
+      note: "2026-10-06T06:12:33",
+      task: "2026-10-05T19:00:00",
+    },
+    { note: "2026-10-05T20:00:00", task: "2026-10-05T19:00:00" },
+  );
+  assert.equal(deletion.type, "unchanged");
+  // A payload without the pair, or a memory saved before the pair existed, keeps the old rule.
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, memory).type,
+    "download",
+  );
+  assert.equal(
+    stateDownload(
+      repo,
+      branch,
+      "2026-10-06T06:12:33",
+      counts,
+      "2026-10-05T20:00:00",
+      { note: "2026-10-06T06:12:33", task: "2026-10-05T19:00:00" },
+    ).type,
+    "download",
+  );
+  // The repo bar carries the pair and the branch anchor, so the name scopes to this repo and
+  // branch. Two repos never collide in one folder.
+  var branchLink = {
+    getAttribute: function (name) {
+      if (name === "href") return "https://github.com/nemoe7/clankers/tree/arena%2F01a0fd4f-clankers";
+      if (name === "title") return "main \u2192 arena/01a0fd4f-clankers";
+      return null;
+    },
+  };
+  var bar = {
+    querySelectorAll: function (selector) {
+      if (selector === "span.truncate") return [{ textContent: "nemoe7/clankers" }];
+      if (selector === "a, [title]") return [branchLink];
+      return [];
+    },
+  };
+  var doc = { querySelector: function () { return bar; } };
+  var scope = stateScope(doc);
+  assert.equal(scope.repo, "clankers");
+  assert.equal(scope.branch, "arena/01a0fd4f-clankers");
+  assert.equal(
+    stateFileName(scope.repo, scope.branch, "2026-10-06T06:12:33", counts),
+    "clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
+  );
+  // Server stamp carries timezone. Name keeps seconds alone.
+  assert.equal(
+    stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
+    "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
+  );
+  // An ongoing session renders the repository as a bare chip without its owner. A slash-less slug-like span in the
+  // bar still names the repository for the selector and the fill. It never falls through to a header session token.
+  var bareBar = {
+    querySelectorAll: function (selector) {
+      if (selector === "span.truncate") return [{ textContent: "daedalus" }];
+      if (selector === "a, [title]") return [branchLink];
+      return [];
+    },
+  };
+  var bareDoc = {
+    querySelector: function () { return bareBar; },
+    querySelectorAll: function (selector) {
+      return selector.indexOf("span.truncate") !== -1 ? [{ textContent: "daedalus" }] : [];
+    },
+  };
+  assert.equal(slugFromBare("daedalus"), "daedalus");
+  assert.equal(slugFromBare("nemoe7/daedalus"), null);
+  assert.equal(slugFromBare("  "), null);
+  assert.equal(stateRepo(bareDoc), "daedalus");
+  assert.equal(readSlug(bareDoc), "daedalus");
+  assert.equal(stateScope(bareDoc).repo, "daedalus");
+  var promptDoc = {
+    location: { href: "https://arena.ai/agent/session" },
+    title: "Arena | previous",
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      return selector.includes('aria-haspopup')
+        ? [{ textContent: "daedalus read ARENA.md AGENTS.md in full before your first edit" }]
+        : [];
+    },
+  };
+  assert.equal(readSlug(promptDoc), "daedalus");
+  assert.equal(stateRepo(promptDoc), "daedalus");
+  promptDoc.location.href = "https://arena.ai/agent";
+  assert.equal(readSlug(promptDoc), "previous");
+  promptDoc.location.href = "https://arena.ai/agent/session";
+  promptDoc.querySelectorAll = function () {
+    return [{ textContent: "not a repo read ARENA.md" }];
+  };
+  assert.equal(readSlug(promptDoc), "previous");
+  // A new chat on /agent has no session bar. The composer's own selector row carries the
+  // repository chip ahead of the branch chip, and the fill reads it there.
+  var composerDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/clankers" }, { textContent: "main" }];
+    },
+  };
+  assert.equal(readSlug(composerDoc), "clankers");
+  assert.equal(stateRepo(composerDoc), "clankers");
+  // The leading chip is the repository, so a chip that is not the owner/repo form never
+  // answers. The title still carries the read.
+  var branchChipDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "main" }, { textContent: "nemoe7/clankers" }];
+    },
+    title: "Arena | clankers",
+  };
+  assert.equal(readSlug(branchChipDoc), "clankers");
+  // A branch with a slash wears the owner/repo shape too, so two such chips stay ambiguous. The
+  // title decides instead of a branch.
+  var branchFirstDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "arena/595e8dec-clankers" }, { textContent: "nemoe7/clankers" }];
+    },
+    title: "Arena | clankers",
+  };
+  assert.equal(readSlug(branchFirstDoc), "clankers");
+  // A selected diff branch puts the session branch beside the repository chip. The tab title stays bare on that page.
+  // The branch wears the platform namespace. The chip read still names the repository with nothing else to fall back on.
+  var diffBranchDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/daedalus" }, { textContent: "arena/fef1ae85-daedalus" }];
+    },
+    title: "Arena",
+  };
+  assert.equal(readSlug(diffBranchDoc), "daedalus");
+  assert.equal(stateRepo(diffBranchDoc), "daedalus");
+  // A branch in another namespace carries no platform mark, so the pair stays ambiguous and
+  // the title alone can answer.
+  var otherBranchDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/daedalus" }, { textContent: "feature/panel" }];
+    },
+    title: "Arena",
+  };
+  assert.equal(readSlug(otherBranchDoc), null);
+  // The page's own chip outranks the title. The title can still name the previous
+  // session after a new chat opens on the same tab.
+  var staleTitleDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/daedalus" }];
+    },
+    title: "Arena | clankers",
+  };
+  assert.equal(readSlug(staleTitleDoc), "daedalus");
+  // While dialog holds page, header disappears and fill's saved slug names repository.
+  // Branch stays empty.
+  session.value = "clankers";
+  assert.equal(stateRepo({ querySelector: function () { return null; } }), "clankers");
+  assert.equal(
+    stateScope({ querySelector: function () { return null; } }).branch,
+    "",
+  );
+  session.value = null;
+  assert.equal(stateRepo({ querySelector: function () { return null; } }), "");
+  // One storage scope per repo and branch. A second tab of another session never
+  // shares the stamp memory or the chosen file with this one.
+  assert.equal(stateScopeKey("clankers", "main"), stateScopeKey("clankers", "main"));
+  assert.notEqual(stateScopeKey("clankers", "main"), stateScopeKey("widget", "main"));
+  assert.notEqual(stateScopeKey("clankers", "main"), stateScopeKey("clankers", "feat/x"));
+  assert.equal(stateScopeKey("", ""), "arena");
+  assert.equal(stateScopeKey("my repo", "feat/x"), "my-repo-feat-x");
+  assert.equal(api.downloadRoute, undefined);
+  assert.equal(api.stateDownloadRoute, undefined);
+  // A title without the arrow falls back to the href. A page without the bar stays empty.
+  branchLink.getAttribute = function (name) {
+    if (name === "href") return "https://github.com/other/repo/tree/feat%2Fx";
+    return "";
+  };
+  assert.equal(stateScope(doc).branch, "feat/x");
+  assert.equal(
+    JSON.stringify(stateScope({ querySelector: function () { return null; } })),
+    JSON.stringify({ repo: "", branch: "" }),
+  );
+  // The bar leaves the page while a dialog holds it. With no saved slug either, the title
+  // still carries the repository this script wrote.
+  session.value = null;
+  assert.equal(
+    stateRepo({ querySelector: function () { return null; }, title: "Arena | clankers \uD83D\uDCA4" }),
+    "clankers",
+  );
+  assert.equal(
+    stateRepo({ querySelector: function () { return null; }, title: "ChatGPT" }),
+    "",
+  );
+  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish. The conversation header still opens with the repository name, and its first word is the repository.
+  // The tab title is the reliable read, so it comes before the greppier header read.
+  var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
+  var headerDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      return selector.indexOf("aria-haspopup") !== -1 ? [headerSpan] : [];
+    },
+    title: "Arena | other",
+  };
+  assert.equal(stateRepo(headerDoc), "other");
+  // With no title at all, the header read names the repository.
+  var headerOnlyDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      return selector.indexOf("aria-haspopup") !== -1 ? [headerSpan] : [];
+    },
+  };
+  assert.equal(stateRepo(headerOnlyDoc), "clankers");
+  // A header span with no slug-like first word and no title yields nothing.
+  headerSpan.textContent = "";
+  assert.equal(stateRepo(headerOnlyDoc), "");
+  // Saved slug still wins over header read when title disappears.
+  session.value = "saved";
+  headerSpan.textContent = "clankers read ARENA.md";
+  assert.equal(stateRepo(headerOnlyDoc), "saved");
+  session.value = null;
+  // The proxy-config card: a manual press always shows it, and an automatic tick stays quiet.
+  assert.equal(panelNeeded(true, true), true);
+  assert.equal(panelNeeded(true, false), true);
+  assert.equal(panelNeeded(false, false), true);
+  assert.equal(panelNeeded(false, true), false);
+  assert.match(proxyStateFailLine("http-502"), /http-502/);
+  assert.match(proxyStateFailLine(null), /unknown/);
+  // The panel keeps its text, but the console carries only the error code and status.
+  var errorLines = [];
+  var restoreLog = console.error;
+  console.error = function () { errorLines.push(JSON.stringify(Array.from(arguments))); };
+  try {
+    stateError("GET 500 http://localhost:8000/api/copy-state", null, null, "copy-state", 500);
+  } finally {
+    console.error = restoreLog;
+  }
+  assert.match(errorLines[0], /\[NemoUtils\]\[state\]\[error\] failed/);
+  assert.match(errorLines[0], /copy-state/);
+  assert.match(errorLines[0], /500/);
+  assert.doesNotMatch(errorLines[0], /localhost|api\/copy-state/);
+  assert.match(getLine(200, "http://localhost:8000"), /^GET 200$/);
+  // Every comparison in the save path writes its own line, so one filter shows which test
+  // refused a write.
+  logging.setLogLevel("debug");
+  var compared = [];
+  var originalLog = console.log;
+  console.log = function () {
+    compared.push(JSON.stringify(Array.from(arguments)));
+  };
+  try {
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
+    stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33");
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "");
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, {
+      stamp: "2026-10-05T20:00:00",
+      note: "2026-10-06T05:30:00",
+      task: "2026-10-06T05:00:00",
+    }, { note: "2026-10-06T05:00:00", task: "2026-10-06T06:00:00" });
+    stateDownload(repo, branch, null, counts, "");
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, {
+      stamp: "2026-10-06T06:12:33",
+      note: "2026-10-06T06:12:33",
+      task: "2026-10-06T06:12:33",
+    }, { note: "2026-10-06T06:12:33", task: "2026-10-06T06:12:33" });
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, {
+      stamp: "2026-10-05T20:00:00",
+      note: "2026-10-06T05:30:00",
+      task: "2026-10-06T05:00:00",
+    }, { note: "2026-10-06T05:00:00", task: "2026-10-06T06:00:00" }, true);
+  } finally {
+    console.log = originalLog;
+    logging.setLogLevel("info");
+  }
+  function comparedLine(event, fields) {
+    return compared.some(function (line) {
+      var parts = JSON.parse(line);
+      return parts[0] === "[NemoUtils][state][debug] " + event &&
+        JSON.stringify(parts[1] || {}) === JSON.stringify(fields || {});
+    });
+  }
+  assert.ok(comparedLine("compare", { group: "note", verdict: "older" }));
+  assert.ok(comparedLine("compare", { group: "task", verdict: "forward" }));
+  assert.ok(comparedLine("no-stamp"));
+  assert.ok(comparedLine("compare", { group: "note", verdict: "same" }));
+  assert.ok(comparedLine("compare", { group: "task", verdict: "same" }));
+  assert.ok(comparedLine("force-stamp", { group: "note" }));
+  assert.ok(comparedLine("force-stamp", { group: "task" }));
+  assert.doesNotMatch(compared.join("\n"), /2026-|http|private/);
+  // A save moves when the session branch is unknown. It also moves when the preview URL differs from the one that last wrote this scope.
+  // A moved save that would write asks before it writes. A forced save never asks.
+  assert.equal(saveMoved("", "", "https://p.example"), true, "No branch moves the save");
+  assert.equal(saveMoved("arena/x", "", "https://p.example"), false, "A first write does not move");
+  assert.equal(saveMoved("arena/x", "https://p.example", "https://p.example"), false);
+  assert.equal(saveMoved("arena/x", "https://p.example", "https://q.example"), true);
+  assert.equal(
+    saveMoved("", "https://p.example", "https://p.example", "clankers-arena-x"),
+    false,
+    "A remembered scope keeps the same preview after overwrite",
+  );
+  assert.equal(
+    saveMoved("", "https://p.example", "https://q.example", "clankers-arena-x"),
+    true,
+    "A new preview still moves the save",
+  );
+  assert.equal(
+    saveMoved("arena/y", "https://p.example", "https://p.example", "clankers-arena-x", "arena/x"),
+    true,
+    "A new branch still moves the save",
+  );
+
+  assert.equal(overwriteAsk(true, { type: "download" }, true, false), true);
+  assert.equal(overwriteAsk(true, { type: "download" }, true, true), false, "A forced save writes");
+  assert.equal(overwriteAsk(false, { type: "download" }, true, false), false);
+  assert.equal(overwriteAsk(true, { type: "unchanged" }, true, false), false, "Nothing to write");
+  assert.equal(overwriteAsk(true, { type: "download" }, false, false), false, "No file to protect");
+
+  // The reset window accepts a URL-only move within 150 seconds either side of the four PHT
+  // boundaries. A branch move, a missing branch and an outside-window clock still ask.
+  var previousBoundary = api.previousBoundary;
+  var inResetWindow = api.inResetWindow;
+  var resetWindowAccepts = api.resetWindowAccepts;
+  assert.equal(api.resetWindowOn(), true, "the reset-window switch ships on");
+  assert.equal(
+    previousBoundary(new Date("2026-10-15T06:59:00Z")).toISOString(),
+    "2026-10-15T06:00:00.000Z",
+    "14:59 PHT sits after the 14:00 boundary",
+  );
+  assert.equal(
+    previousBoundary(new Date("2026-10-14T17:30:00Z")).toISOString(),
+    "2026-10-14T12:00:00.000Z",
+    "01:30 PHT falls back to the previous 20:00 boundary",
+  );
+  assert.equal(inResetWindow(new Date("2026-10-15T06:02:30Z")), true, "150 seconds after 14:00 PHT");
+  assert.equal(inResetWindow(new Date("2026-10-15T05:57:30Z")), true, "150 seconds before 14:00 PHT");
+  assert.equal(inResetWindow(new Date("2026-10-15T06:02:31Z")), false, "151 seconds after leaves");
+  assert.equal(inResetWindow(new Date("2026-10-15T05:57:29Z")), false, "151 seconds before leaves");
+  assert.equal(inResetWindow(new Date("2026-10-15T00:30:00Z")), false, "08:30 PHT waits");
+  var atWindow = new Date("2026-10-15T06:01:00Z");
+  var outside = new Date("2026-10-15T02:00:00Z");
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "main", "https://old.arena.site", "https://new.arena.site", "main"),
+    true,
+    "an in-window URL-only move writes without the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, false, "main", "https://old.arena.site", "https://new.arena.site", "main"),
+    false,
+    "the switch off keeps the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(outside, true, "main", "https://old.arena.site", "https://new.arena.site", "main"),
+    true,
+    "outside the window a URL-only move still writes without the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "dev", "https://old.arena.site", "https://new.arena.site", "main"),
+    false,
+    "a branch mismatch keeps the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "", "https://old.arena.site", "https://new.arena.site", ""),
+    false,
+    "a missing branch keeps the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "main", "https://new.arena.site", "https://new.arena.site", "main"),
+    false,
+    "a URL that did not move needs no acceptance",
+  );
+  const overwriteContext = {
+    branch: "main", rememberedBranch: "main", lastScope: "clankers-main",
+    base: "https://new.arena.site", rememberedBase: "https://old.arena.site",
+    memory: { stamp: "2026-10-05T20:00:00", note: "2026-10-05T19:00:00", task: "2026-10-05T18:00:00" },
+    stamp: "2026-10-06T20:00:00",
+    stamps: { note: "2026-10-05T19:00:00", task: "2026-10-05T18:00:00" },
+  };
+  const FILE = "clankers-main.ndjson";
+  const forwardOnly = overwriteLine(FILE, overwriteContext);
+  assert.match(forwardOnly, /State: forward/);
+  assert.equal(/Notes|Tasks/.test(forwardOnly), false, "same comparisons are omitted");
+  for (const hidden of [FILE, overwriteContext.base, overwriteContext.rememberedBase, "URL", "Branch", "main"]) {
+    assert.equal(forwardOnly.includes(hidden), false, hidden + " stays out of the body");
+  }
+  assert.equal(
+    overwriteLine("other.ndjson", { ...overwriteContext, base: "https://x.example", branch: "dev" }),
+    forwardOnly,
+    "only stamp comparisons shape the body",
+  );
+  const mixed = overwriteLine(FILE, {
+    ...overwriteContext, stamp: "2026-10-04T20:00:00",
+    stamps: { note: "2026-10-04T19:00:00", task: "2026-10-06T18:00:00" },
+  });
+  assert.match(mixed, /State: older/);
+  assert.match(mixed, /Notes: older/);
+  assert.match(mixed, /Tasks: forward/);
+  const unchanged = overwriteLine(FILE, {
+    ...overwriteContext, stamp: overwriteContext.memory.stamp,
+    stamps: { note: overwriteContext.memory.note, task: overwriteContext.memory.task },
+  });
+  assert.equal(/same|State|Notes|Tasks/.test(unchanged), false, "an all-same body names no comparison");
+  assert.ok(unchanged.length > 0 && unchanged.length < mixed.length);
+  const legacyStamp = overwriteLine(FILE, { ...overwriteContext, memory: overwriteContext.stamp });
+  assert.match(legacyStamp, /Notes: unknown/);
+  assert.match(legacyStamp, /Tasks: unknown/);
+  assert.equal(legacyStamp.includes("State"), false, "the same overall stamp is omitted");
+  const unknown = overwriteLine(FILE);
+  assert.match(unknown, /State: unknown/);
+  assert.match(unknown, /Notes: unknown/);
+  assert.match(unknown, /Tasks: unknown/);
+  assert.equal(unknown.includes(FILE), false);
+
+  console.log("ok state download 32");
+  // The session bar names an unpushed branch in a titled span. A pushed branch also has an
+  // anchor with a /tree/ href. The repository anchor carries no branch.
+  const element = (tag, title, href) => ({
+    tag: tag,
+    getAttribute: (name) => (name === "title" ? title || null : name === "href" ? href || null : null),
+  });
+  // The fake answers a selector list the way the bar does: a tag name, or any titled element.
+  const matches = (el, selector) => selector.split(",").some((part) => {
+    const token = part.trim();
+    return token === el.tag || (token === "[title]" && el.getAttribute("title") !== null);
+  });
+  const docWith = (links) => ({
+    querySelector: () => ({ querySelectorAll: (selector) => links.filter((el) => matches(el, selector)) }),
+  });
+  const repoLink = element("a", "nemoe7/clankers", "https://github.com/nemoe7/clankers");
+  assert.equal(
+    stateBranch(docWith([repoLink, element("span", "main \u2192 arena/1bc9bdc9-clankers")])),
+    "arena/1bc9bdc9-clankers",
+    "An unpushed branch reads from its titled span",
+  );
+  assert.equal(
+    stateBranch(docWith([
+      repoLink,
+      element("a", "main \u2192 arena/fef1ae85-daedalus", "https://github.com/nemoe7/daedalus/tree/arena%2Ffef1ae85-daedalus"),
+    ])),
+    "arena/fef1ae85-daedalus",
+    "A pushed branch reads from its /tree/ anchor",
+  );
+  assert.equal(stateBranch(docWith([repoLink])), "", "A repository link alone names no branch");
+  var posted = [];
+  var previewFrameNode = {
+    src: "https://sbx-test.arena.site/",
+    getAttribute: function (name) {
+      return name === "title" ? "App preview on port 8000" : "";
+    },
+    contentWindow: {
+      postMessage: function (payload, target) {
+        posted.push([payload, target]);
+      },
+    },
+  };
+  var previewDoc = {
+    querySelectorAll: function () {
+      return [previewFrameNode];
+    },
+  };
+  assert.equal(api.notifyPreviewReady(previewDoc), true);
+  assert.equal(api.notifyPreviewReady(previewDoc), false);
+  assert.equal(api.notifyPreviewReady(previewDoc, true), true);
+  assert.equal(posted.length, 2);
+  assert.equal(posted[0][0].type, "clankers:userscript-ready");
+  assert.equal(posted[0][1], "https://sbx-test.arena.site");
+  console.log("ok state download 34");
+}
+
+const arenaModule = loadChecks("arena.user.js");
+const arena = arenaModule.checks;
+test("prompt fill", () => checkPromptFill(arena.promptFill));
+run("arena logging", () => checkArenaLogging(arena.logging, arenaModule.menus));
+run("open steering", () => checkOpenSteering(arena.openSteering));
+run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
+run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
+run("transcript alerts", () => checkTranscriptAlerts(arena.transcriptAlerts));
+run("hide composer", () => checkHideComposer(arena.hideComposer));
+run("tab title", () => checkTabTitle(arena.tabTitle, arena.logging));
+run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session, arena.logging));
+run("keep awake", () => checkKeepAwake(arena.keepAwake));
+
+require("node:test").test("successful state saves clear stale failure notices", async () => {
+  const loaded = loadChecks("arena.user.js");
+  const api = loaded.checks.stateDownload;
+  let panel;
+  const reset = (autoHide = false) => {
+    panel = {
+      getAttribute(name) { return name === "data-auto-hide" ? String(autoHide) : null; },
+      parentNode: { removeChild(node) { assert.equal(node, panel); panel = null; } },
+    };
+  };
+  loaded.context.document = {
+    getElementById(id) { assert.equal(id, "clankers-state-panel"); return panel; },
+  };
+  reset();
+  api.clearSavedFailure();
+  assert.equal(panel, null, "a successful proxy state save clears the old failure");
+  reset(true);
+  api.clearSavedFailure();
+  assert.ok(panel, "a transient success message keeps its existing timeout");
+});
+
+require("node:test").test("multi-session board enforces proxy-only cache, Main Session role, uncapped script-to-proxy state, and target scoping", () => {
+  const loaded = loadChecks("arena.user.js");
+  const boardApi = loaded.checks.board;
+  assert.equal(boardApi.boardBranch("arena/main0001-clankers"), "arena/main0001-clankers");
+  assert.equal(boardApi.boardBranch("work0002-clankers"), "work0002-clankers");
+  assert.equal(boardApi.MAX_BOARD_FILE_BYTES, undefined);
+  assert.equal(boardApi.BOARD_KEY, undefined);
+  assert.equal(boardApi.applyBoardAction, undefined);
+  assert.equal(boardApi.mergePreviewBoard, undefined);
+  assert.equal(boardApi.computeBoardDiff, undefined);
+  assert.equal(boardApi.applyBoardDiff, undefined);
+  assert.equal(boardApi.writeGlobalBoard, undefined);
+
+  const manySessions = Array.from({ length: 70 }, (_, idx) => ({
+    branch: `${String(idx + 1).padStart(8, "0")}-clankers`,
+    repo: "clankers",
+  }));
+  const manyEntries = Array.from({ length: 120 }, (_, idx) => ({
+    id: `p${idx}`,
+    branch: "00000001-clankers",
+    text: `entry-${idx}`,
+  }));
+  const uncapped = boardApi.normalizeBoard({
+    allowed_sessions: manySessions.map((row) => row.branch),
+    sessions: manySessions,
+    entries: manyEntries,
+  });
+  assert.equal(uncapped.sessions.length, 70);
+  assert.equal(uncapped.entries.length, 120);
+
+  let state = boardApi.readGlobalBoard();
+  assert.deepEqual([...state.allowed_sessions], []);
+
+  state = boardApi.updateProxyBoardCache(
+    {
+      allowed_sessions: ["arena/main0001-clankers", "arena/work0002-clankers"],
+      main_session_id: "arena/main0001-clankers",
+      sessions: [
+        { branch: "arena/main0001-clankers", repo: "clankers", polling: true },
+        { branch: "arena/work0002-clankers", repo: "clankers", status: "active" },
+      ],
+      entries: [
+        {
+          id: "p00001",
+          branch: "arena/work0002-clankers",
+          to: "arena/main0001-clankers",
+          repo: "nemoe7/clankers",
+          payload: { topic: "scope-split", status: "ready" },
+          file: {
+            name: "skills/nuu/scripts/nuu.py",
+            encoding: "utf-8",
+            content: "print('ok')\n",
+            size: 12,
+            sha256: "a".repeat(64),
+          },
+        },
+      ],
+      wakes: { "arena/main0001-clankers": "2026-10-25T12:01:00Z" },
+    },
+    1,
+  );
+  assert.deepEqual([...state.allowed_sessions], ["arena/main0001-clankers", "arena/work0002-clankers"]);
+  assert.equal(state.main_session_id, "arena/main0001-clankers");
+  assert.equal(boardApi.boardRoleFor(state, "arena/main0001-clankers"), "main");
+  assert.equal(boardApi.canPushOrPr(state, "arena/main0001-clankers"), true);
+  assert.equal(boardApi.boardRoleFor(state, "arena/work0002-clankers"), "worker");
+  assert.equal(boardApi.canPushOrPr(state, "arena/work0002-clankers"), false);
+  assert.equal(state.entries.length, 1);
+  assert.equal(state.entries[0].file.size, 12);
+  assert.equal(state.entries[0].payload.topic, "scope-split");
+  assert.equal(state.wakes["arena/main0001-clankers"], "2026-10-25T12:01:00Z");
+
+  const unoptedView = boardApi.scopeBoardForTarget(state, "untr0003-sandbox", "sandbox");
+  assert.deepEqual([...unoptedView.entries], []);
+  assert.equal(unoptedView.main_session_id, "");
+
+  const revoked = boardApi.normalizeBoard({
+    allowed_sessions: ["work0002-clankers"],
+    removed_sessions: ["main0001-clankers"],
+    main_session_id: "main0001-clankers",
+  });
+  assert.equal(revoked.main_session_id, "");
+
+  const promptFill = fs.readFileSync(
+    path.join(__dirname, "../../userscripts/arena-prompt-fill.txt"),
+    "utf8",
+  );
+  const surveySpec = JSON.parse(
+    fs.readFileSync(
+      path.join(__dirname, "../../docs/archive/arena-skill/references/survey.json"),
+      "utf8",
+    ),
+  );
+  const promptSurveyIds = Array.from(
+    promptFill.matchAll(/^\d+\.\s+\*\*([A-Z0-9]+):\*\*/gm),
+    m => m[1],
+  );
+  assert.deepEqual(
+    promptSurveyIds,
+    surveySpec.questions.map(q => q.id),
+  );
+  assert.match(promptFill, /arena-preview survey -i/);
+  assert.match(promptFill, /"unknown"/);
+});

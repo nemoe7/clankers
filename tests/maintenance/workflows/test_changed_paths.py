@@ -169,9 +169,9 @@ def test_main_needs_an_output_file(tmp_path, monkeypatch):
 
 def test_module_matrix_selects_owners_and_shared_changes():
   paths = (
-    "tests/maintenance/measurements/test_measurements.py",
-    "tests/gpt-plugins/test_release_artifact.py",
-    "tests/github/workflows/test_check_workflows.py",
+    "tests/maintenance/test_check.py",
+    "tests/github/workflows/test_artifacts.py",
+    "tests/maintenance/workflows/test_gate_workflows.py",
     "tests/github/workflows/test_gemini_release.py",
   )
   for path in paths:
@@ -264,7 +264,7 @@ def test_module_test_ownership_is_complete_and_unique():
 def test_module_step_routes_changes_and_missing_bases(tmp_path):
   repo = init_repo(tmp_path)
   base = base_of(repo)
-  path = "tests/maintenance/measurements/test_measurements.py"
+  path = "tests/maintenance/test_check.py"
   commit_change(repo, path)
   out = tmp_path / "modules.txt"
   assert changed_paths.step_module_tests({"PUSH_BEFORE": base}, out, str(repo)) == 0

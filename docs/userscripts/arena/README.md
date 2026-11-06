@@ -177,8 +177,7 @@ From the repository root:
 
 ```bash
 node userscripts/arena.user.js
-node --test tests/userscripts/userscripts.checks.cjs
-node --test tests/userscripts/userscripts.test.cjs
+node --test tests/userscripts/arena.test.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundle carries runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `tests/userscripts/userscripts.checks.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.
+Each command prints `ok` when its checks pass. The bundle carries runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `tests/userscripts/arena.test.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.

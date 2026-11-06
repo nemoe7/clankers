@@ -56,8 +56,7 @@ From the repository root:
 
 ```bash
 node userscripts/chatgpt.user.js
-node --test tests/userscripts/userscripts.checks.cjs
-node --test tests/userscripts/userscripts.test.cjs
+node --test tests/userscripts/chatgpt.test.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundle carries runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `tests/userscripts/userscripts.checks.cjs`.
+Each command prints `ok` when its checks pass. The bundle carries runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `tests/userscripts/chatgpt.test.cjs`.
