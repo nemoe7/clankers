@@ -49,6 +49,7 @@ from .store import STATE_TABLES, SqliteStore
 RouteHandler = Callable[[dict[str, str], dict[str, list[str]], Any], tuple[int, Any]]
 
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+HOT_RELOAD_QUIET_SECONDS = 10.0
 WS_TICK_SECONDS = 0.25
 WS_HEARTBEAT_SECONDS = 10.0
 WS_IDLE_SECONDS = 35.0
@@ -280,6 +281,13 @@ class SteeringApp:
     self._clean_uncommitted_uploads()
     default_assets = Path(__file__).resolve().parents[2] / "assets"
     self.assets_dir = Path(assets_dir) if assets_dir is not None else default_assets
+    initial_assets = assets_signature(self.assets_dir)
+    self._asset_tracker = {
+      "lock": threading.Lock(),
+      "observed": initial_assets,
+      "stable": initial_assets,
+      "changed_at": None,
+    }
     self.repo_name = repo_name or _detect_repo_name(store)
     self._read_set = _read_set_files(_detect_repo_root(store))
     self.messages = MessageService(store, store, store, store)
@@ -754,9 +762,21 @@ class SteeringApp:
     return self._resolve_under(Path(db_path).resolve().parent, rel)
 
   def asset_signature_hash(self) -> str:
-    """Return a short hash of current asset file mtimes and sizes."""
-    sig = assets_signature(self.assets_dir)
-    digest = hashlib.sha256(repr(sig).encode("utf-8")).hexdigest()
+    """Return a hash after asset changes have been quiet for ten seconds."""
+    tracker = self._asset_tracker
+    with tracker["lock"]:
+      sig = assets_signature(self.assets_dir)
+      now = time.monotonic()
+      if sig != tracker["observed"]:
+        tracker["observed"] = sig
+        tracker["changed_at"] = now
+      elif (
+        tracker["changed_at"] is not None
+        and now - tracker["changed_at"] >= HOT_RELOAD_QUIET_SECONDS
+      ):
+        tracker["stable"] = sig
+        tracker["changed_at"] = None
+      digest = hashlib.sha256(repr(tracker["stable"]).encode("utf-8")).hexdigest()
     return digest[:12]
 
   def _handle_blocked_bash_log(
@@ -1730,7 +1750,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       try:
         version = app.data_version()
         ack_snapshot = app.report_ack_snapshot()
-        asset_ver = assets_signature(app.assets_dir)
+        asset_ver = app.asset_signature_hash()
         restore_notice = app.store.get_meta("state_restore_notice", "")
         self.ws_send(1, b'{"type":"change"}')
         while True:
@@ -1801,7 +1821,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
                 "utf-8"
               ),
             )
-          current_assets = assets_signature(app.assets_dir)
+          current_assets = app.asset_signature_hash()
           if current_assets != asset_ver:
             asset_ver = current_assets
             self.ws_send(1, b'{"type":"reload"}')
@@ -1944,6 +1964,7 @@ def reload_server_handler(server: ThreadingHTTPServer, app: SteeringApp) -> Stee
     assets_dir=app.assets_dir,
     repo_name=app.repo_name,
   )
+  new_app._asset_tracker = app._asset_tracker
   with app.messages._cond, new_app.messages._cond:
     new_app.messages._survey_answers = dict(app.messages._survey_answers)
     new_app.messages._survey_results = list(app.messages._survey_results)
@@ -1962,7 +1983,7 @@ def watch_hot_reload(
   stop: threading.Event | None = None,
   interval: float = 1.0,
   scripts_dir: str | Path | None = None,
-  quiet_seconds: float = 10.0,
+  quiet_seconds: float = HOT_RELOAD_QUIET_SECONDS,
 ) -> None:
   """Swap changed Python modules after a quiet period without closing the TCP socket."""
   baseline = scripts_signature(scripts_dir)

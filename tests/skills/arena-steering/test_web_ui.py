@@ -399,7 +399,7 @@ def test_survey_modal_survives_asset_hot_reload(tmp_path: Path) -> None:
         page.locator("#survey-open").click()
         page.locator(".survey-cap-pill").first.wait_for()
         with (
-          page.expect_navigation(wait_until="load", timeout=10000),
+          page.expect_navigation(wait_until="load", timeout=20000),
           (assets / "style.css").open("a", encoding="utf-8") as css,
         ):
           css.write("\n/* asset reload test */\n")
@@ -5479,6 +5479,78 @@ def test_report_header_tracks_linked_tasks_without_duplicate_title(
         page.screenshot(path=str(tmp_path / f"report-linked-task-{width}.png"))
         chip.click()
         page.locator('#tab-tasks[aria-selected="true"]').wait_for()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+def test_asset_version_waits_for_ten_quiet_seconds(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  clock = [0.0]
+  signature = [(("style.css", 1, 1),)]
+  monkeypatch.setattr(steering_server.time, "monotonic", lambda: clock[0])
+  monkeypatch.setattr(steering_server, "assets_signature", lambda _path: signature[0])
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  initial = app.asset_signature_hash()
+  signature[0] = (("style.css", 2, 2),)
+  clock[0] = 1
+  assert app.asset_signature_hash() == initial
+  signature[0] = (("style.css", 3, 3),)
+  clock[0] = 8
+  assert app.asset_signature_hash() == initial
+  clock[0] = 17.9
+  assert app.asset_signature_hash() == initial
+  clock[0] = 18
+  assert app.asset_signature_hash() != initial
+  store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("transport", ["websocket", "poll"])
+def test_asset_reload_waits_for_quiet_period_while_state_updates(
+  tmp_path: Path, transport: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  assets = tmp_path / "assets"
+  shutil.copytree(ASSETS_DIR, assets)
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, assets_dir=assets)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport={transport}")
+        page.locator('#connection-dot[data-state="ok"]').wait_for()
+        page.evaluate("window.reloadMarker = true")
+        with (assets / "style.css").open("a", encoding="utf-8") as css:
+          css.write("\n/* first change */\n")
+        page.wait_for_timeout(4000)
+        with (assets / "style.css").open("a", encoding="utf-8") as css:
+          css.write("\n/* second change */\n")
+        app.messages.send_message(
+          "Live state during asset edits", msg_id="e01010", blocking=False
+        )
+        page.get_by_text("Live state during asset edits").wait_for(timeout=8000)
+        page.wait_for_timeout(7500)
+        assert page.evaluate("window.reloadMarker === true")
+        page.wait_for_function("window.reloadMarker !== true", timeout=15000)
       finally:
         browser.close()
   finally:
