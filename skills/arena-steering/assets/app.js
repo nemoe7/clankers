@@ -1116,6 +1116,7 @@ function initImageModal() {
     const target = event.target;
     if (!target.closest?.("#view-messages, #view-reports")) return;
     const media = target.closest(".mermaid-diagram svg, .mermaid-block svg, img")
+      || target.closest(".mermaid-diagram")?.querySelector("svg")
       || target.closest("button.message-attachment-preview")?.querySelector("img");
     if (!media) return;
     event.preventDefault();

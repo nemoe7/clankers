@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Open Mermaid diagrams from clicks anywhere on their thumbnails.
+
 - Show report dismissals immediately, and restore reports after failures.
 
 - Show blocked Bash log dismissals immediately, and restore entries after failures.

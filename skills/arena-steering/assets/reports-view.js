@@ -569,7 +569,7 @@ export function renderReportsView(container, state, handlers) {
   };
   syncScrollState();
 
-  for (const btn of container.querySelectorAll("[data-report-id]")) {
+  for (const btn of container.querySelectorAll(".report-picker-link[data-report-id]")) {
     listen(btn, "click", () => {
       handlers.onSelectReport(btn.dataset.reportId);
     });
