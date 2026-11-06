@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show report answers immediately, preserve edits after failures, and reconcile retries by request ID.
+
 - Open survey results immediately, and refresh them without reopening a closed dialog.
 
 - Show poll-skip feedback immediately, and surface failures.

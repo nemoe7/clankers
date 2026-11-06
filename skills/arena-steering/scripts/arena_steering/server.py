@@ -367,6 +367,9 @@ class SteeringApp:
     self.router.add("POST", "/reports/{id}/ack-seen", self._handle_mark_ack_seen)
     self.router.add("POST", "/reports/{id}/answers", self._handle_submit_answer)
     self.router.add(
+      "GET", "/reports/{id}/answer-requests/{request_id}", self._handle_answer_request
+    )
+    self.router.add(
       "POST",
       "/reports/{id}/answers/{answer_id}/ack",
       self._handle_ack_report_answer,
@@ -1403,6 +1406,15 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     report = self.reports.get_report(params["id"])
     return (int(HTTPStatus.OK), {"report": self._serialize_report(report)})
+
+  def _handle_answer_request(
+    self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    result = self.store.browser_write_result(params["request_id"]) or {}
+    report = result.get("report") or {}
+    answer = result.get("answer") or {}
+    answer_id = answer.get("id") if report.get("id") == params["id"] else None
+    return (int(HTTPStatus.OK), {"answer_id": answer_id})
 
   def _handle_patch_report(
     self, params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]

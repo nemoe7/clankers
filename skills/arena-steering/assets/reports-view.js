@@ -189,8 +189,24 @@ export function renderReportsView(container, state, handlers) {
     state.selectedReportId && reports.some((r) => r.id === state.selectedReportId)
       ? state.selectedReportId
       : reports[0].id;
-  const activeReport =
-    reports.find((r) => r.id === selectedId) || reports[0];
+  let activeReport = reports.find((r) => r.id === selectedId) || reports[0];
+  const pending = (state.pendingReportAnswers || {})[activeReport.id];
+  if (pending?.reportId === activeReport.id &&
+      !(activeReport.answers || []).some((answer) => answer.id === pending.answerId)) {
+    const fields = activeReport.fields || [];
+    const fieldLabels = Object.fromEntries(fields.map((field) => [field.id, field.label]));
+    const values = { ...pending.values };
+    for (const field of fields) {
+      const value = values[field.id];
+      const label = (item) => field.option_labels?.[item] || item;
+      if (typeof value === "string") values[field.id] = label(value);
+      else if (Array.isArray(value)) values[field.id] = value.map(label);
+    }
+    activeReport = { ...activeReport, answers: [...(activeReport.answers || []), {
+      id: "Sending…", values, field_labels: fieldLabels, pending: true,
+      modified_at: new Date().toISOString(),
+    }] };
+  }
   const loadingReport = state.loadingReportId === activeReport.id && !Array.isArray(activeReport.blocks);
   const swappedReport =
     lastRenderedReportId !== null && lastRenderedReportId !== activeReport.id;
@@ -291,7 +307,7 @@ export function renderReportsView(container, state, handlers) {
           return `
             <div class="${idx > 0 ? "reply-block" : ""}">
               <p><strong>Answer <code class="msg-id">${escapeHtml(ans.id)}</code></strong> · <time datetime="${iso}" data-timestamp="${iso}">${rel}</time> · ${escapeHtml(entries)}</p>
-              ${ans.ack ? ans.ack_html || renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
+              ${ans.pending ? `<p class="muted" role="status">Sending answer…</p>` : ans.ack ? ans.ack_html || renderMarkdownBlock(ans.ack) : `<p class="muted">Awaiting agent acknowledgement.</p>`}
             </div>
           `;
         })
@@ -365,6 +381,7 @@ export function renderReportsView(container, state, handlers) {
 
       <div id="report-main" class="report-main">
         <form id="report-answer-form" data-report-id="${escapeHtml(activeReport.id)}">
+          ${state.reportAnswerErrors?.[activeReport.id] ? `<p role="alert">${escapeHtml(state.reportAnswerErrors[activeReport.id])}</p>` : ""}
           <article id="report" class="report" aria-label="Selected report">
             ${renderedWithMeta}
           </article>
@@ -708,8 +725,11 @@ export function renderReportsView(container, state, handlers) {
     }
     try {
       const values = collectValues(true);
+      const draftsAtSubmit = JSON.stringify(readDrafts());
       await handlers.onSubmitReportAnswer(activeReport.id, values);
-      clearDrafts(activeReport.id);
+      if (JSON.stringify(readDrafts()) === draftsAtSubmit) clearDrafts(activeReport.id);
+    } catch {
+      // The handler displays the failure and leaves drafts intact.
     } finally {
       pendingReportSubmissions.delete(activeReport.id);
       if (container.querySelector("#report-answer-form")?.dataset.reportId === activeReport.id) {

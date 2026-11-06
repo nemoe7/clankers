@@ -468,6 +468,16 @@ async function refreshAll(force = false) {
       );
       await ensureReportCached(selectedReportId, selectedSummary?.modified_at);
     }
+    const pendingAnswers = store.getState().pendingReportAnswers || {};
+    for (const pendingAnswer of Object.values(pendingAnswers)) {
+      const result = await api.getReportAnswerRequest(pendingAnswer.reportId, pendingAnswer.requestId);
+      const current = store.getState().pendingReportAnswers || {};
+      if (current[pendingAnswer.reportId] === pendingAnswer && result.answer_id) {
+        store.setState({ pendingReportAnswers: {
+          ...current, [pendingAnswer.reportId]: { ...pendingAnswer, answerId: result.answer_id },
+        } });
+      }
+    }
     const reports = hydrateReportsWithCache(reportSummaries);
     const latestSelection = store.getState().selectedReportId;
     const currentSelectedReportId = reports.some((report) => report.id === latestSelection)
@@ -783,14 +793,40 @@ const handlers = {
     await refreshAll(true);
   },
   async onSubmitReportAnswer(reportId, values) {
-    const ansRes = await api.submitReportAnswer(reportId, values);
-    if (ansRes?.report) {
-      reportCache.set(reportId, {
-        modified_at: ansRes.report.modified_at,
-        report: ansRes.report,
+    try {
+      const ansRes = await api.submitReportAnswer(reportId, values, async (requestId, retry) => {
+        const answerId = retry ? (await api.getReportAnswerRequest(reportId, requestId)).answer_id : null;
+        const reportAnswerErrors = { ...(store.getState().reportAnswerErrors || {}) };
+        delete reportAnswerErrors[reportId];
+        store.setState({ reportAnswerErrors, pendingReportAnswers: {
+          ...(store.getState().pendingReportAnswers || {}),
+          [reportId]: { reportId, values, requestId, answerId },
+        } });
       });
+      if (ansRes?.report) {
+        const cached = reportCache.get(reportId);
+        const confirmed = cached && isNewerReportVersion(cached.modified_at, ansRes.report.modified_at)
+          ? cached.report : ansRes.report;
+        reportCache.set(reportId, {
+          modified_at: confirmed.modified_at,
+          report: confirmed,
+        });
+        const reports = (store.getState().reports || []).map((report) =>
+          report.id === reportId ? confirmed : report
+        );
+        const pendingReportAnswers = { ...(store.getState().pendingReportAnswers || {}) };
+        delete pendingReportAnswers[reportId];
+        store.setState({ reports, pendingReportAnswers });
+      }
+      void refreshAll(true);
+    } catch (err) {
+      const pendingReportAnswers = { ...(store.getState().pendingReportAnswers || {}) };
+      delete pendingReportAnswers[reportId];
+      store.setState({ pendingReportAnswers, reportAnswerErrors: {
+        ...(store.getState().reportAnswerErrors || {}), [reportId]: err.message,
+      } });
+      throw err;
     }
-    await refreshAll(true);
   },
 };
 
@@ -933,7 +969,7 @@ function renderApp(state) {
       delete visible.last_viewed_at;
       return visible;
     });
-    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, visibleReports, state.replyParentRefs]);
+    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, visibleReports, state.replyParentRefs, state.pendingReportAnswers, state.reportAnswerErrors]);
     if (signature !== lastReportRenderSignature) {
       lastReportRenderSignature = signature;
       renderReportsView(reportsEl, state, handlers);

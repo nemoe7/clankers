@@ -217,7 +217,7 @@ async function beginWrite(key, interactive = false) {
     savePendingWrites();
   }
   activeWrites.add(id);
-  return id;
+  return { id, retry: Boolean(pending && pending.id === id) };
 }
 
 function finishWrite(id, confirmed) {
@@ -228,13 +228,15 @@ function finishWrite(id, confirmed) {
   }
 }
 
-async function requestJson(method, path, body = undefined, interactive = false) {
+async function requestJson(method, path, body = undefined, interactive = false, onRequestId = null) {
   const write = ["POST", "PATCH", "DELETE"].includes(method) && path !== "/markdown";
-  const id = write ? await beginWrite(JSON.stringify([method, path, body || {}]), interactive) : null;
+  const writeInfo = write ? await beginWrite(JSON.stringify([method, path, body || {}]), interactive) : null;
+  const id = writeInfo?.id || null;
   const requestBody = write ? { ...(body || {}), _request_id: id } : body;
   const bodyStr = requestBody !== undefined ? JSON.stringify(requestBody) : undefined;
   let confirmed = false;
   try {
+    if (id && onRequestId) await onRequestId(id, writeInfo.retry);
     if (liveSocket?.readyState === 1) {
       try {
         const payload = await socketRequest(method, path, bodyStr);
@@ -262,7 +264,7 @@ async function requestJson(method, path, body = undefined, interactive = false) 
 async function requestForm(path, formData, file, { automaticRetry = false } = {}) {
   const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const id = await beginWrite(JSON.stringify(["POST", path, file.name, digest]), !automaticRetry);
+  const { id } = await beginWrite(JSON.stringify(["POST", path, file.name, digest]), !automaticRetry);
   formData.append("_request_id", id);
   let confirmed = false;
   try {
@@ -391,13 +393,17 @@ export const api = {
       {}
     );
   },
-  submitReportAnswer(reportId, values) {
+  submitReportAnswer(reportId, values, onRequestId) {
     return requestJson(
       "POST",
       `/reports/${encodeURIComponent(reportId)}/answers`,
       { values },
-      true
+      true,
+      onRequestId
     );
+  },
+  getReportAnswerRequest(reportId, requestId) {
+    return requestJson("GET", `/reports/${encodeURIComponent(reportId)}/answer-requests/${encodeURIComponent(requestId)}`);
   },
   getSurvey() {
     return requestJson("GET", "/survey");

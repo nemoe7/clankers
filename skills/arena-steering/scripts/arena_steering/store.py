@@ -502,6 +502,14 @@ class SqliteStore:
         for row in self._conn.execute("SELECT request_id FROM browser_write_requests")
       ]
 
+  def browser_write_result(self, request_id: str) -> dict | None:
+    with self._lock:
+      row = self._conn.execute(
+        "SELECT response_json FROM browser_write_requests WHERE request_id = ?",
+        (request_id,),
+      ).fetchone()
+    return json.loads(row["response_json"]) if row is not None else None
+
   def message_id_for_request(self, request_id: str) -> str | None:
     with self._lock:
       row = self._conn.execute(
