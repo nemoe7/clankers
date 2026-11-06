@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Preserve task-reference chip shape on hover.
+
 - Add vertical spacing between wrapped message task chips.
 
 - Show linked tasks in report headers and avoid duplicate titles in cached reports.

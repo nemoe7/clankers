@@ -500,6 +500,17 @@ def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
         )
         chips.first.wait_for()
         assert chips.count() == 8
+        first = chips.first
+        before = first.evaluate(
+          "el => ({radius: getComputedStyle(el).borderRadius, box: el.getBoundingClientRect().toJSON()})"
+        )
+        first.hover()
+        after = first.evaluate(
+          "el => ({radius: getComputedStyle(el).borderRadius, box: el.getBoundingClientRect().toJSON()})"
+        )
+        assert after["radius"] == before["radius"]
+        assert after["box"]["width"] == pytest.approx(before["box"]["width"])
+        assert after["box"]["height"] == pytest.approx(before["box"]["height"])
         rects = chips.evaluate_all(
           "els => els.map(el => el.getBoundingClientRect().toJSON())"
         )

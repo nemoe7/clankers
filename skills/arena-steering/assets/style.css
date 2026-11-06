@@ -3437,7 +3437,7 @@ article#report.report img,
 @media (hover: hover) and (pointer: fine) {
   :is(.tab-btn, .icon-button, .btn-secondary, .preview-code-mermaid, .preview-code-md,
     .copy-code, .log-edited, .log-newest, .survey-id-trigger, .survey-cap-pill,
-    .message-attachment-preview, .reply-parent-chip, .composer-reply-chip,
+    .message-attachment-preview, .composer-reply-chip,
     .composer-attachment-chip button, .parent-id-button, .task-title,
     .report-toc-link, .report-picker-toggle, .report-scroll-top, .report-picker-link):hover:not(:disabled) {
     background-color: hsl(var(--surface-tertiary));
