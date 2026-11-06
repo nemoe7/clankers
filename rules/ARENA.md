@@ -134,7 +134,7 @@
 
 - Prefer several passes with a re-check after each.
 - ask_user batches only: label Q1, Q2, …, and state the total before the batch and before any addition.
-- Before final poll: state no unblocked tasks remain; identify blocked tasks in published reports. End every turn with final-Bash `arena-preview poll` unless `skip_poll` stamped; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- Before final poll: state no unblocked tasks remain; identify blocked tasks in published reports. End every turn with final-Bash `arena-preview poll` unless `skip_poll` stamped; ALWAYS use Bash tool timeout 1800; NEVER wrap it in a shell timeout; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Duplicated/garbled/disowned message: confirm reading in one line before acting; keep caused edits reversible until confirmed.
 - Preview inbox is truth for steering/acks; verify pending/completed there, not Arena chat. Repeats are resends: answer pending, restate done in one line, NEVER redo/widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck. Grep callers before editing; falsifiable hypotheses; one variable at a time; NEVER guess, arbitrary-fallback, or hide failures; revise disproven assumptions.

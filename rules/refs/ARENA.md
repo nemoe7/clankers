@@ -159,7 +159,7 @@
 - Prefer several passes, re-checking after each, over one sweep.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
-- Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports. ALWAYS end every turn with `arena-preview poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports. ALWAYS end every turn with `arena-preview poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; ALWAYS use Bash tool timeout 1800; NEVER wrap it in a shell timeout; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
