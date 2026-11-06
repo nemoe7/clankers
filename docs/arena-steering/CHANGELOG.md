@@ -38,7 +38,7 @@ This log has no Unreleased section.
 
 - `markdown.py`, `services.py`, `test_server_cli.py`: Render standalone two-space-indented blocks as code and preserve acknowledgement indentation.
 
-- Default report-only tasks to P3 and all other new tasks to P4. Preserve explicit and existing priorities, including when linking attachments. Document the defaults in the CLI reference.
+- Default report-only tasks to P3 and all other new tasks to P4, and document these defaults in the CLI reference. Preserve explicit and existing priorities, including when linking attachments.
 
 - `pre.py`, `test_pre.py`: Exempt selected Steering commands from the pending-inbox count and gate, or from the count only.
 
