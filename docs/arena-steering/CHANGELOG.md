@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Defer scheduled instruction checks while an agent poll is active.
+
 - Use temporary textarea selection for all copy controls, including in embedded previews.
 
 - Reuse bounded, content-keyed browser Markdown DOM during message and report updates.

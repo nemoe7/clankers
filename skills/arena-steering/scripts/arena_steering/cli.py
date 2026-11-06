@@ -36,7 +36,13 @@ from .models import (
   Task,
 )
 from .server import SteeringApp, create_http_server
-from .services import MessageService, ReportService, TaskService, with_bible_read
+from .services import (
+  POLL_FRESH_SECONDS,
+  MessageService,
+  ReportService,
+  TaskService,
+  with_bible_read,
+)
 from .store import SqliteStore
 
 BIND_HOST = "0.0.0.0"
@@ -1028,10 +1034,23 @@ def _schedule_instruction_check(
 ) -> None:
   """Mint one hidden instruction checkpoint after each elapsed interval."""
   words = pre_mod._line_commands(pre_mod.PreContext(line=line))
-  if len(words) == 1 and words[0][:2] in (["steer", "poll"], ["arena-preview", "poll"]):
+  if any(
+    len(command) >= 2
+    and Path(command[0]).name in {"steer", "arena-preview"}
+    and command[1] == "poll"
+    for command in words
+  ):
     return
   now = moment or datetime.now(UTC)
   with store.transaction():
+    try:
+      heartbeat = datetime.fromisoformat(store.get_meta("polling_at", "") or "")
+      if heartbeat.tzinfo is None:
+        heartbeat = heartbeat.replace(tzinfo=UTC)
+      if 0 <= (now - heartbeat).total_seconds() < POLL_FRESH_SECONDS:
+        return
+    except ValueError:
+      pass
     stamp = store.get_meta(READ_SET_LAST_META)
     if stamp is None:
       store.set_meta(READ_SET_LAST_META, now.isoformat())

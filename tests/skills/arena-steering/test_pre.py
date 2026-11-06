@@ -3834,3 +3834,43 @@ def test_instruction_checkpoints_fire_at_ten_minutes_and_honor_legacy_pending(
     assert len(messages.pending_ids()) == 1
   finally:
     store.close()
+
+
+@pytest.mark.parametrize(
+  "line",
+  [
+    "steer poll",
+    "/home/user/.local/bin/steer poll",
+    "env LANG=C steer poll",
+    "bash -c 'steer poll'",
+  ],
+)
+def test_due_instruction_checkpoint_does_not_interrupt_poll_invocations(
+  _isolate_state: Path, line: str
+) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  try:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store.set_meta(cli.READ_SET_LAST_META, (now - timedelta(minutes=11)).isoformat())
+    cli._schedule_instruction_check(line, messages, store, moment=now)
+    assert not messages.pending_ids()
+    cli._schedule_instruction_check("printf ready", messages, store, moment=now)
+    assert len(messages.pending_ids()) == 1
+  finally:
+    store.close()
+
+
+def test_due_instruction_checkpoint_waits_for_active_poll(_isolate_state: Path) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  try:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store.set_meta(cli.READ_SET_LAST_META, (now - timedelta(minutes=11)).isoformat())
+    store.set_meta("polling_at", now.isoformat())
+    cli._schedule_instruction_check("printf ready", messages, store, moment=now)
+    assert not messages.pending_ids()
+    cli._schedule_instruction_check(
+      "printf ready", messages, store, moment=now + timedelta(seconds=6)
+    )
+    assert len(messages.pending_ids()) == 1
+  finally:
+    store.close()

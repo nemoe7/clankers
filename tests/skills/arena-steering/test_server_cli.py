@@ -4422,3 +4422,31 @@ def test_mermaid_cache_bounds_files_without_removing_unrelated_files(
     assert unrelated.read_text(encoding="utf-8") == "keep"
   finally:
     store.close()
+
+
+def test_scheduled_bible_check_does_not_wake_an_active_poll(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  store.set_meta(
+    cli.READ_SET_LAST_META, (datetime.now(UTC) - timedelta(minutes=11)).isoformat()
+  )
+  result = []
+  thread = threading.Thread(
+    target=lambda: result.append(app.messages.poll(timeout_seconds=0.4)), daemon=True
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 2
+    while not store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.01)
+    assert store.get_meta("polling_at")
+    cli._schedule_instruction_check("printf ready", app.messages, store)
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert result[0]["status"] == "timeout"
+    assert not result[0]["messages"]
+    cli._schedule_instruction_check("printf ready", app.messages, store)
+    assert len(app.messages.pending_ids()) == 1
+  finally:
+    thread.join(timeout=2)
+    store.close()
