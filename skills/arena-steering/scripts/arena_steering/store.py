@@ -427,6 +427,14 @@ class SqliteStore:
       else proposed
     )
 
+  def clear(self) -> None:
+    """Clear database state while preserving the browser timezone."""
+    with self._lock, self._conn:
+      for table in (*STATE_TABLES, "message_requests", "browser_write_requests"):
+        self._conn.execute(f"DELETE FROM {table}")
+      self._conn.execute("DELETE FROM state_row_versions")
+      self._conn.execute("DELETE FROM meta WHERE key != 'timezone'")
+
   def close(self) -> None:
     """Close the underlying SQLite connection."""
     with self._lock:

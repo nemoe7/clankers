@@ -7,11 +7,14 @@ Bare `steer` runs from the repo checkout. `steer --version` shows the installed 
 | Command | Output on success | Exit |
 | --- | --- | --- |
 | `steer serve` | `Steering server listening on http://0.0.0.0:8000` | 0 on clean stop, 1 on error |
+| `steer clear` | Clear database state, preserving timezone, files, and server survey memory | 0 on clear, 1 on error |
 | `steer read` | `Inbox HH:MM:SS: N pending` and pending items | 0 on read, 1 on error |
 | `steer poll` | Task, run verdict, skip, or full-wait instruction | 0 on delivery or timeout, 1 on error, 2 on repeat violation |
 | `steer ack ID 'ANSWER'` | `ok ID` and any added task detail | 0 on acknowledgement, 1 on error |
 | `steer msg list [-p PAGE] [-s SIZE]` | Newest-first IDs and six-word previews | 0 on list, 1 on error |
 | `steer msg ID` | Stored body, parents, attachments, and acknowledgements | 0 on inspection, 1 on error |
+
+`steer clear` immediately deletes messages, tasks, reports, and request bookkeeping without a confirmation prompt. It keeps the saved timezone, uploads, backups, and server survey memory.
 
 `steer read` marks delivered items seen, not acknowledged. A separate `steer ack` records each pending ID's response. `steer msg list` starts with five rows per page, and `-s` accepts 5–50.
 

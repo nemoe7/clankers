@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import sqlite3
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -4250,3 +4251,56 @@ def test_cli_multi_ack_rolls_back_all_detail_additions(
     assert reports.get_report(report_id).answers[0].acks == []
     assert tasks.get_task(report_id)[0].details == ["Review"]
   store.close()
+
+
+def test_clear_removes_database_state_only_and_preserves_timezone(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  try:
+    app.messages.send_message("Work", msg_id="aa1001")
+    app.tasks.create_task("clear-test", "Clear test", size=3, details=["Detail"])
+    app.reports.publish_report("clear-report", "Report", "# Report")
+    store.set_meta("timezone", "Asia/Manila")
+    store.set_meta("custom", "remove")
+    app.messages._survey_answers = {"answer": "preserved"}
+    files = [state_dir / "uploads" / "file.txt", state_dir / "backups" / "backup.txt"]
+    for path in files:
+      path.parent.mkdir(parents=True, exist_ok=True)
+      path.write_text("keep", encoding="utf-8")
+    code, out, err = _run_cli(state_dir, "clear")
+    assert (code, err) == (0, "")
+    assert "clear" in out.lower()
+    assert app.messages.list_messages(unread_only=False, include_hidden=True) == []
+    assert app.tasks.list_tasks() == []
+    assert app.reports.list_reports() == []
+    assert store.get_meta("timezone", "") == "Asia/Manila"
+    assert store.get_meta("custom", "") == ""
+    assert app.messages._survey_answers == {"answer": "preserved"}
+    assert all(path.read_text(encoding="utf-8") == "keep" for path in files)
+    assert (
+      store._conn.execute("SELECT count(*) FROM state_row_versions").fetchone()[0] == 0
+    )
+    app.messages.send_message("New work", msg_id="aa1001")
+    assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) == 1
+  finally:
+    store.close()
+
+
+def test_clear_rolls_back_when_a_delete_fails() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  try:
+    app.messages.send_message("Keep on failure", msg_id="aa1001")
+    app.tasks.create_task("keep-task", "Keep task", size=3, details=["Detail"])
+    with store._conn:
+      store._conn.execute("""CREATE TRIGGER reject_clear BEFORE DELETE ON tasks
+        BEGIN SELECT RAISE(ABORT, 'delete rejected'); END""")
+    with pytest.raises(sqlite3.IntegrityError, match="delete rejected"):
+      store.clear()
+    assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) == 1
+    assert len(app.tasks.list_tasks()) == 1
+  finally:
+    store.close()

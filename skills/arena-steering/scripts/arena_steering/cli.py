@@ -186,6 +186,10 @@ def main(
     ),
   )
 
+  clear_p = sub.add_parser(
+    "clear", help="Clear database state while preserving timezone and files."
+  )
+
   survey_p = sub.add_parser("survey", help="Inspect or submit bible survey answers.")
   survey_p.add_argument("entries", nargs="*", help="JSON array submission")
   survey_p.add_argument(
@@ -431,6 +435,11 @@ def main(
       return 0
     if cmd == "report":
       return _run_report(cmd_args, reports, store, stdout)
+    if cmd == "clear":
+      clear_p.parse_args(cmd_args)
+      store.clear()
+      print("Cleared database state; timezone and files preserved.", file=stdout)
+      return 0
     if cmd == "survey":
       parsed = survey_p.parse_args(cmd_args)
       return _run_survey(parsed, messages, stdout, resolved_state_dir)
@@ -459,7 +468,14 @@ def main(
   except DirtyTreeError as exc:
     print(f"Steer error: {exc}", file=stderr)
     return 1
-  except (KeyError, ValueError, IndexError, OSError, RuntimeError) as exc:
+  except (
+    KeyError,
+    ValueError,
+    IndexError,
+    OSError,
+    RuntimeError,
+    sqlite3.Error,
+  ) as exc:
     msg = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
     print(f"Steer error: {msg}", file=stderr)
     return 1
