@@ -69,7 +69,7 @@ flowchart TB
 The message then carries a six-step checklist:
 
 1. Read the task, grep every caller of the code it touches, and trace the flow end to end.
-2. Name the requirements and the constraints, and follow the conventions in the code.
+2. Specify requirements and constraints, and follow code conventions.
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
 4. Write the failing check before new or changed executable behavior, and reproduce a bug before the fix.
 5. Keep the behavior, interfaces, validation, and security that stand.

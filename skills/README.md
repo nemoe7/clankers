@@ -52,7 +52,7 @@ Check each path and its precedence against your installed release.
 
 The Antigravity row covers VS Code, not the CLI. Keep one active copy unless you first check precedence. Reload or restart discovery as necessary. Do not embed shell-execution syntax: permissions differ by scope.
 
-After setup, ask the agent to name an installed `SKILL.md` and its conditional reference paths without reading all supporting files. Report missing skills, never install or silently ignore them. Supply skills explicitly without automatic discovery.
+After setup, ask the agent to specify an installed `SKILL.md` and its conditional reference paths without reading all supporting files. Report missing skills, never install or silently ignore them. Supply skills explicitly without automatic discovery.
 
 ### Skill selection
 

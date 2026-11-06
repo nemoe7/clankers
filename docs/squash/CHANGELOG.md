@@ -8,6 +8,10 @@ This log has no Unreleased section.
 
 ## [0.1.0]
 
+### Changed
+
+- Clarify tokenizer wording in the budget table.
+
 ### Added
 
 - Add `metadata.version` (`0.1.0`) in `SKILL.md` (`skills/squash/SKILL.md`, `skills/refs/squash/SKILL.md`).

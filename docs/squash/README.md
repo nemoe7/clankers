@@ -18,7 +18,7 @@ Without a target, it seeks the smallest faithful result. Summarizing or changing
 
 | Unit | Measurement |
 | --- | --- |
-| Tokens | The consuming model's tokenizer, or `cl100k_base`, named in the result |
+| Tokens | The consuming model's tokenizer, or `cl100k_base`, specified in the result |
 | Words | Whitespace-separated words |
 | Characters | Unicode characters, including spaces and newlines |
 | Bytes | UTF-8 bytes |

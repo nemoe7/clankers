@@ -10,4 +10,6 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Clarify requirement wording in the setup guide.
+
 - `userscripts/arena.user.js`: Shorten the reset-window comments for prose validation without changing behavior.
