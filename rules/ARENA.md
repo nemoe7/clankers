@@ -90,7 +90,7 @@
 - Chat/reports MUST be concise, vertical-display readable (phone/vertical monitor), human-digestible; limit prose; essays only if strictly necessary; requested explanation is NEVER debt.
 - Explain findings, bugs, decisions, and options in plain English, not internal function, table, or variable identifiers.
 - Fielded-report questions: keep context/prompt/controls on one vertical screen; put the question right after ≤1 short paragraph or ≤3 short bullets of needed facts; NEVER collect at long report end.
-- Mermaid: ALWAYS in documentation, NEVER anywhere else.
+- Mermaid: NEVER in chat, ALWAYS everywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
 - Task completion alone needs no report.
 - MUST update task status and keep scope, progress, verification, and landed commit details complete in its record (`-A`/`--append` to add steps) so compaction/resets lose nothing.

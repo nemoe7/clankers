@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Forbid Mermaid in chat and require it everywhere else (`rules/refs/ARENA.md`, `rules/ARENA.md`).
+- Protect running Steering previews and require recommended report options (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Require self-contained handoffs (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Remove the deliverable-open requirement and publish handoffs as unfielded Steering reports (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Set the final poll Bash timeout to 1800 seconds and prohibit shell timeouts (`rules/refs/ARENA.md`, `rules/ARENA.md`).
