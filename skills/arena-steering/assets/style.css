@@ -967,27 +967,6 @@ mark.search-hit {
   color: hsl(var(--text-secondary));
 }
 
-.survey-item {
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px solid hsl(var(--border-faint));
-  background-color: hsl(var(--surface-primary));
-}
-
-.survey-item-prompt {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: hsl(var(--text-primary));
-}
-
-.survey-item-answer {
-  margin: 0;
-  font-size: 13px;
-  color: hsl(var(--text-secondary));
-  font-family: var(--font-basel-grotesk-mono);
-}
-
 .topbar:has(~ main #view-reports[data-loading="true"]:not([hidden]))::after {
   content: "";
   position: absolute;

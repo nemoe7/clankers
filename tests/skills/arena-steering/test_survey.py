@@ -101,6 +101,27 @@ def test_cli_survey_smallest_image_and_submission(tmp_path: Path) -> None:
   assert "R3S0N" in out3
 
 
+def test_survey_rejects_ungraded_submissions_without_changing_results(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(json.dumps(survey.template()))
+  before = app.messages.get_survey()
+  for values in ({"R3S0N": '{"reasoning":true}'}, "{broken", []):
+    with pytest.raises((TypeError, ValueError)):
+      app.messages.submit_survey(values)
+    assert app.messages.get_survey() == before
+  status, _body = app.dispatch("POST", "/survey", {"answers": {"R3S0N": "true"}})
+  assert status == 400
+  assert app.messages.get_survey() == before
+  code, _out, err = _run_cli(state_dir, "survey", 'R3S0N={"reasoning":true}')
+  assert code != 0 and err
+  assert app.messages.get_survey() == before
+  store.close()
+
+
 def test_survey_results_stay_in_memory(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)

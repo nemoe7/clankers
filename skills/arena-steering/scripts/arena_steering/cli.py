@@ -187,7 +187,7 @@ def main(
   )
 
   survey_p = sub.add_parser("survey", help="Inspect or submit bible survey answers.")
-  survey_p.add_argument("entries", nargs="*", help="[<json-array> | <key=value> ...]")
+  survey_p.add_argument("entries", nargs="*", help="JSON array submission")
   survey_p.add_argument(
     "-i",
     "--smallest-image",
@@ -1949,24 +1949,11 @@ def _run_survey(
     return 0
   entries: list[str] = list(parsed.entries or [])
   if entries:
-    if len(entries) == 1 and entries[0].lstrip().startswith("["):
-      survey = _submit_survey(entries[0], messages, state_dir, out)
-      print(
-        f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
-        file=out,
-      )
-      return 0
-    values: dict[str, str] = {}
-    for entry in entries:
-      if "=" not in entry:
-        raise ValueError(
-          f"Expected JSON array or <key=value> survey entry, got {entry!r}"
-        )
-      key, _, val = entry.partition("=")
-      values[key.strip()] = val.strip()
-    survey = _submit_survey(json.dumps(values), messages, state_dir, out)
+    if len(entries) != 1:
+      raise ValueError("Survey submission must be a JSON array")
+    survey = _submit_survey(entries[0], messages, state_dir, out)
     print(
-      f"Submitted {len(values)} survey answer(s) at {survey['checked_at']}",
+      f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
       file=out,
     )
     return 0

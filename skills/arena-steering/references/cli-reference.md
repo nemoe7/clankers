@@ -79,7 +79,6 @@ The source is an ignored workspace file, not a commit artifact. Fielded question
 | `steer survey -i` | Smallest reference image path | 0 on image lookup, 1 on error |
 | `steer survey -f FILE` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
 | `steer survey 'JSON_ARRAY'` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
-| `steer survey KEY=VALUE ...` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
 | `steer skills` | Skill name, source, path, and description | 0 on list, 1 on error |
 
 A live server receives submissions. Without it, the CLI evaluates survey input locally. `unknown` with confidence zero represents a wholly unknown answer.

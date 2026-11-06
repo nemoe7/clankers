@@ -325,7 +325,7 @@ WebSocket RPC requests carry an `id`, `method`, `path`, and JSON-encoded string 
 
 The server sends `change`, `reload`, `heartbeat`, and `report.acked` events. Respond to a heartbeat with `{"type":"pong"}`. Messages are limited to 16 MiB, and an idle connection closes after 35 seconds.
 
-A survey takes a graded JSON array, a JSON array string, or a nonempty key-value object. Array submissions follow [`references/survey.json`](references/survey.json). Answers, graded results, and a check stamp live only in server memory, so a restart clears them.
+A survey takes a graded JSON array or JSON array string. Submissions follow [`references/survey.json`](references/survey.json). Answers, graded results, and a check stamp live only in server memory, so a restart clears them.
 
 `steer serve` writes its port to `server.json` inside a state directory, and the CLI posts submissions there. When no server answers, grading happens in that CLI process.
 

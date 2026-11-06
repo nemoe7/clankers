@@ -111,16 +111,6 @@ function renderSurveyModalContent(survey) {
         </table>
       </div>`;
   }
-  const questions = survey.questions || [];
-  const answers = survey.answers || {};
-  if (Object.keys(answers).length > 0 && questions.length > 0) {
-    return questions
-      .map((q) => {
-        const ans = answers[q.id] || "(not answered yet)";
-        return `<div class="survey-item"><p class="survey-item-prompt">${escapeHtml(q.prompt)}</p><p class="survey-item-answer">${escapeHtml(ans)}</p></div>`;
-      })
-      .join("");
-  }
   return `<p class="muted">No survey submission recorded yet.</p>`;
 }
 

@@ -252,6 +252,40 @@ def test_reports_copy_in_isolated_browser_selects_full_markdown(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+def test_survey_modal_does_not_show_ungraded_answers(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages._survey_answers = {"R3S0N": '{"reasoning":true}'}
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#survey-open").click()
+        assert page.locator(".survey-item").count() == 0
+        assert "reasoning" not in page.locator(".survey-modal-content").inner_text()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 @pytest.mark.parametrize(("width", "height"), [(411, 799), (855, 325), (1372, 883)])
 def test_survey_modal_keeps_tooltip_and_actions_in_view(
   tmp_path: Path, width: int, height: int

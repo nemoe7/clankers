@@ -594,30 +594,16 @@ class MessageService:
 
   def submit_survey(self, values: Any) -> dict[str, Any]:
     """Grade and keep agent survey answers in memory, rejecting any null values."""
-    answers = dict(self._survey_answers)
-    results = list(self._survey_results)
     if isinstance(values, list):
       raw_text = json.dumps(values, ensure_ascii=False)
-      results = survey_mod.grade(raw_text)
-      for row in results:
-        answers[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
     elif isinstance(values, str):
-      stripped = values.strip()
-      if not stripped:
-        raise ValueError("Survey submission must not be empty")
-      results = survey_mod.grade(stripped)
-      for row in results:
-        answers[str(row["id"])] = json.dumps(row["answer"], ensure_ascii=False)
-    elif isinstance(values, dict) and values:
-      for key, val in values.items():
-        if val is None:
-          raise ValueError(f"Survey answer for {key!r} must not be null; use 'unknown'")
-        text = str(val).strip()
-        if not text:
-          raise ValueError(f"Survey answer for {key!r} cannot be empty")
-        answers[str(key).strip()] = text
+      raw_text = values.strip()
     else:
-      raise ValueError("Survey submission must be a JSON array or non-empty dictionary")
+      raise TypeError("Survey submission must be a JSON array")
+    results = survey_mod.grade(raw_text)
+    answers = {
+      str(row["id"]): json.dumps(row["answer"], ensure_ascii=False) for row in results
+    }
     with self._cond:
       self._survey_answers = answers
       self._survey_results = results

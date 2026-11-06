@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Require graded JSON survey submissions and remove the ungraded results fallback.
+
 - `SKILL.md`: Require semantic task, report, field, and gate IDs.
 
 - `cli.py`: Show task-link hints after message acknowledgements and nonempty inbox reads.
