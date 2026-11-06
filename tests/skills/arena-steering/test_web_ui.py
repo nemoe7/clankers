@@ -1126,7 +1126,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
 
   timestamps_js = (ASSETS_DIR / "timestamps.js").read_text(encoding="utf-8")
   assert "nextRelativeDelay" in timestamps_js
-  assert "node.textContent !== nextText" in timestamps_js
+  assert "node.textContent !== text" in timestamps_js
   assert "setInterval" not in timestamps_js
 
   # Finished runs arrive as a server change event. Only agent health is polled.
@@ -4869,6 +4869,12 @@ def test_seen_reply_receipt_keeps_message_height(
           .get_attribute("aria-label")
           .startswith("Status: acked, ")
         )
+        card.locator(".receipt-status").hover()
+        tooltip = page.locator("#arena-title-tooltip")
+        tooltip.wait_for(state="visible")
+        assert "Status:" not in tooltip.inner_text()
+        assert not re.search(r"\b(?:AM|PM)\b", tooltip.inner_text(), re.IGNORECASE)
+        page.screenshot(path=str(tmp_path / f"receipt-tooltip-{width}-{transport}.png"))
         assert bool(sockets) == (transport == "ws")
       finally:
         release_receipt.set()
@@ -5554,3 +5560,40 @@ def test_asset_reload_waits_for_quiet_period_while_state_updates(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+def test_timestamp_tooltip_uses_24_hour_time_without_receipt_status() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+import { mountRelativeTimers } from './skills/arena-steering/assets/timestamps.js';
+
+globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+for (const [stamp, time] of [
+  ['2026-11-06T19:16:41Z', '19:16:41'],
+  ['2026-11-06T00:03:04Z', '00:03:04'],
+]) {
+  for (const state of [null, 'Status: acked']) {
+    const attrs = { 'data-timestamp': stamp, 'data-state-label': state };
+    const node = {
+      title: '', textContent: '',
+      getAttribute(name) { return attrs[name] || null; },
+      setAttribute(name, value) { attrs[name] = value; },
+    };
+    const stop = mountRelativeTimers({ querySelectorAll: () => [node] });
+    assert.ok(node.title.includes(time), node.title);
+    assert.ok(!node.title.includes('Status:'), node.title);
+    assert.ok(!/\b(?:AM|PM)\b/i.test(node.title), node.title);
+    if (state) assert.ok(attrs['aria-label'].startsWith(`${state}, `));
+    stop();
+  }
+}
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=ROOT,
+    env={**os.environ, "TZ": "UTC", "LANG": "en_US.UTF-8"},
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr

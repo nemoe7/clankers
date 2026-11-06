@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show timestamp tooltips in 24-hour time without receipt status.
+
 - Render message receipt and time as one text element with a normal space.
 
 - Reload browser assets after 10 seconds without changes, while keeping state updates live.
