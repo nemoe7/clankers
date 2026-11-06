@@ -88,7 +88,7 @@ ARENA_PROCESS_PROBE_SHA256 = (
   "98cec4863048f02988a62faac41ce8c46bb987e3ec4e843769d123b67d48b665"
 )
 ARENA_WORKSPACE_VERBS = {"read", "edit", "write"}
-STOP_PROCESS_NAME = re.compile(r"clankers-steering-[0-9a-f]{8}")
+STOP_PROCESS_NAME = re.compile(r"/tmp/arena-workspace/procs/([^/'\r\n`$\x00]+)")
 STOP_PROCESS_SCRIPT_SHA256 = (
   "34229acc3bb28de2035839b6a592ac81c7d4d01bc25f7b74bc361facbb885f39"
 )
@@ -208,14 +208,18 @@ def _checkout_directory_validator(
 
 
 def _platform_stop_process(line: str, command: str) -> bool:
-  """Match the complete stop script for one eight-hex platform process name."""
-  if command.strip() != "echo '===ARENA_STATUS==='":
+  """Match the complete stop script for one platform process name."""
+  current = _normalize_native_redirect(command)
+  if not current or (
+    current != "source ~/.profile" and current not in shell_line(line)
+  ):
     return False
   names = set(STOP_PROCESS_NAME.findall(line))
-  if len(names) != 1:
+  if len(names) != 1 or names & {".", ".."}:
     return False
-  normalized = (
-    line.replace("\r\n", "\n").strip().replace(names.pop(), "clankers-steering-{id}")
+  normalized = STOP_PROCESS_NAME.sub(
+    "/tmp/arena-workspace/procs/clankers-steering-{id}",
+    line.replace("\r\n", "\n").strip(),
   )
   return hashlib.sha256(normalized.encode()).hexdigest() == STOP_PROCESS_SCRIPT_SHA256
 

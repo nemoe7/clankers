@@ -1300,15 +1300,20 @@ def test_active_run_blocks_sleep_but_not_its_own_worker(
   assert code == pre.CONTINUE
 
 
+@pytest.mark.parametrize(
+  "process_name",
+  ("clankers-steering-a1b2c3d4", "arena-steering-5cf8f8f5", "website-12345678", "cat"),
+)
 def test_platform_stop_helper_exempts_only_one_exact_process_script(
   _isolate_state: Path,
+  process_name: str,
 ) -> None:
   _seed(_isolate_state, "Pending work")
   store, _, _, _ = cli.open_services(_isolate_state)
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
 
-  record = Path("/tmp") / "arena-workspace" / "procs" / "clankers-steering-a1b2c3d4"
+  record = Path("/tmp") / "arena-workspace" / "procs" / process_name
   line = f"""/bin/bash -l -c echo '===ARENA_STATUS==='
 if [ ! -f '{record}'/meta.json ]; then echo "not_found"
 elif pid=$(cat '{record}'/pid 2>/dev/null) && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -1324,15 +1329,20 @@ tail -c 80000 '{record}'/out.log 2>/dev/null | tail -n 100 || true """
   code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.CONTINUE, output
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  cli._count_outer_bash(_isolate_state, line, routed=False)
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  for current in ("source ~/.profile", f"[ ! -f '{record}'/meta.json ]", "sleep 0.2"):
+    code, output = _run("pre", "--line", line, "--command", current, "--shell", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
   for changed, current in (
     (line + "\necho extra", command),
     (line.replace("sleep 0.2", "sleep 0.3"), command),
     (line.replace("arena-workspace/procs", "arena-workspace/elsewhere"), command),
-    (line.replace("clankers-steering-a1b2c3d4", "other-a1b2c3d4"), command),
-    (line.replace("a1b2c3d4'/out.log", "12345678'/out.log"), command),
+    (line.replace(f"{process_name}'/out.log", "different-name'/out.log"), command),
     (line.replace('kill -TERM "$pid"', 'echo kill -TERM "$pid"'), command),
-    (line, "sleep 0.2"),
+    (line + "\necho extra", "sleep 0.2"),
   ):
     code, output = _run("pre", "-l", changed, "-c", current, "-s", "bash")
     assert code == pre.BLOCK, output
