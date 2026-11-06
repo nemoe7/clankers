@@ -10,6 +10,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### maintenance
+
+- Run one Nemoizer stage using the root configuration instead of a separate Markdown allowlist (`maintenance/check.py`, `nemoizer.toml`).
+
 #### rules
 
 - Forbid Mermaid in chat and require it everywhere else (`rules/refs/ARENA.md`, `rules/ARENA.md`).

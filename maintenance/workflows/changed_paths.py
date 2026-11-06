@@ -212,6 +212,7 @@ MODULE_PATHS = {
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
+    "nemoizer.toml",
     "pyproject.toml",
     ".markdownlint*",
     "README.md",

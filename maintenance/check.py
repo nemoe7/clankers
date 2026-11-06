@@ -98,32 +98,6 @@ EXPECTED_LINTED = (
   "rules/wenyan/README.md",
 )
 
-# This comment identifies the documented markdownlint count. Root AGENTS.md is agent-facing and excluded.
-# Add a path only when it has no Nemoize violations. CI uses this same list.
-NEMOIZE_DOCS = (
-  "docs/userscripts/arena/README.md",
-  "docs/userscripts/chatgpt/README.md",
-  "maintenance/README.md",
-  "skills/README.md",
-  "docs/nemoizer/README.md",
-  "docs/nuu/README.md",
-  "docs/squash/README.md",
-  "docs/workflows/gemini-release/README.md",
-  "README.md",
-  ".agents/skills/README.md",
-  "docs/arena-quirks.md",
-  "rules/README.md",
-  "rules/refs/README.md",
-  "docs/gpt-plugins/README.md",
-  "docs/CHANGELOG.md",
-  "docs/nemoizer/CHANGELOG.md",
-  "docs/nuu/CHANGELOG.md",
-  "docs/squash/CHANGELOG.md",
-  "docs/gpt-plugins/CHANGELOG.md",
-  "docs/userscripts/arena/CHANGELOG.md",
-  "docs/userscripts/chatgpt/CHANGELOG.md",
-  "docs/workflows/gemini-release/CHANGELOG.md",
-)
 NEMOIZE = "skills/nemoizer/scripts/nemoize.py"
 CODE_SPAN_RE = re.compile(r"(`+)[^`\n]*?\1")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
@@ -189,23 +163,8 @@ def run_logged(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess
   return result
 
 
-def check_nemoize(errors: list[str]) -> None:
-  """Run the vendored nemoizer over the covered prose. Any hard violation is an error."""
-  result = run_logged(
-    [sys.executable, str(ROOT / NEMOIZE), *(str(ROOT / doc) for doc in NEMOIZE_DOCS)],
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    errors="replace",
-    env=CHILD_ENV,
-  )
-  if result.returncode:
-    output = (result.stdout + result.stderr).strip()
-    errors.append(f"Nemoize failed:\n{output}")
-
-
 def check_nemoizer(errors: list[str]) -> None:
-  """Run nemoize.py over the repository root. Exclusions live in pyproject.toml."""
+  """Run nemoize.py over the repository root. Exclusions live in nemoizer.toml."""
   result = run_logged(
     [sys.executable, str(ROOT / NEMOIZE), "."],
     cwd=ROOT,
@@ -953,7 +912,6 @@ def main() -> int:
 
   errors: list[str] = []
   skills = run_check("repository", errors, lambda: validate(errors))
-  run_check("Nemoize", errors, lambda: check_nemoize(errors))
   run_check(
     "Nemoizer domains",  # nonemo: NMO100
     errors,

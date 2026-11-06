@@ -37,28 +37,3 @@ extend-safe-fixes = ["C408", "PERF102", "RUF059"]
 
 [tool.ruff.lint.pycodestyle]
 max-line-length = 120
-
-[tool.nemoizer]
-extend-exclude = [
-  "skills/**/*.md",
-  "!skills/**/README.md",
-  "rules/**",
-  "**/*.min.js",
-  "skills/nuu/data/vendor",
-  "skills/refs/nuu/data/vendor",
-  "docs/archive/CHANGELOG.md",
-  "docs/archive/arena-skill/**",
-  "tests/skills/arena-preview-proxy/**",
-  "automations/**/*.md",
-  "!automations/**/README.md",
-  "system-prompts/**/*.md",
-  "!system-prompts/**/README.md",
-  "gpt-plugins/**/*.md",
-  "!gpt-plugins/**/README.md",
-  "userscripts/arena-prompt-fill.txt",
-  "userscripts/refs/arena-prompt-fill.txt",
-]
-
-[[tool.nemoizer.files]]
-paths = ["docs/CHANGELOG.md", "docs/**/CHANGELOG.md"]
-list-sentence-cap = 3

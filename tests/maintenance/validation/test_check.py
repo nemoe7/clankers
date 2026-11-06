@@ -145,7 +145,6 @@ def test_main_enforces_rotation_findings(monkeypatch, capsys):
     check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
   )
   monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
-  monkeypatch.setattr(check, "check_nemoize", lambda errors: None)
   monkeypatch.setattr(
     check,
     "check_nemoizer",
@@ -156,26 +155,34 @@ def test_main_enforces_rotation_findings(monkeypatch, capsys):
   assert "rotation-data" in capsys.readouterr().out
 
 
-def test_ste_docs_cover_moved_module_docs_and_changelogs():
-  expected = {
+def test_nemoizer_scope_is_root_config_and_one_stage(monkeypatch, capsys):
+  import tomllib
+
+  config = tomllib.loads((check.ROOT / "nemoizer.toml").read_text(encoding="utf-8"))
+  assert "!.agents/skills/README.md" in config["extend-exclude"]
+  assert "!rules/README.md" in config["extend-exclude"]
+  assert "!rules/refs/README.md" in config["extend-exclude"]
+  import nemoize
+
+  monkeypatch.setattr(nemoize, "ACTIVE_CONFIG", nemoize.load_config([str(check.ROOT)]))
+  for path in (
+    ".agents/skills/README.md",
+    "rules/README.md",
+    "rules/refs/README.md",
     "docs/CHANGELOG.md",
-    "docs/nemoizer/README.md",
-    "docs/nemoizer/CHANGELOG.md",
     "docs/nuu/README.md",
     "docs/nuu/CHANGELOG.md",
-    "docs/squash/README.md",
-    "docs/squash/CHANGELOG.md",
-    "docs/gpt-plugins/README.md",
-    "docs/gpt-plugins/CHANGELOG.md",
-    "docs/userscripts/arena/README.md",
-    "docs/userscripts/arena/CHANGELOG.md",
-    "docs/userscripts/chatgpt/README.md",
-    "docs/userscripts/chatgpt/CHANGELOG.md",
-    "docs/workflows/gemini-release/README.md",
-    "docs/workflows/gemini-release/CHANGELOG.md",
-  }
-  assert expected <= set(check.NEMOIZE_DOCS)
-  assert "docs/archive/CHANGELOG.md" not in check.NEMOIZE_DOCS
-  assert "CHANGELOG.md" not in check.NEMOIZE_DOCS
-  assert not (check.ROOT / "CHANGELOG.md").exists()
-  assert all((check.ROOT / doc).is_file() for doc in check.NEMOIZE_DOCS)
+  ):
+    assert not nemoize.skipped(check.ROOT / path, check.ROOT, ())
+  assert nemoize.skipped(check.ROOT / "docs/archive/CHANGELOG.md", check.ROOT, ())
+  assert nemoize.skipped(check.ROOT / ".agents/skills/other.md", check.ROOT, ())
+  assert nemoize.skipped(check.ROOT / "rules/other.md", check.ROOT, ())
+  monkeypatch.setattr(
+    check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
+  )
+  monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
+  calls = []
+  monkeypatch.setattr(check, "check_nemoizer", lambda errors: calls.append(True))
+  assert check.main() == 0
+  assert calls == [True]
+  assert capsys.readouterr().out.count("== Nemoizer") == 1  # nonemo: NMO100

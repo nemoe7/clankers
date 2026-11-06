@@ -317,3 +317,8 @@ def test_node_test_ownership_is_complete_and_unique():
   }
   assert set(owned) == discovered
   assert len(owned) == len(set(owned))
+
+
+def test_root_nemoizer_config_selects_validation_tests():
+  selected = changed_paths.module_matrix(["nemoizer.toml"])
+  assert {row["name"] for row in selected} == {"Repository Prose and Validation"}
