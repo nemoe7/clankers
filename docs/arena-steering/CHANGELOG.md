@@ -26,6 +26,10 @@ This log has no Unreleased section.
 
 - `SKILL.md`: Use self-identifying field labels so acknowledgements linked to tasks produce meaningful details without reopening the report.
 
+### Removed
+
+- `references/notices.md`: Remove the notice inventory and its README link.
+
 ### Fixed
 
 - `pre.py`, `test_pre.py`: Exempt validated native process-launch wrappers from the Bash count and gate.
