@@ -58,7 +58,7 @@
 
 ## General
 
-- Stderr reminder = only read schedule; Bash gate = repair, NEVER schedule. Mechanics: skill reference, Read cadence. No reminder line MAY mean sandbox reset: run reset steps first.
+- Stderr read reminder = only read schedule; act on other stderr reminders as directed. Bash gate = repair, NEVER schedule. Mechanics: skill reference, Read cadence.
 - Before the first start there is no inbox.
 - ALWAYS answer each delivered message substantively in its own `ack <id> <Markdown>` before chat; one answer/call; NEVER ack pending blindly.
 - Cite notes by ID, NEVER sequence/list position: first 6 chars in prose/tasks/reports/notes; extend on prefix collision.

@@ -61,7 +61,7 @@
 
 ## General
 
-- The stderr reminder is the only read schedule; the Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence. A call with no reminder line MAY signal a sandbox reset: run the reset steps before other work.
+- Use the stderr read reminder as the only read schedule and act on other stderr reminders as directed. The Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read.
 - ALWAYS provide the substantive answer to each delivered message in its own `ack <id> <Markdown>` call before any chat follow-up.
 - One call carries one answer text, so acknowledge notes separately when the answers differ.
