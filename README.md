@@ -45,7 +45,7 @@ flowchart TB
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,457 `tok` |
-| [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 3,712 `tok` |
+| [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 3,730 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,388 `tok` |
 | [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,602 `tok` |
 | [`system-prompts/wenyan/NEMOGPT.md`](system-prompts/wenyan/NEMOGPT.md) | `o200k_base` | 3,401 `tok` |

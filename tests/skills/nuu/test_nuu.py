@@ -2594,3 +2594,107 @@ def test_study_ramp_and_contextual_prose_width():
   assert measure._body_width_finding(
     {**prose, "in_card_or_dialog": True, "values": {"max-width": "80ch"}}, 1280
   ).startswith("TYP201")
+
+
+def test_live_audit_checks_completed_feedback_for_each_click(tmp_path):
+  import http.server
+  import os
+  import threading
+
+  import pytest
+
+  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
+    pytest.skip("Optional browser integration is not enabled")
+  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  markup = b"""<!doctype html><html><head><title>Feedback fixture</title></head>
+  <body style="background:#222;color:white"><button id="copy">Copy</button>
+  <button id="save">Save</button><button id="submit">Submit</button>
+  <button id="missing">Missing</button><button id="pending">Start</button>
+  <button id="delayed">Send</button><button id="failure">Fail</button>
+  <button id="success">Save again</button><input type="button" id="input" value="Copy input">
+  <p role="status" id="status"></p>
+  <script>
+  document.querySelector('#copy').onclick = e => e.currentTarget.textContent = 'Copied';
+  document.querySelector('#save').onclick = () => document.querySelector('#status').textContent = 'Saved';
+  document.querySelector('#submit').onclick = () => document.querySelector('#status').textContent = 'Submitted';
+  document.querySelector('#pending').onclick = e => e.currentTarget.textContent = 'Loading';
+  document.querySelector('#failure').onclick = () => document.querySelector('#status').textContent = 'Saving failed';
+  document.querySelector('#success').onclick = () => document.querySelector('#status').textContent = 'Saving complete';
+  document.querySelector('#input').onclick = e => e.currentTarget.value = 'Copied';
+  document.querySelector('#delayed').onclick = () => {
+    document.querySelector('#status').textContent = 'Sending';
+    setTimeout(() => document.querySelector('#status').textContent = 'Sent', 200);
+  };
+  </script></body></html>"""
+
+  class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+      self.send_response(200)
+      self.send_header("Content-Type", "text/html")
+      self.end_headers()
+      self.wfile.write(markup)
+
+    def log_message(self, *_args):
+      pass
+
+  project = tmp_path / "project"
+  (project / "docs").mkdir(parents=True)
+  (project / "docs" / "design.md").write_text("# Design\n")
+  flow_file = tmp_path / "flow.json"
+  flow_file.write_text(
+    json.dumps(
+      [
+        {"action": "click", "selector": f"#{item}"}
+        for item in (
+          "copy",
+          "save",
+          "submit",
+          "missing",
+          "pending",
+          "delayed",
+          "failure",
+          "success",
+          "input",
+        )
+      ]
+    )
+  )
+  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+      result = subprocess.run(
+        [
+          sys.executable,
+          str(SCRIPT),
+          "audit",
+          "-p",
+          str(project),
+          "-u",
+          f"http://127.0.0.1:{server.server_port}",
+          "-e",
+          "chromium",
+          "-x",
+          config["executable"],
+          "-w",
+          "411",
+          "-t",
+          "1",
+          "-f",
+          str(flow_file),
+          "-d",
+          str(tmp_path / "artifacts"),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        env={**os.environ, **config.get("env", {})},
+      )
+      assert result.returncode == 1, result.stderr or result.stdout
+      report = json.loads(result.stdout)
+      findings = [item for item in report["findings"] if item["rule"] == "ACC206"]
+      assert len(findings) == 8
+      assert {item["selector"] for item in findings} == {"#missing", "#pending"}
+    finally:
+      server.shutdown()
+      thread.join(timeout=5)

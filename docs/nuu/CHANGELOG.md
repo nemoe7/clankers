@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.73]
+
+### Added
+
+- **Completed-action feedback (`ACC206`)**: Review changed names and status text after each live-audit click. Flag missing feedback after the flow timeout.
+
 ## [0.1.72]
 
 ### Added
