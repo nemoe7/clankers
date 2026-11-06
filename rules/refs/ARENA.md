@@ -16,6 +16,7 @@
 - After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
 - In an Arena session, ALWAYS run `steer --version` at every turn start and follow arena-steering's turn-start recipe for installation and server startup, and read the inbox at every cadence point.
 - After any arena-steering source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
+- NEVER stop or restart a running Steering preview server unless a health check fails or the user asks.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-steering` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.

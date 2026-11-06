@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Protect a running Steering preview from unnecessary restarts.
+
 - Preserve survey results and the open survey modal across hot reloads.
 
 - Keep the Messages log at the bottom when content grows while pinned.
