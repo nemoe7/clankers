@@ -135,6 +135,8 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path, width: int) -> No
         page.locator("#tab-reports").click()
         history = page.locator("#report-ack-history")
         history.get_by_text("Choice?: A", exact=False).wait_for()
+        entry = history.locator('.report-answer-entry[data-answer-id="ab9002"]')
+        assert entry.locator(".answer.reply").count() == 0
         status, _ = app.dispatch(
           "POST", "/messages/ab9002/ack", {"markdown": "Reviewed answer"}
         )

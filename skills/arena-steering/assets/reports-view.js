@@ -324,7 +324,7 @@ export function renderReportsView(container, state, handlers) {
               <div class="message-heading"><strong><code class="msg-id" aria-label="Answer ${escapeHtml(ans.id)}">${escapeHtml(ans.id)}</code></strong></div>
               <div class="message-bubble">
                 <div class="message-text"><p>${escapeHtml(entries)}</p></div>
-                ${ans.pending ? `<div class="answer reply" role="status">Sending answer…</div>` : ans.ack ? `<div class="answer reply message-text">${markdownBatch.slot(ans.ack_html || renderMarkdownBlock(ans.ack), "report-ack-markdown")}</div>` : `<div class="answer reply">Awaiting agent acknowledgement.</div>`}
+                ${ans.pending ? `<div class="answer reply" role="status">Sending answer…</div>` : ans.ack ? `<div class="answer reply message-text">${markdownBatch.slot(ans.ack_html || renderMarkdownBlock(ans.ack), "report-ack-markdown")}</div>` : ""}
               </div>
               <p class="receipt"><time role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" datetime="${iso}" data-timestamp="${iso}" data-prefix="${status}">${status ? `${status} ` : ""}${rel}</time></p>
             </div>

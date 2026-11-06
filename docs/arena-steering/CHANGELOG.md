@@ -8,7 +8,7 @@ This log has no Unreleased section.
 
 ### Changed
 
-- Format report answer history as message-style entries.
+- Format report answer history as message-style entries without an acknowledgement placeholder.
 
 - Preserve selected parents and completed uploads across reloads, discarding unfinished uploads.
 
