@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `references/recipes/resume-turn.md`, `SKILL.md`: Rename the turn-start recipe and update its link.
+
 - `SKILL.md`: Require specific labels for report fields and answer options.
 
 - `SKILL.md`: Estimate task sizes relative to a reference using effort, complexity, and uncertainty.

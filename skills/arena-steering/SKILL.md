@@ -13,7 +13,7 @@ Use one `steer` server and one state directory per session (`arena-state` by def
 
 ## Server and version
 
-At every turn start, follow [the v2 turn-start recipe](references/recipes/turn-start.md).
+At every turn start, follow [the v2 resume-turn recipe](references/recipes/resume-turn.md).
 For any browser work, follow [the Chromium recipe](references/recipes/chromium.md) as standard local tooling.
 For GitHub Actions logs, follow [the direct job-log recipe](references/recipes/job-logs.md).
 

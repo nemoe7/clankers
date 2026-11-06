@@ -1,4 +1,4 @@
-# V2 turn-start recipe
+# V2 resume-turn recipe
 
 At every turn start:
 1. Run `steer --version`.
