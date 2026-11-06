@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep floating scroll and reply controls neutral and retain their shape on hover.
+
 - Show timestamp tooltips in 24-hour time without receipt status.
 
 - Render message receipt and time as one text element with a normal space.

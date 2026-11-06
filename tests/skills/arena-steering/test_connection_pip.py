@@ -560,3 +560,58 @@ def test_tooltip_entrance_follows_placement_and_reduced_motion(tmp_path: Path) -
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_floating_controls_keep_neutral_shape_on_hover(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  server = create_http_server(SteeringApp(store), host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 800, "height": 600})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        for index, name in enumerate(("log-edited", "log-newest", "report-scroll-top")):
+          button = page.evaluate_handle(
+            """([name, index]) => {
+              const button = document.createElement('button');
+              button.className = name;
+              button.textContent = name;
+              Object.assign(button.style, { position: 'fixed', left: '250px',
+                top: `${120 + index * 80}px`, bottom: 'auto', transition: 'none' });
+              document.body.appendChild(button);
+              return button;
+            }""",
+            [name, index],
+          ).as_element()
+          assert button is not None
+          style = """el => {
+            const s = getComputedStyle(el);
+            return {color: s.color, border: s.borderColor,
+              radius: s.borderRadius, background: s.backgroundColor};
+          }"""
+          before = button.evaluate(style)
+          button.hover()
+          after = button.evaluate(style)
+          assert after["color"] == before["color"]
+          assert after["border"] == before["border"]
+          assert after["radius"] == before["radius"]
+          assert after["background"] != before["background"]
+          page.screenshot(path=str(tmp_path / f"floating-hover-{name}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
