@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Store task creation times and raise queued task priority once after one hour.
+
 - Use server-rendered Markdown for confirmed messages and reports, and retain optimistic message rendering.
 
 - Format report answer history as message-style entries without an acknowledgement placeholder.

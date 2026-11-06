@@ -139,7 +139,8 @@ class SqliteStore:
           msg_ids_json TEXT NOT NULL DEFAULT '[]',
           report_ids_json TEXT NOT NULL DEFAULT '[]',
           deps_json TEXT NOT NULL DEFAULT '[]',
-          modified_at TEXT NOT NULL
+          modified_at TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS reports (
@@ -268,6 +269,11 @@ class SqliteStore:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN size INTEGER CHECK (size IN (1,2,3,5,8,13,21,34))"
         )
+      if "created_at" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN created_at TEXT NOT NULL DEFAULT ''"
+        )
+        self._conn.execute("UPDATE tasks SET created_at = modified_at")
       if "insertion_order" not in task_cols:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN insertion_order INTEGER CHECK (insertion_order >= 0)"
@@ -866,8 +872,8 @@ class SqliteStore:
           INSERT INTO tasks (
             position, priority, priority_explicit, size, insertion_order, id, title, type,
             types_json, phase_index, phase_evidence_json, status, scope, details_json,
-            links_json, msg_ids_json, report_ids_json, deps_json, modified_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            links_json, msg_ids_json, report_ids_json, deps_json, modified_at, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
@@ -889,6 +895,7 @@ class SqliteStore:
             json.dumps(task.report_ids),
             json.dumps(task.task_ids),
             task.modified_at,
+            task.created_at,
           ),
         )
       kept_ids = {task.id for task in tasks}
@@ -1202,10 +1209,13 @@ class SqliteStore:
                 f"Task {row_id!r} needs an individual Fibonacci size before import"
               )
             if current is not None:
-              # Once created, insertion order cannot be reset by a remote edit.
+              # Once created, insertion order and creation time do not change.
               data.pop("insertion_order", None)
+              data.pop("created_at", None)
               if current["size"] is None and "size" not in data:
                 raise ValueError(f"Task {row_id!r} needs an individual Fibonacci size")
+            else:
+              data["created_at"] = str(data.get("created_at") or incoming_stamp)
             if "priority" in data and (
               not isinstance(data["priority"], str)
               or data["priority"] not in TASK_PRIORITIES
@@ -1420,6 +1430,9 @@ class SqliteStore:
       "insertion_order": row["insertion_order"],
       "allow_long_details": True,
       "modified_at": str(row["modified_at"]),
+      "created_at": str(row["created_at"])
+      if "created_at" in keys
+      else str(row["modified_at"]),
     }
     if isinstance(parsed_links, dict):
       return Task(**common, links=parsed_links)

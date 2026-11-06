@@ -1866,7 +1866,7 @@ def _print_single_task(
   if task.gate_names:
     print(f"- Gates: {', '.join(task.gate_names)}", file=out)
   if include_details:
-    print(f"- Priority: {task.priority}", file=out)
+    print(f"- Priority: {task.effective_priority}", file=out)
     print(f"- Size: {task.size}", file=out)
     for idx, line in enumerate(task.details, 1):
       print(f"- [{idx}] {line}", file=out)

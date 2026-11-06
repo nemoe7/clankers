@@ -322,7 +322,9 @@ class Task:
   priority_explicit: bool
   size: int
   insertion_order: int | None
+  created_at: str
   modified_at: str
+  effective_priority: str
 
   def __init__(
     self,
@@ -347,6 +349,7 @@ class Task:
     deps: list[str] | None = None,
     gate_names: list[str] | None = None,
     modified_at: str = "",
+    created_at: str = "",
     allow_long_details: bool = False,
   ) -> None:
     validate_entity_id(id, "Task.id")
@@ -369,6 +372,8 @@ class Task:
     ):
       raise ValueError(f"Invalid Task.insertion_order: {insertion_order!r}")
     self.priority = priority
+    self.effective_priority = priority
+    self.created_at = str(created_at or modified_at or "")
     self.priority_explicit = priority_explicit
     self.size = size
     self.insertion_order = insertion_order
@@ -525,6 +530,7 @@ class Task:
         "gate_names": list(self.gate_names),
       },
       "modified_at": self.modified_at,
+      "created_at": self.created_at,
     }
     if blocked is not None:
       payload["blocked"] = bool(blocked)
@@ -562,6 +568,7 @@ class Task:
         [str(item) for item in data["gate_names"]] if "gate_names" in data else None
       ),
       modified_at=str(data.get("modified_at", "")),
+      created_at=str(data.get("created_at", "")),
       allow_long_details=True,
     )
 

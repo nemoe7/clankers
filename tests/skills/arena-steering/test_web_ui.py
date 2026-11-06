@@ -12,6 +12,7 @@ import struct
 import subprocess
 import threading
 import zlib
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
 
@@ -1480,6 +1481,49 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert ".composer-attachment-chip" in style_css
   assert ".composer-expanded" in style_css
   assert ".composer-drop-active" in style_css
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_task_age_updates_priority_and_current_in_browser(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "age.sqlite3")
+  app = SteeringApp(store)
+  app.tasks.create_task("old", "Old", size=5, priority="P4", details=["Work"])
+  app.tasks.create_task("new", "New", size=1, priority="P4", details=["Work"])
+  created = (datetime.now(UTC) - timedelta(minutes=59, seconds=53)).isoformat()
+  with store.transaction():
+    store._conn.execute("UPDATE tasks SET created_at = ? WHERE id = 'old'", (created,))
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=ws")
+        page.locator("#tab-tasks").click()
+        page.locator('[data-task-id="old"] summary').click()
+        page.locator('[data-task-id="old"] li').get_by_text("Priority: P3").wait_for(
+          timeout=15000
+        )
+        assert store.get_task("old").priority == "P4"
+        assert app.tasks.list_tasks()[0][0].id == "old"
+        page.screenshot(path=str(tmp_path / "aged-task.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
 
 
 def test_linked_tasks_do_not_break_message_rendering() -> None:

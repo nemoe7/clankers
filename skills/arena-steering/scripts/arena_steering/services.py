@@ -772,6 +772,7 @@ class TaskService:
     task = self._tasks.get_task(task_id)
     if task is None:
       raise KeyError(f"Unknown task ID: {task_id}")
+    self._apply_age_priority(task, self._clock.now_iso())
     return (task, self.is_task_blocked(task))
 
   @_transactional_task_write
@@ -1300,8 +1301,22 @@ class TaskService:
         raise ValueError(f"Unknown dependency task ID: {dep_id!r}")
 
   @staticmethod
-  def _enforce_dependency_order(tasks: list[Task]) -> list[Task]:
+  def _apply_age_priority(task: Task, now: str) -> None:
+    task.effective_priority = task.priority
+    if task.status != "upcoming" or not task.created_at:
+      return
+    try:
+      age = datetime.fromisoformat(now) - datetime.fromisoformat(task.created_at)
+    except (ValueError, TypeError):
+      return
+    if age >= timedelta(hours=1):
+      task.effective_priority = f"P{max(1, int(task.priority[1]) - 1)}"
+
+  def _enforce_dependency_order(self, tasks: list[Task]) -> list[Task]:
     """Rank upcoming tasks while promoting prerequisites and preserving history."""
+    now = self._clock.now_iso()
+    for task in tasks:
+      self._apply_age_priority(task, now)
     all_tasks = {item.id: item for item in tasks}
     cycle_state: dict[str, int] = {}
 
@@ -1347,7 +1362,7 @@ class TaskService:
     for item in sorted(
       upcoming.values(),
       key=lambda task: (
-        int(task.priority[1]),
+        int(task.effective_priority[1]),
         task.size,
         task.insertion_order if task.insertion_order is not None else len(tasks),
       ),

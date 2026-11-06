@@ -435,6 +435,20 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
   }
 }
 
+let taskAgeTimer = null;
+
+function scheduleTaskAgeRefresh(tasks) {
+  clearTimeout(taskAgeTimer);
+  const now = Date.now();
+  const deadlines = tasks.filter(task => task.status === "upcoming" && task.priority !== "P1" &&
+    task.priority === task.effective_priority && task.created_at)
+    .map(task => Date.parse(task.created_at) + 3600000)
+    .filter(Number.isFinite);
+  if (!deadlines.length) return;
+  const delay = Math.min(2147483647, Math.max(1000, Math.min(...deadlines) - now + 1000));
+  taskAgeTimer = setTimeout(() => { void refreshAll(true); }, delay);
+}
+
 async function refreshAll(force = false) {
   try {
     const curState = store.getState();
@@ -468,6 +482,7 @@ async function refreshAll(force = false) {
     }
     const messages = msgRes || store.getState().messages || [];
     const tasks = taskRes.tasks || [];
+    scheduleTaskAgeRefresh(tasks);
     if (currentReportEpoch !== reportEpoch) return;
     const reportSummaries = (repRes.reports || []).filter((report) => !pendingReportDismissals.has(report.id));
     const survey = health.survey || {};

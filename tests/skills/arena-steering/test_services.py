@@ -939,6 +939,64 @@ class _ReportTestClock:
     self.current += timedelta(**kwargs)
 
 
+def test_task_age_priority_uses_creation_time_once_and_preserves_base() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  tasks = TaskService(store, store, clock=clock)
+  first = tasks.create_task("old", "Old", size=5, priority="P4", details=["Work"])
+  created = clock.now_iso()
+  assert first.created_at == created
+  clock.advance(minutes=30)
+  tasks.patch_task("old", {"title": "Updated"})
+  tasks.create_task("new", "New", size=1, priority="P4", details=["Work"])
+  clock.advance(minutes=29, seconds=59)
+  assert [task.id for task, _ in tasks.list_tasks()] == ["new", "old"]
+  clock.advance(seconds=1)
+  ordered = [task for task, _ in tasks.list_tasks()]
+  assert [task.id for task in ordered] == ["old", "new"]
+  assert ordered[0].effective_priority == "P3"
+  assert store.get_task("old").priority == "P4"
+  assert store.get_task("old").created_at == created
+  from arena_steering.server import SteeringApp
+
+  app = SteeringApp(store)
+  app.tasks = tasks
+  status, payload = app.dispatch("GET", "/tasks", {})
+  assert status == 200
+  assert payload["tasks"][0]["effective_priority"] == "P3"
+  assert payload["tasks"][0]["priority"] == "P4"
+  from io import StringIO
+
+  from arena_steering.cli import _print_single_task
+
+  output = StringIO()
+  _print_single_task(ordered[0], False, output)
+  assert "Priority: P3" in output.getvalue()
+  clock.advance(hours=3)
+  assert tasks.get_task("old")[0].effective_priority == "P3"
+  highest = tasks.create_task(
+    "urgent", "Urgent", size=1, priority="P1", details=["Work"]
+  )
+  clock.advance(hours=1)
+  assert tasks.get_task(highest.id)[0].effective_priority == "P1"
+  store.close()
+
+
+def test_task_creation_time_migrates_from_modified_time(tmp_path) -> None:
+  path = tmp_path / "legacy.sqlite3"
+  clock = _ReportTestClock()
+  store = SqliteStore(path)
+  task = TaskService(store, store, clock=clock).create_task(
+    "legacy", "Legacy", size=1, details=["Work"]
+  )
+  with store.transaction():
+    store._conn.execute("ALTER TABLE tasks DROP COLUMN created_at")
+  store.close()
+  reopened = SqliteStore(path)
+  assert reopened.get_task("legacy").created_at == task.modified_at
+  reopened.close()
+
+
 def test_report_publication_order_survives_republish_rename_and_sync() -> None:
   store = SqliteStore(":memory:")
   columns = {row["name"] for row in store._conn.execute("PRAGMA table_info(reports)")}
