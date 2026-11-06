@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Match Reports header attention indicators to their picker sizes.
+
 - Reject dependencies on lower-priority tasks while allowing larger dependencies.
 
 - Store task creation times and raise queued task priority once after one hour.

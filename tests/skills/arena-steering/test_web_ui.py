@@ -4079,7 +4079,20 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
             const bounds = tab.getBoundingClientRect();
             const pip = tab.querySelector('#report-pip').getBoundingClientRect();
             const question = tab.querySelector('#report-needs-answer').getBoundingClientRect();
+            const dotSample = document.createElement('span');
+            dotSample.className = 'report-picker-unseen-dot';
+            const iconSample = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            iconSample.classList.add('report-picker-help-icon');
+            document.body.append(dotSample, iconSample);
+            const pickerDot = dotSample.getBoundingClientRect();
+            const pickerIcon = iconSample.getBoundingClientRect();
+            dotSample.remove();
+            iconSample.remove();
             return {
+              pickerDotWidth: pickerDot.width,
+              pickerDotHeight: pickerDot.height,
+              pickerIconWidth: pickerIcon.width,
+              pickerIconHeight: pickerIcon.height,
               textCenter: (text.left + text.right) / 2,
               tabCenter: (bounds.left + bounds.right) / 2,
               textRight: text.right,
@@ -4101,14 +4114,25 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
             };
           }""")
           assert abs(geometry["textCenter"] - geometry["tabCenter"]) < 1
-          assert geometry["questionTop"] == geometry["pipTop"]
-          assert geometry["questionWidth"] == geometry["pipWidth"]
-          assert geometry["questionHeight"] == geometry["pipHeight"]
+          assert geometry["pipWidth"] == geometry["pickerDotWidth"]
+          assert geometry["pipHeight"] == geometry["pickerDotHeight"]
+          assert geometry["questionWidth"] == geometry["pickerIconWidth"]
+          assert geometry["questionHeight"] == geometry["pickerIconHeight"]
+          assert (
+            abs(
+              geometry["questionTop"]
+              + geometry["questionHeight"] / 2
+              - geometry["pipTop"]
+              - geometry["pipHeight"] / 2
+            )
+            < 1
+          )
           assert (
             geometry["textRight"] <= geometry["questionLeft"]
             or geometry["textTop"] >= geometry["questionBottom"]
           ), (width, geometry)
           assert geometry["questionRight"] < geometry["pipLeft"]
+          assert geometry["questionTop"] >= 0
           assert geometry["pipOffsetRight"] == 6
           assert geometry["navRight"] + 8 <= geometry["actionsLeft"]
           assert not geometry["overflow"]
@@ -4145,10 +4169,9 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
             };
           }""")
           assert abs(alone["textCenter"] - alone["tabCenter"]) < 1
-          assert alone["textRight"] <= alone["questionLeft"]
           assert alone["questionOffsetRight"] == 6
-          assert alone["questionTop"] == (-3 if width <= 480 else 6)
-          assert alone["questionWidth"] == alone["questionHeight"] == 7
+          assert alone["questionTop"] == -7
+          assert alone["questionWidth"] == alone["questionHeight"] == 14
 
         page.locator("#tab-messages").click()
         answer = app.reports.submit_answer("decision", {"choice": "Yes"})
