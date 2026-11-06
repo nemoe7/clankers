@@ -536,6 +536,13 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
           };
         }""")
         assert first["background"] == "rgb(255, 255, 255)"
+        first_tip = page.locator(".survey-cap-pill:first-child .survey-answer-tooltip")
+        assert first_tip.evaluate("el => getComputedStyle(el).animationName") in (
+          "tooltip-from-above",
+          "tooltip-from-below",
+        )
+        page.emulate_media(reduced_motion="reduce")
+        assert first_tip.evaluate("el => getComputedStyle(el).animationName") == "none"
         assert (
           page.locator(
             ".survey-cap-pill:first-child .survey-answer-val"

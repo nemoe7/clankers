@@ -451,16 +451,25 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         button.hover()
         tip = page.get_by_role("tooltip").filter(has_text="Open survey results")
         assert tip.is_visible()
+        page.screenshot(path=str(tmp_path / "animated-tooltip.png"))
         styles = tip.evaluate("""el => ({
           bg: getComputedStyle(el).backgroundColor,
           color: getComputedStyle(el).color,
           top: el.getBoundingClientRect().top,
+          bottom: el.getBoundingClientRect().bottom,
+          triggerTop: document.querySelector('#survey-open').getBoundingClientRect().top,
           triggerBottom: document.querySelector('#survey-open').getBoundingClientRect().bottom,
-          arrow: getComputedStyle(el, '::before').borderBottomColor,
+          above: el.classList.contains('above'),
+          arrow: getComputedStyle(el, '::before')[
+            el.classList.contains('above') ? 'borderTopColor' : 'borderBottomColor'
+          ],
         })""")
         assert styles["bg"] == "rgb(255, 255, 255)"
         assert styles["color"] == "rgb(24, 24, 24)"
-        assert styles["top"] >= styles["triggerBottom"]
+        if styles["above"]:
+          assert styles["bottom"] <= styles["triggerTop"]
+        else:
+          assert styles["top"] >= styles["triggerBottom"]
         assert styles["arrow"] == styles["bg"]
         assert button.get_attribute("aria-describedby") == "arena-title-tooltip"
         assert dot.evaluate("el => getComputedStyle(el).backgroundColor") == dot_color
@@ -490,6 +499,60 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         image_button = page.get_by_role("button", name="Existing name")
         image_button.hover()
         assert page.get_by_role("button", name="Existing name").is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_tooltip_entrance_follows_placement_and_reduced_motion(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          for (const [id, top] of [['low', 300], ['high', 0]]) {
+            const target = document.createElement('button');
+            target.id = id;
+            target.title = id;
+            target.style.cssText = `position:fixed;z-index:999;left:180px;top:${top}px`;
+            document.body.append(target);
+          }
+        }""")
+        for target, expected in (
+          ("low", "tooltip-from-below"),
+          ("high", "tooltip-from-above"),
+        ):
+          page.locator(f"#{target}").hover()
+          tip = page.locator("#arena-title-tooltip")
+          assert tip.evaluate("el => getComputedStyle(el).animationName") == expected
+          assert tip.evaluate("el => getComputedStyle(el).animationDuration") == "0.15s"
+        page.mouse.move(600, 700)
+        page.emulate_media(reduced_motion="reduce")
+        page.locator("#low").hover()
+        assert (
+          page.locator("#arena-title-tooltip").evaluate(
+            "el => getComputedStyle(el).animationName"
+          )
+          == "none"
+        )
       finally:
         browser.close()
   finally:

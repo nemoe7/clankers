@@ -1363,6 +1363,30 @@ select,
   overflow-wrap: anywhere;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes tooltip-from-below {
+    from { opacity: 0; translate: 0 4px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
+  @keyframes tooltip-from-above {
+    from { opacity: 0; translate: 0 -4px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
+  .arena-tooltip,
+  .survey-answer-tooltip {
+    animation: tooltip-from-above 150ms ease-out;
+  }
+
+  .arena-tooltip.above,
+  .survey-answer-tooltip.above,
+  #preview-msg[data-tooltip]::before,
+  #preview-msg[data-tooltip]::after {
+    animation: tooltip-from-below 150ms ease-out;
+  }
+}
+
 .arena-tooltip::before {
   position: absolute;
   bottom: 100%;

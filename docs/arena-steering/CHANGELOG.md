@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Fade and slide tooltips from their triggers, respecting reduced motion.
+
 - Retain visible message cards while the hidden-message filter reloads.
 
 - Keep optimistic message cards connected when their server IDs arrive.
