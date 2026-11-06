@@ -371,7 +371,7 @@ export function messageMatchesQuery(message, query) {
   return haystacks.some((item) => String(item || "").toLowerCase().includes(needle));
 }
 
-async function fetchMessagePage({ before = "", reset = false } = {}) {
+async function fetchMessagePage({ before = "", reset = false, preserve = false } = {}) {
   const state = store.getState();
   const key = messageQueryKey(state);
   // A routine refresh must not invalidate a slower pagination request. Apply
@@ -381,11 +381,11 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
     return state.messages || [];
   }
   const epoch = ++messageEpoch;
-  const previous = reset || loadedMessageKey !== key ? [] : [...(state.messages || [])];
+  const previous = !preserve && (reset || loadedMessageKey !== key) ? [] : [...(state.messages || [])];
   if (reset || loadedMessageKey !== key) {
     loadedMessageKey = key;
     olderPageErrorKey = null;
-    store.setState({ messages: [], messagesHasMore: false, messagesError: "", messagesLoading: true });
+    store.setState({ ...(preserve ? {} : { messages: [], messagesHasMore: false }), messagesError: "", messagesLoading: true });
   }
   try {
     const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim(), requestId: state.optimisticMessage?.requestId || "" };
@@ -394,7 +394,9 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
     let fresh = result.messages || [];
     let hasMore = result.has_more;
     if (!before && previous.length) {
-      while (hasMore && fresh.length < previous.length) {
+      while (hasMore && (preserve
+        ? !fresh.some((message) => message.id === previous[0].id)
+        : fresh.length < previous.length)) {
         const older = await api.listMessages({ ...options, before: fresh[0].id });
         if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
         fresh = [...(older.messages || []), ...fresh];
@@ -692,8 +694,9 @@ const handlers = {
   async onToggleHidden() {
     const nextHidden = !store.getState().showHidden;
     historyCache = null;
-    store.setState({ showHidden: nextHidden });
-    await fetchMessagePage({ reset: true });
+    const messages = store.getState().messages || [];
+    store.setState({ showHidden: nextHidden, messages: nextHidden ? messages : messages.filter((message) => !message.hidden) });
+    await fetchMessagePage({ reset: true, preserve: true });
   },
   onSearchChange(query) {
     const state = store.getState();

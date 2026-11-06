@@ -2,6 +2,7 @@
 
 import os
 import threading
+from pathlib import Path
 
 import pytest
 from arena_steering.server import SteeringApp, create_http_server
@@ -82,6 +83,68 @@ def test_pagination_error_survives_refresh_until_manual_retry() -> None:
         "document.querySelectorAll('#history .message').length === 26"
       )
       assert error.is_hidden()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_hidden_toggle_retains_visible_cards_during_fetch(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("Visible message", msg_id="aaaaaa", blocking=False)
+  for index in range(25):
+    app.messages.send_message(
+      f"Hidden message {index}", msg_id=f"{index + 1:06x}", hidden=True, blocking=False
+    )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page()
+      page.add_init_script("""(() => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (!window.hiddenFetchStarted && String(args[0]).includes('/messages?') &&
+              String(args[0]).includes('hidden=1')) {
+            window.hiddenFetchStarted = true;
+            await new Promise(resolve => { window.releaseHidden = resolve; });
+          }
+          return original(...args);
+        };
+      })();""")
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      visible = page.locator('#history .message[data-msg-id="aaaaaa"]')
+      visible.wait_for()
+      page.evaluate(
+        "window.visibleCard = document.querySelector('[data-msg-id=aaaaaa]')"
+      )
+      page.get_by_role("button", name="Show hidden messages").click()
+      page.wait_for_function("window.hiddenFetchStarted")
+      assert visible.count() == 1
+      assert visible.evaluate("el => el === window.visibleCard")
+      page.screenshot(path=str(tmp_path / "hidden-toggle-loading.png"))
+      page.evaluate("window.releaseHidden()")
+      page.locator('#history .message[data-msg-id="000019"]').wait_for()
+      assert visible.evaluate("el => el === window.visibleCard")
+      assert page.locator('#history .message[data-hidden="true"]').count() == 25
+      page.screenshot(path=str(tmp_path / "hidden-toggle-loaded.png"))
+      page.get_by_role("button", name="Hide hidden messages").click()
+      assert page.locator('#history .message[data-hidden="true"]').count() == 0
+      assert visible.evaluate("el => el === window.visibleCard")
       browser.close()
   finally:
     server.shutdown()

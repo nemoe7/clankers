@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Retain visible message cards while the hidden-message filter reloads.
+
 - Keep optimistic message cards connected when their server IDs arrive.
 
 - Restore send-button hover feedback without changing its size.
