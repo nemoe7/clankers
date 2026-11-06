@@ -1945,6 +1945,7 @@ code.msg-id {
 .composer-shell #attach-file { grid-area: attach; }
 .composer-shell #preview-msg { grid-area: preview; margin-left: -4px; }
 .composer-shell #send { grid-area: send; border-color: hsl(var(--border-medium)); background-color: hsl(var(--surface-secondary)); }
+.composer-shell #send:hover:not(:disabled) { background-color: hsl(var(--surface-tertiary)); }
 .composer-shell #send[aria-busy="true"] svg { animation: composer-spinner 1s linear infinite; }
 @keyframes composer-spinner { to { transform: rotate(360deg); } }
 .composer-shell #composer-expand { position: absolute; top: 0; right: 0; }

@@ -911,3 +911,26 @@ def test_code_and_id_copy_use_textarea_and_report_failures() -> None:
     assert parent.locator("code").get_attribute("data-state") == "bad"
     assert "failed" in (parent.get_attribute("aria-label") or "").lower()
     assert page.locator("textarea[readonly]").count() == 0
+
+
+@pytest.mark.parametrize("width", [390, 1200])
+def test_send_hover_changes_background_without_resizing(
+  tmp_path: Path, width: int
+) -> None:
+  with composer_page(width) as page:
+    page.locator("#msg").fill("Draft message")
+    send = page.locator("#send")
+    before = send.evaluate("""el => ({
+      background: getComputedStyle(el).backgroundColor,
+      box: el.getBoundingClientRect().toJSON()
+    })""")
+    send.hover()
+    page.wait_for_timeout(250)
+    after = send.evaluate("""el => ({
+      background: getComputedStyle(el).backgroundColor,
+      box: el.getBoundingClientRect().toJSON()
+    })""")
+    assert before["background"] != after["background"]
+    assert after["box"]["width"] == pytest.approx(before["box"]["width"])
+    assert after["box"]["height"] == pytest.approx(before["box"]["height"])
+    page.screenshot(path=str(tmp_path / f"send-hover-{width}.png"))

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Restore send-button hover feedback without changing its size.
+
 - Preserve task-reference chip shape on hover.
 
 - Add vertical spacing between wrapped message task chips.
