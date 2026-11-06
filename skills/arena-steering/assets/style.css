@@ -1765,6 +1765,17 @@ code.msg-id {
     background-color var(--fast) var(--ease);
 }
 
+.message-heading .reply-parent-chip,
+.receipt-task-links .reply-parent-chip {
+  padding-block: 0;
+  line-height: 1.28;
+}
+
+.message .reply-parent-chip > code:not(.msg-id) {
+  padding: 0;
+  background: none;
+}
+
 .reply-parent-chip > code:not(.msg-id),
 #report .reply-parent-chip > code:not(.msg-id) {
   font-size: 11px;

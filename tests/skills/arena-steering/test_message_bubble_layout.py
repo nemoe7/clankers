@@ -544,3 +544,74 @@ def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("No chips", msg_id="cc0001", blocking=False)
+  app.messages.send_message(
+    "Parent chip",
+    msg_id="cc0002",
+    blocking=False,
+    parent_refs=[{"type": "message", "id": "cc0001"}],
+  )
+  app.messages.send_message("Task chip", msg_id="cc0003", blocking=False)
+  app.tasks.create_task(
+    "chip-task", "Chip task", size=1, details=["Review"], msg_ids=["cc0003"]
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"], args=["--no-sandbox"]
+      )
+      try:
+        for width in (390, 1200):
+          page = browser.new_page(viewport={"width": width, "height": 800})
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          page.locator('.message[data-msg-id="cc0003"] .reply-parent-chip').wait_for()
+          geometry = page.evaluate("""() => {
+            const el = (id, selector) => document.querySelector(`[data-msg-id="${id}"] ${selector}`);
+            const height = node => node.getBoundingClientRect().height;
+            const textCenter = node => {
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              const box = range.getBoundingClientRect();
+              return box.top + box.height / 2;
+            };
+            return {
+              plainHeading: height(el('cc0001', '.message-heading')),
+              parentHeading: height(el('cc0002', '.message-heading')),
+              plainReceipt: height(el('cc0001', '.receipt')),
+              taskReceipt: height(el('cc0003', '.receipt')),
+              parentDelta: Math.abs(textCenter(el('cc0002', '.reply-parent-chip code')) -
+                textCenter(el('cc0002', '.msg-id code'))),
+              taskDelta: Math.abs(textCenter(el('cc0003', '.reply-parent-chip code')) -
+                textCenter(el('cc0003', '.receipt-status'))),
+            };
+          }""")
+          assert abs(geometry["plainHeading"] - geometry["parentHeading"]) <= 0.5, (
+            geometry
+          )
+          assert abs(geometry["plainReceipt"] - geometry["taskReceipt"]) <= 0.5, (
+            geometry
+          )
+          assert geometry["parentDelta"] <= 1, geometry
+          assert geometry["taskDelta"] <= 1, geometry
+          page.screenshot(path=str(tmp_path / f"chip-row-{width}.png"))
+          page.close()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

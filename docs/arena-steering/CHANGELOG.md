@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep message parent and task chips aligned without expanding single-line rows.
+
 - Keep floating scroll and reply controls neutral and retain their shape on hover.
 
 - Show timestamp tooltips in 24-hour time without receipt status.
