@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Require self-contained handoffs (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Remove the deliverable-open requirement and publish handoffs as unfielded Steering reports (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Set the final poll Bash timeout to 1800 seconds and prohibit shell timeouts (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Remove the violation-notice trigger for full bible reads (`rules/refs/ARENA.md`, `rules/ARENA.md`).

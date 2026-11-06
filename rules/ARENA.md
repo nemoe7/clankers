@@ -207,6 +207,7 @@
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Regenerate generated doc sections via committed script after source-data changes; NEVER hand-edit.
 - For agent handoffs or cross-session specs, follow the [handoff template](.agents/skills/arena-steering/references/handoff.md) and publish an unfielded Steering report.
+- Include all required context in each handoff. NEVER require access to the sender's state or local-only files.
 
 ## When in doubt
 
