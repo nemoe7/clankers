@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `resume-turn.md`, `install.sh`: Remove redundant login-shell instructions.
+
 - `SKILL.md`: Publish handoffs and cross-session specifications as unfielded Steering reports.
 
 - `markdown.py`, `services.py`, `test_server_cli.py`: Render standalone two-space-indented blocks as code and preserve acknowledgement indentation.

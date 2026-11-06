@@ -276,4 +276,4 @@ PY
 COMMIT_MSG_HOOK
 chmod 755 "$GIT_HOOK" || fail "cannot make $GIT_HOOK executable"
 git -C "$SCRIPTS_DIR" config --local core.hooksPath "$GIT_HOOKS" || fail "cannot set core.hooksPath"
-printf 'Installed steer in %s. Open a new login shell or source %s.\n' "$COMMAND" "$PROFILE"
+printf 'Installed steer in %s.\n' "$COMMAND"
