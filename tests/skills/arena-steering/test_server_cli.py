@@ -73,6 +73,26 @@ def test_cli_inbox_message_header_omits_status_metadata(
     store.close()
 
 
+def test_cli_task_reminders_for_ack_and_nonempty_read(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.messages.send_message("Please fix this", msg_id=MSG_ID_CLI)
+    code, out, err = _run_cli(state_dir, "read")
+    assert (code, err) == (0, "")
+    read_hint = "If a message asks for work or details, add it to a task."
+    assert read_hint in out
+    assert "steer task mod <task-id> links msg <message-id>" not in out
+    code, out, err = _run_cli(state_dir, "ack", MSG_ID_CLI, "Working on it")
+    assert (code, err) == (0, "")
+    assert f"steer task mod <task-id> links msg {MSG_ID_CLI}" in out
+    assert "If msg asks for work or details, add to task" in out  # nonemo: NMT100
+    assert "add it to a task" not in _run_cli(state_dir, "read")[1]
+  finally:
+    store.close()
+
+
 def test_cli_inbox_header_uses_browser_timezone_and_utc_fallback(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -97,6 +117,7 @@ def test_cli_inbox_header_uses_browser_timezone_and_utc_fallback(
     assert app.dispatch("POST", "/timezone", {"timezone": "UTC"})[0] == 200
     assert _run_cli(state_dir, "read")[1] == (
       "Inbox 07:20:10: 1 pending\n`ab1234`\nRead the note\n"
+      "If a message asks for work or details, add it to a task.\n"
     )
   finally:
     store.close()
@@ -3081,7 +3102,13 @@ def test_cli_ack_batches_messages_and_report_answers(tmp_path: Path) -> None:
     state_dir, "ack", "ab1001", "ab1002", "ab1003", "One shared reply"
   )
   assert code == 0, err
-  assert out == "ok ab1001 ab1002 ab1003\n"
+  assert out == (
+    "ok ab1001 ab1002 ab1003\n"
+    "If msg asks for work or details, add to task\n"
+    "steer task mod <task-id> links msg ab1001\n"
+    "If msg asks for work or details, add to task\n"
+    "steer task mod <task-id> links msg ab1002\n"
+  )
   store, _, _, reports = cli.open_services(state_dir)
   assert store.get_message("ab1001").acks == ["One shared reply"]
   assert store.get_message("ab1002").acks == ["One shared reply"]
@@ -3113,7 +3140,10 @@ def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> N
   store.close()
   code, out, err = _run_cli(state_dir, "ack", "Received")
   assert code == 0, err
-  assert out == "ok ab1011\n"
+  assert out == (
+    "ok ab1011\nIf msg asks for work or details, add to task\n"
+    "steer task mod <task-id> links msg ab1011\n"
+  )
   store, messages, _, _ = cli.open_services(state_dir)
   assert store.get_message("ab1011").acks == ["Received"]
   messages.send_message("First pending", msg_id="ab1012")
@@ -3140,7 +3170,10 @@ def test_cli_ack_rejects_id_only_reply_and_keeps_message_pending() -> None:
 
     code, out, err = _run_cli(state_dir, "ack", "ab1014", "Reviewed the change")
     assert code == 0, err
-    assert out == "ok ab1014\n"
+    assert out == (
+      "ok ab1014\nIf msg asks for work or details, add to task\n"
+      "steer task mod <task-id> links msg ab1014\n"
+    )
     assert store.get_message("ab1014").acks == ["Reviewed the change"]
   finally:
     store.close()

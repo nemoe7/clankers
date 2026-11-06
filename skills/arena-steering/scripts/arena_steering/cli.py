@@ -354,6 +354,8 @@ def main(
       _print_restore_notice(store, stdout)
       delivered = messages.read_pending(mark_seen=True)
       _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
+      if delivered["messages"] or delivered["report_answers"]:
+        print("If a message asks for work or details, add it to a task.", file=stdout)
       messages.reset_gate_if_clear()
       return 0
     if cmd == "poll":
@@ -512,6 +514,9 @@ def _run_ack(
     acked = [messages.ack(target, markdown)[1] for target in target_ids]
   print(f"ok {' '.join(item.id for item in acked)}", file=out)
   for item in acked:
+    if isinstance(item, Message):
+      print("If msg asks for work or details, add to task", file=out)
+      print(f"steer task mod <task-id> links msg {item.id}", file=out)
     if isinstance(item, ReportAnswer):
       for task_id, details in item.task_details_added.items():
         print(f"Added to task {task_id}:", file=out)
