@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import itertools
 import os
 import threading
 from pathlib import Path
@@ -460,6 +461,63 @@ def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
           ack: el.querySelector('.answer.reply').getBoundingClientRect().width,
         })""")
         assert wide_widths["ack"] >= wide_widths["bubble"] - 31, wide_widths
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN for Chromium"
+)
+def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("Linked work.", msg_id="bb1010", blocking=False)
+  for i in range(8):
+    app.tasks.create_task(
+      f"linked-task-{i}", f"Task {i}", size=1, details=["Review"], msg_ids=["bb1010"]
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        chips = page.locator(
+          '.message[data-msg-id="bb1010"] .receipt-task-links button'
+        )
+        chips.first.wait_for()
+        assert chips.count() == 8
+        rects = chips.evaluate_all(
+          "els => els.map(el => el.getBoundingClientRect().toJSON())"
+        )
+        rows = {}
+        for rect in rects:
+          rows.setdefault(round(rect["y"]), []).append(rect)
+        assert len(rows) > 1
+        ordered = [rows[y] for y in sorted(rows)]
+        for before, after in itertools.pairwise(ordered):
+          assert (
+            min(item["y"] for item in after) - max(item["bottom"] for item in before)
+            >= 3
+          )
+        assert any(len(row) > 1 for row in ordered)
+        for row in ordered:
+          for left, right in itertools.pairwise(row):
+            assert 0 < right["x"] - left["right"] < 8
+        page.screenshot(path=str(tmp_path / "wrapped-task-chips.png"))
       finally:
         browser.close()
   finally:

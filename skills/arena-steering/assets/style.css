@@ -1607,6 +1607,16 @@ select,
   text-align: right;
 }
 
+.receipt-task-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: .33em;
+  row-gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .receipt-bottom {
   display: inline-flex;
   align-items: center;

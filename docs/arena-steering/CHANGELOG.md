@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Add vertical spacing between wrapped message task chips.
+
 - Show linked tasks in report headers and avoid duplicate titles in cached reports.
 
 - Defer scheduled instruction checks while an agent poll is active.
