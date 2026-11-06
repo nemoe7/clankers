@@ -1,20 +1,29 @@
-"""Tests for Arena Steering HTTP router (`server.py`) and `steer` CLI (`cli.py`)."""
+"""Steering regression tests."""
 
 from __future__ import annotations
 
 import base64
 import io
 import json
+import os
+import runpy
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
 
 import pytest
-from arena_steering import __version__, cli, server
-from arena_steering.blocked_bash import append_blocked_bash
+from arena_steering import __version__, blocked_bash, cli, pre, server
+from arena_steering.blocked_bash import (
+  append_blocked_bash,
+  dismiss_blocked_bash,
+  read_blocked_bash,
+)
 from arena_steering.cli import main as cli_main
 from arena_steering.markdown import render_markdown, render_report_markdown
 from arena_steering.server import (
@@ -22,19 +31,40 @@ from arena_steering.server import (
   PASTE_ATTACHMENT_LINE_THRESHOLD,
   SteeringApp,
   _read_set_files,
+  create_http_server,
   make_request_handler,
+  reload_server_handler,
 )
 from arena_steering.store import SqliteStore
+from fixtures.reload_isolation import run_reload_in_child
 
 MSG_ID_CLI = "a0b1c2"
+
+
 ACK_MARKDOWN = "ack-token-verified"
+
+
 SECOND_DETAIL_TOKEN = "detail-token-two"
+
+
 REPORT_ID_PORT = "port-report"
+
+
 TEST_COMMIT_HASH = "a" * 40
+
+
 TASK_ID_CLI = "cli-task"
+
+
 TASK_ID_BASE = "base-task"
+
+
 PR_VERIFICATION_ERROR = "did not verify"
+
+
 NO_CURRENT_TASK = "No current task"
+
+
 JOB_LOG_FALLBACK_TEXT = "job log text"
 
 
@@ -4450,3 +4480,435 @@ def test_scheduled_bible_check_does_not_wake_an_active_poll(tmp_path: Path) -> N
   finally:
     thread.join(timeout=2)
     store.close()
+
+
+def test_dismiss_deletes_only_the_selected_raw_line_and_keeps_log_private(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  line = "printf '<script>alert(1)</script>'\nnext line"
+  for _ in range(2):
+    append_blocked_bash(state_dir, line=line, command="printf", blocked_by="gate")
+  append_blocked_bash(state_dir, line="last", command="other", blocked_by="sleep")
+  log_path = state_dir / "blocked-bash.jsonl"
+  before = log_path.read_bytes().splitlines(keepends=True)
+  entries = read_blocked_bash(state_dir)
+  assert len(entries) == 3
+  assert len({entry["id"] for entry in entries}) == 3
+  assert all(len(entry["id"]) == 64 for entry in entries)
+  assert [entry["line"] for entry in entries] == [line, line, "last"]
+
+  dismiss_blocked_bash(state_dir, entries[1]["id"])
+  assert log_path.read_bytes() == before[0] + before[2]
+  assert [entry["line"] for entry in read_blocked_bash(state_dir)] == [line, "last"]
+  assert log_path.stat().st_mode & 0o777 == 0o600
+  with pytest.raises(KeyError, match="no longer present"):
+    dismiss_blocked_bash(state_dir, entries[1]["id"])
+  with pytest.raises(ValueError, match="entry ID"):
+    dismiss_blocked_bash(state_dir, "../outside")
+  assert list(state_dir.glob(".blocked-bash-*")) == []
+
+
+def test_dismiss_and_append_are_locked_across_threads(
+  tmp_path: Path,
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  append_blocked_bash(tmp_path, line="target", command="target", blocked_by="gate")
+  target_id = read_blocked_bash(tmp_path)[0]["id"]
+  started, attempting, resume = threading.Event(), threading.Event(), threading.Event()
+  original_replace = os.replace
+  original_flock = blocked_bash.fcntl.flock
+
+  def pause_replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+    started.set()
+    assert resume.wait(3), "replacement never resumed"
+    original_replace(src, dst)
+
+  def observe_lock(fd: int, operation: int) -> None:
+    if started.is_set():
+      attempting.set()
+    original_flock(fd, operation)
+
+  monkeypatch.setattr(blocked_bash.os, "replace", pause_replace)
+  monkeypatch.setattr(blocked_bash.fcntl, "flock", observe_lock)
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    deleting = pool.submit(dismiss_blocked_bash, tmp_path, target_id)
+    assert started.wait(3)
+    adding = pool.submit(
+      append_blocked_bash,
+      tmp_path,
+      line="new",
+      command="new",
+      blocked_by="gate",
+    )
+    assert attempting.wait(3)
+    resume.set()
+    deleting.result(timeout=3)
+    adding.result(timeout=3)
+  assert [entry["line"] for entry in read_blocked_bash(tmp_path)] == ["new"]
+
+
+def test_delete_endpoint_is_local_only_and_never_exposes_log_in_state(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  line = "private shell line with <unsafe> text"
+  append_blocked_bash(state_dir, line=line, command="private", blocked_by="gate")
+  status, payload = app.dispatch("GET", "/blocked-bash")
+  assert status == HTTPStatus.OK and payload["entries"][0]["line"] == line
+  entry_id = payload["entries"][0]["id"]
+  assert app.dispatch("DELETE", "/blocked-bash/invalid")[0] == HTTPStatus.BAD_REQUEST
+  status, _ = app.dispatch("DELETE", f"/blocked-bash/{entry_id}")
+  assert status == HTTPStatus.OK
+  assert app.dispatch("GET", "/blocked-bash") == (HTTPStatus.OK, {"entries": []})
+  assert app.dispatch("DELETE", f"/blocked-bash/{entry_id}")[0] == HTTPStatus.NOT_FOUND
+  status, snapshot = app.dispatch("GET", "/state/snapshot")
+  assert status == HTTPStatus.OK and line not in json.dumps(snapshot)
+
+  handler = object.__new__(make_request_handler(app))
+  replies: list[dict[str, object]] = []
+  handler.ws_send = lambda _opcode, data: replies.append(json.loads(data))
+  for method, path in (
+    ("GET", "/blocked-bash"),
+    ("DELETE", f"/blocked-bash/{entry_id}"),
+  ):
+    handler.ws_dispatch({"id": method, "method": method, "path": path, "body": ""})
+  assert all(reply["status"] == HTTPStatus.FORBIDDEN for reply in replies)
+  assert line not in json.dumps(replies)
+  store.close()
+
+
+def test_dismiss_fails_closed_on_symlink_and_replacement_error(
+  tmp_path: Path,
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  state_dir = tmp_path / "state"
+  append_blocked_bash(state_dir, line="first", command="cmd", blocked_by="gate")
+  log_path = state_dir / "blocked-bash.jsonl"
+  entry_id = read_blocked_bash(state_dir)[0]["id"]
+  original = log_path.read_bytes()
+  outside = tmp_path / "outside.jsonl"
+  outside.write_bytes(b"outside must survive")
+  log_path.unlink()
+  log_path.symlink_to(outside)
+  with pytest.raises(RuntimeError, match="unavailable"):
+    dismiss_blocked_bash(state_dir, entry_id)
+  assert outside.read_bytes() == b"outside must survive"
+
+  log_path.unlink()
+  log_path.write_bytes(original)
+
+  def fail_replace(_src: str | os.PathLike[str], _dst: str | os.PathLike[str]) -> None:
+    raise OSError("simulated write failure")
+
+  monkeypatch.setattr(blocked_bash.os, "replace", fail_replace)
+  with pytest.raises(RuntimeError, match="unavailable"):
+    dismiss_blocked_bash(state_dir, entry_id)
+  assert log_path.read_bytes() == original
+  assert list(state_dir.glob(".blocked-bash-*")) == []
+
+  invalid = original + b"not JSON\n"
+  log_path.write_bytes(invalid)
+  with pytest.raises(RuntimeError, match="line 2"):
+    dismiss_blocked_bash(state_dir, entry_id)
+  assert log_path.read_bytes() == invalid
+
+  lock_path = state_dir / ".blocked-bash.lock"
+  lock_path.unlink()
+  lock_path.symlink_to(outside)
+  with pytest.raises(RuntimeError, match="unavailable"):
+    append_blocked_bash(
+      state_dir, line="must not append", command="x", blocked_by="gate"
+    )
+  assert outside.read_bytes() == b"outside must survive"
+
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+SCRIPT = ROOT / "skills/arena-steering/scripts/chromium.sh"
+
+
+def test_installer_reports_runtime_paths_and_reuses_package(tmp_path: Path) -> None:
+  fake_bin = tmp_path / "bin"
+  fake_bin.mkdir()
+  npm = fake_bin / "npm"
+  npm.write_text(
+    "#!/bin/sh\n"
+    "set -eu\n"
+    "prefix=$2\n"
+    "pkg=$prefix/node_modules/@sparticuz/chromium\n"
+    'mkdir -p "$pkg/bin" "$pkg/build"\n'
+    'printf \'%s\' \'{"version":"153.0.0","type":"module"}\' > "$pkg/package.json"\n'
+    "cat > \"$pkg/build/index.js\" <<'EOF'\n"
+    "import { mkdirSync, writeFileSync } from 'node:fs';\n"
+    "import { join } from 'node:path';\n"
+    "const root = process.env.TMPDIR;\n"
+    "export async function inflate(path) {\n"
+    "  const name = path.includes('al2023') ? 'al2023/lib' : 'fonts';\n"
+    "  mkdirSync(join(root, name), {recursive:true});\n"
+    "}\n"
+    "export function setupLambdaEnvironment() {}\n"
+    "export default { async executablePath() {\n"
+    "  const path = join(root, 'chromium'); writeFileSync(path, 'browser', {mode:0o700}); return path;\n"
+    "} };\n"
+    "EOF\n"
+    'echo invoked >> "$prefix/npm-calls"\n',
+    encoding="utf-8",
+  )
+  npm.chmod(0o755)
+  cache = tmp_path / "runtime cache"
+  env = {
+    **os.environ,
+    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+    "STEER_CHROMIUM_DIR": str(cache),
+  }
+  for _ in range(2):
+    result = subprocess.run(
+      [str(SCRIPT)], env=env, capture_output=True, text=True, check=True
+    )
+    paths = dict(line.split("=", 1) for line in result.stdout.strip().splitlines())
+    assert Path(paths["CHROMIUM_BIN"]).is_file()
+    assert Path(paths["CHROMIUM_LIB"]).is_dir()
+    assert Path(paths["CHROMIUM_FONTS"]).is_dir()
+  assert (cache / "npm-calls").read_text().splitlines() == ["invoked"]
+
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+DEMO_PATH = ROOT / "maintenance" / "demo-arena-steer.py"
+
+
+DEMO = runpy.run_path(str(DEMO_PATH))
+
+
+KEEP_ON_FAILURE = "Keep on failure"
+
+
+def test_demo_reset_command_restores_samples_without_restarting(tmp_path: Path) -> None:
+  live = SqliteStore(tmp_path / "live" / "state.sqlite3")
+  normal = SteeringApp(live)
+  normal.messages.send_message("Live state", msg_id="fa0001")
+  store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
+  app = DEMO["seed_demo_store"](store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    app.messages.send_message("Demo sentinel", msg_id="fa0002")
+    app.tasks.create_task(
+      "demo-sentinel", "Demo sentinel", size=3, details=["Temporary"]
+    )
+    old_version = app.data_version()
+    result = subprocess.run(
+      [sys.executable, str(DEMO_PATH), "--reset", "--port", str(server.server_port)],
+      cwd=ROOT,
+      text=True,
+      capture_output=True,
+      timeout=15,
+      check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert store.get_message("fa0002") is None
+    assert store.get_task("demo-sentinel") is None
+    assert store.get_message("a00001") is not None
+    assert app.data_version() != old_version
+    assert app.dispatch("GET", "/health")[0] == HTTPStatus.OK
+    assert normal.dispatch("POST", "/demo/reset")[0] == HTTPStatus.NOT_FOUND
+    assert live.get_message("fa0001").body == "Live state"
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+    live.close()
+
+
+def test_demo_reset_rolls_back_on_seed_failure(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
+  app = DEMO["seed_demo_store"](store)
+  app.messages.send_message(KEEP_ON_FAILURE, msg_id="fa0003")
+  globals_ = DEMO["reseed_demo_store"].__globals__
+
+  def fail_media(_store: SqliteStore) -> None:
+    raise RuntimeError("seed failed")
+
+  monkeypatch.setitem(globals_, "_write_demo_media_files", fail_media)
+  try:
+    status, body = app.dispatch("POST", "/demo/reset")
+    assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert "seed failed" in body["error"]
+    assert store.get_message("fa0003").body == KEEP_ON_FAILURE
+    assert store.get_message("a00001") is not None
+  finally:
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
+  app = DEMO["seed_demo_store"](store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.set_default_timeout(10000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/")
+        response = page.request.post(
+          f"http://127.0.0.1:{server.server_port}/messages",
+          data={"id": "fa0004", "body": "Temporary demo message"},
+        )
+        assert response.ok
+        page.get_by_text("Temporary demo message").wait_for()
+        response = page.request.post(
+          f"http://127.0.0.1:{server.server_port}/reports",
+          data={
+            "id": "steering-architecture",
+            "title": "Temporary demo report",
+            "body": "# Temporary demo report body",
+          },
+        )
+        assert response.ok
+        page.locator("#tab-reports").click()
+        page.get_by_role("heading", name="Temporary demo report body").wait_for()
+        old_version = app.reports.get_report("steering-architecture").modified_at
+        result = subprocess.run(
+          [
+            sys.executable,
+            str(DEMO_PATH),
+            "--reset",
+            "--port",
+            str(server.server_port),
+          ],
+          cwd=ROOT,
+          text=True,
+          capture_output=True,
+          timeout=15,
+          check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert app.reports.get_report("steering-architecture").modified_at > old_version
+        page.get_by_role("heading", name="Temporary demo report body").wait_for(
+          state="detached"
+        )
+        page.locator("#tab-messages").click()
+        page.get_by_text("Temporary demo message").wait_for(state="detached")
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+def test_running_demo_reset_uses_the_current_app_class(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+  if run_reload_in_child(request):
+    return
+  store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
+  app = DEMO["seed_demo_store"](store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  try:
+    reloaded = reload_server_handler(server, app)
+
+    def stale_app(_store: SqliteStore) -> None:
+      raise TypeError("old server constructor")
+
+    demo_globals = DEMO["seed_demo_store"].__globals__
+    monkeypatch.setitem(demo_globals, "SteeringApp", stale_app)
+    status, body = reloaded.dispatch("POST", "/demo/reset")
+    assert status == HTTPStatus.OK and body["reset"] is True
+    assert reloaded.store.get_message("a00001") is not None
+    reloaded.store.close()
+  finally:
+    server.server_close()
+    store.close()
+
+
+def test_running_demo_reset_survives_server_hot_reload(
+  tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+  if run_reload_in_child(request):
+    return
+  store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
+  app = DEMO["seed_demo_store"](store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  try:
+    old_version = app.data_version()
+    reloaded = reload_server_handler(server, app)
+    assert reloaded.messages.get_survey() == app.messages.get_survey()
+    reloaded.messages.send_message("Before reset", msg_id="fa0005")
+    status, body = reloaded.dispatch("POST", "/demo/reset")
+    assert status == HTTPStatus.OK and body["reset"] is True
+    assert reloaded.store.get_message("fa0005") is None
+    assert reloaded.store.get_message("a00001") is not None
+    assert app.data_version() != old_version
+    reloaded.store.close()
+  finally:
+    server.server_close()
+    store.close()
+
+
+INSTALLED = Path.home() / ".local/bin/steer"
+
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_browser_recipe_is_standard_tooling_without_installer_changes() -> None:
+  skill = (ROOT / "skills/arena-steering/SKILL.md").read_text(encoding="utf-8")
+  recipe = (ROOT / "skills/arena-steering/references/recipes/chromium.md").read_text(
+    encoding="utf-8"
+  )
+  installer = (ROOT / "skills/arena-steering/scripts/install.sh").read_text(
+    encoding="utf-8"
+  )
+  assert (
+    "For any browser work, follow [the Chromium recipe]"
+    "(references/recipes/chromium.md) as standard local tooling."
+  ) in skill
+  assert "Inflate `bin/al2023.tar.br`" in recipe
+  assert "Call `setupLambdaEnvironment`" in recipe
+  assert "NEVER use a Playwright-managed browser." in recipe
+  assert "Python" not in recipe and "pip " not in recipe
+  assert "@sparticuz/chromium" not in installer
+
+
+@pytest.mark.parametrize(
+  ("line", "warn"),
+  (
+    (f"{INSTALLED} read", True),
+    ("~/.local/bin/steer read", True),
+    (f"env LANG=C {INSTALLED} read", True),
+    (f"printf '{INSTALLED}'", False),
+    ("steer read", False),
+  ),
+)
+def test_installed_launcher_suggests_bare_steer_without_blocking(
+  line: str, warn: bool
+) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.CONTINUE
+  text = " ".join(result.messages)
+  assert ("Use bare `steer`" in text) == warn
+  if warn:
+    assert "It works without the full path." in text

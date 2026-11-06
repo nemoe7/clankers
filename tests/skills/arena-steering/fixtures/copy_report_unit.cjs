@@ -5,7 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const asset = fs.readFileSync(
-  path.resolve(__dirname, "../../../skills/arena-steering/assets/copy.js"),
+  path.resolve(__dirname, "../../../../skills/arena-steering/assets/copy.js"),
   "utf8",
 );
 assert.ok(asset.includes("export function copyText("), "selection-copy helper is present");

@@ -202,11 +202,10 @@ def test_module_matrix_selects_owners_and_shared_changes():
 @pytest.mark.parametrize(
   "path",
   [
-    "tests/skills/arena-steering/test_report_answer_ui.py",
-    "tests/skills/arena-steering/test_composer_parity.py",
-    "tests/skills/arena-steering/test_demo_reset.py",
-    "tests/skills/arena-steering/test_connection_pip.py",
-    "tests/skills/arena-steering/test_violation_form.py",
+    "tests/skills/arena-steering/test_reports_ui.py",
+    "tests/skills/arena-steering/test_messages_ui.py",
+    "tests/skills/arena-steering/test_server_cli.py",
+    "tests/skills/arena-steering/test_web_ui.py",
   ],
 )
 def test_browser_test_runs_with_preview_module(path):
@@ -237,7 +236,7 @@ def test_archived_tests_never_enter_ci_matrix(path, tmp_path):
 def test_demo_script_runs_with_preview_module():
   selected = changed_paths.module_matrix(["maintenance/demo-arena-steer.py"])
   assert [row["name"] for row in selected] == ["Preview"]
-  assert "tests/skills/arena-steering/test_demo_reset.py" in selected[0]["command"]
+  assert "tests/skills/arena-steering/test_server_cli.py" in selected[0]["command"]
 
 
 def test_v2_steering_source_runs_task_chain_regressions():
@@ -245,7 +244,7 @@ def test_v2_steering_source_runs_task_chain_regressions():
     ["skills/arena-steering/scripts/arena_steering/services.py"]
   )
   assert [row["name"] for row in selected] == ["Preview"]
-  assert "tests/skills/arena-steering/test_task_chains.py" in selected[0]["command"]
+  assert "tests/skills/arena-steering/test_services.py" in selected[0]["command"]
 
 
 def test_module_test_ownership_is_complete_and_unique():

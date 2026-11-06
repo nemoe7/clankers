@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Route Preview checks to consolidated Steering test modules (`maintenance/workflows/changed_paths.py`).
 - Time skills, links, budgets, parity, and paths validation as separate stages (`maintenance/check.py`).
 - Run one Nemoizer stage using the root configuration instead of a separate Markdown allowlist (`maintenance/check.py`, `nemoizer.toml`).
 

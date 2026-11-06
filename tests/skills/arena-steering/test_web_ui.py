@@ -1,8 +1,9 @@
-"""Tests for Arena Steering web UI assets (`skills/arena-steering/assets/`) and `demo.py`."""
+"""Steering regression tests."""
 
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import re
@@ -11,32 +12,52 @@ import shutil
 import struct
 import subprocess
 import threading
+import time
 import zlib
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import Path
 
 import pytest
-from _reload_isolation import run_reload_in_child
+from arena_steering import cli, survey
 from arena_steering import server as steering_server
-from arena_steering import survey
 from arena_steering.blocked_bash import append_blocked_bash
+from arena_steering.display_paths import home_relative
 from arena_steering.server import (
   SteeringApp,
   create_http_server,
   reload_server_handler,
 )
+from arena_steering.services import BIBLE_READ, with_bible_read
 from arena_steering.store import SqliteStore
+from fixtures.reload_isolation import run_reload_in_child
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
 SKILL_DIR = ROOT / "skills" / "arena-steering"
+
+
 ASSETS_DIR = SKILL_DIR / "assets"
+
+
 DEMO_PATH = ROOT / "maintenance" / "demo-arena-steer.py"
+
+
 DEMO = runpy.run_path(str(DEMO_PATH))
+
+
 SCROLLSPY_ZONES_SVG = DEMO["SCROLLSPY_ZONES_SVG"]
+
+
 TOKENS_SWATCH_SVG = DEMO["TOKENS_SWATCH_SVG"]
+
+
 seed_demo_store = DEMO["seed_demo_store"]
+
+
 demo_main = DEMO["main"]
+
 
 EXPECTED_FONTS = (
   "Basel_Grotesk_Bold.woff2",
@@ -45,6 +66,7 @@ EXPECTED_FONTS = (
   "Basel_Grotesk_Mono_Regular.woff2",
   "Basel_Grotesk_Regular.woff2",
 )
+
 
 EXPECTED_JS_MODULES = (
   "api.js",
@@ -59,97 +81,262 @@ EXPECTED_JS_MODULES = (
   "timestamps.js",
 )
 
+
 PRELOAD_ATTR = 'rel="preload"'
+
+
 MODULEPRELOAD_ATTR = 'rel="modulepreload"'
+
+
 MODAL_SHELL_ID = 'id="modal-shell"'
+
+
 CONFIRM_DELETE_TPL = 'data-modal-template="confirm-delete"'
+
+
 SURFACE_TOKEN = "--surface-primary:"
+
+
 CTA_TOKEN = "--interactive-cta:"
+
+
 CODE_BG_TOKEN = "--code-bg:"
+
+
 INLINE_CODE_RULE = ":not(pre) > code:not(.msg-id)"
+
+
 MAIN_MAX_WIDTH = "max-width: 900px;"
+
+
 MESSAGE_TEXT_FONT_SIZE = "font-size: 16px;"
+
+
 STATUS_BANNER_ID = "status-banner"
+
+
 THEME_TOGGLE_ID = "theme-toggle"
+
+
 TOPBAR_BRAND_CLASS = "topbar-brand"
+
+
 ARENA_SCROLLBAR_RULE = (
   "scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent;"
 )
+
+
 SCROLLBAR_WIDTH_RULE = "::-webkit-scrollbar {\n  width: 15px;\n  height: 10px;\n}"
+
+
 SCROLLBAR_FLAT_THUMB_RULE = (
   "border: 1px solid transparent;\n  background-clip: padding-box;\n  border-radius: 0;"
 )
+
+
 SCROLLBAR_HOVER_RULE = "::-webkit-scrollbar-thumb:hover"
+
+
 FONT_DISPLAY_BLOCK = "font-display: block;"
+
+
 EDGE_LOADING_KEYFRAME = "nuu-edge-loading"
+
+
 CUSTOM_OPTION_MARKER = "__custom__"
+
+
 HISTORY_LIST_ID = 'id="history"'
+
+
 COMPOSER_SHELL_CLASS = 'class="composer-shell"'
+
+
 MANUAL_BLOCKING_INPUT = "inbox-blocking"
+
+
 MANUAL_HIDDEN_INPUT = "inbox-hidden"
+
+
 LUCIDE_CLOSE_ICON = "lucide-x"
+
+
 LUCIDE_LOCK_ICON = "lucide-lock"
+
+
 LUCIDE_CHEVRON_DOWN_ICON = "lucide-chevron-down"
+
+
 SELECT_CHEVRON_CLASS = "select-chevron"
+
+
 LUCIDE_COPY_ICON = "lucide-copy"
+
+
 LUCIDE_SEND_ICON = "lucide-send"
+
+
 REPORT_TOC_ID = 'id="report-toc"'
+
+
 REPORT_PICKER_ID = 'id="report-picker"'
+
+
 REPORT_RAIL_ID = 'id="report-rail"'
+
+
 OPTION_CUSTOM_CLASS = "option-custom"
+
+
 ON_THIS_PAGE_TEXT = "On this page"
+
+
 REPORT_PICKER_META_CLASS = "report-picker-meta"
+
+
 TASK_SECTION_TITLE_FONT_SIZE = "font-size: 18px;"
+
+
 NOTES_PIP_ID = 'id="notes-pip"'
+
+
 REPORT_PIP_ID = 'id="report-pip"'
+
+
 TAB_BADGE_CLASS = "tab-badge"
+
+
 REPORT_ACKED_EVENT = "report.acked"
+
+
 REPORT_ACK_SEEN_API = "markReportAckSeen"
+
+
 REPORT_ACK_SEEN_PATH = "/ack-seen"
+
+
 REPORT_ACKED_HANDLER = "onReportAcked"
+
+
 REPORT_SUBMIT_ID = 'id="report-submit"'
+
+
 REPORT_SUBMIT_FLOAT_ID = 'id="report-submit-float"'
+
+
 REPORT_SUBMIT_FLOAT_CLASS = "report-submit-float"
+
+
 REPORT_SUBMIT_SPACER_RULE = ".report-submit-row > #report-submit"
+
+
 REPORT_SUBMIT_FLOAT_RULE = ".report-submit-float {"
+
+
 CLOCK_ID = 'id="clock"'
+
+
 RECEIPT_ID_CLASS = "receipt-id"
+
+
 REPLY_PARENT_CHIP_CLASS = "reply-parent-chip"
+
+
 COMPOSER_REPLY_BAR_ID = 'id="composer-reply-bar"'
+
+
 COMPOSER_REPLY_CHIP_CLASS = "composer-reply-chip"
+
+
 PARENT_IDS_FIELD = "parent_ids"
+
+
 PARENT_REFS_FIELD = "parent_refs"
+
+
 REPLY_PARENT_REFS_STATE = "replyParentRefs"
+
+
 TOGGLE_REPLY_PARENT_HANDLER = "onToggleReplyParent"
+
+
 STATIC_ASSET_PREFIX = "/static/assets/"
+
+
 STATIC_STYLE_HREF = 'href="/static/assets/style.css"'
+
+
 STATIC_APP_SRC = 'src="/static/assets/app.js"'
+
+
 ROOT_STYLE_HREF = 'href="/style.css"'
+
+
 MARK_RULE = "mark {"
+
+
 COMPOSER_ATTACHMENTS_ID = 'id="composer-attachments"'
+
+
 ATTACH_FILE_ID = 'id="attach-file"'
+
+
 COMPOSER_EXPAND_ID = 'id="composer-expand"'
+
+
 COMPOSER_ATTACHMENTS_STATE = "composerAttachments"
+
+
 COMPOSER_EXPANDED_STATE = "composerExpanded"
+
+
 UPLOAD_FILE_API = "uploadFile"
+
+
 SEND_MESSAGE_WITH_FILE_API = "sendMessageWithFile"
 
-# Hex values of the warm Arena tokens in `assets/style.css` `:root`
-# (HSL token channels converted to sRGB, plus its literal hex tokens).
+
 WARM_SURFACE_PRIMARY = "#252523"
+
+
 WARM_SURFACE_SECONDARY = "#2c2b28"
+
+
 WARM_SURFACE_TERTIARY = "#1b1a19"
+
+
 WARM_SURFACE_RAISED_TERTIARY = "#292624"
+
+
 WARM_TEXT_PRIMARY = "#f4f0eb"
+
+
 WARM_TEXT_TERTIARY = "#c7c2bc"
+
+
 WARM_BORDER_FAINT = "#413d39"
+
+
 WARM_BORDER_MEDIUM = "#524c47"
+
+
 WARM_ACCENT = "#e5bb8b"
+
+
 WARM_DOT_SEEN = "#7fa7d1"
+
+
 WARM_DOT_SAID = "#8dc07f"
+
+
 WARM_ACCENT_RGB = "(229, 187, 139)"
+
+
 WARM_SURFACE_PRIMARY_HSL = '"60 3% 14%"'
+
+
 WARM_SURFACE_RAISED_HSL = '"24 6% 24%"'
+
 
 SLATE_MERMAID_COLORS = (
   "#22252b",
@@ -163,6 +350,8 @@ SLATE_MERMAID_COLORS = (
   "#f3f4f6",
   "#f9fafb",
 )
+
+
 SLATE_DEMO_COLORS = (
   "#14171c",
   "#343944",
@@ -192,7 +381,7 @@ SLATE_DEMO_COLORS = (
 
 def test_reports_copy_uses_only_confirmed_selection_method() -> None:
   subprocess.run(
-    ["node", str(ROOT / "tests/skills/arena-steering/copy_report_unit.cjs")],
+    ["node", str(ROOT / "tests/skills/arena-steering/fixtures/copy_report_unit.cjs")],
     cwd=ROOT,
     capture_output=True,
     check=True,
@@ -5739,3 +5928,1102 @@ assert.equal(values.has('steer:composerState'), false);
     check=False,
   )
   assert result.returncode == 0, result.stderr
+
+
+def _stamp(seconds_ago: float = 0) -> str:
+  return (datetime.now(UTC) - timedelta(seconds=seconds_ago)).isoformat()
+
+
+def test_health_exposes_native_tool_cadence(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  try:
+    store.set_meta("last_tool_name", "bash")
+    store.set_meta("last_tool_at", "2026-01-01T00:00:03Z")
+    store.set_meta("pre_call_count", "4")
+    status, health = app.dispatch("GET", "/health")
+    assert status == 200
+    assert health["last_tool"] == {
+      "tool": "bash",
+      "at": "2026-01-01T00:00:03Z",
+    }
+    assert health["calls_since_message"] == 4
+  finally:
+    store.close()
+
+
+def test_poll_heartbeat_and_wake_across_store_connections(tmp_path: Path) -> None:
+  db = tmp_path / "state.sqlite3"
+  polling_store = SqliteStore(db)
+  server_store = SqliteStore(db)
+  polling_app = SteeringApp(polling_store)
+  server_app = SteeringApp(server_store)
+  delivered: list[dict] = []
+  thread = threading.Thread(
+    target=lambda: delivered.append(polling_app.messages.poll(timeout_seconds=5)),
+    daemon=True,
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not server_store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    status, health = server_app.dispatch("GET", "/health")
+    assert status == 200
+    assert health["polling"] is True
+    assert health["polling_since"]
+    server_app.messages.send_message("Wake the other process", msg_id="ac0001")
+    thread.join(timeout=2.5)
+    assert not thread.is_alive()
+    assert [msg.id for msg in delivered[0]["messages"]] == ["ac0001"]
+    assert server_app.dispatch("GET", "/health")[1]["polling"] is False
+  finally:
+    thread.join(timeout=6)
+    polling_store.close()
+    server_store.close()
+
+
+def test_skip_poll_from_another_store_marks_turn_ended(tmp_path: Path) -> None:
+  db = tmp_path / "state.sqlite3"
+  polling_store = SqliteStore(db)
+  server_store = SqliteStore(db)
+  poller = SteeringApp(polling_store)
+  sender = SteeringApp(server_store)
+  thread = threading.Thread(
+    target=lambda: poller.messages.poll(timeout_seconds=5), daemon=True
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not server_store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    sender.messages.trigger_skip_poll()
+    thread.join(timeout=2.5)
+    assert not thread.is_alive()
+    status, health = sender.dispatch("GET", "/health")
+    assert status == 200
+    assert health["polling"] is False
+    assert health["turn_ended_at"]
+  finally:
+    thread.join(timeout=6)
+    polling_store.close()
+    server_store.close()
+
+
+def test_skip_arriving_during_live_run_waits_until_run_ends(tmp_path: Path) -> None:
+  db = tmp_path / "state.sqlite3"
+  polling_store = SqliteStore(db)
+  sender_store = SqliteStore(db)
+  poller = SteeringApp(polling_store)
+  sender = SteeringApp(sender_store)
+  live = [True]
+  delivered: list[dict] = []
+  thread = threading.Thread(
+    target=lambda: delivered.append(
+      poller.messages.poll(timeout_seconds=0.25, live_run=lambda: live[0])
+    ),
+    daemon=True,
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not sender_store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert sender_store.get_meta("polling_at")
+    sender.messages.trigger_skip_poll()
+    thread.join(timeout=1.5)
+    assert not thread.is_alive()
+    assert delivered[0]["status"] == "timeout"
+    assert sender_store.get_meta("skip_poll") == "1"
+    live[0] = False
+    assert poller.messages.poll()["status"] == "skipped"
+    assert sender_store.get_meta("skip_poll") == "0"
+  finally:
+    thread.join(timeout=2)
+    polling_store.close()
+    sender_store.close()
+
+
+def test_answer_wakes_poll_without_lock_inversion() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "choice",
+    "Choice",
+    '<!-- question {"id": "pick", "label": "Pick"} -->\n'
+    'Pick\n- (x) Yes <!-- option {"label": "Yes"} -->\n',
+  )
+  delivered: list[dict] = []
+  poller = threading.Thread(
+    target=lambda: delivered.append(app.messages.poll(timeout_seconds=5)), daemon=True
+  )
+  poller.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    app.reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ac0003")
+    poller.join(timeout=2.5)
+    assert not poller.is_alive()
+    assert [answer.id for _, answer in delivered[0]["report_answers"]] == ["ac0003"]
+  finally:
+    poller.join(timeout=6)
+    store.close()
+
+
+def test_health_expires_abandoned_poll_heartbeat() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  try:
+    store.set_meta("polling_at", _stamp(6))
+    store.set_meta("polling_since", _stamp(60))
+    status, health = app.dispatch("GET", "/health")
+    assert status == 200
+    assert health["polling"] is False
+    assert health["polling_since"] is None
+  finally:
+    store.close()
+
+
+def test_timed_out_poll_marks_turn_end() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  try:
+    result = app.messages.poll(timeout_seconds=0.05)
+    assert result["status"] == "timeout"
+    assert store.get_meta("turn_ended_at")
+    assert not store.get_meta("polling_at")
+    app.messages.touch_agent()
+    assert not store.get_meta("turn_ended_at")
+  finally:
+    store.close()
+
+
+def test_agent_poll_uses_initial_task_without_wait() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  try:
+    task = app.tasks.create_task(
+      "initial", "Initial task", size=2, details=["Do the first task."]
+    )
+    app.messages.trigger_skip_poll()
+    delivered = app.messages.poll(timeout_seconds=0.4, initial_task=task)
+    assert delivered["status"] == "ready"
+    assert delivered["next_task"].id == "initial"
+    assert store.get_meta("skip_poll") == "1"
+    assert not store.get_meta("turn_ended_at")
+  finally:
+    store.close()
+
+
+def test_agent_poll_does_not_recheck_gate_linked_task(tmp_path: Path) -> None:
+  db = tmp_path / "state.sqlite3"
+  polling_store = SqliteStore(db)
+  other_store = SqliteStore(db)
+  poller = SteeringApp(polling_store)
+  sender = SteeringApp(other_store)
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  exit_path = runs / "verify.exit"
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(exit_path)}), encoding="utf-8"
+  )
+  sender.tasks.create_task(
+    "gate-task", "Gate task", size=3, gate_names=["verify"], details=["Wait for gate."]
+  )
+  gate_id = "gate-task"
+  assert poller.tasks.has_running_gate(poller.tasks.get_task(gate_id)[0])
+  delivered: list[dict] = []
+  thread = threading.Thread(
+    target=lambda: delivered.append(poller.messages.poll(timeout_seconds=0.25)),
+    daemon=True,
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.8
+    while not other_store.get_meta("polling_at") and time.monotonic() < deadline:
+      time.sleep(0.02)
+    assert other_store.get_meta("polling_at")
+    exit_path.write_text("0", encoding="utf-8")
+    thread.join(timeout=1.5)
+    assert not thread.is_alive()
+    assert delivered[0]["status"] == "timeout"
+    assert delivered[0]["next_task"] is None
+    assert not poller.tasks.get_task(gate_id)[1]
+  finally:
+    thread.join(timeout=3)
+    polling_store.close()
+    other_store.close()
+
+
+def test_cli_agent_call_clears_turn_end(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: tmp_path)
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    old_seen = _stamp(2000)
+    store.set_meta("agent_seen_at", old_seen)
+    store.set_meta("turn_ended_at", _stamp(200))
+    assert cli.main(["read"], out=io.StringIO(), err=io.StringIO()) == 0
+    assert not store.get_meta("turn_ended_at")
+    assert store.get_meta("agent_seen_at") != old_seen
+  finally:
+    store.close()
+
+
+def test_cli_repeated_fast_poll_flags_once_without_flagging_browser(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Pending work", blocking=True)
+  assert cli.main(["poll"], out=io.StringIO(), err=io.StringIO()) == 0
+
+  browser = SteeringApp(store)
+  assert browser.dispatch("GET", "/poll?timeout=0")[0] == 200
+  out = io.StringIO()
+  assert cli.main(["poll"], out=out, err=io.StringIO()) == 2
+  flag = messages.pending_violation()
+  assert flag is not None and flag.hidden and flag.requires_ack
+  assert flag.violation_type == "repeat-poll"
+  assert flag.body == with_bible_read(
+    "VIOLATION: Repeat poll. Use worktree if more task open."
+  )
+  assert cli.main(["poll"], out=io.StringIO(), err=io.StringIO()) == 2
+  assert messages.pending_violation().id == flag.id
+  store.close()
+
+
+def test_cli_poll_repeat_uses_v1_timing_and_resets_after_read(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import arena_steering.services as service_module
+
+  now = [1000]
+  monkeypatch.setattr(service_module.time, "time", lambda: now[0])
+  state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Pending work", blocking=True)
+
+  def poll() -> int:
+    return cli.main(["poll"], out=io.StringIO(), err=io.StringIO())
+
+  assert poll() == 0
+  now[0] += 46
+  assert poll() == 0
+  assert cli.main(["read"], out=io.StringIO(), err=io.StringIO()) == 0
+  now[0] += 1
+  assert poll() == 0
+  now[0] += 45
+  assert poll() == 2
+  flag = messages.pending_violation()
+  assert flag is not None and flag.violation_type == "repeat-poll"
+  messages.ack(flag.id, "Read; work resumed.")
+  messages.record_poll_duration(1.0)
+  now[0] += 1
+  assert poll() == 0
+  assert messages.pending_violation() is None
+  store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_connection_states_and_survey_modal(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Connection states")
+  app.messages._survey_results = [{"id": "test", "correct": False}]
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.add_init_script(
+          """(() => {
+            const realFetch = window.fetch;
+            window.fetch = (...args) => {
+              if (args[0] === '/health' && !window.releaseHealth) {
+                return new Promise(resolve => { window.releaseHealth = () => resolve(realFetch(...args)); });
+              }
+              return realFetch(...args);
+            };
+          })()"""
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        dot = page.locator("#connection-dot")
+        page.wait_for_function("() => !!window.releaseHealth", timeout=7000)
+        assert dot.get_attribute("data-state") == "connecting"
+        page.evaluate("window.releaseHealth()")
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'ok'"
+        )
+        assert (
+          dot.evaluate("el => getComputedStyle(el).backgroundColor")
+          == "rgb(34, 197, 94)"
+        )
+        states = page.evaluate(
+          """async () => {
+            const { connectionPresentation } = await import('/messages-view.js');
+            const now = Date.parse('2026-01-01T12:00:00Z');
+            return [
+              connectionPresentation({loaded: true, turn_ended_at: '2026-01-01T11:57:00Z'}, now).state,
+              connectionPresentation({loaded: true, turn_ended_at: '2026-01-01T11:56:59Z'}, now).state,
+              connectionPresentation({loaded: true, agent_seen_at: '2026-01-01T11:28:00Z'}, now).state,
+              connectionPresentation({loaded: true, agent_seen_at: '2026-01-01T11:27:59Z'}, now).state,
+              connectionPresentation({loaded: true, polling: true, turn_ended_at: '2026-01-01T11:00:00Z'}, now).state,
+            ];
+          }"""
+        )
+        assert states == ["ok", "idle", "ok", "idle", "polling"]
+        page.locator("#survey-open").click()
+        page.locator("#modal-shell").wait_for(state="visible")
+        assert page.get_by_role("heading", name="Survey Verification").is_visible()
+        page.get_by_role("button", name="Close dialog").click()
+
+        store.set_meta("turn_ended_at", _stamp(181))
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'idle'",
+          timeout=7000,
+        )
+        store.set_meta("polling_at", _stamp())
+        store.set_meta("polling_since", _stamp(10))
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'polling'",
+          timeout=7000,
+        )
+        store.set_meta("polling_at", _stamp(6))
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'idle'",
+          timeout=7000,
+        )
+        store.set_meta("turn_ended_at", "")
+        store.set_meta("agent_seen_at", _stamp())
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'ok'",
+          timeout=7000,
+        )
+        store.set_meta("agent_seen_at", _stamp(1921))
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'idle'",
+          timeout=7000,
+        )
+        page.route("**/health", lambda route: route.abort())
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'down'",
+          timeout=7000,
+        )
+        assert dot.get_attribute("aria-label") == "Disconnected"
+        page.unroute("**/health")
+        page.wait_for_function(
+          "() => document.querySelector('#connection-dot')?.dataset.state === 'idle'",
+          timeout=7000,
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        button = page.locator("#survey-open")
+        dot = page.locator("#connection-dot")
+        dot_color = dot.evaluate("el => getComputedStyle(el).backgroundColor")
+        button.hover()
+        tip = page.get_by_role("tooltip").filter(has_text="Open survey results")
+        assert tip.is_visible()
+        page.screenshot(path=str(tmp_path / "animated-tooltip.png"))
+        styles = tip.evaluate("""el => ({
+          bg: getComputedStyle(el).backgroundColor,
+          color: getComputedStyle(el).color,
+          top: el.getBoundingClientRect().top,
+          bottom: el.getBoundingClientRect().bottom,
+          triggerTop: document.querySelector('#survey-open').getBoundingClientRect().top,
+          triggerBottom: document.querySelector('#survey-open').getBoundingClientRect().bottom,
+          above: el.classList.contains('above'),
+          arrow: getComputedStyle(el, '::before')[
+            el.classList.contains('above') ? 'borderTopColor' : 'borderBottomColor'
+          ],
+        })""")
+        assert styles["bg"] == "rgb(255, 255, 255)"
+        assert styles["color"] == "rgb(24, 24, 24)"
+        if styles["above"]:
+          assert styles["bottom"] <= styles["triggerTop"]
+        else:
+          assert styles["top"] >= styles["triggerBottom"]
+        assert styles["arrow"] == styles["bg"]
+        assert button.get_attribute("aria-describedby") == "arena-title-tooltip"
+        assert dot.evaluate("el => getComputedStyle(el).backgroundColor") == dot_color
+        button.evaluate("el => el.title = 'Updated survey status'")
+        updated = page.get_by_role("tooltip").filter(has_text="Updated survey status")
+        updated.wait_for()
+        page.mouse.move(600, 700)
+        assert not tip.is_visible()
+        assert button.get_attribute("title") == "Updated survey status"
+        button.evaluate("el => el.title = 'Open survey results'")
+        button.click()
+        page.get_by_role("heading", name="Survey Verification").wait_for()
+        page.get_by_role("button", name="Close dialog").click()
+        page.keyboard.press("Tab")
+        button.focus()
+        assert tip.is_visible()
+        page.keyboard.press("Escape")
+        assert tip.is_hidden()
+        page.evaluate("""() => {
+          const target = document.createElement('button');
+          target.id = 'image-tooltip-probe';
+          target.title = 'Helpful details';
+          target.style.cssText = 'position:fixed;top:180px;left:180px';
+          target.innerHTML = '<img alt="Existing name">';
+          document.body.append(target);
+        }""")
+        image_button = page.get_by_role("button", name="Existing name")
+        image_button.hover()
+        assert page.get_by_role("button", name="Existing name").is_visible()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_tooltip_entrance_follows_placement_and_reduced_motion(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          for (const [id, top] of [['low', 300], ['high', 0]]) {
+            const target = document.createElement('button');
+            target.id = id;
+            target.title = id;
+            target.style.cssText = `position:fixed;z-index:999;left:180px;top:${top}px`;
+            document.body.append(target);
+          }
+        }""")
+        for target, expected in (
+          ("low", "tooltip-from-below"),
+          ("high", "tooltip-from-above"),
+        ):
+          page.locator(f"#{target}").hover()
+          tip = page.locator("#arena-title-tooltip")
+          assert tip.evaluate("el => getComputedStyle(el).animationName") == expected
+          assert tip.evaluate("el => getComputedStyle(el).animationDuration") == "0.15s"
+        page.mouse.move(600, 700)
+        page.emulate_media(reduced_motion="reduce")
+        page.locator("#low").hover()
+        assert (
+          page.locator("#arena-title-tooltip").evaluate(
+            "el => getComputedStyle(el).animationName"
+          )
+          == "none"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_floating_controls_keep_neutral_shape_on_hover(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  server = create_http_server(SteeringApp(store), host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 800, "height": 600})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        for index, name in enumerate(("log-edited", "log-newest", "report-scroll-top")):
+          button = page.evaluate_handle(
+            """([name, index]) => {
+              const button = document.createElement('button');
+              button.className = name;
+              button.textContent = name;
+              Object.assign(button.style, { position: 'fixed', left: '250px',
+                top: `${120 + index * 80}px`, bottom: 'auto', transition: 'none' });
+              document.body.appendChild(button);
+              return button;
+            }""",
+            [name, index],
+          ).as_element()
+          assert button is not None
+          style = """el => {
+            const s = getComputedStyle(el);
+            return {color: s.color, border: s.borderColor,
+              radius: s.borderRadius, background: s.backgroundColor};
+          }"""
+          before = button.evaluate(style)
+          button.hover()
+          after = button.evaluate(style)
+          assert after["color"] == before["color"]
+          assert after["border"] == before["border"]
+          assert after["radius"] == before["radius"]
+          assert after["background"] != before["background"]
+          page.screenshot(path=str(tmp_path / f"floating-hover-{name}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+SOURCE_FILE_UNAVAILABLE = "Source file: unavailable"
+
+
+def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
+  db_path = tmp_path / "state.sqlite3"
+  store = SqliteStore(db_path)
+  try:
+    app = SteeringApp(store)
+    app.messages.send_message("Ordinary pending message", msg_id="ab0001")
+    status, health = app.dispatch("GET", "/health")
+    assert status == HTTPStatus.OK
+    assert health["agent_interrupt_pending"] is False
+    assert {"ARENA.md", "AGENTS.md"} <= set(health["read_set"])
+
+    before = len(app.messages.list_messages())
+    flag = {
+      "armed": True,
+      "tab": "messages",
+      "reason": "bash-violation",
+      "clause_file": "ARENA.md",
+      "msg": "The command failed without an acknowledgement.",
+    }
+    status, result = app.dispatch("POST", "/agent-interrupt", flag)
+    assert status == HTTPStatus.OK
+    assert result["agent_interrupt_pending"] is True
+    messages = app.messages.list_messages()
+    assert len(messages) > before
+    flagged = [message for message in messages if message.violation_type]
+    assert len(flagged) == 1
+    violation = flagged[0]
+    assert violation.hidden and violation.blocking
+    assert violation.violation_type == flag["reason"]
+    assert violation.violation_clause_file == flag["clause_file"]
+    assert "Cited: " + flag["msg"] in violation.body
+    assert BIBLE_READ == "If full bible missing, use read_file for {paths}"
+    assert violation.body.endswith(with_bible_read("").strip())
+    root = Path(__file__).resolve().parents[3]
+    for relative in (
+      "AGENTS.md",
+      "ARENA.md",
+      ".agents/skills/arena-steering/SKILL.md",
+    ):
+      assert home_relative(root / relative) in violation.body
+    assert violation.id in app.messages.pending_ids()
+
+    status, duplicate = app.dispatch("POST", "/agent-interrupt", flag)
+    assert status == HTTPStatus.OK and duplicate == result
+    assert len(app.messages.list_messages()) == len(messages)
+    for invalid in (
+      {**flag, "armed": "false"},
+      {**flag, "tab": "reports"},
+      {**flag, "clause_file": "../outside.md"},
+      {**flag, "clause_file": 0},
+      {**flag, "msg": {"not": "text"}},
+      {**flag, "note": "Legacy key is not supported"},
+      {
+        **{key: value for key, value in flag.items() if key != "msg"},
+        "note": "Legacy key",
+      },
+    ):
+      status, _ = app.dispatch("POST", "/agent-interrupt", invalid)
+      assert status == HTTPStatus.BAD_REQUEST
+    assert len(app.messages.list_messages()) == len(messages)
+  finally:
+    store.close()
+
+  store = SqliteStore(db_path)
+  try:
+    app = SteeringApp(store)
+    assert app.dispatch("GET", "/health")[1]["agent_interrupt_pending"] is True
+    assert app.messages.get_message(violation.id).violation_type == flag["reason"]
+    status, cancelled = app.dispatch(
+      "POST", "/agent-interrupt", {"armed": False, "tab": "messages"}
+    )
+    assert status == HTTPStatus.OK
+    assert cancelled["agent_interrupt_pending"] is False
+    assert app.messages.get_message(violation.id).status == "acked"
+    assert app.messages.pending_ids() == ["ab0001"]
+
+    status, task = app.dispatch(
+      "POST",
+      "/tasks",
+      {
+        "id": "check-inbox",
+        "title": "Check the inbox",
+        "size": 3,
+        "details": ["Read the current task."],
+      },
+    )
+    assert status == HTTPStatus.CREATED
+    status, result = app.dispatch(
+      "POST", "/agent-interrupt", {"tab": "tasks", "reason": "current-task-violation"}
+    )
+    assert status == HTTPStatus.OK and result["agent_interrupt_pending"] is True
+    task_flag = next(
+      message
+      for message in app.messages.list_messages()
+      if message.violation_type == "current-task-violation"
+    )
+    assert task["task"]["id"] in task_flag.body
+    app.dispatch(
+      "POST", f"/messages/{task_flag.id}/ack", {"markdown": "Read the clause."}
+    )
+    assert app.dispatch("GET", "/health")[1]["agent_interrupt_pending"] is False
+
+    app.reports.publish_report("review", "Review", "Report body.")
+    status, result = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "review"},
+    )
+    assert status == HTTPStatus.OK and result["agent_interrupt_pending"] is True
+    report_flag = next(
+      message
+      for message in app.messages.list_messages()
+      if message.violation_type == "format-violation"
+    )
+    assert "review" in report_flag.body
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "missing"},
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+  finally:
+    store.close()
+
+
+def test_flagged_report_unlinks_tasks_without_losing_answers_or_details(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    body = '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n'
+    app.reports.publish_report("flagged", "Flagged", body)
+    app.reports.publish_report("other", "Other", body)
+    app.tasks.create_task(
+      "waiting",
+      "Waiting",
+      size=3,
+      details=["Review the answer"],
+      report_ids=["flagged"],
+    )
+    assert app.tasks.get_task("waiting")[1] is True
+
+    status, result = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "flagged"},
+    )
+    assert status == HTTPStatus.OK and result["agent_interrupt_pending"] is True
+    assert app.reports.get_report("flagged").status == "dismissed"
+    assert app.tasks.get_task("waiting")[1] is False
+    assert app.tasks.get_task("waiting")[0].report_ids == []
+    assert app.tasks.get_task("waiting")[0].details == ["Review the answer"]
+    assert app.reports.get_report("other").status == "published"
+    assert [report.id for report in app.reports.list_reports()] == ["other"]
+    flag = app.messages.pending_violation()
+    assert flag is not None and SOURCE_FILE_UNAVAILABLE in flag.body
+
+    app.messages.ack(flag.id, "Read the clause.")
+    app.tasks.create_task(
+      "answered-work", "Answered work", size=3, details=["Review"], report_ids=["other"]
+    )
+    answer = app.reports.submit_answer("other", {"note": "keep"}, answer_id="aa1201")
+    answer = app.reports.ack_answer("other", answer.id, "Read the answer.")
+    original_details = app.tasks.get_task("answered-work")[0].details
+    assert original_details == ["Review", "Note: keep"]
+    app.reports.publish_report("other", "Other", body)
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "wall-of-text", "report_id": "other"},
+    )
+    assert status == HTTPStatus.OK
+    assert app.reports.get_report("other").status == "dismissed"
+    assert app.reports.get_report("other").answers == [answer]
+    assert app.tasks.get_task("answered-work")[0].report_ids == []
+    assert app.tasks.get_task("answered-work")[0].details == original_details
+    assert store.get_message(answer.id) is not None
+  finally:
+    store.close()
+
+
+def test_report_flag_failure_keeps_report_published(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.reports.publish_report("review", "Review", "Report body.")
+    earlier = app.messages.send_message(
+      "Previous flag", hidden=True, blocking=True, violation_type="bash-violation"
+    )
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "review"},
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert app.reports.get_report("review").status == "published"
+    app.messages.ack(earlier.id, "Read the earlier flag.")
+
+    def fail_message(*_args: object, **_kwargs: object) -> None:
+      raise RuntimeError("Could not save the flag")
+
+    monkeypatch.setattr(app.messages, "send_message", fail_message)
+    status, result = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "review"},
+    )
+    assert status == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert result["error"] == "Could not save the flag"
+    assert app.reports.get_report("review").status == "published"
+  finally:
+    store.close()
+
+
+def test_report_flag_names_the_persisted_source_file(tmp_path: Path) -> None:
+  db_path = tmp_path / "state.sqlite3"
+  store = SqliteStore(db_path)
+  try:
+    app = SteeringApp(store)
+    app.reports.publish_report(
+      "source-report",
+      "Source report",
+      "Report body.",
+      source_file="arena-state/reports/source.md",
+    )
+  finally:
+    store.close()
+
+  store = SqliteStore(db_path)
+  try:
+    app = SteeringApp(store)
+    assert app.reports.get_report("source-report").source_file == (
+      "arena-state/reports/source.md"
+    )
+    app.reports.publish_report(
+      "source-report",
+      "Source report",
+      "Revised body.",
+      source_file="arena-state/reports/revised.md",
+    )
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "source-report"},
+    )
+    assert status == HTTPStatus.OK
+    flag = app.messages.pending_violation()
+    assert flag is not None
+    assert (
+      f"Source file: {home_relative(Path.cwd() / 'arena-state/reports/revised.md')}"
+      in flag.body
+    )
+    assert app.reports.get_report("source-report").status == "dismissed"
+    app.messages.ack(flag.id, "Read the clause.")
+    absolute = tmp_path / "reports" / "absolute.md"
+    app.reports.publish_report(
+      "absolute-report", "Absolute report", "Report body.", source_file=str(absolute)
+    )
+    status, _ = app.dispatch(
+      "POST",
+      "/agent-interrupt",
+      {"tab": "reports", "reason": "format-violation", "report_id": "absolute-report"},
+    )
+    assert status == HTTPStatus.OK
+    second = app.messages.pending_violation()
+    assert (
+      second is not None and f"Source file: {home_relative(absolute)}" in second.body
+    )
+  finally:
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize(("width", "height"), [(1280, 800), (390, 844)])
+def test_violation_form_and_cancel_in_browser(
+  tmp_path: Path, width: int, height: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Violation form test")
+  app.tasks.create_task(
+    "fix-flag",
+    "Fix violation flag",
+    size=3,
+    type="code",
+    details=["Fix the violation form."],
+  )
+  app.reports.publish_report("review", "Review", "Report body.")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("document.fonts.ready")
+        page.screenshot(path=str(tmp_path / f"violation-before-{width}.png"))
+        button = page.locator("#agent-interrupt")
+        button.click()
+        form = page.locator("#violation-form")
+        form.wait_for(state="visible", timeout=5000)
+        reason = page.locator("#violation-reason")
+        assert reason.locator('option[value="bash-violation"]').count() > 0
+        assert reason.locator('option[value="format-violation"]').count() == 0
+        page.locator("#violation-clause-file").select_option("ARENA.md")
+        cited_reason = "Wrong command."
+        assert (
+          page.locator('label[for="violation-msg"]').inner_text()  # nonemo: NMT100
+          == "Cited reason (optional)"
+        )
+        page.locator("#violation-msg").fill(cited_reason)
+        box = form.bounding_box()
+        assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
+        page.screenshot(path=str(tmp_path / f"violation-form-{width}.png"))
+
+        page.route(
+          "**/agent-interrupt",
+          lambda route: route.fulfill(
+            status=503, body='{"error":"Try again"}', content_type="application/json"
+          ),
+          times=1,
+        )
+        with page.expect_request("**/agent-interrupt") as sent:
+          page.locator("#violation-submit").click()
+        assert sent.value.post_data_json["msg"] == cited_reason
+        assert "note" not in sent.value.post_data_json
+        page.locator("#violation-error").wait_for(state="visible", timeout=5000)
+        assert form.is_visible()
+        assert button.get_attribute("aria-pressed") == "false"
+        page.locator("#violation-submit").click()
+        page.get_by_role("button", name="Cancel", exact=True).click()
+        page.locator("#violation-form").wait_for(state="visible", timeout=5000)
+        assert page.locator("#violation-msg").input_value() == cited_reason
+        page.locator("#violation-submit").click()
+        with page.expect_response("**/agent-interrupt"):
+          page.get_by_role("button", name="Retry same action").click()
+        page.locator("#modal-shell").wait_for(state="hidden")
+        page.wait_for_function(
+          "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
+        )
+        violation = app.messages.pending_violation()
+        assert violation is not None and violation.violation_clause_file == "ARENA.md"
+        assert cited_reason in violation.body
+        page.screenshot(path=str(tmp_path / f"violation-pending-{width}.png"))
+
+        page.route(
+          "**/agent-interrupt",
+          lambda route: route.fulfill(
+            status=503, body='{"error":"Try again"}', content_type="application/json"
+          ),
+          times=1,
+        )
+        button.click()
+        page.locator("#violation-status").wait_for(state="visible", timeout=5000)
+        assert button.get_attribute("aria-pressed") == "true"
+        assert app.messages.pending_violation() is not None
+        button.click()
+        with page.expect_response("**/agent-interrupt"):
+          page.get_by_role("button", name="Retry same action").click()
+        page.wait_for_function(
+          "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'false'"
+        )
+        assert app.messages.pending_violation() is None
+        page.locator("#tab-reports").click()
+        button.click()
+        form.wait_for(state="visible", timeout=5000)
+        assert reason.locator('option[value="format-violation"]').count() > 0
+        reason.select_option("format-violation")
+        with page.expect_response("**/agent-interrupt"):
+          page.locator("#violation-submit").click()
+        page.wait_for_function(
+          "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
+        )
+        report_flag = app.messages.pending_violation()
+        assert report_flag is not None and "Report: review" in report_flag.body
+        app.messages.ack(report_flag.id, "Read the clause.")
+        page.reload()
+        assert button.get_attribute("aria-pressed") == "false"
+
+        page.locator("#tab-tasks").click()
+        button.click()
+        form.wait_for(state="visible", timeout=5000)
+        assert reason.locator('option[value="current-task-violation"]').count() > 0
+        assert reason.locator('option[value="bash-violation"]').count() == 0
+        reason.select_option("current-task-violation")
+        with page.expect_response("**/agent-interrupt"):
+          page.locator("#violation-submit").click()
+        page.wait_for_function(
+          "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
+        )
+        task_flag = app.messages.pending_violation()
+        assert task_flag is not None and "Current task: fix-flag" in task_flag.body
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("armed", [False, True])
+@pytest.mark.parametrize("fail", [False, True])
+def test_violation_flag_updates_before_write_and_restores_on_failure(
+  tmp_path: Path, armed: bool, fail: bool
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  if not armed:
+    assert (
+      app.dispatch(
+        "POST",
+        "/agent-interrupt",
+        {"armed": True, "tab": "messages", "reason": "bash-violation"},
+      )[0]
+      == 200
+    )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page()
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      button = page.locator("#agent-interrupt")
+      page.wait_for_function(
+        "expected => document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === expected",
+        arg="false" if armed else "true",
+      )
+      if armed:
+        button.click()
+        page.locator("#violation-form").wait_for()
+        page.locator("#violation-msg").fill("Keep this draft")
+      page.evaluate(
+        """fail => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (String(args[0]) === '/agent-interrupt' && args[1]?.method === 'POST') {
+            await new Promise(resolve => { window.releaseFlag = resolve; });
+            if (fail) return new Response(JSON.stringify({error:'offline'}), {
+              status:503, headers:{'content-type':'application/json'}
+            });
+          }
+          return original(...args);
+        };
+      }""",
+        fail,
+      )
+      if armed:
+        page.locator("#violation-submit").click()
+      else:
+        button.click()
+      page.wait_for_function("typeof window.releaseFlag === 'function'")
+      assert button.get_attribute("aria-pressed") == str(armed).lower()
+      page.evaluate("window.releaseFlag()")
+      if fail:
+        page.locator("#violation-error" if armed else "#violation-status").wait_for(
+          state="visible"
+        )
+        assert button.get_attribute("aria-pressed") == str(not armed).lower()
+        if armed:
+          assert page.locator("#violation-msg").input_value() == "Keep this draft"
+      else:
+        page.wait_for_function(
+          "document.querySelector('#agent-interrupt').getAttribute('aria-busy') !== 'true'"
+        )
+        assert button.get_attribute("aria-pressed") == str(armed).lower()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

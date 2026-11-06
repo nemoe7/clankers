@@ -8,11 +8,11 @@ import threading
 from pathlib import Path
 
 import pytest
-from _reload_isolation import run_reload_in_child
 from arena_steering import cli, survey
 from arena_steering.cli import main as cli_main
 from arena_steering.server import SteeringApp, create_http_server, reload_server_handler
 from arena_steering.store import SqliteStore
+from fixtures.reload_isolation import run_reload_in_child
 
 
 @pytest.fixture(autouse=True)

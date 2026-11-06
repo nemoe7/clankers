@@ -486,7 +486,8 @@ def test_exact_arena_process_probe_skips_block_and_call_count(
 ) -> None:
   script = (
     Path(__file__)
-    .with_name("process_probe_template.sh")
+    .with_name("fixtures")
+    .joinpath("process_probe_template.sh")
     .read_text(encoding="utf-8")
     .strip()
     .removeprefix("/bin/bash -l -c ")
@@ -542,7 +543,8 @@ def test_isolated_reader_requires_whole_pinned_script_and_safe_arguments(
 
   template = (
     Path(__file__)
-    .with_name("reader_tool_template.sh")
+    .with_name("fixtures")
+    .joinpath("reader_tool_template.sh")
     .read_text(encoding="utf-8")
     .strip()
   )
@@ -595,7 +597,8 @@ def test_mixed_native_reader_and_probe_keep_following_command_gated(
   launcher = "/bin/bash -l -c "
   reader = (
     Path(__file__)
-    .with_name("reader_tool_template.sh")
+    .with_name("fixtures")
+    .joinpath("reader_tool_template.sh")
     .read_text(encoding="utf-8")
     .strip()
   ).replace(
@@ -756,7 +759,8 @@ def test_pre_records_native_tool_cadence_only_for_agent_tools(
   launcher = "/bin/bash -l -c "
   reader = (
     Path(__file__)
-    .with_name("reader_tool_template.sh")
+    .with_name("fixtures")
+    .joinpath("reader_tool_template.sh")
     .read_text(encoding="utf-8")
     .strip()
     .replace(
@@ -782,7 +786,8 @@ def test_pre_records_native_tool_cadence_only_for_agent_tools(
   store.close()
   process_probe = (
     Path(__file__)
-    .with_name("process_probe_template.sh")
+    .with_name("fixtures")
+    .joinpath("process_probe_template.sh")
     .read_text(encoding="utf-8")
     .strip()
     .removeprefix(launcher)
@@ -805,13 +810,15 @@ def test_pinned_platform_shells_allow_only_pinned_variables(
   launcher = "/bin/bash -l -c "
   snapshot_template = (
     Path(__file__)
-    .with_name("platform_snapshot_template.sh")
+    .with_name("fixtures")
+    .joinpath("platform_snapshot_template.sh")
     .read_text(encoding="utf-8")
     .strip()
   )
   remote_template = (
     Path(__file__)
-    .with_name("remote_health_template.sh")
+    .with_name("fixtures")
+    .joinpath("remote_health_template.sh")
     .read_text(encoding="utf-8")
     .strip()
   )
@@ -3414,7 +3421,8 @@ def test_outer_exit_counts_mixed_agent_line_once_per_call(
 
   process_probe = (
     Path(__file__)
-    .with_name("process_probe_template.sh")
+    .with_name("fixtures")
+    .joinpath("process_probe_template.sh")
     .read_text(encoding="utf-8")
     .strip()
   )

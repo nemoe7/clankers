@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 CHILD_ENV = "ARENA_STEERING_RELOAD_TEST_CHILD"
 
 
