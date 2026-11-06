@@ -358,8 +358,7 @@ export function renderMessagesView(container, state, handlers) {
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 ${tasksSuffix}
-                <span class="receipt-status${statusText ? "" : " sr-only"}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}>${statusText}</span>
-                <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>
+                <span class="receipt-bottom"><span class="receipt-status${statusText ? "" : " sr-only"}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}>${statusText}</span> <time datetime="${iso}" data-timestamp="${iso}">${rel}</time></span>
               </p>
             </li>
           `;

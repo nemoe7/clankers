@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep each message receipt and timestamp on one bottom line.
+
 - Show violation flag updates immediately, and restore the flag and draft after failures.
 
 - Open Mermaid diagrams from clicks anywhere on their thumbnails.

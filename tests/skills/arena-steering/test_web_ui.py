@@ -1603,7 +1603,11 @@ assert.match(
   acked,
   /class="receipt-status sr-only" role="img" aria-label="Status: acked" title="Status: acked"><\/span>/
 );
-for (const item of [hidden, seen, sent, acked]) assert.doesNotMatch(item, /state-dot/);
+for (const item of [hidden, seen, sent, acked]) {
+  assert.doesNotMatch(item, /state-dot/);
+  assert.match(item, new RegExp('<span class="receipt-bottom"><span class="receipt-status[^>]*>[^<]*</span> '
+    + '<time [^>]*>[^<]*</time></span>'));
+}
 """
   result = subprocess.run(
     ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
@@ -4763,6 +4767,16 @@ def test_seen_reply_receipt_keeps_message_height(
         card.wait_for()
         before = card.bounding_box()
         assert before is not None
+        bottom = card.locator(".receipt-bottom")
+        status_box = bottom.locator(".receipt-status").bounding_box()
+        time_box = bottom.locator("time").bounding_box()
+        assert status_box and time_box
+        expected_gap = 6
+        assert (
+          abs(time_box["x"] - status_box["x"] - status_box["width"] - expected_gap)
+          < 0.5
+        )
+        page.screenshot(path=str(tmp_path / f"receipt-bottom-{width}-{transport}.png"))
         assert (
           app.dispatch(
             "POST", f"/messages/{msg_id}/ack", {"markdown": "Acknowledged."}

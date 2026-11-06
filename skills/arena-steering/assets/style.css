@@ -1606,6 +1606,12 @@ select,
   text-align: right;
 }
 
+.receipt-bottom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .receipt-status {
   display: inline-flex;
   align-items: center;
