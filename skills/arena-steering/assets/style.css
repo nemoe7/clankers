@@ -1749,7 +1749,8 @@ code.msg-id {
   font-weight: 600;
 }
 
-.message[data-highlight="true"] {
+.message[data-highlight="true"],
+.task[data-highlight="true"] {
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }

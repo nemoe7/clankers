@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Highlight a task briefly when navigating to it from an ID chip.
+
 - Keep each message receipt and timestamp on one bottom line.
 
 - Show violation flag updates immediately, and restore the flag and draft after failures.

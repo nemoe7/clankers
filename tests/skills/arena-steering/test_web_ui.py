@@ -2943,7 +2943,17 @@ def test_displayed_ids_choose_typed_composer_parents(
         nav.focus()
         page.keyboard.press("Enter")
         page.locator('#tab-tasks[aria-selected="true"]').wait_for()
-        assert page.locator('.task[data-task-id="task-parent"]').count() == 1
+        highlighted_task = page.locator(
+          '.task[data-task-id="task-parent"][data-highlight="true"]'
+        )
+        highlighted_task.wait_for()
+        highlighted_color = highlighted_task.evaluate(
+          "el => getComputedStyle(el).backgroundColor"
+        )
+        page.screenshot(path=str(tmp_path / f"task-highlight-{width}.png"))
+        highlighted_task.wait_for(state="detached")
+        normal_color = task_row.evaluate("el => getComputedStyle(el).backgroundColor")
+        assert highlighted_color != normal_color
         page.locator("#tab-messages").click()
         child_row.locator(
           'button.reply-parent-chip[data-reference-type="report"][data-reference-id="report-parent"]'
