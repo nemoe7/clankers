@@ -3713,7 +3713,7 @@ def test_exit_reminds_about_unpushed_commits(
   assert code == 0 and "unpushed" not in out
 
 
-def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
+def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
   root = _isolate_state.parent / "checkout"
@@ -3732,7 +3732,7 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_ids() == []
   store.set_meta(
-    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
+    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=11)).isoformat()
   )
   store.close()
 
@@ -3747,7 +3747,7 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   store, messages, _, _ = cli.open_services(_isolate_state)
   due = [msg for msg in messages.list_messages() if msg.hidden and msg.requires_ack]
   assert len(due) == 1
-  assert "15min bible check" in due[0].body
+  assert "10min bible check" in due[0].body
   for path in (root / "ARENA.md", root / "AGENTS.md", skill):
     assert f"`~/{path.relative_to(root.parent).as_posix()}`" in due[0].body
   assert f"`~/{old_skill.relative_to(root.parent).as_posix()}`" not in due[0].body
@@ -3758,7 +3758,7 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert (
-    len([msg for msg in messages.list_messages() if "15min bible check" in msg.body])
+    len([msg for msg in messages.list_messages() if "10min bible check" in msg.body])
     == 1
   )
   store.close()
@@ -3766,13 +3766,13 @@ def test_instruction_checkpoints_wait_fifteen_minutes_and_deduplicate(
   assert _run("ack", due[0].id, "Read in full; text already in context")[0] == 0
   store, messages, _, _ = cli.open_services(_isolate_state)
   store.set_meta(
-    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
+    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=11)).isoformat()
   )
   store.close()
   _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert (
-    len([msg for msg in messages.list_messages() if "15min bible check" in msg.body])
+    len([msg for msg in messages.list_messages() if "10min bible check" in msg.body])
     == 2
   )
   store.close()
@@ -3788,7 +3788,7 @@ def test_concurrent_instruction_ticks_only_mint_one_checkpoint(
   _seed(_isolate_state, "Acknowledged", acked=True)
   store, _, _, _ = cli.open_services(_isolate_state)
   store.set_meta(
-    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
+    "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=11)).isoformat()
   )
   store.close()
   with ThreadPoolExecutor(max_workers=3) as pool:
@@ -3801,7 +3801,36 @@ def test_concurrent_instruction_ticks_only_mint_one_checkpoint(
   assert all(code == 0 for code, _ in results)
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert (
-    len([msg for msg in messages.list_messages() if "15min bible check" in msg.body])
+    len([msg for msg in messages.list_messages() if "10min bible check" in msg.body])
     == 1
   )
   store.close()
+
+
+def test_instruction_checkpoints_fire_at_ten_minutes_and_honor_legacy_pending(
+  _isolate_state: Path,
+) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  try:
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    store.set_meta(cli.READ_SET_LAST_META, start.isoformat())
+    cli._schedule_instruction_check(
+      "echo ready", messages, store, moment=start + timedelta(seconds=599)
+    )
+    assert messages.pending_ids() == []
+    cli._schedule_instruction_check(
+      "echo ready", messages, store, moment=start + timedelta(seconds=600)
+    )
+    assert len(messages.pending_ids()) == 1
+    checkpoint = messages.list_messages(include_hidden=True)[0]
+    assert checkpoint.body.startswith("10min bible check")
+    messages.ack(checkpoint.id, "Read")
+    messages.send_message(
+      "15min bible check\nLegacy pending", hidden=True, blocking=True
+    )
+    cli._schedule_instruction_check(
+      "echo ready", messages, store, moment=start + timedelta(seconds=1200)
+    )
+    assert len(messages.pending_ids()) == 1
+  finally:
+    store.close()

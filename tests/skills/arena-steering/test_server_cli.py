@@ -512,7 +512,7 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
   checkpoint = next(
     msg
     for msg in messages.list_messages(unread_only=False, include_hidden=True)
-    if msg.body.startswith("15min bible check")
+    if msg.body.startswith("10min bible check")
   )
   assert f"`~/{v2_path}`" in checkpoint.body
   assert f"`~/{old_path}`" not in checkpoint.body

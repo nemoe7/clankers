@@ -1016,7 +1016,7 @@ def _pre_state_unavailable(
 
 
 READ_SET_LAST_META = "read_set_last_at"
-READ_SET_INTERVAL_SECONDS = 15 * 60
+READ_SET_INTERVAL_SECONDS = 10 * 60
 
 
 def _schedule_instruction_check(
@@ -1045,7 +1045,9 @@ def _schedule_instruction_check(
     if (now - previous).total_seconds() < READ_SET_INTERVAL_SECONDS:
       return
     if any(
-      item.hidden and item.requires_ack and item.body.startswith("15min bible check")
+      item.hidden
+      and item.requires_ack
+      and item.body.startswith(("10min bible check", "15min bible check"))
       for item in messages.list_messages()
     ):
       return
@@ -1057,7 +1059,7 @@ def _schedule_instruction_check(
     ]
     listed = "\n".join(f"- `{home_relative(path)}`" for path in paths if path.is_file())
     messages.send_message(
-      "15min bible check\n"
+      "10min bible check\n"
       "if bible missing from context:\n"
       f"{listed}\n"
       "Read every listed path in full with read_file and follow its rules.\n"
