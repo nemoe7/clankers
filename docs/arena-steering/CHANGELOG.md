@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `references/recipes/turn-start.md`: Name every Steering preview after its checkout directory.
+
 - `pre.py`, `services.py`, `server.py`, `assets/messages-view.js`: Show native `Read`, `Edit`, `Write`, and `Bash` cadence in Messages. Use Nuu compact seconds timestamps, preserve v1 metadata, ignore platform and inbox-recovery steps, and show only nonzero Bash counts.
 
 - `SKILL.md`: Use self-identifying field labels so acknowledgements linked to tasks produce meaningful details without reopening the report.
