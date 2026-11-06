@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `SKILL.md`: Require specific labels for report fields and answer options.
+
 - `references/recipes/turn-start.md`: Name every Steering preview after its checkout directory.
 
 - `SKILL.md`: Require full reads of image and text attachments before acknowledging their notes.
