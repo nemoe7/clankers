@@ -14,6 +14,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Preserve rotation inflections and protect fenced code, URLs, and code tokens.
+- Scan table prose and wrapped pull requests, and expand verb name contexts.
 - Reject missing targets before scanning or formatting.
 - Let timed-out workers exit without blocking the process.
 - Cover `naming` and restricted `named` verb forms in `NMO901`.

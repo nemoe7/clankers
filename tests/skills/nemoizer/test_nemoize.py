@@ -52,13 +52,12 @@ def test_a_rotation_matches_the_stem_and_prose():
     assert result.returncode == 1
     assert "note.md:1: [NMO901] (advisory) picked -> select" in result.stdout
     assert "note.md:1: [NMO100] (advisory-free) transmit -> send" in result.stdout
-    assert "code.py:1: [NMO100] (advisory-free) kind -> type" in result.stdout
+    assert "code.py:1:" not in result.stdout
     assert "\n    He picked one. Do not transmit this." in result.stdout
     assert (
       nemoize.format_summary(
         [
           "note.md:1: [NMO100] (advisory-free) transmit -> send",
-          "code.py:1: [NMO100] (advisory-free) kind -> type",
           "note.md:1: [NMO901] (advisory) picked -> select",
         ]
       )
@@ -144,12 +143,12 @@ def test_the_format_mode_rewrites_every_form_and_keeps_case():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     note = root / "note.py"
-    note.write_text("kind = 1\nKIND = 2\nkinds = 3\n", encoding="utf-8")
+    note.write_text("kind = 1  # kind KIND kinds\n", encoding="utf-8")
     result = run("--format", cwd=directory)
     assert result.returncode == 0, result.stderr
-    assert note.read_text(encoding="utf-8") == "type = 1\nTYPE = 2\ntypes = 3\n"
-    assert "note.py:1: -kind = 1" in result.stdout
-    assert "note.py:1: +type = 1" in result.stdout
+    assert note.read_text(encoding="utf-8") == "kind = 1  # type TYPE types\n"
+    assert "note.py:1: -kind = 1  # kind KIND kinds" in result.stdout
+    assert "note.py:1: +kind = 1  # type TYPE types" in result.stdout
     assert run(cwd=directory).returncode == 0
 
 
@@ -2167,3 +2166,58 @@ raise SystemExit(nemoize.main(['--no-config', *sys.argv[2:]]))
   assert SKIPPED_MESSAGE in result.stderr
   for note in notes:
     assert str(note) in result.stderr
+
+
+def test_wrapped_rotation_and_name_contexts(tmp_path):
+  doc = tmp_path / "wrapped.md"
+  doc.write_text(
+    "Please name tasks. The widget names the item.\n"
+    "Review the pull\nrequests before merging.\n",
+    encoding="utf-8",
+  )
+  findings, _ = nemoize.scan([doc], [])
+  assert any("name -> specify" in item for item in findings)
+  assert any("names -> specify" in item for item in findings)
+  assert any("pull requests -> PR" in item for item in findings)
+  nemoize.format_paths([doc], [])
+  assert doc.read_text(encoding="utf-8") == (
+    "Please specify tasks. The widget specifies the item.\n"
+    "Review the pull\nrequests before merging.\n"
+  )
+
+
+def test_rotation_irregular_forms_and_false_friends(tmp_path):
+  doc = tmp_path / "forms.md"
+  doc.write_text(
+    "Data was transmitted by the transmitter. Pickle and picky. Be kind.\n",
+    encoding="utf-8",
+  )
+  nemoize.format_paths([doc], [])
+  assert doc.read_text(encoding="utf-8") == (
+    "Data was sent by the sender. Pickle and picky. Be kind.\n"
+  )
+
+
+def test_rotation_respects_fences_links_tables_and_code(tmp_path):
+  doc = tmp_path / "boundary.md"
+  doc.write_text(
+    "```python\ndef pick(x): pass\n```\n"
+    "[API](https://example.com?kind=full&pick=1)\n"
+    "| `check.py` | Pick the kind of repository |\n",
+    encoding="utf-8",
+  )
+  findings, _ = nemoize.scan([doc], [])
+  assert any("NMO100" in item and "kind" in item for item in findings)
+  assert any("NMO901" in item and "Pick" in item for item in findings)
+  nemoize.format_paths([doc], [])
+  assert doc.read_text(encoding="utf-8") == (
+    "```python\ndef pick(x): pass\n```\n"
+    "[API](https://example.com?kind=full&pick=1)\n"
+    "| `check.py` | Select the type of repo |\n"
+  )
+  code = tmp_path / "example.py"
+  code.write_text("item = pick(items)  # Pick the kind.\n", encoding="utf-8")
+  nemoize.format_paths([code], [])
+  assert code.read_text(encoding="utf-8") == (
+    "item = pick(items)  # Select the type.\n"
+  )
