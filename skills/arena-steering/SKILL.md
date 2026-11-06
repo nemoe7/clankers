@@ -37,7 +37,8 @@ steer msg <id>
 ```bash
 steer tasks [-f, --full]
 steer task <id>
-steer task new <id> "<title>" [-T <type>] [-s <status>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-k <task-id>]
+steer task new <id> "<title>" -z <size> [-T <type>]... [-p <priority>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-k <task-id>]
+steer task finish <id> [-c <full-commit>]
 steer task mod <id> deets <text>
 steer task mod <id> deets rm <1-based-index>
 steer task mod <id> links [msg|report|task] <id>
@@ -48,8 +49,10 @@ steer task rm <id>
 ```
 
 - Estimate each task's Fibonacci size against a known reference task, combining effort, complexity, and uncertainty, not time or cost.
+- Create ordered task phases by repeating `-T` with `report`, `code`, `docs`, `ops`, or `misc`.
+- Finish phases on a clean tree using `steer task finish ID [-c FULL_COMMIT]`. Reports need a linked published report or answer, and code/docs need a unique pushed full commit.
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
-- Blocking state derives automatically from unanswered `links.report_ids[]` and unfinished `links.task_ids[]`.
+- Block phases on unfinished dependencies or running gates. Non-report phases also wait on unanswered linked reports, except completed report-phase evidence.
 - When creating a task, omit `-p` unless the user states a priority.
 
 ## Reports (`Reports`)
