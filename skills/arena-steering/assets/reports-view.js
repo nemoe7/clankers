@@ -214,6 +214,34 @@ export function renderReportsView(container, state, handlers) {
     if (key.startsWith(prefix)) fieldValues[key.slice(prefix.length)] = value;
   }
 
+  const updatedAt = activeReport.updated_at || activeReport.modified_at;
+  const modIso = escapeHtml(updatedAt || "");
+  const modRel = escapeHtml(relativeTime(updatedAt));
+  const reportParentSelected = (state.replyParentRefs || []).some(
+    (ref) => ref.type === "report" && ref.id === activeReport.id
+  );
+  const linkedTasks = (state.tasks || []).filter(task =>
+    (task.links?.report_ids || task.report_ids || []).includes(activeReport.id)
+  );
+  const taskLinksHtml = linkedTasks.length
+    ? `<span class="report-task-links">${linkedTasks.map(task => `<button type="button" class="reply-parent-chip" data-reference-type="task" data-reference-id="${escapeHtml(task.id)}" aria-label="Open task ${escapeHtml(task.id)}"><code>${escapeHtml(task.id)}</code></button>`).join(" ")}</span>`
+    : "";
+  const statusBlockHtml = `
+    <div id="report-status" class="report-meta muted" role="status">
+      ${taskLinksHtml}
+      <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
+      <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
+    </div>
+  `;
+  let insertedStatus = false;
+  const reportProse = (html) => {
+    if (!insertedStatus && html.includes("</h1>")) {
+      insertedStatus = true;
+      html = html.replace("</h1>", `</h1>${statusBlockHtml}`);
+    }
+    return markdownBatch.slot(html, "prose-block");
+  };
+
   const renderedBlocks = blocks
     .map((block) => {
       if (block.type === "field") {
@@ -225,9 +253,9 @@ export function renderReportsView(container, state, handlers) {
             headings.push(h);
           }
         }
-        return markdownBatch.slot(block.html, "prose-block");
+        return reportProse(block.html);
       }
-      return markdownBatch.slot(renderMarkdownBlock(block.markdown, { headings }), "prose-block");
+      return reportProse(renderMarkdownBlock(block.markdown, { headings }));
     })
     .join("");
 
@@ -299,22 +327,10 @@ export function renderReportsView(container, state, handlers) {
         .join("")}</div>`
     : "";
 
-  const updatedAt = activeReport.updated_at || activeReport.modified_at;
-  const modIso = escapeHtml(updatedAt || "");
-  const modRel = escapeHtml(relativeTime(updatedAt));
-  const reportParentSelected = (state.replyParentRefs || []).some(
-    (ref) => ref.type === "report" && ref.id === activeReport.id
-  );
-  const statusBlockHtml = `
-    <div id="report-status" class="report-meta muted" role="status">
-      <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
-      <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
-    </div>
-  `;
   const reportBody = loadingReport ? '<p role="status">Loading report…</p>' : renderedBlocks;
   const selectionError = state.reportSelectionError ? `<p role="alert">${escapeHtml(state.reportSelectionError)}</p>` : "";
-  const renderedWithMeta = (reportBody.includes("</h1>")
-    ? reportBody.replace("</h1>", `</h1>${statusBlockHtml}`)
+  const renderedWithMeta = (insertedStatus && !loadingReport
+    ? reportBody
     : `<div class="prose-block"><h1>${escapeHtml(activeReport.title)}</h1>${statusBlockHtml}</div>${reportBody}`) + selectionError;
 
   const markup = `

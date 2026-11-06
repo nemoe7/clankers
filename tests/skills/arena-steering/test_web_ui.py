@@ -5402,3 +5402,77 @@ def test_blocked_bash_dismissal_is_immediate_and_recovers(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_report_header_tracks_linked_tasks_without_duplicate_title(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report("decision", "Decision", "# Decision\n\nReport body.")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        report = page.locator("#report")
+        report.locator("h1").first.wait_for()
+        assert report.locator("h1").count() == 1
+        assert report.locator(".report-task-links").count() == 0
+        app.tasks.create_task(
+          "linked-one",
+          "Linked task",
+          size=3,
+          report_ids=["decision"],
+          details=["Review"],
+        )
+        chip = report.get_by_role("button", name="Open task linked-one")
+        chip.wait_for(timeout=10000)
+        assert report.locator("h1").count() == 1
+        assert report.locator(".report-task-links button").count() == 1
+        app.tasks.create_task(
+          "linked-two",
+          "Another task",
+          size=3,
+          report_ids=["decision"],
+          details=["Review"],
+        )
+        report.get_by_role("button", name="Open task linked-two").wait_for(
+          timeout=10000
+        )
+        assert report.locator(".report-task-links button").count() == 2
+        app.tasks.mod_links_rm("linked-two", "report", "decision")
+        report.get_by_role("button", name="Open task linked-two").wait_for(
+          state="detached", timeout=10000
+        )
+        title_box = report.locator("h1").bounding_box()
+        chip_box = chip.bounding_box()
+        id_box = report.locator('button[data-parent-id="decision"]').bounding_box()
+        assert title_box and chip_box and id_box
+        assert title_box["y"] + title_box["height"] <= chip_box["y"]
+        assert chip_box["y"] + chip_box["height"] <= id_box["y"] + 1
+        page.screenshot(path=str(tmp_path / f"report-linked-task-{width}.png"))
+        chip.click()
+        page.locator('#tab-tasks[aria-selected="true"]').wait_for()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show linked tasks in report headers and avoid duplicate titles in cached reports.
+
 - Defer scheduled instruction checks while an agent poll is active.
 
 - Use temporary textarea selection for all copy controls, including in embedded previews.

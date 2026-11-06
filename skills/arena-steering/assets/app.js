@@ -1026,7 +1026,11 @@ function renderApp(state) {
       delete visible.last_viewed_at;
       return visible;
     });
-    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, state.reportDismissError, visibleReports, state.replyParentRefs, state.pendingReportAnswers, state.reportAnswerErrors]);
+    const reportId = reports.some(report => report.id === state.selectedReportId) ? state.selectedReportId : reports[0]?.id;
+    const linkedTaskIds = (state.tasks || []).filter(task =>
+      (task.links?.report_ids || task.report_ids || []).includes(reportId)
+    ).map(task => task.id);
+    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, state.reportDismissError, visibleReports, state.replyParentRefs, state.pendingReportAnswers, state.reportAnswerErrors, linkedTaskIds]);
     if (signature !== lastReportRenderSignature) {
       lastReportRenderSignature = signature;
       renderReportsView(reportsEl, state, handlers);
