@@ -625,6 +625,7 @@ export function renderMessagesView(container, state, handlers) {
     if (typeof ResizeObserver === "function") {
       historyResizeObserver = new ResizeObserver(() => {
         syncMessageWidths();
+        if (pinnedToBottom) historyEl.scrollTop = historyEl.scrollHeight;
         syncScrollEdges();
       });
       historyResizeObserver.observe(historyEl);

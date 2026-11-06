@@ -86,7 +86,10 @@ observers[0].callback();
 assert.deepEqual(edges(), [false, false], 'resize removes fades when content fits');
 history.clientHeight = 200;
 observers[0].callback();
-assert.deepEqual(edges(), [false, true], 'resize restores the end fade on overflow');
+assert.deepEqual(edges(), [true, false], 'resize keeps a pinned view at the bottom');
+history.scrollTop = 0;
+history.handlers.scroll();
+assert.deepEqual(edges(), [false, true], 'scrolling to top restores the end fade');
 renderMessagesView(container, { messages: [], tasks: [] }, {});
 assert.equal(observers[0].disconnected, true, 'rerender disconnects the old observer');
 assert.equal(history.removed, 1, 'rerender replaces the old scroll listener');
@@ -189,7 +192,11 @@ def test_message_edge_fades_in_both_motion_preferences() -> None:
             page.set_viewport_size({"width": 1200, "height": 700})
             page.wait_for_function(
               "() => { const e = document.querySelector('#history'); "
-              "return e.scrollHeight > e.clientHeight && e.hasAttribute('data-scrolled-end'); }"
+              "return e.scrollHeight > e.clientHeight && !e.hasAttribute('data-scrolled-end'); }"
+            )
+            page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+            page.wait_for_function(
+              "() => document.querySelector('#history').hasAttribute('data-scrolled-end')"
             )
           else:
             assert "edge-start" in str(top["animation"]), top

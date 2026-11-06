@@ -2873,6 +2873,66 @@ def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize("width,height", [(390, 844), (1200, 700)])
+def test_message_content_growth_preserves_bottom_pin(
+  tmp_path: Path, width: int, height: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for idx in range(12):
+    app.messages.send_message(
+      f"Message {idx}. " + "Long content. " * 30, blocking=False
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        history = page.locator("#history")
+        bubble = history.locator(".message-bubble").last
+        bubble.wait_for()
+        history.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+        at_bottom = (
+          "() => { const el = document.querySelector('#history'); "
+          "return el.scrollHeight - el.scrollTop - el.clientHeight <= 1; }"
+        )
+        page.wait_for_function(at_bottom)
+        bubble.evaluate("el => { el.style.minHeight = `${el.offsetHeight + 500}px`; }")
+        page.wait_for_function(at_bottom, timeout=3000)
+        history.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
+        page.wait_for_function(
+          "() => { const el = document.querySelector('#history'); "
+          "return el.scrollHeight - el.scrollTop - el.clientHeight > 100; }"
+        )
+        page.locator("#log-newest").wait_for(state="visible")
+        old_top = history.evaluate("el => el.scrollTop")
+        bubble.evaluate("el => { el.style.minHeight = `${el.offsetHeight + 500}px`; }")
+        page.evaluate(
+          "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )
+        assert abs(history.evaluate("el => el.scrollTop") - old_top) <= 2
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 def test_messages_keep_scroll_target_during_unchanged_polling() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep the Messages log at the bottom when content grows while pinned.
+
 - Require a preselected option in every radio or checkbox report field.
 
 - Send a hidden blocking survey request from Survey Again while preserving results.
