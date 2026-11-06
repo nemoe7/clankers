@@ -826,6 +826,38 @@ def test_markdown_dom_cache_preserves_nodes_and_invalidates() -> None:
     }
 
 
+def test_server_html_required_except_for_optimistic_messages() -> None:
+  with composer_page(1200) as page:
+    result = page.evaluate("""async () => {
+      const { renderMessagesView } = await import('/static/assets/messages-view.js');
+      const { renderReportsView } = await import('/static/assets/reports-view.js');
+      const root = document.createElement('div');
+      document.body.append(root);
+      const message = {id: 'abc123', body: '**client fallback**', acks: [],
+        status: 'sent', modified_at: '2026-01-01T00:00:00Z'};
+      renderMessagesView(root, {messages: [message], tasks: []}, {});
+      const confirmedFallback = !!root.querySelector('.message-text strong');
+      const messageAlert = !!root.querySelector('.message-text [role=alert]');
+      message.optimistic = true;
+      renderMessagesView(root, {messages: [message], tasks: []}, {});
+      const optimisticFallback = !!root.querySelector('.message-text strong');
+      const report = {id: 'report-test', title: 'Test', body: '**report fallback**',
+        blocks: [{type: 'markdown', markdown: '**report fallback**'}], fields: [], answers: []};
+      renderReportsView(root, {reports: [report], selectedReportId: report.id}, {});
+      const reportFallback = !!root.querySelector('.prose-block strong');
+      const reportAlert = !!root.querySelector('.prose-block [role=alert]');
+      root.remove();
+      return {confirmedFallback, messageAlert, optimisticFallback, reportFallback, reportAlert};
+    }""")
+    assert result == {
+      "confirmedFallback": False,
+      "messageAlert": True,
+      "optimisticFallback": True,
+      "reportFallback": False,
+      "reportAlert": True,
+    }
+
+
 def test_markdown_dom_reused_on_message_updates_and_search() -> None:
   with composer_page(1200) as page:
     result = page.evaluate("""async () => {
@@ -868,17 +900,20 @@ def test_markdown_dom_reused_in_report_refresh() -> None:
       const root = document.createElement('div');
       document.body.append(root);
       const report = {id: 'cache-report', title: 'Cache', body: 'hello **world**',
+        blocks: [{type: 'markdown', html: '<p>hello <strong>world</strong></p>'}],
         fields: [], answers: []};
       const state = {reports: [report], selectedReportId: report.id};
       renderReportsView(root, state, {});
       const original = root.querySelector('.prose-block strong');
-      report.answers.push({id: 'abc123', values: {}, ack: 'reply **ok**'});
+      report.answers.push({id: 'abc123', values: {}, ack: 'reply **ok**',
+        ack_html: '<p>reply <strong>ok</strong></p>'});
       renderReportsView(root, state, {});
       const retained = root.querySelector('.prose-block strong') === original;
       const ack = root.querySelector('.report-ack-markdown strong');
       renderReportsView(root, state, {});
       const retainedAck = !!ack && root.querySelector('.report-ack-markdown strong') === ack;
       report.body = 'hello **changed**';
+      report.blocks[0].html = '<p>hello <strong>changed</strong></p>';
       renderReportsView(root, state, {});
       const changed = root.querySelector('.prose-block strong')?.textContent === 'changed';
       root.remove();

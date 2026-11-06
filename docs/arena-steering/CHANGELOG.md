@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Use server-rendered Markdown for confirmed messages and reports, and retain optimistic message rendering.
+
 - Format report answer history as message-style entries without an acknowledgement placeholder.
 
 - Preserve selected parents and completed uploads across reloads, discarding unfinished uploads.

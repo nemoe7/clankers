@@ -329,8 +329,8 @@ export function renderMessagesView(container, state, handlers) {
           const acksHtml = acks.length
             ? `<div class="answer reply message-text">${acks
                 .map(
-                  (ack, idx) =>
-                    markdownBatch.slot(acksHtmlList[idx] || renderMarkdownBlock(ack), idx > 0 ? "reply-block" : "", query)
+                  (_, idx) =>
+                    markdownBatch.slot(acksHtmlList[idx] ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', idx > 0 ? "reply-block" : "", query)
                 )
                 .join("")}</div>`
             : "";
@@ -377,7 +377,7 @@ export function renderMessagesView(container, state, handlers) {
                 ${msg.optimistic ? `<code class="msg-id" aria-label="Pending message ID">xxxxxx</code>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
               </div>
               <div class="message-bubble">
-                ${markdownBatch.slot(msg.body_html || renderMarkdownBlock(msg.body), `message-text${bodyClass}`, query)}
+                ${markdownBatch.slot(msg.optimistic ? renderMarkdownBlock(msg.body) : (msg.body_html ?? '<p role="alert">Rendered message unavailable.</p>'), `message-text${bodyClass}`, query)}
                 ${acksHtml}
               </div>
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}

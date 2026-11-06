@@ -1,7 +1,7 @@
 // Reports tab view with left TOC rail, center report column, and right report selector rail.
 
 import { reconcileView } from "./dom.js";
-import { escapeHtml, renderMarkdownBlock } from "./markdown.js";
+import { escapeHtml } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
 import { copyText } from "./copy.js";
@@ -196,9 +196,7 @@ export function renderReportsView(container, state, handlers) {
     lastRenderedReportId !== null && lastRenderedReportId !== activeReport.id;
   lastRenderedReportId = activeReport.id;
 
-  const blocks = activeReport.blocks || [
-    { type: "markdown", markdown: activeReport.body || "" },
-  ];
+  const blocks = activeReport.blocks || (loadingReport ? [] : [{ type: "markdown" }]);
   const hasFields = !loadingReport && (activeReport.fields || []).length > 0;
   const submitBusyAttrs = pendingReportSubmissions.has(activeReport.id)
     ? 'disabled aria-busy="true"'
@@ -255,7 +253,7 @@ export function renderReportsView(container, state, handlers) {
         }
         return reportProse(block.html);
       }
-      return reportProse(renderMarkdownBlock(block.markdown, { headings }));
+      return reportProse('<p role="alert">Rendered report unavailable.</p>');
     })
     .join("");
 
@@ -324,7 +322,7 @@ export function renderReportsView(container, state, handlers) {
               <div class="message-heading"><strong><code class="msg-id" aria-label="Answer ${escapeHtml(ans.id)}">${escapeHtml(ans.id)}</code></strong></div>
               <div class="message-bubble">
                 <div class="message-text"><p>${escapeHtml(entries)}</p></div>
-                ${ans.pending ? `<div class="answer reply" role="status">Sending answer…</div>` : ans.ack ? `<div class="answer reply message-text">${markdownBatch.slot(ans.ack_html || renderMarkdownBlock(ans.ack), "report-ack-markdown")}</div>` : ""}
+                ${ans.pending ? `<div class="answer reply" role="status">Sending answer…</div>` : ans.ack ? `<div class="answer reply message-text">${markdownBatch.slot(ans.ack_html ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', "report-ack-markdown")}</div>` : ""}
               </div>
               <p class="receipt"><time role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" datetime="${iso}" data-timestamp="${iso}" data-prefix="${status}">${status ? `${status} ` : ""}${rel}</time></p>
             </div>
