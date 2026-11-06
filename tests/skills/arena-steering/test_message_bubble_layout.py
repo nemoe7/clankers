@@ -387,3 +387,68 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN")
+def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message(
+    "ren it then to resume-turn", msg_id="ab1234", blocking=False
+  )
+  app.messages.ack(
+    "ab1234",
+    "I will rename the recipe to resume-turn.md and update its references without changing its instructions.",
+  )
+  app.messages.send_message("Body-driven width.", msg_id="ab1235", blocking=False)
+  app.messages.ack("ab1235", "A longer acknowledgement. " * 30)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(
+          viewport={"width": 1050, "height": 500}, reduced_motion="reduce"
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        card = page.locator('.message[data-msg-id="ab1234"]')
+        card.wait_for()
+        widths = card.evaluate("""el => {
+          const bubble = el.querySelector('.message-bubble').getBoundingClientRect();
+          const row = el.getBoundingClientRect();
+          return {bubble: bubble.width, row: row.width, right: bubble.right, rowRight: row.right};
+        }""")
+        assert abs(widths["right"] - widths["rowRight"]) <= 1, widths
+        assert widths["bubble"] < widths["row"] * 0.62, widths
+        page.add_style_tag(
+          content=(
+            '.message[data-msg-id="ab1235"] .message-text '
+            "{ width: calc(var(--message-row-width) * 0.63 - 30px); }"
+          )
+        )
+        wide = page.locator('.message[data-msg-id="ab1235"]')
+        wide.wait_for()
+        page.wait_for_function(
+          "document.querySelector('[data-msg-id=ab1235]')?.hasAttribute('data-message-wide')"
+        )
+        wide_widths = wide.evaluate("""el => ({
+          bubble: el.querySelector('.message-bubble').getBoundingClientRect().width,
+          ack: el.querySelector('.answer.reply').getBoundingClientRect().width,
+        })""")
+        assert wide_widths["ack"] >= wide_widths["bubble"] - 31, wide_widths
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

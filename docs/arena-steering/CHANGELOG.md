@@ -32,6 +32,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `style.css`, `messages-view.js`, `test_message_bubble_layout.py`: Narrow acknowledgement-driven message bubbles while preserving body-driven expansion.
+
 - `pre.py`, `test_pre.py`: Exempt validated native process-launch wrappers from the Bash count and gate.
 
 - `pre.py`, `test_pre.py`: Exempt exact native process-output scripts from the Bash count and gate.

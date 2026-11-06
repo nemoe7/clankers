@@ -1525,7 +1525,7 @@ select,
 
 .message-bubble > .answer.reply {
   width: 100%;
-  max-width: calc(var(--message-row-width) * 0.666667 - 30px);
+  max-width: calc(var(--message-row-width) * 0.6 - 30px);
   margin-left: auto;
   padding-left: 0;
   padding-right: 12px;
