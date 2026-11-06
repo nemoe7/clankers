@@ -910,11 +910,13 @@ def walk(targets, ignores):
   """Yield every text file under the targets that survives the skip rules."""
   for target in targets:
     path = Path(target)
+    if not path.exists():
+      raise ValueError(f"target does not exist: {target}")
     if path.is_file():
       if path.suffix.lower() not in SKIP_SUFFIXES and not is_license_file(path):
         yield path
       continue
-    root = path if path.is_dir() else Path(".")
+    root = path
     # Exclusion patterns are rooted at the config's project root, never at the walk target.
     # A subdirectory target keeps the same relative paths.
     skip_root = ACTIVE_CONFIG.get("root") or root
@@ -3147,6 +3149,9 @@ def main(argv=None):
     assert any(row["rule"] == "STE100" for row in sample)
     return 0
   targets = arguments.targets or ["."]
+  for target in targets:
+    if not Path(target).exists():
+      parser.error(f"target does not exist: {target}")
   try:
     BASE_CONFIG = load_config(targets, arguments.config, arguments.no_config)
   except (OSError, ValueError, tomllib.TOMLDecodeError) as error:

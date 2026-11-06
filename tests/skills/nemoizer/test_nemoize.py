@@ -2102,3 +2102,20 @@ def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
   view.write_text(source, encoding="utf-8")
   rows = nemoize.source_prose(view, source, "description", nemoize.PARAGRAPH_CAP)
   assert any(row["rule"] == "HMN905" and row["line"] == 2 for row in rows)
+
+
+def test_missing_targets_fail_before_scanning_or_formatting(tmp_path):
+  note = tmp_path / "note.md"
+  original = "Transmit this.\n"
+  note.write_text(original, encoding="utf-8")
+  missing = tmp_path / "missing.md"
+  for arguments in (
+    ("--no-config", str(missing)),
+    ("--format", str(note), str(missing)),
+  ):
+    result = run(*arguments, cwd=tmp_path)
+    assert result.returncode == 2
+    assert f"target does not exist: {missing}" in result.stderr
+    assert note.read_text(encoding="utf-8") == original
+  with pytest.raises(ValueError, match="target does not exist"):
+    list(nemoize.walk([missing], ()))
