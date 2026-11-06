@@ -318,10 +318,38 @@ def render_code_block(raw_lang: str, raw_code: str) -> str:
   )
 
 
+def _two_space_code(state: Any, start: int, end: int, silent: bool) -> bool:
+  if state.blkIndent != 0 or not 2 <= state.sCount[start] < 4:
+    return False
+  content = state.src[state.bMarks[start] + state.tShift[start] : state.eMarks[start]]
+  if re.match(
+    r"(?:[-+*](?:\s|$)|\d{1,9}[.)](?:\s|$)|#{1,6}(?:\s|$)|>|`{3,}|~{3,}|<|\|)", content
+  ):
+    return False
+  if silent:
+    return True
+  last = next_line = start + 1
+  while next_line < end:
+    if state.isEmpty(next_line):
+      next_line += 1
+      continue
+    if state.sCount[next_line] >= 2:
+      next_line += 1
+      last = next_line
+      continue
+    break
+  state.line = last
+  token = state.push("code_block", "code", 0)
+  token.content = state.getLines(start, last, 2, False) + "\n"
+  token.map = [start, last]
+  return True
+
+
 def _create_parser(*, breaks: bool = False, report: bool = False) -> MarkdownIt:
   parser = MarkdownIt("commonmark", {"html": report, "breaks": breaks}).enable(
     ["table", "strikethrough"]
   )
+  parser.block.ruler.before("code", "two_space_code", _two_space_code)
   if not report:
     _highlight_mark_plugin(parser)
   _gfm_extensions_plugin(parser)

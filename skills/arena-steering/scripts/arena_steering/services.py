@@ -69,7 +69,7 @@ def with_bible_read(body: str) -> str:
 def _validate_ack_markdown(markdown: str, target_id: str) -> str:
   if not isinstance(markdown, str) or not markdown.strip():
     raise ValueError("Acknowledgement Markdown cannot be empty")
-  reply = markdown.strip()
+  reply = re.sub(r"\A(?:[ \t]*\r?\n)*", "", markdown).rstrip()
   words = re.findall(r"[^\W_]+", reply)
   if words and all(word.casefold() == target_id for word in words):
     raise ValueError("Acknowledgement must contain more than the target ID alone")

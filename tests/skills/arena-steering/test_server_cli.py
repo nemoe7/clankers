@@ -1662,6 +1662,32 @@ def test_http_static_paths_do_not_collide_with_report_routes(tmp_path: Path) -> 
     store.close()
 
 
+@pytest.mark.parametrize("render", [render_markdown, render_report_markdown])
+def test_two_space_code_blocks_preserve_lists_and_paragraphs(render: object) -> None:
+  code = render('Intro\n\n  "first",\n    "nested"\n  "last"')
+  assert '<div class="code-block"' in code
+  assert '"first",\n  "nested"\n"last"' in code
+  nested_list = render("- parent\n  - child")
+  assert nested_list.count("<ul>") == 2
+  assert '<div class="code-block"' not in nested_list
+  assert '<div class="code-block"' not in render("Intro\n  continuation")
+  assert '<div class="code-block"' in render("    four spaces")
+  assert '<div class="code-block"' not in render("  - item")
+
+
+def test_acknowledgement_preserves_two_space_code_at_start() -> None:
+  store = SqliteStore(":memory:")
+  app = SteeringApp(store)
+  app.messages.send_message("Work", msg_id="aa1234")
+  status, result = app.dispatch(
+    "POST", "/messages/aa1234/ack", {"markdown": "  first\n  second"}
+  )
+  assert status == HTTPStatus.OK
+  assert result["message"]["acks"] == ["  first\n  second"]
+  assert '<div class="code-block"' in result["message"]["acks_html"][0]
+  store.close()
+
+
 def test_message_markdown_uses_one_visual_break_per_line(tmp_path: Path) -> None:
   source = "test\nlong message\ntest"
   expected = "<p>test\nlong message\ntest</p>"
