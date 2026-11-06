@@ -1785,6 +1785,11 @@ code.msg-id {
     background-color var(--fast) var(--ease);
 }
 
+.reply-parent-chip > code:not(.msg-id),
+#report .reply-parent-chip > code:not(.msg-id) {
+  font-size: 11px;
+}
+
 .reply-parent-chip:hover,
 .composer-reply-chip:hover {
   color: var(--accent);

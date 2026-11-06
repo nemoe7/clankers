@@ -500,6 +500,10 @@ def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
         )
         chips.first.wait_for()
         assert chips.count() == 8
+        assert (
+          chips.first.locator("code").evaluate("el => getComputedStyle(el).fontSize")
+          == "11px"
+        )
         first = chips.first
         before = first.evaluate(
           "el => ({radius: getComputedStyle(el).borderRadius, box: el.getBoundingClientRect().toJSON()})"

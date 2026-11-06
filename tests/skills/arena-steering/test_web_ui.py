@@ -5450,6 +5450,9 @@ def test_report_header_tracks_linked_tasks_without_duplicate_title(
         )
         chip = report.get_by_role("button", name="Open task linked-one")
         chip.wait_for(timeout=10000)
+        assert (
+          chip.locator("code").evaluate("el => getComputedStyle(el).fontSize") == "11px"
+        )
         assert report.locator("h1").count() == 1
         assert report.locator(".report-task-links button").count() == 1
         app.tasks.create_task(

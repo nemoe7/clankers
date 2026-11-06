@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Use 11 px task-chip text in Messages and Reports.
+
 - Fade and slide tooltips from their triggers, respecting reduced motion.
 
 - Retain visible message cards while the hidden-message filter reloads.
