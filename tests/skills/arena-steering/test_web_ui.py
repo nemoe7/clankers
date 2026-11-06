@@ -1591,11 +1591,11 @@ assert.ok(hidden && seen && sent && acked);
 assert.match(hidden, /data-hidden="true"/);
 assert.match(hidden, /class="receipt-status" role="img" aria-label="Hidden message. Status: seen">Seen<\/span>/);
 assert.doesNotMatch(hidden, /· hidden|title="Status: seen"/);
-assert.match(hidden, /· checkpoint/);
+assert.doesNotMatch(hidden, /· checkpoint/);
 assert.match(seen, /class="receipt-status" role="img" aria-label="Status: seen">Seen<\/span>/);
 assert.doesNotMatch(seen, /title="Status: seen"/);
 assert.match(sent, /class="receipt-status" role="img" aria-label="Status: sent" title="Status: sent">Sent<\/span>/);
-assert.match(sent, /· checkpoint/);
+assert.doesNotMatch(sent, /· checkpoint/);
 assert.match(
   acked,
   /class="receipt-status sr-only" role="img" aria-label="Status: acked" title="Status: acked"><\/span>/

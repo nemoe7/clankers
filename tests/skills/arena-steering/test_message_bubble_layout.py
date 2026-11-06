@@ -108,6 +108,11 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           seen = page.locator('.message[data-msg-id="bb0005"]')
           for card in (short, long, middle, sent, seen):
             card.wait_for()
+          if os.environ.get("ARENA_STEERING_SCREENSHOT"):
+            sent.scroll_into_view_if_needed()
+            page.screenshot(
+              path=f"{os.environ['ARENA_STEERING_SCREENSHOT']}-{width}.png"
+            )
 
           def boxes(card):
             return card.evaluate("""element => {

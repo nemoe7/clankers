@@ -314,11 +314,6 @@ export function renderMessagesView(container, state, handlers) {
           const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.optimistic ? "sending" : msg.status}`);
           const iso = escapeHtml(msg.modified_at || "");
           const rel = escapeHtml(relativeTime(msg.modified_at));
-          const extraFlags = [];
-          if (!msg.blocking) extraFlags.push("checkpoint");
-          const flagsSuffix = extraFlags.length
-            ? ` · ${escapeHtml(extraFlags.join(", "))}`
-            : "";
           const attachments = Array.isArray(msg.attachments)
             ? msg.attachments
             : [];
@@ -362,7 +357,6 @@ export function renderMessagesView(container, state, handlers) {
               </div>
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
-                ${flagsSuffix ? `<span class="receipt-flags">${flagsSuffix}</span>` : ""}
                 ${tasksSuffix}
                 <span class="receipt-status${statusText ? "" : " sr-only"}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}>${statusText}</span>
                 <time datetime="${iso}" data-timestamp="${iso}">${rel}</time>

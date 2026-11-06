@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Remove the misleading checkpoint label from non-blocking message receipts.
+
 - Rename the CLI reference to `cli.md`.
 
 - Show report answers immediately, preserve edits after failures, and reconcile retries by request ID.
