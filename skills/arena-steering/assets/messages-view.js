@@ -838,7 +838,7 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
-  listen(window, "resize", growComposer);
+  listen(globalThis.window, "resize", growComposer);
   listen(msgEl, "input", () => {
     draftRevision += 1;
     writeComposerDraft(msgEl.value);
