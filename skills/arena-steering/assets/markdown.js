@@ -130,7 +130,7 @@ function renderCodeFence(lang, codeLines) {
   return `
     <div class="code-block"${mermaidStateAttr}>
       ${mermaidBtn}
-      <button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
+      <button type="button" class="copy-code" aria-label="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
       <div class="code-block-header">
         <span class="code-block-lang">${BRACES_SVG}<span>${langLabel}</span></span>
       </div>

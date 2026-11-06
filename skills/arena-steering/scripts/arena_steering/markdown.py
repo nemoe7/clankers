@@ -306,7 +306,7 @@ def render_code_block(raw_lang: str, raw_code: str) -> str:
   mermaid_state_attr = ' data-mermaid-state="pending"' if lang_key == "mermaid" else ""
   copy_button = (
     f'<button type="button" class="copy-code" aria-label="Copy code" '
-    f'title="Copy code" data-code="{payload}">{ICON_COPY}</button>'
+    f'data-code="{payload}">{ICON_COPY}</button>'
   )
   lang_label = html.escape(format_code_language(lang_key), quote=True)
   header = (

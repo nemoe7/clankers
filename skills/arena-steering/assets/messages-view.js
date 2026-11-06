@@ -130,7 +130,7 @@ function renderComposerAttachment(item, sending) {
 
 function parentControls(type, id) {
   const label = escapeHtml(`${type} ${id}`);
-  return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}" title="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
+  return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
 }
 
 export function messageQueryKey(state) {
@@ -336,9 +336,9 @@ export function renderMessagesView(container, state, handlers) {
                     && /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(String(att.name || ""));
                   const displayName = renderAttachmentName(att.name);
                   if (preview) {
-                    return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}" title="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${displayName}</span></button>`;
+                    return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${displayName}</span></button>`;
                   }
-                  return `<span class="message-attachment-file" title="${name}${att.present === false ? " (missing)" : ""}"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${att.present === false ? " (missing)" : ""}</span></span>`;
+                  return `<span class="message-attachment-file"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${att.present === false ? " (missing)" : ""}</span></span>`;
                 })
                 .join("")}</span>`
             : "";
@@ -360,7 +360,7 @@ export function renderMessagesView(container, state, handlers) {
               ${filesSuffix ? `<div class="message-attachments">${filesSuffix}</div>` : ""}
               <div class="message-heading">
                 ${parentsSuffix}
-                ${msg.optimistic ? `<span class="msg-id">Pending ID</span>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
+                ${msg.optimistic ? `<span class="msg-id">Pending ID</span>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
               </div>
               <div class="message-bubble">
                 <div class="message-text${bodyClass}">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
@@ -461,7 +461,7 @@ export function renderMessagesView(container, state, handlers) {
             ${selectedParentRefs
               .map(
                 (ref) =>
-                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent" title="Remove parent">${escapeHtml(ref.id)}</button>`
+                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent">${escapeHtml(ref.id)}</button>`
               )
               .join("")}
           </div>

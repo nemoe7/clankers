@@ -322,7 +322,7 @@ export function renderReportsView(container, state, handlers) {
   );
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
-      <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}" title="${reportParentSelected ? "Remove" : "Select"} report as message parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
+      <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
       <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
     </div>
   `;
@@ -359,7 +359,6 @@ export function renderReportsView(container, state, handlers) {
               id="copy-report-btn"
               data-copy-report="${escapeHtml(activeReport.id)}"
               aria-label="Copy report ${escapeHtml(activeReport.id)}"
-              title="Copy report Markdown"
               ${loadingReport ? "disabled" : ""}
             >${COPY_SVG}</button>
             <button
@@ -368,7 +367,6 @@ export function renderReportsView(container, state, handlers) {
               id="dismiss-report-btn"
               data-dismiss-report="${escapeHtml(activeReport.id)}"
               aria-label="Dismiss report ${escapeHtml(activeReport.id)}"
-              title="Dismiss report"
               ${loadingReport ? "disabled" : ""}
             >${DISMISS_SVG}</button>
           </div>
@@ -617,7 +615,6 @@ export function renderReportsView(container, state, handlers) {
   let copyResetTimer;
   listen(copyBtn, "click", () => {
     const copied = copyReportMarkdown(activeReport.body || "");
-    const originalTitle = "Copy report Markdown";
     const originalLabel = `Copy report ${activeReport.id}`;
     const resultLabel = copied
       ? "Copied through the selection fallback"
@@ -625,13 +622,11 @@ export function renderReportsView(container, state, handlers) {
     clearTimeout(copyResetTimer);
     copyBtn.dataset.state = copied ? "good" : "bad";
     copyBtn.innerHTML = copied ? CHECK_SVG : DISMISS_SVG;
-    copyBtn.title = resultLabel;
     copyBtn.setAttribute("aria-label", resultLabel);
     copyResetTimer = setTimeout(() => {
       if (!copyBtn.isConnected) return;
       delete copyBtn.dataset.state;
       copyBtn.innerHTML = COPY_SVG;
-      copyBtn.title = originalTitle;
       copyBtn.setAttribute("aria-label", originalLabel);
     }, 1400);
   });

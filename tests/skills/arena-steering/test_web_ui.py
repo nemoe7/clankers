@@ -1777,6 +1777,9 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         card = page.locator(f'.message[data-msg-id="{msg_id}"]')
         thumb = card.get_by_role("button", name='View image A "photo" <today>.png')
         thumb.wait_for()
+        assert thumb.get_attribute("title") is None
+        assert card.locator(".message-attachment-file[title]").count() == 0
+        assert card.locator(".parent-id-button[title]").count() == 0
         assert card.locator(".message-attachment-preview").count() == 1
         assert thumb.locator("img").evaluate(
           "image => image.complete && image.naturalWidth === 1"
@@ -2892,6 +2895,9 @@ def test_displayed_ids_choose_typed_composer_parents(
         report_button = page.locator(
           'button[data-parent-type="report"][data-parent-id="report-parent"]'
         )
+        assert report_button.get_attribute("title") is None
+        assert page.locator("#copy-report-btn").get_attribute("title") is None
+        assert page.locator("#dismiss-report-btn").get_attribute("title") is None
         report_button.click(modifiers=["Shift"])
         assert page.locator('#tab-reports[aria-selected="true"]').count() == 1
         assert page.locator(
