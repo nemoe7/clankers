@@ -33,14 +33,15 @@ def test_task_rejects_invalid_priority(priority: object) -> None:
   ("task_type", "types", "priority", "expected"),
   [
     ("report", None, None, "P3"),
-    ("code", ["code", "report"], None, "P3"),
-    ("code", ["report", "code"], None, "P3"),
+    ("report", ["report", "report"], None, "P3"),
+    ("code", ["code", "report"], None, "P4"),
+    ("code", ["report", "code"], None, "P4"),
     ("code", None, None, "P4"),
     ("report", None, "P5", "P5"),
     ("report", None, "P1", "P1"),
   ],
 )
-def test_new_report_phase_priority_default(
+def test_new_task_priority_default(
   task_type: str, types: list[str] | None, priority: str | None, expected: str
 ) -> None:
   store = SqliteStore(":memory:")
@@ -59,7 +60,7 @@ def test_new_report_phase_priority_default(
   store.close()
 
 
-def test_report_phase_default_applies_to_task_api() -> None:
+def test_mixed_phase_default_applies_to_task_api() -> None:
   store = SqliteStore(":memory:")
   app = SteeringApp(store)
   status, payload = app.dispatch(
@@ -74,7 +75,7 @@ def test_report_phase_default_applies_to_task_api() -> None:
     },
   )
   assert status == HTTPStatus.CREATED
-  assert payload["task"]["priority"] == "P3"
+  assert payload["task"]["priority"] == "P4"
   store.close()
 
 

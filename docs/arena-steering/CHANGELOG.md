@@ -38,7 +38,7 @@ This log has no Unreleased section.
 
 - `markdown.py`, `services.py`, `test_server_cli.py`: Render standalone two-space-indented blocks as code and preserve acknowledgement indentation.
 
-- `services.py`, `test_task_priority_size.py`: Default new tasks with a report phase to P3 unless priority is explicit.
+- Default report-only tasks to P3 and all other new tasks to P4. Preserve explicit and existing priorities, including when linking attachments.
 
 - `pre.py`, `test_pre.py`: Exempt selected Steering commands from the pending-inbox count and gate, or from the count only.
 

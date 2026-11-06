@@ -39,7 +39,7 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   created = tasks.create_task(
     "linked", "Linked", size=2, details=["Inspect."], msg_ids=["ab1020"]
   )
-  assert (created.priority, created.priority_explicit) == ("P3", False)
+  assert (created.priority, created.priority_explicit) == ("P4", False)
   assert created.details == ["Inspect.", *paths]
 
   tasks.create_task("explicit", "Explicit", size=2, priority="P4", details=["Inspect."])
@@ -51,7 +51,7 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   tasks.mod_links_add("plain", "ab1020", link_type="msg")
   tasks.mod_links_add("plain", "ab1020", link_type="msg")
   assert (tasks.get_task("plain")[0].priority, tasks.get_task("plain")[0].details) == (
-    "P3",
+    "P4",
     ["Inspect.", *paths],
   )
 
@@ -60,7 +60,7 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   assert (
     tasks.get_task("patched")[0].priority,
     tasks.get_task("patched")[0].details,
-  ) == ("P3", ["Inspect.", *paths])
+  ) == ("P4", ["Inspect.", *paths])
   tasks.patch_task("plain", {"priority": "P5"})
   assert tasks.get_task("plain")[0].priority_explicit
   store.close()
@@ -100,7 +100,7 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   args = ("-t", "New work", "-z", "2", "-d", "Inspect.")
   code, output, error = run("ack", "ab1021", "Read", "-i", "via-ack", *args)
   assert code == 0, error
-  assert "Priority: P3" in output
+  assert "Priority: P4" in output
 
   code, _, error = run("ack", "ab1022", "Read", "-i", "explicit-ack", *args, "-p", "P5")
   assert code == 0, error
@@ -117,7 +117,7 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   assert (
     store.get_task("via-ack").priority,
     store.get_task("explicit-ack").priority,
-  ) == ("P3", "P5")
+  ) == ("P4", "P5")
   assert store.get_task("plain").priority == "P4"
 
   app = SteeringApp(store)
@@ -127,7 +127,7 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
     {"id": "via-api", "title": "Via API", "size": 2, "msg_ids": ["ab1023"]},
   )
   assert status == HTTPStatus.CREATED
-  assert payload["task"]["priority"] == "P3"
+  assert payload["task"]["priority"] == "P4"
   assert payload["task"]["details"] == [
     "~/steer-fixture/first.txt",
     "~/steer-fixture/missing.png",
@@ -181,7 +181,7 @@ def test_long_missing_attachment_path_is_kept_without_truncation() -> None:
     msg_id="ab1025",
   )
   task = app.tasks.create_task("long-path", "Long path", size=2, msg_ids=["ab1025"])
-  assert (task.priority, task.details) == ("P3", [f"~/steer-fixture/{long_path.name}"])
+  assert (task.priority, task.details) == ("P4", [f"~/steer-fixture/{long_path.name}"])
   app.tasks.patch_task("long-path", {"title": "Long path retained"})
   assert app.tasks.get_task("long-path")[0].details == task.details
   store.close()

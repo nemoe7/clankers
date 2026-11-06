@@ -812,7 +812,7 @@ class TaskService:
       gate_names=list(gate_names) if gate_names is not None else None,
       modified_at=now,
     )
-    if priority is None and "report" in task.types:
+    if priority is None and all(phase == "report" for phase in task.types):
       task.priority = "P3"
     task = self._with_message_attachments(task, task.msg_ids)
     self._validate_details(task)
@@ -844,12 +844,9 @@ class TaskService:
           details.append(path)
     if not attached:
       return task
-    priority = task.priority
-    if not task.priority_explicit and int(priority[1:]) > 3:
-      priority = "P3"
-    if details == task.details and priority == task.priority:
+    if details == task.details:
       return task
-    return self._copy_task(task, details=details, priority=priority)
+    return self._copy_task(task, details=details)
 
   def _complete_phase(
     self, task: Task, queue: list[Task], commit_hash: str | None = None
