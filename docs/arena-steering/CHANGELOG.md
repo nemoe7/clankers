@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Use smaller image thumbnails and matching file icons in Messages.
+
 - Cache repeated server Markdown rendering with bounded memory.
 
 - Cap expanding acknowledgements against the Messages log maximum.

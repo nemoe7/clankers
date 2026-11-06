@@ -1788,7 +1788,11 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         assert card.locator('img[src$=".txt"]').count() == 0
         bounds, card_bounds = thumb.bounding_box(), card.bounding_box()
         assert bounds and card_bounds
-        assert bounds["width"] <= 180
+        assert bounds["width"] <= 100
+        assert (
+          card.locator(".message-attachment-file svg.lucide-file-text").count() == 2
+        )
+        assert card.locator(".message-attachment-file").count() == 2
         assert bounds["x"] >= card_bounds["x"] - 1
         assert (
           bounds["x"] + bounds["width"] <= card_bounds["x"] + card_bounds["width"] + 1

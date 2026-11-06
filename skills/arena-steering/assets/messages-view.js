@@ -327,7 +327,7 @@ export function renderMessagesView(container, state, handlers) {
                   if (preview) {
                     return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}" title="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${name}</span></button>`;
                   }
-                  return `<span class="receipt-filename">${name}${att.present === false ? " (missing)" : ""}</span>`;
+                  return `<span class="message-attachment-file" title="${name}${att.present === false ? " (missing)" : ""}"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="message-attachment-name receipt-filename">${name}${att.present === false ? " (missing)" : ""}</span></span>`;
                 })
                 .join("")}</span>`
             : "";
