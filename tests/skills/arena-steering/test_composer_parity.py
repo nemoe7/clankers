@@ -20,9 +20,9 @@ pytestmark = pytest.mark.skipif(
 
 
 @contextmanager
-def composer_page(width: int) -> Iterator[object]:
+def composer_page(width: int, state_path: Path | None = None) -> Iterator[object]:
   playwright = pytest.importorskip("playwright.sync_api")
-  store = SqliteStore()
+  store = SqliteStore(state_path) if state_path else SqliteStore()
   server = create_http_server(SteeringApp(store), host="127.0.0.1", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -947,3 +947,79 @@ def test_send_hover_changes_background_without_resizing(
     assert after["box"]["width"] == pytest.approx(before["box"]["width"])
     assert after["box"]["height"] == pytest.approx(before["box"]["height"])
     page.screenshot(path=str(tmp_path / f"send-hover-{width}.png"))
+
+
+@pytest.mark.parametrize("width", [390, 1200])
+def test_reload_preserves_parents_and_completed_uploads_only(width: int) -> None:
+  with composer_page(width) as page:
+    assert page.request.post(
+      page.url.split("/?", 1)[0] + "/messages",
+      data={"id": "aa0199", "body": "Parent"},
+    ).ok
+    page.locator('.message[data-msg-id="aa0199"] .parent-id-button').click()
+    page.locator("#composer-file-input").set_input_files(
+      {"name": "ready.txt", "mimeType": "text/plain", "buffer": b"ready bytes"}
+    )
+    page.wait_for_function(
+      "document.querySelector('.composer-attachment-chip')?.dataset.uploadStatus === 'ready'"
+    )
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]).endsWith('/uploads')) {
+          if (args[1].body.get('file').name === 'failed.txt') {
+            return new Response(JSON.stringify({error: 'failed'}), {status: 400});
+          }
+          await new Promise(() => {});
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#composer-file-input").set_input_files(
+      {"name": "failed.txt", "mimeType": "text/plain", "buffer": b"failed bytes"}
+    )
+    page.locator('.composer-attachment-chip[data-upload-status="failed"]').wait_for()
+    page.locator("#composer-file-input").set_input_files(
+      {"name": "pending.txt", "mimeType": "text/plain", "buffer": b"pending bytes"}
+    )
+    page.locator('.composer-attachment-chip[data-upload-status="uploading"]').wait_for()
+    page.reload()
+    page.locator('#composer-reply-bar [data-parent-id="aa0199"]').wait_for(timeout=5000)
+    page.locator('.composer-attachment-chip[data-upload-status="ready"]').wait_for()
+    assert "ready.txt" in page.locator("#composer-attachments").inner_text()
+    assert "pending.txt" not in page.locator("#composer-attachments").inner_text()
+    assert "failed.txt" not in page.locator("#composer-attachments").inner_text()
+    page.locator("#msg").fill("Send restored attachment")
+    page.locator("#send").click()
+    page.locator("#composer-attachments").wait_for(state="hidden")
+    page.wait_for_function(
+      "document.querySelector('#send')?.getAttribute('aria-busy') !== 'true'"
+    )
+    page.reload()
+    assert page.locator("#composer-attachments").is_hidden()
+    assert page.locator('#composer-reply-bar [data-parent-id="aa0199"]').count() == 0
+    sent = page.locator("#history .message").filter(has_text="Send restored attachment")
+    sent.wait_for()
+    assert "ready.txt" in sent.text_content()
+
+
+def test_restored_image_preview_and_removal_survive_reload(tmp_path: Path) -> None:
+  image = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmGQAAAAASUVORK5CYII="
+  )
+  with composer_page(390, tmp_path / "state.sqlite3") as page:
+    page.locator("#composer-file-input").set_input_files(
+      {"name": "example.png", "mimeType": "image/png", "buffer": image}
+    )
+    page.locator('.composer-attachment-chip[data-upload-status="ready"]').wait_for()
+    page.reload()
+    preview = page.locator('.composer-attachment-chip img[alt="example.png"]')
+    preview.wait_for()
+    assert preview.get_attribute("src").startswith("/static/uploads/")
+    page.wait_for_function(
+      "document.querySelector('.composer-attachment-chip img')?.naturalWidth > 0"
+    )
+    page.screenshot(path=str(tmp_path / "restored-image.png"))
+    page.locator('[aria-label="Remove example.png"]').click()
+    page.reload()
+    assert page.locator("#composer-attachments").is_hidden()

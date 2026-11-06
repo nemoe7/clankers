@@ -125,6 +125,10 @@ let surveyOpen = false;
 let surveyOpenRevision = 0;
 
 function reloadPreservingSurvey() {
+  if (store.getState().composerPersistenceError) {
+    store.setState({ composerError: "Cannot reload safely: browser storage could not save selected parents or files." });
+    return;
+  }
   try {
     if (surveyOpen) sessionStorage.setItem(SURVEY_RELOAD_KEY, "1");
     else sessionStorage.removeItem(SURVEY_RELOAD_KEY);

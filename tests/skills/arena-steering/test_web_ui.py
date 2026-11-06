@@ -5662,3 +5662,35 @@ def test_selected_tooltips_are_absent_but_control_labels_remain(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+def test_composer_storage_failure_prevents_unsafe_reload_state() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+const values = new Map();
+let broken = false;
+globalThis.sessionStorage = {
+  getItem: key => values.get(key) || null,
+  setItem: (key, value) => { if (broken) throw new Error('quota'); values.set(key, value); },
+  removeItem: key => { if (broken) throw new Error('quota'); values.delete(key); },
+};
+const { createStore } = await import('./skills/arena-steering/assets/state.js');
+const store = createStore();
+store.setState({ replyParentRefs: [{type: 'task', id: 'selected'}] });
+assert.equal(store.getState().composerPersistenceError, false);
+broken = true;
+store.setState({ replyParentRefs: [] });
+assert.equal(store.getState().composerPersistenceError, true);
+broken = false;
+store.setState({ replyParentRefs: [] });
+assert.equal(store.getState().composerPersistenceError, false);
+assert.equal(values.has('steer:composerState'), false);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=ROOT,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr

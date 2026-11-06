@@ -4,6 +4,7 @@ const TAB_STORAGE_KEY = "steer:activeTab";
 const REPORT_STORAGE_KEY = "steer:selectedReportId";
 const DRAFT_STORAGE_KEY = "steer:messageDraft";
 const PENDING_SEND_KEY = "steer:pendingSend";
+const COMPOSER_STATE_KEY = "steer:composerState";
 const VALID_TABS = new Set(["messages", "tasks", "reports"]);
 
 function readSessionValue(key) {
@@ -16,14 +17,15 @@ function readSessionValue(key) {
 
 function writeSessionValue(key, value) {
   try {
-    if (typeof sessionStorage === "undefined") return;
+    if (typeof sessionStorage === "undefined") return false;
     if (value == null || value === "") {
       sessionStorage.removeItem(key);
     } else {
       sessionStorage.setItem(key, String(value));
     }
+    return true;
   } catch {
-    // Ignore storage quota or privacy-mode errors.
+    return false;
   }
 }
 
@@ -66,9 +68,27 @@ export function writePendingSend(value) {
   writeSessionValue(PENDING_SEND_KEY, value ? JSON.stringify(value) : null);
 }
 
+function readComposerState() {
+  try {
+    const saved = JSON.parse(readSessionValue(COMPOSER_STATE_KEY) || "{}");
+    const parents = Array.isArray(saved.parents) ? saved.parents.filter(ref =>
+      ref && ["message", "task", "report"].includes(ref.type) && typeof ref.id === "string" && ref.id) : [];
+    const attachments = Array.isArray(saved.attachments) ? saved.attachments.filter(item =>
+      item && typeof item.id === "string" && typeof item.name === "string" &&
+      item.attachment && typeof item.attachment.path === "string"
+    ).map(item => ({ ...item, status: "ready", file: { size: item.attachment.size_bytes || 0 },
+      previewUrl: /^image\//i.test(item.type || "") && item.attachment.url?.startsWith("/static/uploads/") ? item.attachment.url : "" })) : [];
+    return { parents, attachments };
+  } catch {
+    return { parents: [], attachments: [] };
+  }
+}
+
 export function createStore(initial = {}) {
   const savedTab = readSessionValue(TAB_STORAGE_KEY);
   const savedReportId = readSessionValue(REPORT_STORAGE_KEY);
+  const composer = readComposerState();
+  let composerHadSavedState = composer.parents.length > 0 || composer.attachments.length > 0;
   const state = {
     activeTab: VALID_TABS.has(savedTab) ? savedTab : "messages",
     messages: [],
@@ -78,8 +98,8 @@ export function createStore(initial = {}) {
     messagesLoading: false,
     tasks: [],
     reports: [],
-    replyParentRefs: [],
-    composerAttachments: [],
+    replyParentRefs: composer.parents,
+    composerAttachments: composer.attachments,
     composerExpanded: false,
     composerError: "",
     pendingSend: readPendingSend(),
@@ -97,7 +117,18 @@ export function createStore(initial = {}) {
       return state;
     },
     setState(patch) {
-      Object.assign(state, typeof patch === "function" ? patch(state) : patch);
+      const change = typeof patch === "function" ? patch(state) : patch;
+      Object.assign(state, change);
+      if ("replyParentRefs" in change || "composerAttachments" in change) {
+        const attachments = state.composerAttachments.filter(item => item.status === "ready").map(item => ({
+          id: item.id, name: item.name, type: item.file?.type || item.type || "", attachment: item.attachment,
+        }));
+        const saved = { parents: state.replyParentRefs, attachments };
+        const hasSavedState = saved.parents.length > 0 || attachments.length > 0;
+        const savedSuccessfully = writeSessionValue(COMPOSER_STATE_KEY, hasSavedState ? JSON.stringify(saved) : null);
+        state.composerPersistenceError = !savedSuccessfully && (hasSavedState || composerHadSavedState);
+        if (savedSuccessfully) composerHadSavedState = hasSavedState;
+      }
       if (VALID_TABS.has(state.activeTab)) {
         writeSessionValue(TAB_STORAGE_KEY, state.activeTab);
       }
