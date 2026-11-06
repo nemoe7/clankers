@@ -11,6 +11,8 @@ metadata:
 
 Use one `steer` server and one state directory per session (`arena-state` by default).
 
+- Choose task, report, field, and gate IDs as semantic tokens that describe what each represents.
+
 ## Server and version
 
 At every turn start, follow [the v2 resume-turn recipe](references/recipes/resume-turn.md).

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `SKILL.md`: Require semantic task, report, field, and gate IDs.
+
 - `cli.py`: Show task-link hints after message acknowledgements and nonempty inbox reads.
 
 - `pre.py`, `cli.py`, `install.sh`: Route safe mixed command lines while preserving connectors and exit status.
