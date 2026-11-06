@@ -5046,7 +5046,8 @@ def test_mermaid_thumbnail_preserves_code_footprint(tmp_path: Path, width: int) 
   app.reports.publish_report(
     "diagram-preview",
     "Diagram preview",
-    "# Diagram preview\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Second] --> C[Third] --> D[Fourth] --> E[End]\n```\n",
+    "# Diagram preview\n\n```mermaid\nflowchart TD\n"
+    "  A[Start] --> B[Second] --> C[Third] --> D[Fourth] --> E[End]\n```\n",
   )
   server = create_http_server(app, host="127.0.0.1", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -5067,7 +5068,8 @@ def test_mermaid_thumbnail_preserves_code_footprint(tmp_path: Path, width: int) 
         const unsafe = [
           '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1"><rect onload="alert(1)"/></svg>',
           '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1"><style>body { display: none }</style></svg>',
-          '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1"><style>#mermaid-steering-1 ~ body { display: none }</style></svg>',
+          '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1">' +
+            '<style>#mermaid-steering-1 ~ body { display: none }</style></svg>',
         ];
         return unsafe.every(input => sanitizeMermaidSvg(input) === null);
       }""")
@@ -5106,7 +5108,10 @@ def test_mermaid_thumbnail_preserves_code_footprint(tmp_path: Path, width: int) 
         window.cacheStatuses = [];
         window.cacheUrls = [];
         window.fetch = async (...args) => {
-          if (String(args[0]).startsWith('/mermaid-cache/')) { window.cacheReads++; window.cacheUrls.push(String(args[0])); }
+          if (String(args[0]).startsWith('/mermaid-cache/')) {
+            window.cacheReads++;
+            window.cacheUrls.push(String(args[0]));
+          }
           if (String(args[0]) === '/mermaid-cache') window.cacheWrites++;
           const response = await original(...args);
           if (String(args[0]).startsWith('/mermaid-cache/')) window.cacheStatuses.push(response.status);
@@ -5154,7 +5159,7 @@ def test_mermaid_common_diagrams_persist_in_server_cache(tmp_path: Path) -> None
     "```mermaid\nsequenceDiagram\n  Alice->>Bob: Hello\n  Bob-->>Alice: Hi\n```\n\n"
     "```mermaid\nclassDiagram\n  Animal <|-- Duck\n```\n\n"
     "```mermaid\nstateDiagram-v2\n  [*] --> Ready\n```\n\n"
-    "```mermaid\npie\n  \"Cats\" : 3\n  \"Dogs\" : 5\n```\n\n"
+    '```mermaid\npie\n  "Cats" : 3\n  "Dogs" : 5\n```\n\n'
     "```mermaid\nerDiagram\n  CUSTOMER ||--o{ ORDER : places\n```\n\n"
     "```mermaid\ngantt\n  dateFormat YYYY-MM-DD\n  section Work\n  Task :a, 2026-01-01, 2d\n```\n\n"
     "```mermaid\nflowchart LR\n  A --> B\n```\n",
@@ -5175,9 +5180,9 @@ def test_mermaid_common_diagrams_persist_in_server_cache(tmp_path: Path) -> None
       page.wait_for_function(
         "document.querySelectorAll('#report [data-mermaid-state=rendered]').length === 8"
       )
-      ids = page.locator('#report .mermaid-diagram [id], #report .mermaid-diagram > svg[id]').evaluate_all(
-        "elements => elements.map(element => element.id)"
-      )
+      ids = page.locator(
+        "#report .mermaid-diagram [id], #report .mermaid-diagram > svg[id]"
+      ).evaluate_all("elements => elements.map(element => element.id)")
       assert len(ids) == len(set(ids))
       page.wait_for_function(
         "Object.keys(localStorage).filter(key => key.startsWith('steer:mermaid:v2:')).length === 7"
