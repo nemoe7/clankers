@@ -5200,3 +5200,55 @@ def test_mermaid_common_diagrams_persist_in_server_cache(tmp_path: Path) -> None
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_survey_refresh_preserves_focus_when_results_are_unchanged(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(survey.template())
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": 411, "height": 799})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#last-check").get_by_text("Checked", exact=False).wait_for()
+      page.evaluate("""() => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (String(args[0]) === '/survey') {
+            await new Promise(resolve => { window.releaseSurvey = resolve; });
+            const response = await original(...args);
+            window.surveyReturned = true;
+            return response;
+          }
+          return original(...args);
+        };
+      }""")
+      page.locator("#survey-open").click()
+      page.locator(".survey-cap-pill").first.wait_for()
+      page.wait_for_function("typeof window.releaseSurvey === 'function'")
+      page.locator(".survey-cap-pill").first.focus()
+      focused = page.locator(".survey-cap-pill").first.element_handle()
+      page.evaluate("window.releaseSurvey()")
+      page.wait_for_function("window.surveyReturned === true")
+      assert focused.evaluate("el => el.isConnected && document.activeElement === el")
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

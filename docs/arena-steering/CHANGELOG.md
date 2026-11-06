@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Open survey results immediately, and refresh them without reopening a closed dialog.
+
 - Show poll-skip feedback immediately, and surface failures.
 
 - Run scheduled bible checks every 10 minutes.

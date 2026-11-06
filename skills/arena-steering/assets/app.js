@@ -121,6 +121,7 @@ setPendingWriteChooser(() => modal.open("retry-write", {
 }));
 const SURVEY_RELOAD_KEY = "steer-survey-open-on-reload";
 let surveyOpen = false;
+let surveyOpenRevision = 0;
 
 function reloadPreservingSurvey() {
   try {
@@ -725,20 +726,27 @@ const handlers = {
     }
   },
   async onOpenSurvey(trigger) {
-    const res = await api.getSurvey().catch(() => ({ survey: store.getState().survey || {} }));
-    const survey = res.survey || {};
-    const rowsHtml = renderSurveyModalContent(survey);
+    const cached = store.getState().survey || {};
+    const revision = ++surveyOpenRevision;
+    const initialHtml = cached.checked_at || cached.answered_at ? renderSurveyModalContent(cached) : '<p role="status">Loading survey…</p>';
     surveyOpen = true;
-    let decision;
-    try {
-      decision = await modal.open("survey-results", {
-        title: "Survey Verification",
-        htmlSlots: { content: rowsHtml },
-        trigger,
-      });
-    } finally {
-      surveyOpen = false;
-    }
+    const closed = modal.open("survey-results", {
+      title: "Survey Verification",
+      htmlSlots: { content: initialHtml },
+      trigger,
+    });
+    const content = document.querySelector("#modal-shell[open] .survey-modal-content");
+    const isCurrent = () => content?.isConnected && document.querySelector("#modal-shell[open] .survey-modal-content") === content;
+    api.getSurvey().then((response) => {
+      const updatedHtml = renderSurveyModalContent(response.survey || {});
+      if (isCurrent() && updatedHtml !== initialHtml) content.innerHTML = updatedHtml;
+    }).catch((error) => {
+      if (!isCurrent()) return;
+      if (!cached.checked_at && !cached.answered_at) content.replaceChildren();
+      content.insertAdjacentHTML("beforeend", `<p role="alert">Could not refresh survey: ${escapeHtml(error.message || error)}</p>`);
+    });
+    const decision = await closed;
+    if (revision === surveyOpenRevision) surveyOpen = false;
     if (decision === "bible-check") {
       await api.triggerBibleCheck(true).catch(() => {});
       await refreshAll(true);

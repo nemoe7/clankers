@@ -662,3 +662,91 @@ def test_skip_poll_feedback_is_immediate_and_recovers(
       page.wait_for_function(
         "document.querySelector('#skip-poll')?.dataset.state === 'good'"
       )
+
+
+@pytest.mark.parametrize("width", [1200, 390])
+def test_survey_modal_opens_before_fetch_and_stays_closed_after_release(
+  tmp_path: Path, width: int
+) -> None:
+  with composer_page(width) as page:
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]) === '/survey') {
+          await new Promise(resolve => { window.releaseSurvey = resolve; });
+          const response = await original(...args);
+          window.surveyFinished = true;
+          return response;
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#survey-open").click()
+    page.wait_for_function("typeof window.releaseSurvey === 'function'")
+    assert page.get_by_role("heading", name="Survey Verification").is_visible()
+    page.screenshot(path=str(tmp_path / f"survey-loading-{width}.png"))
+    page.locator('#modal-actions button[value="cancel"]').click()
+    page.evaluate("window.releaseSurvey()")
+    page.wait_for_function("window.surveyFinished === true")
+    assert page.locator("#modal-shell").is_hidden()
+
+
+def test_survey_modal_reports_fetch_failure_without_closing() -> None:
+  with composer_page(390) as page:
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]) === '/survey') {
+          await new Promise(resolve => { window.failSurvey = resolve; });
+          return new Response(JSON.stringify({error:'offline'}), {
+            status:503, headers:{'content-type':'application/json'}
+          });
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#survey-open").click()
+    page.wait_for_function("typeof window.failSurvey === 'function'")
+    assert page.get_by_role("heading", name="Survey Verification").is_visible()
+    page.evaluate("window.failSurvey()")
+    page.get_by_role("alert").filter(
+      has_text="Could not refresh survey: offline"
+    ).wait_for()
+    assert page.get_by_role("status").filter(has_text="Loading survey").count() == 0
+    assert page.locator("#modal-shell").is_visible()
+
+
+def test_survey_old_fetch_does_not_replace_a_reopened_modal() -> None:
+  with composer_page(1200) as page:
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.releaseSurveys = [];
+      window.finishedSurveys = [];
+      window.fetch = async (...args) => {
+        if (String(args[0]) !== '/survey') return original(...args);
+        const index = window.releaseSurveys.length;
+        await new Promise(resolve => window.releaseSurveys.push(resolve));
+        const id = index ? 'NEW' : 'OLD';
+        window.finishedSurveys[index] = true;
+        return new Response(JSON.stringify({survey:{results:[{id,correct:true,answer:{value:id}}]}}), {
+          status:200, headers:{'content-type':'application/json'}
+        });
+      };
+    }""")
+    page.locator("#survey-open").click()
+    page.wait_for_function("window.releaseSurveys.length === 1")
+    page.locator('#modal-actions button[value="cancel"]').click()
+    page.locator("#survey-open").click()
+    page.wait_for_function("window.releaseSurveys.length === 2")
+    page.evaluate("window.releaseSurveys[1]()")
+    page.locator(".survey-modal-content").get_by_text(
+      "NEW", exact=True
+    ).first.wait_for()
+    page.evaluate("window.releaseSurveys[0]()")
+    page.wait_for_function("window.finishedSurveys[0] === true")
+    assert (
+      page.locator(".survey-modal-content").get_by_text("NEW", exact=True).count() > 0
+    )
+    assert (
+      page.locator(".survey-modal-content").get_by_text("OLD", exact=True).count() == 0
+    )
