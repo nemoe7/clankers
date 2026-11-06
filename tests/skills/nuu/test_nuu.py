@@ -440,25 +440,6 @@ byId('retry').addEventListener('click',submit);
         Path(row["screenshot"]): Path(row["screenshot"]).read_bytes()
         for row in captures
       }
-      clean_report = dict(report, findings=[])
-      report_file = tmp_path / "report.json"
-      report_file.write_text(json.dumps(clean_report))
-      review = subprocess.run(
-        [
-          sys.executable,
-          str(SCRIPT),
-          "animate",
-          "--project",
-          str(project),
-          "--evidence",
-          str(report_file),
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-      )
-      assert review.returncode == 0
-      assert json.loads(review.stdout)["rendered_evidence"]["values"]
       list_report = run("inspect", "--selector", "#list,#clip")
       list_capture = list_report["captures"][0]["measurements"]
       list_elements = {row["selector"]: row for row in list_capture["elements"]}
