@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Render message receipt and time as one text element with a normal space.
+
 - Reload browser assets after 10 seconds without changes, while keeping state updates live.
 
 - Use 11 px task-chip text in Messages and Reports.

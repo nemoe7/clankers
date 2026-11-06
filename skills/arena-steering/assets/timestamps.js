@@ -111,10 +111,14 @@ export function mountRelativeTimers(root = document) {
         includeSeconds,
         now,
       });
-      if (node.textContent !== nextText) {
-        node.textContent = nextText;
+      const prefix = node.getAttribute("data-prefix");
+      const text = prefix ? `${prefix} ${nextText}` : nextText;
+      if (node.textContent !== text) {
+        node.textContent = text;
       }
-      const nextTitle = stamp.toLocaleString();
+      const stateLabel = node.getAttribute("data-state-label");
+      if (stateLabel) node.setAttribute("aria-label", `${stateLabel}, ${nextText}`);
+      const nextTitle = stateLabel ? `${stateLabel} · ${stamp.toLocaleString()}` : stamp.toLocaleString();
       if (node.title !== nextTitle) {
         node.title = nextTitle;
       }

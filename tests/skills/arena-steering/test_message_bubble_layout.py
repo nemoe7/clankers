@@ -273,10 +273,14 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           ), intermediate
           t = boxes(sent)
           assert t["task"]["right"] <= t["status"]["x"], t
-          assert t["status"]["right"] <= t["stamp"]["x"], t
-          assert sent.locator(".receipt-status").inner_text() == "Sent"
-          assert seen.locator(".receipt-status").inner_text() == "Seen"
-          assert short.locator(".receipt-status").inner_text() == ""
+          assert t["status"] == t["stamp"], t
+          assert sent.locator(".receipt-status").inner_text().startswith("Sent ")
+          assert seen.locator(".receipt-status").inner_text().startswith("Seen ")
+          assert (
+            not short.locator(".receipt-status")
+            .inner_text()
+            .startswith(("Sent ", "Seen "))
+          )
           image_button.click()
           page.locator("#image-modal[open]").wait_for(state="visible")
           page.wait_for_function(

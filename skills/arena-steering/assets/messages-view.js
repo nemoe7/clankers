@@ -335,7 +335,6 @@ export function renderMessagesView(container, state, handlers) {
                 )
                 .join("")}</div>`
             : "";
-          const status = escapeHtml(msg.status);
           const statusText = msg.optimistic ? "Sending" : msg.status === "sent" ? "Sent" : msg.status === "seen" ? "Seen" : "";
           const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.optimistic ? "sending" : msg.status}`);
           const iso = escapeHtml(msg.modified_at || "");
@@ -385,7 +384,7 @@ export function renderMessagesView(container, state, handlers) {
               ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 ${tasksSuffix}
-                <span class="receipt-bottom"><span class="receipt-status${statusText ? "" : " sr-only"}" role="img" aria-label="${stateLabel}"${msg.status === "seen" ? "" : ` title="Status: ${status}"`}>${statusText}</span> <time datetime="${iso}" data-timestamp="${iso}">${rel}</time></span>
+                <time class="receipt-bottom receipt-status" role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" data-prefix="${statusText}" datetime="${iso}" data-timestamp="${iso}">${statusText ? `${statusText} ` : ""}${rel}</time>
               </p>
             </li>
           `;

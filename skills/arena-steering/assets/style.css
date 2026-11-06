@@ -1641,17 +1641,6 @@ select,
   max-width: 100%;
 }
 
-.receipt-bottom {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.receipt-status {
-  display: inline-flex;
-  align-items: center;
-}
-
 .receipt-file {
   display: flex;
   flex: 0 1 auto;

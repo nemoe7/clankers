@@ -1599,21 +1599,15 @@ const card = id => container.innerHTML.match(
 const hidden = card('aa0001'), seen = card('aa0002'), sent = card('aa0003'), acked = card('aa0004');
 assert.ok(hidden && seen && sent && acked);
 assert.match(hidden, /data-hidden="true"/);
-assert.match(hidden, /class="receipt-status" role="img" aria-label="Hidden message. Status: seen">Seen<\/span>/);
-assert.doesNotMatch(hidden, /· hidden|title="Status: seen"/);
-assert.doesNotMatch(hidden, /· checkpoint/);
-assert.match(seen, /class="receipt-status" role="img" aria-label="Status: seen">Seen<\/span>/);
-assert.doesNotMatch(seen, /title="Status: seen"/);
-assert.match(sent, /class="receipt-status" role="img" aria-label="Status: sent" title="Status: sent">Sent<\/span>/);
+assert.match(hidden, /data-state-label="Hidden message. Status: seen" data-prefix="Seen"/);
+assert.doesNotMatch(hidden, /· hidden|· checkpoint/);
+assert.match(seen, /data-state-label="Status: seen" data-prefix="Seen"/);
+assert.match(sent, /data-state-label="Status: sent" data-prefix="Sent"/);
 assert.doesNotMatch(sent, /· checkpoint/);
-assert.match(
-  acked,
-  /class="receipt-status sr-only" role="img" aria-label="Status: acked" title="Status: acked"><\/span>/
-);
+assert.match(acked, /data-state-label="Status: acked" data-prefix=""/);
 for (const item of [hidden, seen, sent, acked]) {
   assert.doesNotMatch(item, /state-dot/);
-  assert.match(item, new RegExp('<span class="receipt-bottom"><span class="receipt-status[^>]*>[^<]*</span> '
-    + '<time [^>]*>[^<]*</time></span>'));
+  assert.match(item, /<time class="receipt-bottom receipt-status"[^>]*>[^<]*<\/time>/);
 }
 """
   result = subprocess.run(
@@ -4832,14 +4826,8 @@ def test_seen_reply_receipt_keeps_message_height(
         before = card.bounding_box()
         assert before is not None
         bottom = card.locator(".receipt-bottom")
-        status_box = bottom.locator(".receipt-status").bounding_box()
-        time_box = bottom.locator("time").bounding_box()
-        assert status_box and time_box
-        expected_gap = 6
-        assert (
-          abs(time_box["x"] - status_box["x"] - status_box["width"] - expected_gap)
-          < 0.5
-        )
+        assert bottom.locator("*").count() == 0
+        assert bottom.inner_text().startswith("Sent ")
         page.screenshot(path=str(tmp_path / f"receipt-bottom-{width}-{transport}.png"))
         assert (
           app.dispatch(
@@ -4857,9 +4845,15 @@ def test_seen_reply_receipt_keeps_message_height(
         assert pending is not None and receipt_pending is not None
         assert card.locator(".state-dot").count() == 0
         assert (
-          card.locator(".receipt-status").get_attribute("aria-label") == "Status: acked"
+          card.locator(".receipt-status")
+          .get_attribute("aria-label")
+          .startswith("Status: acked, ")
         )
-        assert card.locator(".receipt-status").inner_text() == ""
+        assert (
+          not card.locator(".receipt-status")
+          .inner_text()
+          .startswith(("Sent ", "Seen "))
+        )
         release_receipt.set()
         sentinel.wait_for(state="detached")
         seen = card.bounding_box()
@@ -4871,7 +4865,9 @@ def test_seen_reply_receipt_keeps_message_height(
         assert abs(receipt_pending["y"] - receipt_seen["y"]) < 0.5
         assert card.locator(".state-dot").count() == 0
         assert (
-          card.locator(".receipt-status").get_attribute("aria-label") == "Status: acked"
+          card.locator(".receipt-status")
+          .get_attribute("aria-label")
+          .startswith("Status: acked, ")
         )
         assert bool(sockets) == (transport == "ws")
       finally:
