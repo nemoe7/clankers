@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `test_pre.py`: Exempt exact native process-output scripts from the Bash count and gate.
+
 - `pre.py`, `test_pre.py`: Exempt exact native stop scripts for any valid process name from the Bash count and gate.
 
 - `cli.py`, `scripts/install.sh`, `test_pre.py`: Count each completed outer Bash shell once at `post-exit`, including mixed lines, while skipping routed children, platform steps, and inbox recovery. Preserve user `EXIT` traps and accept the managed `DEBUG` replay.

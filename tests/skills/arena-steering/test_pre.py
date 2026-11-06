@@ -1301,6 +1301,49 @@ def test_active_run_blocks_sleep_but_not_its_own_worker(
 
 
 @pytest.mark.parametrize(
+  ("process_name", "tail_lines"), (("alpha", 20), ("cat", 120), ("beta", 10000))
+)
+def test_platform_output_helper_exempts_only_one_exact_process_script(
+  _isolate_state: Path, process_name: str, tail_lines: int
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  record = Path("/tmp") / "arena-workspace" / "procs" / process_name
+  line = f"""/bin/bash -l -c echo '===ARENA_STATUS==='
+if [ ! -f '{record}'/meta.json ]; then echo "not_found"
+elif [ -f '{record}'/exit ]; then echo "exited $(cat '{record}'/exit 2>/dev/null)"
+elif pid=$(cat '{record}'/pid 2>/dev/null) && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "running $pid"
+else echo "exited"
+fi
+echo '===ARENA_LOG==='
+tail -c 80000 '{record}'/out.log 2>/dev/null | tail -n {tail_lines} || true
+echo '===ARENA_PORTS==='
+(command -v ss >/dev/null 2>&1 && ss -ltnH) || netstat -ltn 2>/dev/null || true """
+  for command in (
+    "echo '===ARENA_STATUS==='",
+    "source ~/.profile",
+    f"[ ! -f '{record}'/meta.json ]",
+  ):
+    code, output = _run("pre", "-l", line, "-c", command, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  cli._count_outer_bash(_isolate_state, line, routed=False)
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  for changed in (
+    line + "\necho extra",
+    line.replace(f"{process_name}'/out.log", "different'/out.log"),
+    line.replace(f"tail -n {tail_lines}", "tail -n x"),
+    line.replace("tail -c 80000", "tail -c 80001"),
+  ):
+    code, output = _run(
+      "pre", "-l", changed, "-c", "echo '===ARENA_STATUS==='", "-s", "bash"
+    )
+    assert code == pre.BLOCK, output
+
+
+@pytest.mark.parametrize(
   "process_name",
   ("clankers-steering-a1b2c3d4", "arena-steering-5cf8f8f5", "website-12345678", "cat"),
 )

@@ -92,6 +92,9 @@ STOP_PROCESS_NAME = re.compile(r"/tmp/arena-workspace/procs/([^/'\r\n`$\x00]+)")
 STOP_PROCESS_SCRIPT_SHA256 = (
   "34229acc3bb28de2035839b6a592ac81c7d4d01bc25f7b74bc361facbb885f39"
 )
+OUTPUT_PROCESS_SCRIPT_SHA256 = (
+  "a54cfd816bdfb02a258842410dd9ea3c3cf7151119ef50c7c90e190f6487cb2d"
+)
 ISOLATED_READER_SHA256 = (
   "387e3514ed96d946f84178cc5b262b7740321b2638d1de359fd7fd2dac6df6b3"
 )
@@ -224,6 +227,26 @@ def _platform_stop_process(line: str, command: str) -> bool:
   return hashlib.sha256(normalized.encode()).hexdigest() == STOP_PROCESS_SCRIPT_SHA256
 
 
+def _platform_output_process(line: str, command: str) -> bool:
+  """Match the complete output script for one platform process name and tail length."""
+  current = _normalize_native_redirect(command)
+  if not current or (
+    current != "source ~/.profile" and current not in shell_line(line)
+  ):
+    return False
+  names = set(STOP_PROCESS_NAME.findall(line))
+  if len(names) != 1 or names & {".", ".."}:
+    return False
+  normalized = STOP_PROCESS_NAME.sub(
+    "/tmp/arena-workspace/procs/{id}", line.replace("\r\n", "\n").strip()
+  )
+  normalized, count = re.subn(r"tail -n [0-9]+", "tail -n {lines}", normalized)
+  return (
+    count == 1
+    and hashlib.sha256(normalized.encode()).hexdigest() == OUTPUT_PROCESS_SCRIPT_SHA256
+  )
+
+
 def _pinned_platform_shell(
   line: str, command: str, *, allow_inner: bool = False
 ) -> bool:
@@ -276,7 +299,7 @@ def arena_maintenance_call(
     return True
   if _checkout_directory_validator(line, command, checkout_root):
     return True
-  if _platform_stop_process(line, command):
+  if _platform_stop_process(line, command) or _platform_output_process(line, command):
     return True
   if _pinned_platform_shell(line, command):
     return True
@@ -347,7 +370,9 @@ def arena_maintenance_step(
       if current not in segment:
         continue
       candidate = launcher + segment
-      if arena_maintenance_call(candidate, current, checkout_root=checkout_root):
+      if not _platform_output_process(candidate, current) and arena_maintenance_call(
+        candidate, current, checkout_root=checkout_root
+      ):
         return True
       if _pinned_platform_shell(candidate, current, allow_inner=True):
         return True
