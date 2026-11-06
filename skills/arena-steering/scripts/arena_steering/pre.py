@@ -247,6 +247,72 @@ def _platform_output_process(line: str, command: str) -> bool:
   )
 
 
+def _platform_launch_process(line: str, command: str) -> bool:
+  """Match the full launch wrapper and verify its literal metadata and command."""
+  current = _normalize_native_redirect(command).replace("< /dev/null", "</dev/null")
+  if not current or (
+    current != "source ~/.profile" and current not in shell_line(line)
+  ):
+    return False
+  text = line.replace("\r\n", "\n").strip()
+  try:
+    head, setsid, echo, cat = text.rsplit("\n", 3)
+    first_line, metadata_line, command_line = head.split("\n", 2)
+  except ValueError:
+    return False
+  first = re.fullmatch(
+    r"/bin/bash -l -c mkdir -p '(/tmp/arena-workspace/procs/([^/'\r\n`$\x00]+))'",
+    first_line,
+  )
+  if first is None or first.group(2) in {".", ".."}:
+    return False
+  directory, process_id = first.groups()
+  meta_match = re.fullmatch(
+    r"printf '%s' (.+) > '" + re.escape(directory) + r"'/meta.json", metadata_line
+  )
+  run_match = re.fullmatch(
+    r"printf '%s' (.+) > '" + re.escape(directory) + r"'/run.cmd",
+    command_line,
+    flags=re.DOTALL,
+  )
+  if meta_match is None or run_match is None:
+    return False
+  try:
+    meta_words = shlex.split(meta_match.group(1))
+    run_words = shlex.split(run_match.group(1))
+    if len(meta_words) != 1 or len(run_words) != 1:
+      return False
+    metadata, run_command = meta_words[0], run_words[0]
+
+    def quoted(value: str) -> tuple[str, str]:
+      return shlex.quote(value), "'" + value.replace("'", "'\\''") + "'"
+
+    if meta_match.group(1) not in quoted(metadata) or run_match.group(1) not in quoted(
+      run_command
+    ):
+      return False
+    meta = json.loads(metadata)
+  except (ValueError, TypeError):
+    return False
+  if (
+    not isinstance(meta, dict)
+    or set(meta) != {"processId", "name", "command", "cwd", "startedAt"}
+    or meta["processId"] != process_id
+    or meta["command"] != run_command
+    or not all(isinstance(meta[key], str) for key in ("name", "command", "cwd"))
+    or type(meta["startedAt"]) not in (int, float)
+  ):
+    return False
+  return [setsid, echo, cat] == [
+    (
+      'setsid bash -c \'bash "$0/run.cmd" > "$0/out.log" 2>&1; echo $? > "$0/exit"\' '
+      f"'{directory}' </dev/null >/dev/null 2>&1 &"
+    ),
+    f"echo $! > '{directory}'/pid",
+    f"cat '{directory}'/pid",
+  ]
+
+
 def _pinned_platform_shell(
   line: str, command: str, *, allow_inner: bool = False
 ) -> bool:
@@ -299,7 +365,11 @@ def arena_maintenance_call(
     return True
   if _checkout_directory_validator(line, command, checkout_root):
     return True
-  if _platform_stop_process(line, command) or _platform_output_process(line, command):
+  if (
+    _platform_stop_process(line, command)
+    or _platform_output_process(line, command)
+    or _platform_launch_process(line, command)
+  ):
     return True
   if _pinned_platform_shell(line, command):
     return True
@@ -351,6 +421,8 @@ def arena_maintenance_step(
   if arena_maintenance_call(line, command, checkout_root=checkout_root):
     return True
   text = shell_line(line)
+  if text.startswith("mkdir -p '/tmp/arena-workspace/procs/") and "/meta.json" in text:
+    return False
   launcher = "/bin/bash -l -c " if line.startswith("/bin/bash -l -c ") else ""
   boundaries = [0, *(index + 1 for index, char in enumerate(text) if char in ";\n")]
   ends = [*(index for index, char in enumerate(text) if char in ";\n"), len(text)]
@@ -370,8 +442,10 @@ def arena_maintenance_step(
       if current not in segment:
         continue
       candidate = launcher + segment
-      if not _platform_output_process(candidate, current) and arena_maintenance_call(
-        candidate, current, checkout_root=checkout_root
+      if (
+        not _platform_output_process(candidate, current)
+        and not _platform_launch_process(candidate, current)
+        and arena_maintenance_call(candidate, current, checkout_root=checkout_root)
       ):
         return True
       if _pinned_platform_shell(candidate, current, allow_inner=True):

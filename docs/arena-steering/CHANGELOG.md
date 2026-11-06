@@ -18,6 +18,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- `pre.py`, `test_pre.py`: Exempt validated native process-launch wrappers from the Bash count and gate.
+
 - `pre.py`, `test_pre.py`: Exempt exact native process-output scripts from the Bash count and gate.
 
 - `pre.py`, `test_pre.py`: Exempt exact native stop scripts for any valid process name from the Bash count and gate.

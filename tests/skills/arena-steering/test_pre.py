@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -1298,6 +1299,67 @@ def test_active_run_blocks_sleep_but_not_its_own_worker(
   exit_path.write_text("0", encoding="utf-8")
   code, _ = _run("pre", "-l", "sleep 1", "-c", "sleep 1", "-s", "bash")
   assert code == pre.CONTINUE
+
+
+@pytest.mark.parametrize(
+  ("process_name", "command"),
+  (
+    ("alpha", "python3 -m http.server 8765 --bind 0.0.0.0"),
+    ("cat", "printf '%s' '$HOME'"),
+    ("multi", "printf first\nprintf second"),
+  ),
+)
+def test_platform_launch_helper_exempts_only_one_validated_wrapper(
+  _isolate_state: Path, process_name: str, command: str
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  record = f"/tmp/arena-workspace/procs/{process_name}"
+  metadata = json.dumps(
+    {
+      "processId": process_name,
+      "name": "Test server",
+      "command": command,
+      "cwd": "/home/user/clankers",
+      "startedAt": 1000,
+    },
+    separators=(",", ":"),
+  )
+  line = f"""/bin/bash -l -c mkdir -p '{record}'
+printf '%s' {shlex.quote(metadata)} > '{record}'/meta.json
+printf '%s' {shlex.quote(command)} > '{record}'/run.cmd
+setsid bash -c 'bash "$0/run.cmd" > "$0/out.log" 2>&1; echo $? > "$0/exit"' '{record}' </dev/null >/dev/null 2>&1 &
+echo $! > '{record}'/pid
+cat '{record}'/pid"""
+  for current in (
+    f"mkdir -p '{record}'",
+    "source ~/.profile",
+    f"cat '{record}'/pid",
+    line.rsplit("\n", 3)[1]
+    .removesuffix(" &")
+    .replace("</dev/null", "< /dev/null")
+    .replace(">/dev/null", "> /dev/null"),
+  ):
+    code, output = _run("pre", "-l", line, "-c", current, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  cli._count_outer_bash(_isolate_state, line, routed=False)
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+  for changed in (
+    line + "\necho extra",
+    line.replace(f"{process_name}'/pid", "different'/pid"),
+    line.replace('"processId":"' + process_name + '"', '"processId":"different"'),
+    line.replace(f"printf '%s' {shlex.quote(command)} >", "printf '%s' 'different' >"),
+    line.replace(
+      f"printf '%s' {shlex.quote(command)} >", "printf '%s' \"$(echo injected)\" >"
+    ),
+  ):
+    code, output = _run(
+      "pre", "-l", changed, "-c", f"mkdir -p '{record}'", "-s", "bash"
+    )
+    assert code == pre.BLOCK, output
 
 
 @pytest.mark.parametrize(
