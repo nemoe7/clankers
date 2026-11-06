@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Cache repeated server Markdown rendering with bounded memory.
+
 - Cap expanding acknowledgements against the Messages log maximum.
 
 - Highlight a task briefly when navigating to it from an ID chip.

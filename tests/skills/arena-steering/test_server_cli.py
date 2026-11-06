@@ -1758,6 +1758,47 @@ def test_message_markdown_uses_one_visual_break_per_line(tmp_path: Path) -> None
     store.close()
 
 
+def test_markdown_render_cache_preserves_options_and_headings(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  from arena_steering import markdown
+
+  counts = {"standard": 0, "report": 0}
+  for name, parser in (
+    ("standard", markdown._PARSER_STANDARD),
+    ("report", markdown._PARSER_REPORT),
+  ):
+    original = parser.render
+
+    def counted(*args, _name=name, _original=original, **kwargs):
+      counts[_name] += 1
+      return _original(*args, **kwargs)
+
+    monkeypatch.setattr(parser, "render", counted)
+  source = "# Cache check\n\nLine one\nline two"
+  first: list[dict] = []
+  second: list[dict] = []
+  assert markdown.render_markdown(source, headings=first) == markdown.render_markdown(
+    source, headings=second
+  )
+  assert counts["standard"] == 1
+  assert first == second and first is not second
+  first[0]["text"] = "mutated"
+  assert second[0]["text"] == "Cache check"
+  assert markdown.render_markdown(source, pre_wrap=True) == markdown.render_markdown(
+    source
+  )
+  assert counts["standard"] == 2
+  report_headings: list[dict] = []
+  assert markdown.render_report_markdown(source, headings=report_headings)
+  assert markdown.render_report_markdown(source) and counts["report"] == 1
+  assert report_headings[0]["text"] == "Cache check"
+  large = "x" * (markdown._MARKDOWN_CACHE_TEXT_LIMIT + 1)
+  markdown.render_markdown(large)
+  markdown.render_markdown(large)
+  assert counts["standard"] == 4
+
+
 def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> None:
   headings: list[dict[str, object]] = []
   rendered = render_markdown(

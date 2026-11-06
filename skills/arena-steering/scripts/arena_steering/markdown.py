@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+from functools import lru_cache
 from typing import Any
 
 from markdown_it import MarkdownIt
@@ -408,6 +409,46 @@ _PARAGRAPH_HTML = re.compile(r"<p>.*?</p>", re.DOTALL)
 _PARAGRAPH_BREAK = re.compile(r"<br\s*/?>")
 
 
+_MARKDOWN_CACHE_SIZE = 256
+_MARKDOWN_CACHE_TEXT_LIMIT = 32768
+
+
+def _render_cached_value(
+  text: str, report: bool, breaks: bool, pre_wrap: bool
+) -> tuple[str, tuple[tuple[str, int, str], ...]]:
+  parser = _PARSER_REPORT if report else _PARSER_BREAKS if breaks else _PARSER_STANDARD
+  headings: list[dict[str, Any]] = []
+  rendered = str(parser.render(text, {"headings": headings})).strip()
+  if pre_wrap:
+    rendered = _PARAGRAPH_HTML.sub(
+      lambda match: _PARAGRAPH_BREAK.sub("", match.group(0)), rendered
+    )
+  return rendered, tuple((item["id"], item["level"], item["text"]) for item in headings)
+
+
+_render_cached = lru_cache(maxsize=_MARKDOWN_CACHE_SIZE)(_render_cached_value)
+
+
+def _render_with_cache(
+  markdown: str,
+  report: bool,
+  breaks: bool,
+  pre_wrap: bool,
+  headings: list[dict[str, Any]] | None,
+) -> str:
+  text = str(markdown or "")
+  render = (
+    _render_cached if len(text) <= _MARKDOWN_CACHE_TEXT_LIMIT else _render_cached_value
+  )
+  rendered, cached_headings = render(text, report, breaks, pre_wrap)
+  if headings is not None:
+    headings.extend(
+      {"id": id_, "level": level, "text": title}
+      for id_, level, title in cached_headings
+    )
+  return rendered
+
+
 def render_markdown(
   markdown: str,
   *,
@@ -416,27 +457,14 @@ def render_markdown(
   headings: list[dict[str, Any]] | None = None,
 ) -> str:
   """Render CommonMark text to safe HTML using markdown-it-py."""
-  parser = _PARSER_BREAKS if breaks else _PARSER_STANDARD
-  env: dict[str, Any] = {}
-  if headings is not None:
-    env["headings"] = headings
-  rendered = str(parser.render(str(markdown or ""), env)).strip()
-  if pre_wrap:
-    # Only paragraphs use pre-wrap. Tight list items still need break tags.
-    return _PARAGRAPH_HTML.sub(
-      lambda match: _PARAGRAPH_BREAK.sub("", match.group(0)), rendered
-    )
-  return rendered
+  return _render_with_cache(markdown, False, breaks, pre_wrap, headings)
 
 
 def render_report_markdown(
   markdown: str, *, headings: list[dict[str, Any]] | None = None
 ) -> str:
   """Render trusted report Markdown with raw HTML and ordinary equals signs."""
-  env: dict[str, Any] = {}
-  if headings is not None:
-    env["headings"] = headings
-  return str(_PARSER_REPORT.render(str(markdown or ""), env)).strip()
+  return _render_with_cache(markdown, True, False, False, headings)
 
 
 def unparsed_strike_lines(markdown: str) -> list[int]:
