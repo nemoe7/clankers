@@ -57,6 +57,13 @@ _BIBLE_PATHS = (
 TOOL_NAME_META = "last_tool_name"
 TOOL_AT_META = "last_tool_at"
 TOOL_PROBE_NAMES = frozenset({"read", "edit", "write", "bash"})
+ENTITY_ID_MAX_LEN = 64
+
+
+def _validate_new_entity_id(value: str, label: str) -> None:
+  validate_entity_id(value, f"{label}.id")
+  if len(value) > ENTITY_ID_MAX_LEN:
+    raise ValueError(f"{label} ID must be at most {ENTITY_ID_MAX_LEN} characters")
 
 
 def with_bible_read(body: str) -> str:
@@ -787,8 +794,11 @@ class TaskService:
     deps: list[str] | None = None,
     gate_names: list[str] | None = None,
   ) -> Task:
+    _validate_new_entity_id(task_id, "Task")
     if self._tasks.get_task(task_id) is not None:
       raise ValueError(f"Task {task_id!r} already exists")
+    if self._reports.get_report(task_id) is not None:
+      raise ValueError(f"Report {task_id!r} already exists")
     if status == "finished":
       raise ValueError("Create an upcoming task, then finish its phase with evidence")
     now = self._clock.now_iso()
@@ -950,7 +960,10 @@ class TaskService:
     if old_task_id == new_task_id:
       task, _blocked = self.get_task(old_task_id)
       return task
+    _validate_new_entity_id(new_task_id, "Task")
     queue, target = self._load_queue_and_target(old_task_id)
+    if self._reports.get_report(new_task_id) is not None:
+      raise ValueError(f"Report {new_task_id!r} already exists")
     if any(item.id == new_task_id for item in queue):
       raise ValueError(f"Task {new_task_id!r} already exists")
     now = self._clock.now_iso()
@@ -1419,6 +1432,9 @@ class ReportService:
     validate_entity_id(report_id, "Report.id")
     existing = self._reports.get_report(report_id)
     if existing is None:
+      _validate_new_entity_id(report_id, "Report")
+      if self._tasks.get_task(report_id) is not None:
+        raise ValueError(f"Task {report_id!r} already exists")
       # Old databases may retain answers from a report removed before orphaning.
       self._reports.orphan_report_answers(report_id)
     preserved_answers = self._reports.list_report_answers(report_id)
@@ -1645,7 +1661,10 @@ class ReportService:
     validate_entity_id(new_report_id, "Report.id")
     if old_report_id == new_report_id:
       return self.get_report(old_report_id)
+    _validate_new_entity_id(new_report_id, "Report")
     existing = self.get_report(old_report_id)
+    if self._tasks.get_task(new_report_id) is not None:
+      raise ValueError(f"Task {new_report_id!r} already exists")
     if self._reports.get_report(new_report_id) is not None:
       raise ValueError(f"Report {new_report_id!r} already exists")
     now = self._clock.now_iso()

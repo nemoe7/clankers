@@ -4275,7 +4275,7 @@ def test_cli_multi_ack_rolls_back_all_detail_additions(
       '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
     )
     tasks.create_task(
-      report_id, report_id, size=3, details=["Review"], report_ids=[report_id]
+      f"{report_id}-task", report_id, size=3, details=["Review"], report_ids=[report_id]
     )
     reports.submit_answer(report_id, {"note": report_id}, answer_id=answer_id)
   store.close()
@@ -4296,7 +4296,7 @@ def test_cli_multi_ack_rolls_back_all_detail_additions(
   for report_id in ("first", "second"):
     assert reports.get_report(report_id).answers[0].status == "sent"
     assert reports.get_report(report_id).answers[0].acks == []
-    assert tasks.get_task(report_id)[0].details == ["Review"]
+    assert tasks.get_task(f"{report_id}-task")[0].details == ["Review"]
   store.close()
 
 

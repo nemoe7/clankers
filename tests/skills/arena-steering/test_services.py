@@ -1369,3 +1369,52 @@ def test_ack_answer_details_sync_without_repeating_on_receiver() -> None:
   assert target.get_task("work").details == ["Review"]
   source.close()
   target.close()
+
+
+def test_new_task_and_report_ids_enforce_length_and_cross_type_collisions() -> None:
+  store = SqliteStore(":memory:")
+  tasks = TaskService(store, store)
+  reports = ReportService(store, store)
+  max_id = "a" * 64
+  long_id = "b" * 65
+  tasks.create_task(max_id, "Allowed", size=1, details=["Work"])
+  reports.publish_report("report", "Report", "# Report")
+  with pytest.raises(ValueError):
+    tasks.create_task(long_id, "Too long", size=1, details=["Work"])
+  with pytest.raises(ValueError):
+    reports.publish_report(long_id, "Too long", "# Report")
+  with pytest.raises(ValueError):
+    tasks.create_task("report", "Collision", size=1, details=["Work"])
+  with pytest.raises(ValueError):
+    reports.publish_report(max_id, "Collision", "# Report")
+  with pytest.raises(ValueError):
+    tasks.rename_task(max_id, "report")
+  with pytest.raises(ValueError):
+    reports.rename_report("report", max_id)
+  with pytest.raises(ValueError):
+    tasks.rename_task(max_id, long_id)
+  with pytest.raises(ValueError):
+    reports.rename_report("report", long_id)
+  assert tasks.get_task(max_id)[0].id == max_id
+  assert reports.get_report("report").id == "report"
+  store.close()
+
+
+def test_existing_long_and_colliding_ids_remain_usable() -> None:
+  from arena_steering.models import Report, Task
+
+  store = SqliteStore(":memory:")
+  tasks = TaskService(store, store)
+  reports = ReportService(store, store)
+  legacy = "legacy-" + "x" * 65
+  store.save_task_queue([Task(id=legacy, title="Old task", size=1, details=["Work"])])
+  store.save_report(Report(id=legacy, title="Old report", body="# Old"))
+
+  assert tasks.get_task(legacy)[0].title == "Old task"
+  assert reports.get_report(legacy).title == "Old report"
+  assert tasks.rename_task(legacy, legacy).id == legacy
+  assert reports.rename_report(legacy, legacy).id == legacy
+  assert reports.publish_report(legacy, "Updated", "# Updated").title == "Updated"
+  assert tasks.rename_task(legacy, "short-task").id == "short-task"
+  assert reports.rename_report(legacy, "short-report").id == "short-report"
+  store.close()
