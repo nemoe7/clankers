@@ -188,8 +188,10 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           assert (
             abs(trailing["body"]["right"] - (trailing["bubble"]["right"] - 15)) <= 1
           ), trailing
-          assert s["bubble"]["width"] <= s["row"]["width"] * 0.72, s
-          assert s["ack"]["width"] <= s["row"]["width"] * 2 / 3 + 1, s
+          log_max = 900
+          reply_cap = log_max * 2 / 3
+          assert s["bubble"]["width"] <= min(s["row"]["width"] - 20, reply_cap) + 1, s
+          assert s["ack"]["width"] <= reply_cap - 30 + 1, s
           assert abs(s["ack"]["width"] - (s["bubble"]["width"] - 30)) <= 1, s
           assert s["ackBorderLeft"] == "0px" and s["ackBorderRight"] == "2px", s
           assert abs(s["ack"]["right"] - (s["bubble"]["right"] - 15)) <= 1, s
@@ -203,14 +205,11 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           multiple.scroll_into_view_if_needed()
           paragraphs = multiple.locator(".answer.reply > div > p:last-child")
           assert paragraphs.count() == 2
-          assert (
-            paragraphs.nth(0).evaluate("el => getComputedStyle(el).marginBottom")
-            == "8px"
-          )
-          assert (
-            paragraphs.nth(1).evaluate("el => getComputedStyle(el).marginBottom")
-            == "0px"
-          )
+          page.wait_for_function("""() => {
+            const nodes = document.querySelectorAll('[data-msg-id=bb0007] .answer.reply > div > p:last-child');
+            return nodes.length === 2 && getComputedStyle(nodes[0]).marginBottom === '8px'
+              && getComputedStyle(nodes[1]).marginBottom === '0px';
+          }""")
           assert short.locator(
             ".message-parents .reply-parent-chip"
           ).all_text_contents() == ["bb0001", "reference"]
@@ -395,8 +394,10 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
 
 
 @pytest.mark.skipif(not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN")
+@pytest.mark.parametrize("width", [390, 1050])
 def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
   tmp_path: Path,
+  width: int,
 ) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
@@ -422,29 +423,38 @@ def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
       )
       try:
         page = browser.new_page(
-          viewport={"width": 1050, "height": 500}, reduced_motion="reduce"
+          viewport={"width": width, "height": 500}, reduced_motion="reduce"
         )
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         card = page.locator('.message[data-msg-id="ab1234"]')
         card.wait_for()
-        widths = card.evaluate("""el => {
-          const bubble = el.querySelector('.message-bubble').getBoundingClientRect();
-          const row = el.getBoundingClientRect();
-          return {bubble: bubble.width, row: row.width, right: bubble.right, rowRight: row.right};
-        }""")
+        widths = page.wait_for_function("""() => {
+          const el = document.querySelector('[data-msg-id=ab1234]');
+          const bubble = el?.querySelector('.message-bubble')?.getBoundingClientRect();
+          const row = el?.getBoundingClientRect();
+          return bubble?.width && row?.width &&
+            {bubble: bubble.width, row: row.width, right: bubble.right, rowRight: row.right};
+        }""").json_value()
         assert abs(widths["right"] - widths["rowRight"]) <= 1, widths
-        assert widths["bubble"] < widths["row"] * 0.62, widths
+        log_reply_cap = 900 * 2 / 3
+        if width == 390:
+          assert widths["bubble"] > widths["row"] * 0.8, widths
+        else:
+          assert widths["bubble"] <= log_reply_cap + 1, widths
+          assert widths["bubble"] > widths["row"] * 0.6, widths
+        page.screenshot(path=str(tmp_path / f"ack-cap-{width}.png"))
         page.add_style_tag(
           content=(
             '.message[data-msg-id="ab1235"] .message-text '
-            "{ width: calc(var(--message-row-width) * 0.63 - 30px); }"
+            "{ width: calc(var(--message-row-width) * 0.78 - 30px); }"
           )
         )
         wide = page.locator('.message[data-msg-id="ab1235"]')
         wide.wait_for()
-        page.wait_for_function(
-          "document.querySelector('[data-msg-id=ab1235]')?.hasAttribute('data-message-wide')"
-        )
+        if width == 1050:
+          page.wait_for_function(
+            "document.querySelector('[data-msg-id=ab1235]')?.hasAttribute('data-message-wide')"
+          )
         wide_widths = wide.evaluate("""el => ({
           bubble: el.querySelector('.message-bubble').getBoundingClientRect().width,
           ack: el.querySelector('.answer.reply').getBoundingClientRect().width,
