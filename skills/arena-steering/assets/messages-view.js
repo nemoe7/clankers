@@ -360,7 +360,7 @@ export function renderMessagesView(container, state, handlers) {
               ${filesSuffix ? `<div class="message-attachments">${filesSuffix}</div>` : ""}
               <div class="message-heading">
                 ${parentsSuffix}
-                ${msg.optimistic ? `<span class="msg-id">Pending ID</span>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
+                ${msg.optimistic ? `<code class="msg-id" aria-label="Pending message ID">xxxxxx</code>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
               </div>
               <div class="message-bubble">
                 <div class="message-text${bodyClass}">${msg.body_html || renderMarkdownBlock(msg.body)}</div>

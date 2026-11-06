@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep pending message ID placeholders the same width as confirmed IDs.
+
 - Prefer placing remaining tooltips above their targets when space allows.
 
 - Remove tooltips from ID chips, attachment thumbnails, copy controls, and report dismissal.

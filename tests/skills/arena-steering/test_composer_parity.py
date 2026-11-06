@@ -474,14 +474,26 @@ def test_send_shows_message_before_network_response(tmp_path: Path, width: int) 
       .get_by_text("Sending")
       .is_visible()
     )
+    pending_id = (
+      page.locator("#history .message")
+      .filter(has_text="Immediate message")
+      .locator(".msg-id")
+    )
+    assert pending_id.inner_text() == "xxxxxx"
+    pending_font = pending_id.evaluate("el => getComputedStyle(el).fontFamily")
+    pending_width = pending_id.bounding_box()["width"]
     assert page.locator("#msg").input_value() == ""
     page.screenshot(path=str(tmp_path / f"optimistic-send-{width}.png"))
     page.evaluate("window.releaseSend()")
     page.wait_for_function("!document.querySelector('#send')?.disabled")
+    message = page.locator("#history .message").filter(has_text="Immediate message")
+    assert message.count() == 1
+    confirmed_id = message.locator("button.receipt-id code.msg-id")
+    confirmed_id.wait_for()
     assert (
-      page.locator("#history .message").filter(has_text="Immediate message").count()
-      == 1
+      confirmed_id.evaluate("el => getComputedStyle(el).fontFamily") == pending_font
     )
+    assert abs(confirmed_id.bounding_box()["width"] - pending_width) < 1
 
 
 def test_optimistic_send_reconciles_refresh_before_delayed_response() -> None:
