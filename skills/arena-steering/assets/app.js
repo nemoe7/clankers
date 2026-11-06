@@ -608,8 +608,11 @@ const handlers = {
       messageEpoch += 1;
       const current = store.getState();
       const message = response.message;
-      const messages = message && messageMatchesQuery(message, current.searchQuery) && !message.hidden
-        ? [...(current.messages || []).filter(item => item.id !== message.id), message]
+      const existing = (current.messages || []).find(item => item.id === message?.id);
+      const confirmed = existing && existing.modified_at >= message.modified_at
+        ? existing : message;
+      const messages = confirmed && messageMatchesQuery(confirmed, current.searchQuery) && !confirmed.hidden
+        ? [...(current.messages || []).filter(item => item.id !== confirmed.id), confirmed]
         : current.messages;
       store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null });
       writePendingSend(null);

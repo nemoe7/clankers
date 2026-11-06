@@ -7050,3 +7050,113 @@ def test_violation_flag_updates_before_write_and_restores_on_failure(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_slow_send_confirmation_keeps_newer_live_ack(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  original_dispatch = app.dispatch
+  send_ready = threading.Event()
+  release_send = threading.Event()
+  hold_pages = threading.Event()
+  release_pages = threading.Event()
+  result = {}
+
+  def delayed_dispatch(method, url, body=None):
+    if method == "GET" and url.startswith("/messages?") and hold_pages.is_set():
+      release_pages.wait(10)
+    response = original_dispatch(method, url, body)
+    if method == "POST" and url == "/messages":
+      result.update(response[1])
+      send_ready.set()
+      release_send.wait(10)
+    return response
+
+  app.dispatch = delayed_dispatch
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.set_default_timeout(10000)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#msg").fill("A message with a quick reply")
+        page.locator("#send").click()
+        assert send_ready.wait(5)
+        msg_id = result["message"]["id"]
+        app.messages.ack(msg_id, "Acknowledged immediately")
+        reply = page.locator(f'.message[data-msg-id="{msg_id}"] .reply').get_by_text(
+          "Acknowledged immediately"
+        )
+        reply.wait_for()
+        hold_pages.set()
+        release_send.set()
+        page.locator("#send").wait_for(state="visible")
+        page.wait_for_function("() => !document.querySelector('#send').disabled")
+        assert reply.is_visible()
+      finally:
+        release_send.set()
+        release_pages.set()
+        browser.close()
+  finally:
+    release_send.set()
+    release_pages.set()
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("transport", ["websocket", "poll"])
+def test_external_ack_appears_live(tmp_path: Path, transport: str) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  path = tmp_path / "state.sqlite3"
+  server_store = SqliteStore(path)
+  writer_store = SqliteStore(path)
+  app = SteeringApp(server_store)
+  writer = SteeringApp(writer_store)
+  app.messages.send_message("Awaiting reply", msg_id="ab0123")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        query = "?transport=poll" if transport == "poll" else ""
+        page.goto(f"http://127.0.0.1:{server.server_port}/{query}")
+        card = page.locator('[data-msg-id="ab0123"]').first
+        card.wait_for(state="visible")
+        writer.messages.ack("ab0123", "Live acknowledgement")
+        card.locator(".reply").get_by_text("Live acknowledgement").wait_for(
+          timeout=10000
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    writer_store.close()
+    server_store.close()

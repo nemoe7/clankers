@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Preserve newer message acknowledgements when send confirmations arrive late.
+
 - Match Reports header attention indicators to their picker sizes.
 
 - Reject dependencies on lower-priority tasks while allowing larger dependencies.
