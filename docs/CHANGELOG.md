@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-06
+
+### Changed
+
+#### rules
+
+- Remove the violation-notice trigger for full bible reads (`rules/refs/ARENA.md`, `rules/ARENA.md`).
+
 ## 2026-11-05
 
 ### Changed
