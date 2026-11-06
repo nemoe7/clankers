@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep optimistic message cards connected when their server IDs arrive.
+
 - Restore send-button hover feedback without changing its size.
 
 - Preserve task-reference chip shape on hover.

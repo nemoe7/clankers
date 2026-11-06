@@ -482,6 +482,11 @@ def test_send_shows_message_before_network_response(tmp_path: Path, width: int) 
     assert pending_id.inner_text() == "xxxxxx"
     pending_font = pending_id.evaluate("el => getComputedStyle(el).fontFamily")
     pending_width = pending_id.bounding_box()["width"]
+    page.evaluate("""() => {
+      window.pendingCard = document.querySelector('#history .message:last-child');
+      window.pendingBubble = window.pendingCard.querySelector('.message-bubble');
+      window.pendingBackground = getComputedStyle(window.pendingBubble).backgroundColor;
+    }""")
     assert page.locator("#msg").input_value() == ""
     page.screenshot(path=str(tmp_path / f"optimistic-send-{width}.png"))
     page.evaluate("window.releaseSend()")
@@ -490,6 +495,12 @@ def test_send_shows_message_before_network_response(tmp_path: Path, width: int) 
     assert message.count() == 1
     confirmed_id = message.locator("button.receipt-id code.msg-id")
     confirmed_id.wait_for()
+    page.screenshot(path=str(tmp_path / f"confirmed-send-{width}.png"))
+    assert message.evaluate(
+      "el => el === window.pendingCard && "
+      "el.querySelector('.message-bubble') === window.pendingBubble && "
+      "getComputedStyle(window.pendingBubble).backgroundColor === window.pendingBackground"
+    )
     assert (
       confirmed_id.evaluate("el => getComputedStyle(el).fontFamily") == pending_font
     )
@@ -504,6 +515,7 @@ def test_optimistic_send_reconciles_refresh_before_delayed_response() -> None:
       window.fetch = async (...args) => {
         const response = await original(...args);
         if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          window.pendingCard = document.querySelector('#history .message:last-child');
           window.sendCommitted = true;
           await new Promise(resolve => { window.releaseSendResponse = resolve; });
         }
@@ -518,6 +530,7 @@ def test_optimistic_send_reconciles_refresh_before_delayed_response() -> None:
       has_text="Only one copy while a response is delayed"
     )
     assert matching.count() == 1
+    assert matching.evaluate("el => el === window.pendingCard")
     assert page.locator("#msg").input_value() == ""
     page.evaluate("window.releaseSendResponse()")
     page.wait_for_function("!document.querySelector('#send')?.disabled")

@@ -553,7 +553,7 @@ const handlers = {
       attachmentIds: payload.attachmentIds || [],
       status: "sending", blocking: true, modified_at: new Date().toISOString(), acks: [],
     };
-    store.setState({ sending: true, composerError: "", optimisticMessage, ...(clearRefs ? { replyParentRefs: [] } : {}) });
+    store.setState({ sending: true, composerError: "", optimisticMessage, optimisticConfirmation: null, ...(clearRefs ? { replyParentRefs: [] } : {}) });
     try {
       const attachments = pending
         ? payload.attachments || []
@@ -590,7 +590,7 @@ const handlers = {
       const messages = message && messageMatchesQuery(message, current.searchQuery) && !message.hidden
         ? [...(current.messages || []).filter(item => item.id !== message.id), message]
         : current.messages;
-      store.setState({ messages, optimisticMessage: null });
+      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null });
       writePendingSend(null);
       store.setState({ pendingSend: null, sending: false });
     } catch (error) {

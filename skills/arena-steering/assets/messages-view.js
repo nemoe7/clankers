@@ -195,7 +195,7 @@ function highlightSearchMatches(root, rawQuery) {
 
 // Keep the scroll container and unchanged message cards connected while pages are
 // added. Replacing them interrupts a scrollbar drag or an ongoing touch gesture.
-function updateHistory(history, nextHistory, signatures) {
+function updateHistory(history, nextHistory, signatures, confirmation) {
   const existing = new Map(
     Array.from(history.querySelectorAll(":scope > .message"), (node) => [node.dataset.msgId, node])
   );
@@ -205,8 +205,15 @@ function updateHistory(history, nextHistory, signatures) {
   }
   const wanted = nextChildren.slice(2).map((node) => {
     const signature = signatures.get(node.dataset.msgId);
-    const old = existing.get(node.dataset.msgId);
-    const use = old && renderedMessageSignatures.get(old) === signature ? old : node;
+    let old = existing.get(node.dataset.msgId);
+    const pending = !old && confirmation?.serverId === node.dataset.msgId
+      ? existing.get(confirmation.pendingId) : null;
+    if (pending) {
+      pending.dataset.msgId = node.dataset.msgId;
+      reconcileElement(pending, node);
+      old = pending;
+    }
+    const use = pending || (old && renderedMessageSignatures.get(old) === signature ? old : node);
     if (old && use === node) {
       const previous = Array.from(old.querySelectorAll("[data-markdown-key]"));
       for (const next of node.querySelectorAll("[data-markdown-key]")) {
@@ -564,7 +571,10 @@ export function renderMessagesView(container, state, handlers) {
       for (const selector of replaceSelectors) {
         reconcileElement(container.querySelector(selector), template.content.querySelector(selector));
       }
-      updateHistory(prevHistory, nextHistory, messageSignatures);
+      const confirmation = optimistic?.serverId
+        ? { pendingId: optimistic.id, serverId: optimistic.serverId }
+        : state.optimisticConfirmation;
+      updateHistory(prevHistory, nextHistory, messageSignatures, confirmation);
       reusedHistory = true;
     } else {
       container.replaceChildren(template.content);
