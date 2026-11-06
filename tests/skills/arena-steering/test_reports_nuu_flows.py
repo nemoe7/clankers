@@ -13,8 +13,7 @@ import pytest
 from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.store import SqliteStore
 
-ROOT = Path(__file__).resolve().parents[3]
-FLOWS = ROOT / "skills" / "arena-steering" / "references" / "nuu"
+FLOWS = Path(__file__).resolve().parent / "nuu"
 VIEWPORTS = {411: 799, 855: 325, 1372: 883}
 FLOWS_BY_STATE = {
   "empty": ("reports-empty.json",),

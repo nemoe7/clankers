@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `test_reports_nuu_flows.py`: Move Reports audit fixtures out of the skill references.
+
 - `SKILL.md`: Document ordered task phases, completion evidence, and phase blocking.
 
 - `references/recipes/resume-turn.md`, `SKILL.md`: Rename the turn-start recipe and update its link.
