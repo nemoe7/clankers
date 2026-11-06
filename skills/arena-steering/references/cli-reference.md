@@ -74,9 +74,8 @@ The source is an ignored workspace file, not a commit artifact. Fielded question
 
 | Command | Output on success | Exit |
 | --- | --- | --- |
-| `steer survey` | Pending state, checked time, questions, answers, and JSON template | 0 on inspection, 1 on error |
+| `steer survey` | Pending state, checked time, questions with image path, answers, and JSON template | 0 on inspection, 1 on error |
 | `steer survey --template` | JSON template | 0 on template, 1 on error |
-| `steer survey -i` | Smallest reference image path | 0 on image lookup, 1 on error |
 | `steer survey -f FILE` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
 | `steer survey 'JSON_ARRAY'` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
 | `steer skills` | Skill name, source, path, and description | 0 on list, 1 on error |

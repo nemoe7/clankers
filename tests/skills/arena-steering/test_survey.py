@@ -86,11 +86,17 @@ def test_deterministic_boolean_checks_accept_true_and_unknown() -> None:
   assert by_id["V1S0N"]["correct"] is None
 
 
-def test_cli_survey_smallest_image_and_submission(tmp_path: Path) -> None:
+def test_cli_survey_smallest_image_and_submission(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
   state_dir = tmp_path / "arena-state"
-  code, out, _err = _run_cli(state_dir, "survey", "-i")
+  monkeypatch.setattr(survey, "smallest_image", lambda: "image.png")
+  code, out, _err = _run_cli(state_dir, "survey")
   assert code == 0
-  assert out.strip().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"))
+  image_question = "Read image.png. Can you view images?"
+  assert image_question in out
+  with pytest.raises(SystemExit):
+    _run_cli(state_dir, "survey", "-i")
 
   payload = json.dumps(survey.template())
   code2, _out2, _err2 = _run_cli(state_dir, "survey", payload)

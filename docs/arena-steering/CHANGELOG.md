@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Make bare `steer survey` print the image question and path, and retire `-i`.
+
 - Require graded JSON survey submissions and remove the ungraded results fallback.
 
 - `SKILL.md`: Require semantic task, report, field, and gate IDs.

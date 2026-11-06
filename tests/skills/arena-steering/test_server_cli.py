@@ -516,6 +516,10 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
   assert f"`~/{v2_path}`" in checkpoint.body
   assert f"`~/{old_path}`" not in checkpoint.body
   assert "if bible missing from context:" in checkpoint.body  # nonemo: NMT100
+  survey_hint = "Run `steer survey` and read the image path it prints"
+  assert survey_hint in checkpoint.body
+  assert "Guesses are allowed; use extremely low confidence" in checkpoint.body
+  assert "steer survey -i" not in checkpoint.body
   assert "ack this msg" in checkpoint.body  # nonemo: NMT100
   assert (
     "Read every listed path in full with read_file" in checkpoint.body  # nonemo: NMT100

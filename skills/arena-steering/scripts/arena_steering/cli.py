@@ -189,12 +189,6 @@ def main(
   survey_p = sub.add_parser("survey", help="Inspect or submit bible survey answers.")
   survey_p.add_argument("entries", nargs="*", help="JSON array submission")
   survey_p.add_argument(
-    "-i",
-    "--smallest-image",
-    action="store_true",
-    help="Print path to smallest image in workspace for V1S0N check.",
-  )
-  survey_p.add_argument(
     "-f",
     "--file",
     default=None,
@@ -1053,13 +1047,12 @@ def _schedule_instruction_check(
       "Read every listed path in full with read_file and follow its rules.\n"
       "Answer the survey, ack this msg, and continue. "
       "If no bible text was missing, only ack and continue.\n"
-      "For the survey, use existing knowledge only. Read only references/survey.json "
-      "(or bare `steer survey`) and the image path from `steer survey -i`, "
-      "in JSON order.\n"
+      "For the survey, use existing knowledge only. Run `steer survey` and read "
+      "the image path it prints, in JSON order.\n"
       "Do not search, fetch, open other files, run code, or ask another system "
       "for answers.\n"
-      "Give complete answers with lower confidence when uncertain. Boolean "
-      "answers need true or false and confidence above 0.\n"
+      "Give your best effort. Guesses are allowed; use extremely low confidence "
+      "when very unsure. Boolean answers need true or false.\n"
       "Use unknown with confidence 0 only if the whole question is unknown.",
       hidden=True,
       blocking=True,
@@ -1932,9 +1925,6 @@ def _run_survey(
 
   from . import survey as survey_mod
 
-  if getattr(parsed, "smallest_image", False):
-    print(survey_mod.smallest_image(), file=out)
-    return 0
   if getattr(parsed, "template", False):
     print(json.dumps(survey_mod.template(), indent=2), file=out)
     return 0
@@ -1965,7 +1955,10 @@ def _run_survey(
   for q in survey["questions"]:
     qid = q["id"]
     ans = survey["answers"].get(qid, "(unanswered)")
-    print(f"- {qid}: {q['prompt']} -> {ans}", file=out)
+    prompt = q["prompt"]
+    if qid == "V1S0N":
+      prompt = prompt.replace("{path}", survey_mod.smallest_image())
+    print(f"- {qid}: {prompt} -> {ans}", file=out)
   print("\nSubmission template:", file=out)
   print(json.dumps(survey_mod.template(), indent=2), file=out)
   return 0

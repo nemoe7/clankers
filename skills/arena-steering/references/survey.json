@@ -19,7 +19,7 @@
     {
       "id": "V1S0N",
       "deterministic": true,
-      "question": "Run `steer survey -i` and read the image path it prints. Can you view images in this session?",
+      "question": "Read {path}. Can you view images?",
       "answer_fields": {
         "vision": "boolean"
       }
