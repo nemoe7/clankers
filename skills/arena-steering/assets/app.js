@@ -1117,7 +1117,7 @@ function renderBlockedBashEntry(entry, onDismiss, canDismiss) {
   dismiss.textContent = "Dismiss";
   dismiss.disabled = !canDismiss;
   dismiss.setAttribute("aria-label", `Dismiss blocked Bash call at ${entry.at}`);
-  dismiss.addEventListener("click", () => void onDismiss(entry));
+  dismiss.addEventListener("click", () => void onDismiss(entry, article));
   article.append(fields, dismiss);
   return article;
 }
@@ -1141,9 +1141,13 @@ async function openBlockedBashLog(trigger) {
     log.replaceChildren(...entries.map((entry) => renderBlockedBashEntry(entry, dismissEntry, canDismiss)));
     if (focusAfter) (log.querySelector(".audit-row-dismiss") || log).focus();
   };
-  const dismissEntry = async (entry) => {
+  const dismissEntry = async (entry, row) => {
     const buttons = log.querySelectorAll(".audit-row-dismiss");
+    const next = row.nextElementSibling;
     buttons.forEach((button) => { button.disabled = true; });
+    row.remove();
+    status.textContent = "Dismissing local log entry…";
+    log.focus();
     let deleted = false;
     try {
       await api.dismissBlockedBash(entry.id);
@@ -1151,9 +1155,15 @@ async function openBlockedBashLog(trigger) {
       await refresh(true);
     } catch (error) {
       if (status.isConnected && shell.open) {
-        status.textContent = `Could not dismiss the local log entry: ${error.message}. Close and reopen to retry.`;
+        status.textContent = deleted
+          ? `Entry dismissed, but the log could not refresh: ${error.message}. Close and reopen.`
+          : `Could not dismiss the local log entry: ${error.message}. Click to retry.`;
+        if (!deleted) {
+          log.insertBefore(row, next?.parentNode === log ? next : null);
+          buttons.forEach((button) => { button.disabled = false; });
+          row.querySelector(".audit-row-dismiss")?.focus();
+        }
       }
-      if (!deleted) buttons.forEach((button) => { button.disabled = false; });
     }
   };
   try {

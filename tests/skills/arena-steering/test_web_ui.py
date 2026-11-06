@@ -679,6 +679,9 @@ def test_blocked_bash_modal_shows_full_escaped_local_entries(
           "() => document.querySelectorAll('#blocked-bash-log .blocked-bash-entry').length === 1"
         )
         remaining = page.locator("#blocked-bash-log .blocked-bash-entry").first
+        page.wait_for_function(
+          "document.querySelector('#blocked-bash-log button')?.disabled === false"
+        )
         assert remaining.locator('[data-field="line"]').text_content() == "second call"
         assert remaining.locator("button.audit-row-dismiss").is_enabled()
         assert [
@@ -688,7 +691,7 @@ def test_blocked_bash_modal_shows_full_escaped_local_entries(
         page.wait_for_function(
           "() => document.querySelectorAll('#blocked-bash-log .blocked-bash-entry').length === 0"
         )
-        assert page.locator("#blocked-bash-status").text_content()
+        page.get_by_text("No blocked Bash calls recorded locally.").wait_for()
         assert app.dispatch("GET", "/blocked-bash") == (200, {"entries": []})
 
         page.locator('#modal-actions button[value="cancel"]').click()
@@ -5246,6 +5249,79 @@ def test_survey_refresh_preserves_focus_when_results_are_unchanged(
       page.evaluate("window.releaseSurvey()")
       page.wait_for_function("window.surveyReturned === true")
       assert focused.evaluate("el => el.isConnected && document.activeElement === el")
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("width", [390, 1200])
+def test_blocked_bash_dismissal_is_immediate_and_recovers(
+  tmp_path: Path, fail: bool, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  append_blocked_bash(tmp_path, line="first", command="first", blocked_by="gate")
+  append_blocked_bash(tmp_path, line="second", command="second", blocked_by="gate")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": width, "height": 800})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#blocked-bash-open").click()
+      rows = page.locator("#blocked-bash-log .blocked-bash-entry")
+      rows.nth(1).wait_for()
+      page.evaluate(
+        """fail => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (String(args[0]).startsWith('/blocked-bash/') && args[1]?.method === 'DELETE') {
+            await new Promise(resolve => { window.releaseDismiss = resolve; });
+            if (fail) return new Response(JSON.stringify({error:'offline'}), {
+              status:503, headers:{'content-type':'application/json'}
+            });
+          }
+          return original(...args);
+        };
+      }""",
+        fail,
+      )
+      rows.first.locator("button.audit-row-dismiss").click()
+      page.wait_for_function("typeof window.releaseDismiss === 'function'")
+      assert rows.count() == 1
+      assert rows.first.locator('[data-field="line"]').inner_text() == "second"
+      if os.environ.get("ARENA_STEERING_SCREENSHOT") and not fail:
+        page.screenshot(path=f"{os.environ['ARENA_STEERING_SCREENSHOT']}-{width}.png")
+      page.evaluate("window.releaseDismiss()")
+      if fail:
+        page.locator("#blocked-bash-status").get_by_text(
+          "Could not dismiss", exact=False
+        ).wait_for()
+        assert rows.count() == 2
+        assert rows.first.locator('[data-field="line"]').inner_text() == "first"
+        assert rows.first.locator("button.audit-row-dismiss").is_enabled()
+      else:
+        page.wait_for_function(
+          "document.querySelector('#blocked-bash-log button')?.disabled === false"
+        )
+        assert [
+          entry["line"] for entry in app.dispatch("GET", "/blocked-bash")[1]["entries"]
+        ] == ["second"]
       browser.close()
   finally:
     server.shutdown()
