@@ -1465,7 +1465,9 @@ function positionTitleTooltip(target, tip) {
   const box = tip.getBoundingClientRect();
   const left = Math.max(8, Math.min(rect.left + rect.width / 2 - box.width / 2, innerWidth - box.width - 8));
   const below = rect.bottom + 8;
-  const above = below + box.height > innerHeight - 8;
+  const fitsAbove = rect.top - box.height - 8 >= 8;
+  const fitsBelow = below + box.height <= innerHeight - 8;
+  const above = fitsAbove || (!fitsBelow && rect.top > innerHeight - rect.bottom);
   tip.classList.toggle("above", above);
   tip.style.left = `${left}px`;
   tip.style.top = `${above ? Math.max(8, rect.top - box.height - 8) : below}px`;
@@ -1498,8 +1500,11 @@ function positionSurveyTooltip(trigger) {
   const tip = trigger?.querySelector(".survey-answer-tooltip");
   const body = trigger?.closest(".modal-body");
   if (!tip || !body) return;
-  tip.classList.remove("above");
-  if (tip.getBoundingClientRect().bottom > body.getBoundingClientRect().bottom) tip.classList.add("above");
+  tip.classList.add("above");
+  const box = tip.getBoundingClientRect();
+  const heading = trigger.matches(".survey-cap-pill") ? body.querySelector(".survey-section-label")?.getBoundingClientRect() : null;
+  const coversHeading = heading && box.top < heading.bottom && box.bottom > heading.top && box.left < heading.right && box.right > heading.left;
+  if (box.top < body.getBoundingClientRect().top || coversHeading) tip.classList.remove("above");
 }
 
 document.addEventListener("mouseover", (event) => {

@@ -2886,6 +2886,33 @@ def test_displayed_ids_choose_typed_composer_parents(
         task_title = task_row.locator('button.task-title[data-parent-type="task"]')
         task_title.hover()
         assert page.get_by_role("tooltip").filter(has_text="task-parent").is_visible()
+        page.evaluate("""() => {
+          for (const [id, top] of [['tip-top', 2], ['tip-middle', 300], ['tip-bottom', 790]]) {
+            const button = document.createElement('button');
+            button.id = id; button.title = 'Placement test';
+            button.textContent = id;
+            Object.assign(button.style, {position: 'fixed', top: `${top}px`, left: '200px', zIndex: 10000});
+            document.body.append(button);
+          }
+        }""")
+        for button_id, above in [
+          ("tip-top", False),
+          ("tip-middle", True),
+          ("tip-bottom", True),
+        ]:
+          button = page.locator(f"#{button_id}")
+          button.hover()
+          tooltip = page.locator("#arena-title-tooltip")
+          assert tooltip.is_visible()
+          button_box, tip_box = button.bounding_box(), tooltip.bounding_box()
+          assert button_box and tip_box
+          if above:
+            assert tip_box["y"] + tip_box["height"] <= button_box["y"]
+          else:
+            assert tip_box["y"] >= button_box["y"] + button_box["height"]
+        page.evaluate(
+          "document.querySelectorAll('[id^=tip-]').forEach(el => el.remove())"
+        )
         assert "task-parent" in (task_title.get_attribute("aria-label") or "")
         page.screenshot(path=str(tmp_path / f"task-id-hover-{width}.png"))
         task_title.click()

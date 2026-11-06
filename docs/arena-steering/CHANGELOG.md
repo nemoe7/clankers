@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Prefer placing remaining tooltips above their targets when space allows.
+
 - Remove tooltips from ID chips, attachment thumbnails, copy controls, and report dismissal.
 
 - Truncate attachment filenames in the middle while retaining their extensions.
