@@ -193,6 +193,10 @@ Run records, logs, and exit files live under the state directory's `runs/` folde
 
 `worktree add` uses native Git and places the named worktree in `.worktrees/` at the repo root. `remove` uses Git's normal safety checks. The commands do not collect or apply worktree patches.
 
+## Chromium runtime
+
+On Linux x86-64, with Node 22.17+ in the 22 series or Node 24+ and npm, run `skills/arena-steering/scripts/chromium.sh` to install the Sparticuz Chromium runtime on demand. It prints executable, library, and font paths as `CHROMIUM_BIN`, `CHROMIUM_LIB`, and `CHROMIUM_FONTS`. Prepend the reported library path to `LD_LIBRARY_PATH` and set `FONTCONFIG_PATH` to the reported font path when launching the browser. Set `STEER_CHROMIUM_DIR` to choose a different cache directory.
+
 ## Report fields
 
 New fielded reports use question and option comments. The question comment supplies its unique ID and submitted label. Each option comment supplies its submitted label.

@@ -128,6 +128,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_blocked_bash_dismiss.py",
     "tests/skills/arena-steering/test_server_cli.py",
     "tests/skills/arena-steering/test_survey.py",
+    "tests/skills/arena-steering/test_chromium_installer.py",
     "tests/skills/arena-steering/test_web_ui.py",
     "tests/skills/arena-steering/test_violation_form.py",
     "tests/skills/arena-steering/test_demo_reset.py",

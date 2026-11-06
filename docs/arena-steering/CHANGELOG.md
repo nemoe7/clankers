@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Add an on-demand Chromium installer that reports runtime paths.
+
 - Protect a running Steering preview from unnecessary restarts.
 
 - Preserve survey results and the open survey modal across hot reloads.
