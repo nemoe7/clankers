@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Truncate attachment filenames in the middle while retaining their extensions.
+
 - Use smaller image thumbnails and matching file icons in Messages.
 
 - Cache repeated server Markdown rendering with bounded memory.

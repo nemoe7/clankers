@@ -1667,11 +1667,24 @@ select,
 }
 
 .message-attachment-name {
+  display: flex;
   width: 100%;
+  min-width: 0;
   padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.attachment-name-head {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.attachment-name-tail {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .receipt-filename {

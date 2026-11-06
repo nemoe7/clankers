@@ -1781,11 +1781,21 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         assert thumb.locator("img").evaluate(
           "image => image.complete && image.naturalWidth === 1"
         )
-        assert card.locator(".receipt-filename").all_inner_texts() == [
+        assert card.locator(".receipt-filename").all_text_contents() == [
           "notes.txt",
           "gone.png (missing)",
         ]
         assert card.locator('img[src$=".txt"]').count() == 0
+        assert thumb.locator(".attachment-name-tail").inner_text() == "ay>.png"
+        assert (
+          card.locator(".message-attachment-file")
+          .first.locator(".attachment-name-tail")
+          .inner_text()
+          == "tes.txt"
+        )
+        assert thumb.locator(".attachment-name-head").evaluate(
+          "el => el.scrollWidth > el.clientWidth"
+        )
         bounds, card_bounds = thumb.bounding_box(), card.bounding_box()
         assert bounds and card_bounds
         assert bounds["width"] <= 100

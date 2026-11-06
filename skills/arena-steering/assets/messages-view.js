@@ -105,6 +105,16 @@ function attachmentState(item) {
   return `${(size / 1000000).toFixed(2)} MB`;
 }
 
+function renderAttachmentName(name) {
+  const text = String(name || "");
+  const dot = text.lastIndexOf(".");
+  const base = dot > 0 ? text.slice(0, dot) : text;
+  const extension = dot > 0 ? text.slice(dot) : "";
+  const chars = Array.from(base);
+  const tail = chars.splice(Math.max(0, chars.length - 3)).join("") + extension;
+  return `<span class="attachment-name-head">${escapeHtml(chars.join(""))}</span><span class="attachment-name-tail">${escapeHtml(tail)}</span>`;
+}
+
 function renderComposerAttachment(item, sending) {
   const name = escapeHtml(item.name || "attachment");
   const lead = item.previewUrl
@@ -324,10 +334,11 @@ export function renderMessagesView(container, state, handlers) {
                   const preview = att.present !== false && typeof att.url === "string"
                     && att.url.startsWith("/static/uploads/")
                     && /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(String(att.name || ""));
+                  const displayName = renderAttachmentName(att.name);
                   if (preview) {
-                    return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}" title="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${name}</span></button>`;
+                    return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}" title="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${displayName}</span></button>`;
                   }
-                  return `<span class="message-attachment-file" title="${name}${att.present === false ? " (missing)" : ""}"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="message-attachment-name receipt-filename">${name}${att.present === false ? " (missing)" : ""}</span></span>`;
+                  return `<span class="message-attachment-file" title="${name}${att.present === false ? " (missing)" : ""}"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${att.present === false ? " (missing)" : ""}</span></span>`;
                 })
                 .join("")}</span>`
             : "";

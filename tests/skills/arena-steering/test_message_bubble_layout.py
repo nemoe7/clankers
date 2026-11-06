@@ -215,7 +215,7 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           ).all_text_contents() == ["bb0001", "reference"]
           assert short.locator(
             ".message-attachments .receipt-filename"
-          ).all_inner_texts() == ["notes.txt (missing)", "other.txt (missing)"]
+          ).all_text_contents() == ["notes.txt (missing)", "other.txt (missing)"]
           image_button = short.get_by_role("button", name="View image layout.png")
           image_button.scroll_into_view_if_needed()
           page.wait_for_function(
