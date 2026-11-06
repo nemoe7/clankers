@@ -357,8 +357,14 @@ def test_violation_form_and_cancel_in_browser(
         page.locator("#violation-error").wait_for(state="visible", timeout=5000)
         assert form.is_visible()
         assert button.get_attribute("aria-pressed") == "false"
-        page.once("dialog", lambda dialog: dialog.accept())
         page.locator("#violation-submit").click()
+        page.get_by_role("button", name="Cancel", exact=True).click()
+        page.locator("#violation-form").wait_for(state="visible", timeout=5000)
+        assert page.locator("#violation-msg").input_value() == cited_reason
+        page.locator("#violation-submit").click()
+        with page.expect_response("**/agent-interrupt"):
+          page.get_by_role("button", name="Retry same action").click()
+        page.locator("#modal-shell").wait_for(state="hidden")
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
         )
@@ -378,8 +384,9 @@ def test_violation_form_and_cancel_in_browser(
         page.locator("#violation-status").wait_for(state="visible", timeout=5000)
         assert button.get_attribute("aria-pressed") == "true"
         assert app.messages.pending_violation() is not None
-        page.once("dialog", lambda dialog: dialog.accept())
         button.click()
+        with page.expect_response("**/agent-interrupt"):
+          page.get_by_role("button", name="Retry same action").click()
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'false'"
         )
@@ -389,7 +396,8 @@ def test_violation_form_and_cancel_in_browser(
         form.wait_for(state="visible", timeout=5000)
         assert reason.locator('option[value="format-violation"]').count() > 0
         reason.select_option("format-violation")
-        page.locator("#violation-submit").click()
+        with page.expect_response("**/agent-interrupt"):
+          page.locator("#violation-submit").click()
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
         )
@@ -405,7 +413,8 @@ def test_violation_form_and_cancel_in_browser(
         assert reason.locator('option[value="current-task-violation"]').count() > 0
         assert reason.locator('option[value="bash-violation"]').count() == 0
         reason.select_option("current-task-violation")
-        page.locator("#violation-submit").click()
+        with page.expect_response("**/agent-interrupt"):
+          page.locator("#violation-submit").click()
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
         )
@@ -416,4 +425,88 @@ def test_violation_form_and_cancel_in_browser(
   finally:
     server.shutdown()
     server.server_close()
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("armed", [False, True])
+@pytest.mark.parametrize("fail", [False, True])
+def test_violation_flag_updates_before_write_and_restores_on_failure(
+  tmp_path: Path, armed: bool, fail: bool
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  if not armed:
+    assert (
+      app.dispatch(
+        "POST",
+        "/agent-interrupt",
+        {"armed": True, "tab": "messages", "reason": "bash-violation"},
+      )[0]
+      == 200
+    )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page()
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      button = page.locator("#agent-interrupt")
+      page.wait_for_function(
+        "expected => document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === expected",
+        arg="false" if armed else "true",
+      )
+      if armed:
+        button.click()
+        page.locator("#violation-form").wait_for()
+        page.locator("#violation-msg").fill("Keep this draft")
+      page.evaluate(
+        """fail => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (String(args[0]) === '/agent-interrupt' && args[1]?.method === 'POST') {
+            await new Promise(resolve => { window.releaseFlag = resolve; });
+            if (fail) return new Response(JSON.stringify({error:'offline'}), {
+              status:503, headers:{'content-type':'application/json'}
+            });
+          }
+          return original(...args);
+        };
+      }""",
+        fail,
+      )
+      if armed:
+        page.locator("#violation-submit").click()
+      else:
+        button.click()
+      page.wait_for_function("typeof window.releaseFlag === 'function'")
+      assert button.get_attribute("aria-pressed") == str(armed).lower()
+      page.evaluate("window.releaseFlag()")
+      if fail:
+        page.locator("#violation-error" if armed else "#violation-status").wait_for(
+          state="visible"
+        )
+        assert button.get_attribute("aria-pressed") == str(not armed).lower()
+        if armed:
+          assert page.locator("#violation-msg").input_value() == "Keep this draft"
+      else:
+        page.wait_for_function(
+          "document.querySelector('#agent-interrupt').getAttribute('aria-busy') !== 'true'"
+        )
+        assert button.get_attribute("aria-pressed") == str(armed).lower()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
     store.close()

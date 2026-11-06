@@ -19,6 +19,7 @@ export function createModalManager(
   const closeBtn = shell.querySelector(".close-button");
   const registry = new Map();
   let activeTrigger = null;
+  let activeClose = null;
 
   for (const tpl of document.querySelectorAll("template[data-modal-template]")) {
     registry.set(tpl.dataset.modalTemplate, tpl);
@@ -34,7 +35,10 @@ export function createModalManager(
     ) {
       const tpl = registry.get(name);
       if (!tpl) throw new Error(`Unknown modal template: ${name}`);
-      if (shell.open) shell.close("replaced");
+      if (shell.open) {
+        activeClose?.("replaced");
+        shell.close("replaced");
+      }
       activeTrigger = trigger;
       titleEl.textContent = title;
       const frag = tpl.content.cloneNode(true);
@@ -62,18 +66,21 @@ export function createModalManager(
       shell.returnValue = "cancel";
       shell.showModal();
       return new Promise((resolve) => {
-        shell.addEventListener(
-          "close",
-          () => {
-            const triggerEl = activeTrigger;
-            activeTrigger = null;
-            if (triggerEl && typeof triggerEl.focus === "function") {
-              triggerEl.focus();
-            }
-            resolve(shell.returnValue || "cancel");
-          },
-          { once: true }
-        );
+        const finish = (value) => {
+          shell.removeEventListener("close", onClose);
+          if (activeClose === finish) activeClose = null;
+          const triggerEl = activeTrigger;
+          activeTrigger = null;
+          if (value !== "replaced" && triggerEl && typeof triggerEl.focus === "function") {
+            triggerEl.focus();
+          }
+          resolve(value);
+        };
+        const onClose = () => {
+          if (!shell.open) finish(shell.returnValue || "cancel");
+        };
+        activeClose = finish;
+        shell.addEventListener("close", onClose);
       });
     },
   };

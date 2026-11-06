@@ -147,6 +147,8 @@ let lastReportView = { id: null, at: 0 };
 let reportViewTimer = null;
 let healthRequestId = 0;
 let appliedHealthRequestId = 0;
+let optimisticViolation = null;
+let confirmedViolation = { agent_interrupt_pending: false };
 
 function applyConnection(requestId, health, error = false) {
   if (requestId < appliedHealthRequestId) return;
@@ -165,6 +167,7 @@ function applyConnection(requestId, health, error = false) {
 function paintViolationFlag(health) {
   const button = document.getElementById("agent-interrupt");
   if (!button) return;
+  health = optimisticViolation || health;
   const pending = Boolean(health.agent_interrupt_pending);
   const label = pending
     ? `Flagged${health.violation_type ? `: ${health.violation_type.replaceAll("-", " ")}` : ""}. Click to cancel.`
@@ -186,7 +189,10 @@ async function getHealthWithConnection() {
   try {
     const health = await api.getHealth();
     applyConnection(requestId, health);
-    if (requestId === appliedHealthRequestId) paintViolationFlag(health);
+    if (requestId === appliedHealthRequestId) {
+      confirmedViolation = health;
+      paintViolationFlag(health);
+    }
     return health;
   } catch (error) {
     applyConnection(requestId, null, true);
@@ -1226,7 +1232,7 @@ async function openBlockedBashLog(trigger) {
   }
 }
 
-function openViolationForm(health, trigger) {
+function openViolationForm(health, trigger, draft = null, failure = null) {
   const tab = store.getState().activeTab;
   const types = health.violation_types?.[tab];
   if (!Array.isArray(types) || !types.length) {
@@ -1247,6 +1253,15 @@ function openViolationForm(health, trigger) {
     new Option("No clause file", ""),
     ...(Array.isArray(health.read_set) ? health.read_set : []).map((path) => new Option(path, path)),
   );
+  if (draft) {
+    reason.value = draft.reason;
+    clause.value = draft.clause_file || "";
+    msg.value = draft.msg || "";
+  }
+  if (failure) {
+    errorText.textContent = `Could not send flag: ${failure.message}. Click to retry.`;
+    errorText.hidden = false;
+  }
   submit.addEventListener("click", async () => {
     if (submit.disabled) return;
     errorText.hidden = true;
@@ -1265,18 +1280,31 @@ function openViolationForm(health, trigger) {
     if (tab === "reports" && reportId) payload.report_id = reportId;
     submit.disabled = true;
     submit.setAttribute("aria-busy", "true");
+    submit.textContent = "Sending flag…";
+    optimisticViolation = { agent_interrupt_pending: true, violation_type: payload.reason };
+    paintViolationFlag(optimisticViolation);
     try {
       const response = await api.flagViolation(payload);
+      optimisticViolation = null;
+      confirmedViolation = response;
+      appliedHealthRequestId = ++healthRequestId;
       paintViolationFlag(response);
       const shell = document.getElementById("modal-shell");
       if (shell.open && shell.querySelector("#violation-form") === form) shell.close("confirm");
       void refreshAll(true);
     } catch (error) {
-      errorText.textContent = `Could not send flag: ${error.message}. Click to retry.`;
-      errorText.hidden = false;
+      optimisticViolation = null;
+      paintViolationFlag(confirmedViolation);
+      if (!form.isConnected && !document.getElementById("modal-shell").open) {
+        openViolationForm(health, trigger, payload, error);
+      } else {
+        errorText.textContent = `Could not send flag: ${error.message}. Click to retry.`;
+        errorText.hidden = false;
+      }
     } finally {
       submit.disabled = false;
       submit.setAttribute("aria-busy", "false");
+      submit.textContent = "Send flag";
     }
   });
 }
@@ -1327,16 +1355,29 @@ function initEvents() {
     interruptBtn.disabled = true;
     interruptBtn.setAttribute("aria-busy", "true");
     setViolationStatus("");
+    const wasFlagged = interruptBtn.getAttribute("aria-pressed") === "true";
+    if (wasFlagged) {
+      optimisticViolation = { agent_interrupt_pending: false };
+      paintViolationFlag(optimisticViolation);
+    }
     try {
       const health = await getHealthWithConnection();
       if (health.agent_interrupt_pending) {
         const response = await api.flagViolation({ armed: false });
+        optimisticViolation = null;
+        confirmedViolation = response;
+        appliedHealthRequestId = ++healthRequestId;
         paintViolationFlag(response);
         await refreshAll(true);
+      } else if (wasFlagged) {
+        optimisticViolation = null;
+        paintViolationFlag(health);
       } else {
         openViolationForm(health, interruptBtn);
       }
     } catch (error) {
+      optimisticViolation = null;
+      paintViolationFlag(confirmedViolation);
       setViolationStatus(`Could not update flag: ${error.message}. Click to retry.`);
     } finally {
       interruptBtn.disabled = false;

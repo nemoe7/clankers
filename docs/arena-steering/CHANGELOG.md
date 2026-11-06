@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show violation flag updates immediately, and restore the flag and draft after failures.
+
 - Open Mermaid diagrams from clicks anywhere on their thumbnails.
 
 - Show report dismissals immediately, and restore reports after failures.
