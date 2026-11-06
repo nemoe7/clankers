@@ -502,6 +502,13 @@ class SqliteStore:
         for row in self._conn.execute("SELECT request_id FROM browser_write_requests")
       ]
 
+  def message_id_for_request(self, request_id: str) -> str | None:
+    with self._lock:
+      row = self._conn.execute(
+        "SELECT message_id FROM message_requests WHERE request_id = ?", (request_id,)
+      ).fetchone()
+    return str(row["message_id"]) if row is not None else None
+
   def get_message(self, msg_id: str) -> Message | None:
     with self._lock:
       row = self._conn.execute(

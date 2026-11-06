@@ -262,14 +262,19 @@ export function renderMessagesView(container, state, handlers) {
     : [];
   const isParentSelected = (type, id) =>
     selectedParentRefs.some((ref) => ref.type === type && ref.id === id);
+  const sentAttachmentIds = new Set(state.optimisticMessage?.attachmentIds || []);
   const composerAttachments = Array.isArray(state.composerAttachments)
-    ? state.composerAttachments
+    ? state.composerAttachments.filter(item => !sentAttachmentIds.has(item.id))
     : [];
   const composerExpanded = Boolean(state.composerExpanded);
   const pendingSend = state.pendingSend;
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
 
-  const visibleMessages = state.messages || [];
+  const optimistic = state.optimisticMessage;
+  const messages = state.messages || [];
+  const optimisticMatches = optimistic && (!query || [optimistic.body, ...(optimistic.parent_ids || []), ...(optimistic.parent_refs || []).map(ref => ref.id)].some(value => String(value || "").toLowerCase().includes(query)));
+  const alreadyVisible = optimistic?.serverId && messages.some(message => message.id === optimistic.serverId);
+  const visibleMessages = optimisticMatches && !alreadyVisible ? [...messages, optimistic] : messages;
   const placeholder = (visibleMessages.at(-1)?.body || "What should happen next?").split(/\r?\n/, 1)[0];
   const hasOlderMessages = Boolean(state.messagesHasMore);
 
@@ -302,8 +307,8 @@ export function renderMessagesView(container, state, handlers) {
                 .join("")}</div>`
             : "";
           const status = escapeHtml(msg.status);
-          const statusText = msg.status === "sent" ? "Sent" : msg.status === "seen" ? "Seen" : "";
-          const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.status}`);
+          const statusText = msg.optimistic ? "Sending" : msg.status === "sent" ? "Sent" : msg.status === "seen" ? "Seen" : "";
+          const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.optimistic ? "sending" : msg.status}`);
           const iso = escapeHtml(msg.modified_at || "");
           const rel = escapeHtml(relativeTime(msg.modified_at));
           const extraFlags = [];
@@ -346,7 +351,7 @@ export function renderMessagesView(container, state, handlers) {
               ${filesSuffix ? `<div class="message-attachments">${filesSuffix}</div>` : ""}
               <div class="message-heading">
                 ${parentsSuffix}
-                <button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>
+                ${msg.optimistic ? `<span class="msg-id">Pending ID</span>` : `<button type="button" class="msg-id receipt-id parent-id-button" data-parent-type="message" data-parent-id="${escapeHtml(msg.id)}" aria-label="Message ${escapeHtml(msg.id)} as message parent" aria-pressed="${replySelected ? "true" : "false"}" title="${replySelected ? "Remove" : "Select"} message as parent. Shift+Click copies ID"><code class="msg-id">${escapeHtml(msg.id)}</code></button>`}
               </div>
               <div class="message-bubble">
                 <div class="message-text${bodyClass}">${msg.body_html || renderMarkdownBlock(msg.body)}</div>
@@ -936,18 +941,12 @@ export function renderMessagesView(container, state, handlers) {
   }
 
   async function submitPayload(payload, submittedDraft) {
-    const submittedRevision = draftRevision;
-    try {
-      await handlers.onSendMessage(payload);
-    } catch (error) {
-      console.error(error);
-      return;
-    }
     const currentMsgEl = container.querySelector("#msg");
-    if (draftRevision === submittedRevision && (currentMsgEl ? currentMsgEl.value === submittedDraft : readComposerDraft() === submittedDraft)) {
+    const clearDraft = Boolean(submittedDraft) && (currentMsgEl ? currentMsgEl.value === submittedDraft : readComposerDraft() === submittedDraft);
+    if (clearDraft) {
       writeComposerDraft("");
       draftPreviewActive = false;
-      if (currentMsgEl && currentMsgEl.value === submittedDraft) {
+      if (currentMsgEl) {
         currentMsgEl.value = "";
         currentMsgEl.hidden = false;
         const currentPreview = container.querySelector("#draft-preview");
@@ -956,6 +955,22 @@ export function renderMessagesView(container, state, handlers) {
         currentMsgEl.dispatchEvent(new Event("input", { bubbles: true }));
         if (!container.hidden && currentMsgEl.isConnected) currentMsgEl.focus();
       }
+    }
+    const clearedRevision = draftRevision;
+    try {
+      await handlers.onSendMessage(payload);
+    } catch (error) {
+      if (clearDraft && draftRevision === clearedRevision) {
+        const input = container.querySelector("#msg");
+        if (!input?.value && !readComposerDraft()) {
+          writeComposerDraft(submittedDraft);
+          if (input) {
+            input.value = submittedDraft;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }
+      }
+      console.error(error);
     }
   }
 

@@ -2812,6 +2812,12 @@ def test_message_request_id_is_atomic_and_survives_restart(tmp_path: Path) -> No
   app = SteeringApp(store)
   status, result = app.dispatch("POST", "/messages", body)
   assert status == HTTPStatus.CREATED and result["message"]["id"] in ids
+  status, page = app.dispatch("GET", "/messages?all=1&request_id=request-1")
+  assert status == HTTPStatus.OK and page["pending_message_id"] in ids
+  status, page = app.dispatch("GET", "/messages?all=1&request_id=unknown")
+  assert status == HTTPStatus.OK and page["pending_message_id"] is None
+  status, _ = app.dispatch("GET", "/messages?request_id=bad%20id")
+  assert status == HTTPStatus.BAD_REQUEST
   status, _ = app.dispatch(
     "POST", "/messages", {"body": "Different content", "request_id": "request-1"}
   )

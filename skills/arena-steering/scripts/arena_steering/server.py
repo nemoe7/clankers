@@ -1174,14 +1174,17 @@ class SteeringApp:
       before=(query.get("before", [""])[0] or "").strip(),
       limit=20,
     )
-    return (
-      int(HTTPStatus.OK),
-      {
-        "messages": [self._serialize_message(item) for item in items],
-        "total": total,
-        "has_more": has_more,
-      },
-    )
+    result = {
+      "messages": [self._serialize_message(item) for item in items],
+      "total": total,
+      "has_more": has_more,
+    }
+    request_id = query.get("request_id", [""])[0]
+    if request_id:
+      if not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", request_id):
+        raise ValueError("Invalid request ID")
+      result["pending_message_id"] = self.store.message_id_for_request(request_id)
+    return (int(HTTPStatus.OK), result)
 
   @staticmethod
   def _message_request_identity(

@@ -83,6 +83,7 @@ export function createStore(initial = {}) {
     composerExpanded: false,
     composerError: "",
     pendingSend: readPendingSend(),
+    optimisticMessage: null,
     sending: false,
     selectedReportId: savedReportId || null,
     ...initial,

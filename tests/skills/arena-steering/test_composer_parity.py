@@ -7,6 +7,7 @@ import os
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from arena_steering.server import SteeringApp, create_http_server
@@ -204,13 +205,18 @@ def test_send_waits_for_an_inflight_upload_and_retries_a_failure() -> None:
       page.locator("#send svg").evaluate("e => getComputedStyle(e).animationName")
       == "none"
     )
+    assert (
+      page.locator("#history .message")
+      .filter(has_text="Please inspect this file")
+      .is_visible()
+    )
     page.evaluate("window.releaseUpload()")
     page.wait_for_function("window.uploadCalls === 2")
     page.wait_for_function(
       "Array.from(document.querySelectorAll('#history .message'))"
       ".some(e => e.textContent.includes('Please inspect this file'))"
     )
-    assert page.locator("#composer-attachments").is_hidden()
+    page.locator("#composer-attachments").wait_for(state="hidden")
     page.wait_for_function("document.querySelector('#msg')?.value === ''")
 
 
@@ -344,6 +350,12 @@ def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
     page.locator("#msg").fill("Reply once despite a lost response")
     page.locator("#send").click()
     page.locator("#retry-send").wait_for(timeout=6000)
+    assert (
+      page.locator(
+        '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa01"]'
+      ).count()
+      == 1
+    )
     assert page.locator("#msg").input_value() == "Reply once despite a lost response"
     page.locator("#retry-send").click()
     page.wait_for_function("!document.querySelector('#retry-send')")
@@ -433,3 +445,181 @@ def test_confirmed_send_clears_draft_without_waiting_for_refresh() -> None:
       )
     finally:
       page.evaluate("window.releaseHealth()")
+
+
+@pytest.mark.parametrize("width", [1200, 390])
+def test_send_shows_message_before_network_response(tmp_path: Path, width: int) -> None:
+  with composer_page(width) as page:
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.releaseSend = null;
+      window.fetch = async (...args) => {
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          await new Promise(resolve => { window.releaseSend = resolve; });
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#msg").fill("Immediate message")
+    page.locator("#send").click()
+    page.wait_for_function("window.releaseSend !== null")
+    assert (
+      page.locator("#history .message")
+      .filter(has_text="Immediate message")
+      .is_visible()
+    )
+    assert (
+      page.locator("#history .message")
+      .filter(has_text="Immediate message")
+      .get_by_text("Sending")
+      .is_visible()
+    )
+    assert page.locator("#msg").input_value() == ""
+    page.screenshot(path=str(tmp_path / f"optimistic-send-{width}.png"))
+    page.evaluate("window.releaseSend()")
+    page.wait_for_function("!document.querySelector('#send')?.disabled")
+    assert (
+      page.locator("#history .message").filter(has_text="Immediate message").count()
+      == 1
+    )
+
+
+def test_optimistic_send_reconciles_refresh_before_delayed_response() -> None:
+  with composer_page(1200) as page:
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.sendCommitted = false;
+      window.fetch = async (...args) => {
+        const response = await original(...args);
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          window.sendCommitted = true;
+          await new Promise(resolve => { window.releaseSendResponse = resolve; });
+        }
+        return response;
+      };
+    }""")
+    page.locator("#msg").fill("Only one copy while a response is delayed")
+    page.locator("#send").click()
+    page.wait_for_function("window.sendCommitted")
+    page.wait_for_timeout(4000)
+    matching = page.locator("#history .message").filter(
+      has_text="Only one copy while a response is delayed"
+    )
+    assert matching.count() == 1
+    assert page.locator("#msg").input_value() == ""
+    page.evaluate("window.releaseSendResponse()")
+    page.wait_for_function("!document.querySelector('#send')?.disabled")
+    assert matching.count() == 1
+
+
+def test_optimistic_send_failure_preserves_new_draft() -> None:
+  with composer_page(1200) as page:
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          await new Promise(resolve => { window.failSend = resolve; });
+          return new Response(JSON.stringify({error: 'offline'}), {
+            status: 503, headers: {'content-type': 'application/json'}
+          });
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#msg").fill("First draft")
+    page.locator("#send").click()
+    page.wait_for_function("typeof window.failSend === 'function'")
+    assert page.locator("#msg").input_value() == ""
+    page.locator("#msg").fill("A newer draft")
+    page.evaluate("window.failSend()")
+    page.locator("#retry-send").wait_for()
+    assert page.locator("#msg").input_value() == "A newer draft"
+    assert page.locator("#retry-send").is_visible()
+
+
+def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> None:
+  with composer_page(1200) as page:
+    response = page.request.post(
+      page.url.split("/?", 1)[0] + "/messages",
+      data={"id": "aaaa02", "body": "A parent"},
+    )
+    assert response.ok
+    parent = page.locator('button.receipt-id[data-parent-id="aaaa02"]')
+    parent.wait_for(timeout=6000)
+    parent.click()
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          await new Promise(resolve => { window.failSend = resolve; });
+          return new Response(JSON.stringify({error: 'offline'}), {
+            status: 503, headers: {'content-type': 'application/json'}
+          });
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#msg").fill("Reply waiting")
+    page.locator("#send").click()
+    page.wait_for_function("typeof window.failSend === 'function'")
+    assert (
+      page.locator(
+        '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa02"]'
+      ).count()
+      == 0
+    )
+    assert (
+      page.locator("#history .message").filter(has_text="Reply waiting").is_visible()
+    )
+    page.evaluate("window.failSend()")
+    page.locator("#retry-send").wait_for()
+    assert (
+      page.locator(
+        '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa02"]'
+      ).count()
+      == 1
+    )
+    assert page.locator("#msg").input_value() == "Reply waiting"
+
+
+def test_send_during_delayed_pagination_preserves_older_messages() -> None:
+  with composer_page(1200) as page:
+    url = page.url.split("/?", 1)[0]
+    for index in range(25):
+      response = page.request.post(
+        url + "/messages", data={"id": f"{index:06x}", "body": f"Old message {index}"}
+      )
+      assert response.ok
+    page.reload()
+    page.locator("#load-older-messages").wait_for()
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.heldOlder = false;
+      window.fetch = async (...args) => {
+        if (!window.heldOlder && String(args[0]).includes('/messages?') && String(args[0]).includes('before=')) {
+          window.heldOlder = true;
+          await new Promise(resolve => { window.releaseOlder = resolve; });
+        }
+        return original(...args);
+      };
+    }""")
+    page.evaluate("document.querySelector('#load-older-messages').click()")
+    page.wait_for_function("typeof window.releaseOlder === 'function'")
+    page.locator("#msg").fill("Send while loading older")
+    page.locator("#send").click()
+    assert (
+      page.locator("#history .message")
+      .filter(has_text="Send while loading older")
+      .is_visible()
+    )
+    page.evaluate("window.releaseOlder()")
+    page.wait_for_function("!document.querySelector('#send')?.disabled")
+    page.wait_for_function(
+      "Array.from(document.querySelectorAll('#history .message')).some(e => e.textContent.includes('Old message 0'))"
+    )
+    assert (
+      page.locator("#history .message")
+      .filter(has_text="Send while loading older")
+      .count()
+      == 1
+    )

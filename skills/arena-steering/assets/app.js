@@ -378,7 +378,7 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
     store.setState({ messages: [], messagesHasMore: false, messagesError: "", messagesLoading: true });
   }
   try {
-    const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim() };
+    const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim(), requestId: state.optimisticMessage?.requestId || "" };
     const result = await api.listMessages({ ...options, before });
     if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
     let fresh = result.messages || [];
@@ -396,6 +396,9 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
       : fresh;
     const current = store.getState();
+    if (result.pending_message_id && current.optimisticMessage?.requestId === options.requestId) {
+      current.optimisticMessage.serverId = result.pending_message_id;
+    }
     const retainedError = !before && olderPageErrorKey === key ? current.messagesError : "";
     if (before) olderPageErrorKey = null;
     if (current.messagesHasMore !== hasMore || current.messagesError !== retainedError || current.messagesLoading ||
@@ -496,6 +499,7 @@ async function refreshAll(force = false) {
 }
 
 const composerUploads = createComposerUploads(store, (file, options) => api.uploadFile(file, options));
+let replySelectionRevision = 0;
 
 const handlers = {
   onRenderDraft(markdown) {
@@ -504,7 +508,24 @@ const handlers = {
   async onSendMessage(payload) {
     let pending = store.getState().pendingSend;
     if (store.getState().sending) throw new Error("A send is already in progress");
-    store.setState({ sending: true, composerError: "" });
+    const requestId = pending?.request_id || crypto.randomUUID();
+    // A page requested before this send cannot reconcile its optimistic row.
+    messageEpoch += 1;
+    const selectedRefs = store.getState().replyParentRefs || [];
+    const clearRefs = JSON.stringify(selectedRefs) === JSON.stringify(payload.parent_refs || []);
+    const selectedRevision = replySelectionRevision;
+    const staged = store.getState().composerAttachments || [];
+    const optimisticMessage = {
+      id: `pending-${requestId}`, requestId, optimistic: true,
+      body: payload.body, parent_ids: payload.parent_ids || [], parent_refs: payload.parent_refs || [],
+      attachments: (payload.attachmentIds || []).map(id => {
+        const item = staged.find(entry => entry.id === id);
+        return item?.attachment || { name: item?.name || "Attachment" };
+      }),
+      attachmentIds: payload.attachmentIds || [],
+      status: "sending", blocking: true, modified_at: new Date().toISOString(), acks: [],
+    };
+    store.setState({ sending: true, composerError: "", optimisticMessage, ...(clearRefs ? { replyParentRefs: [] } : {}) });
     try {
       const attachments = pending
         ? payload.attachments || []
@@ -522,24 +543,31 @@ const handlers = {
         throw new Error("Retry the unconfirmed send before sending changes");
       }
       if (!pending) {
-        pending = { request_id: crypto.randomUUID(), content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
+        pending = { request_id: requestId, content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
         writePendingSend(pending);
       }
       store.setState({ pendingSend: pending });
       const request = { ...pending.content, request_id: pending.request_id };
+      let response;
       if (request.attachments.length) {
-        await api.sendMessageWithFile(request);
+        response = await api.sendMessageWithFile(request);
         composerUploads.clearSent(pending.attachmentIds);
       } else {
-        await api.sendMessage(request);
+        response = await api.sendMessage(request);
       }
-      if (JSON.stringify(store.getState().replyParentRefs || []) === JSON.stringify(request.parent_refs || [])) {
-        store.setState({ replyParentRefs: [] });
-      }
+      // Ignore page responses started before this confirmed send.
+      messageEpoch += 1;
+      const current = store.getState();
+      const message = response.message;
+      const messages = message && messageMatchesQuery(message, current.searchQuery) && !message.hidden
+        ? [...(current.messages || []).filter(item => item.id !== message.id), message]
+        : current.messages;
+      store.setState({ messages, optimisticMessage: null });
       writePendingSend(null);
       store.setState({ pendingSend: null, sending: false });
     } catch (error) {
-      store.setState({ sending: false, composerError: String(error.message || error) });
+      const restoreRefs = clearRefs && replySelectionRevision === selectedRevision;
+      store.setState({ sending: false, optimisticMessage: null, composerError: String(error.message || error), ...(restoreRefs ? { replyParentRefs: selectedRefs } : {}) });
       throw error;
     }
     // Do not keep a confirmed draft editable while an unrelated refresh waits.
@@ -627,6 +655,7 @@ const handlers = {
     const next = current.some((ref) => ref.type === type && ref.id === id)
       ? current.filter((ref) => ref.type !== type || ref.id !== id)
       : [...current, { type, id }];
+    replySelectionRevision += 1;
     store.setState({ replyParentRefs: next });
   },
   async onSkipPoll() {
@@ -676,7 +705,13 @@ const handlers = {
     const request = { key, refreshRequested: false };
     olderPageRequest = request;
     try {
-      await fetchMessagePage({ before: state.messages[0].id });
+      const before = state.messages[0].id;
+      while (messageQueryKey(store.getState()) === key) {
+        const loading = fetchMessagePage({ before });
+        const startedEpoch = messageEpoch;
+        const result = await loading;
+        if (result || messageEpoch === startedEpoch) break;
+      }
     } finally {
       if (olderPageRequest === request) olderPageRequest = null;
       if (request.refreshRequested && messageQueryKey(store.getState()) === key) {

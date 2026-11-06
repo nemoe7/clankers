@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show outgoing messages immediately, and preserve drafts and retry IDs after failed sends.
+
 - Cache Mermaid diagrams in the browser and server, and fit thumbnails within their code-block footprint.
 
 - Add `steer clear` to clear database state while preserving timezone, files, and survey memory.
