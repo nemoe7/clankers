@@ -310,6 +310,8 @@ function syncViewportHeight() {
   }
 }
 
+let reportEpoch = 0;
+const pendingReportDismissals = new Set();
 let loadingCount = 0;
 let loadingStartAt = 0;
 let loadingDoneTimer = null;
@@ -423,6 +425,7 @@ async function fetchMessagePage({ before = "", reset = false } = {}) {
 async function refreshAll(force = false) {
   try {
     const curState = store.getState();
+    const currentReportEpoch = reportEpoch;
     const [health, msgRes, taskRes, repRes] = await Promise.all([
       getHealthWithConnection(),
       fetchMessagePage(),
@@ -452,7 +455,8 @@ async function refreshAll(force = false) {
     }
     const messages = msgRes || store.getState().messages || [];
     const tasks = taskRes.tasks || [];
-    const reportSummaries = repRes.reports || [];
+    if (currentReportEpoch !== reportEpoch) return;
+    const reportSummaries = (repRes.reports || []).filter((report) => !pendingReportDismissals.has(report.id));
     const survey = health.survey || {};
     const lastTool = health.last_tool || null;
     const callsSinceMessage = Number(health.calls_since_message || 0);
@@ -478,6 +482,7 @@ async function refreshAll(force = false) {
         } });
       }
     }
+    if (currentReportEpoch !== reportEpoch) return;
     const reports = hydrateReportsWithCache(reportSummaries);
     const latestSelection = store.getState().selectedReportId;
     const currentSelectedReportId = reports.some((report) => report.id === latestSelection)
@@ -788,9 +793,54 @@ const handlers = {
       trigger,
     });
     if (decision !== "confirm") return;
-    reportCache.delete(reportId);
-    await api.dismissReport(reportId);
-    await refreshAll(true);
+    const state = store.getState();
+    const index = (state.reports || []).findIndex((report) => report.id === reportId);
+    if (index < 0 || pendingReportDismissals.has(reportId)) return;
+    const removed = state.reports[index];
+    const reports = state.reports.filter((report) => report.id !== reportId);
+    const wasSelected = state.selectedReportId === reportId;
+    const revision = ++reportSelectionRevision;
+    pendingReportDismissals.add(reportId);
+    reportEpoch += 1;
+    const selectedReportId = wasSelected ? reports[0]?.id || null : state.selectedReportId;
+    const fallback = reports.find((report) => report.id === selectedReportId);
+    const loadFallback = wasSelected && fallback && !Array.isArray(fallback.blocks);
+    if (wasSelected) confirmedReportId = selectedReportId;
+    store.setState({ reports, selectedReportId, loadingReportId: loadFallback ? selectedReportId : null, reportSelectionError: "", reportDismissError: "" });
+    if (loadFallback) {
+      ensureReportCached(selectedReportId, fallback.modified_at).then((report) => {
+        const current = store.getState();
+        if (!report || current.selectedReportId !== selectedReportId || reportSelectionRevision !== revision) return;
+        store.setState({ reports: hydrateReportsWithCache(current.reports || []), loadingReportId: null });
+      }).catch((error) => {
+        if (store.getState().selectedReportId === selectedReportId && reportSelectionRevision === revision) {
+          store.setState({ loadingReportId: null, reportSelectionError: `Could not load report: ${error.message || error}` });
+        }
+      });
+    }
+    try {
+      await api.dismissReport(reportId);
+      reportCache.delete(reportId);
+      pendingReportDismissals.delete(reportId);
+      reportEpoch += 1;
+      void refreshAll(true);
+    } catch (error) {
+      pendingReportDismissals.delete(reportId);
+      reportEpoch += 1;
+      const current = store.getState();
+      const restored = [...(current.reports || [])];
+      if (!restored.some((report) => report.id === reportId)) {
+        restored.splice(Math.min(index, restored.length), 0, removed);
+      }
+      const restoreSelection = wasSelected && reportSelectionRevision === revision;
+      if (restoreSelection) confirmedReportId = reportId;
+      store.setState({ reports: restored,
+        selectedReportId: restoreSelection ? reportId : current.selectedReportId,
+        loadingReportId: restoreSelection ? null : current.loadingReportId,
+        reportDismissError: `Could not dismiss report: ${error.message}`,
+      });
+      void refreshAll(true);
+    }
   },
   async onSubmitReportAnswer(reportId, values) {
     try {
@@ -969,7 +1019,7 @@ function renderApp(state) {
       delete visible.last_viewed_at;
       return visible;
     });
-    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, visibleReports, state.replyParentRefs, state.pendingReportAnswers, state.reportAnswerErrors]);
+    const signature = JSON.stringify([state.selectedReportId, state.loadingReportId, state.reportSelectionError, state.reportDismissError, visibleReports, state.replyParentRefs, state.pendingReportAnswers, state.reportAnswerErrors]);
     if (signature !== lastReportRenderSignature) {
       lastReportRenderSignature = signature;
       renderReportsView(reportsEl, state, handlers);

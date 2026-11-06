@@ -1004,3 +1004,132 @@ def test_report_loading_bar_respects_reduced_motion(motion: str) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("width", [390, 1200])
+@pytest.mark.parametrize("change_selection", [False, True])
+def test_report_dismissal_is_immediate_and_preserves_new_selection(
+  width: int,
+  fail: bool,
+  change_selection: bool,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  for name in ("first", "second", "third"):
+    app.reports.publish_report(name, name.title(), f"# {name.title()}\n")
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": width, "height": 800})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      page.locator('#report-picker [data-report-id="first"]').wait_for()
+      page.evaluate(
+        """fail => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (String(args[0]) === '/reports/first' && args[1]?.method === 'DELETE') {
+            await new Promise(resolve => { window.releaseDismiss = resolve; });
+            if (fail) return new Response(JSON.stringify({error:'offline'}), {
+              status:503, headers:{'content-type':'application/json'}
+            });
+          }
+          return original(...args);
+        };
+      }""",
+        fail,
+      )
+      page.locator("#dismiss-report-btn").click()
+      page.locator('#modal-actions button[value="confirm"]').click()
+      page.wait_for_function("typeof window.releaseDismiss === 'function'")
+      assert page.locator('#report-picker [data-report-id="first"]').count() == 0
+      app.reports.publish_report("fourth", "Fourth", "# Fourth\n")
+      page.locator('#report-picker [data-report-id="fourth"]').wait_for(timeout=8000)
+      assert page.locator('#report-picker [data-report-id="first"]').count() == 0
+      if change_selection:
+        page.locator('#report-picker [data-report-id="third"]').evaluate(
+          "el => el.click()"
+        )
+        page.wait_for_function(
+          "document.querySelector('#report-picker [aria-current=true]')?.dataset.reportId === 'third'"
+        )
+      else:
+        page.get_by_role("heading", name="Second", exact=True).wait_for()
+      if os.environ.get("ARENA_STEERING_SCREENSHOT") and not fail and change_selection:
+        page.screenshot(path=f"{os.environ['ARENA_STEERING_SCREENSHOT']}-{width}.png")
+      page.evaluate("window.releaseDismiss()")
+      if fail:
+        page.get_by_role("alert").filter(has_text="Could not dismiss").wait_for()
+        assert page.locator('#report-picker [data-report-id="first"]').count() == 1
+      else:
+        page.wait_for_function(
+          "document.querySelector('#report-picker [data-report-id=first]') === null"
+        )
+      assert page.locator('#report-picker [aria-current="true"]').get_attribute(
+        "data-report-id"
+      ) == ("third" if change_selection else "first" if fail else "second")
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
+def test_lost_report_dismissal_response_reconciles_server_state() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.reports.publish_report("only", "Only", "# Only\n")
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page()
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      page.locator("#dismiss-report-btn").wait_for()
+      page.evaluate("""() => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          if (String(args[0]) === '/reports/only' && args[1]?.method === 'DELETE') {
+            await original(...args);
+            throw new Error('Connection lost');
+          }
+          return original(...args);
+        };
+      }""")
+      page.locator("#dismiss-report-btn").click()
+      page.locator('#modal-actions button[value="confirm"]').click()
+      page.get_by_role("alert").filter(has_text="Connection lost").wait_for()
+      page.get_by_text("No report published yet.").wait_for(timeout=8000)
+      assert page.get_by_role("alert").filter(has_text="Connection lost").is_visible()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

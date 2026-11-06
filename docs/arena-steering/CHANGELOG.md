@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show report dismissals immediately, and restore reports after failures.
+
 - Show blocked Bash log dismissals immediately, and restore entries after failures.
 
 - Hide the Reports loading bar when reduced motion is enabled.

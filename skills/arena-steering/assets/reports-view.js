@@ -181,7 +181,7 @@ export function renderReportsView(container, state, handlers) {
     lastRenderedReportId = null;
     pickerScrollTop = 0;
     container.dataset.scrollable = "false";
-    container.innerHTML = `<div class="reports-layout"><p class="muted" id="report-status">No report published yet.</p></div>`;
+    container.innerHTML = `<div class="reports-layout">${state.reportDismissError ? `<p role="alert">${escapeHtml(state.reportDismissError)}</p>` : ""}<p class="muted" id="report-status">No report published yet.</p></div>`;
     return;
   }
 
@@ -380,6 +380,7 @@ export function renderReportsView(container, state, handlers) {
       </aside>
 
       <div id="report-main" class="report-main">
+        ${state.reportDismissError ? `<p role="alert">${escapeHtml(state.reportDismissError)}</p>` : ""}
         <form id="report-answer-form" data-report-id="${escapeHtml(activeReport.id)}">
           ${state.reportAnswerErrors?.[activeReport.id] ? `<p role="alert">${escapeHtml(state.reportAnswerErrors[activeReport.id])}</p>` : ""}
           <article id="report" class="report" aria-label="Selected report">
