@@ -688,7 +688,7 @@ def check_root_copies(errors: list[str]) -> None:
       )
 
 
-def validate(errors: list[str]) -> int:
+def check_skills(errors: list[str]) -> int:
   skills = sorted(
     path
     for path in SKILLS.iterdir()
@@ -768,6 +768,10 @@ def validate(errors: list[str]) -> int:
     if len(text.splitlines()) > 500:
       errors.append(f"{path.relative_to(ROOT)}: SKILL.md exceeds 500 lines")
 
+  return len(skills)
+
+
+def check_links(errors: list[str]) -> None:
   for path in (
     README,
     RULES / "README.md",
@@ -777,6 +781,8 @@ def validate(errors: list[str]) -> int:
     if path.is_file():
       check_internal_links(path, errors)
 
+
+def check_budgets(errors: list[str]) -> None:
   budgets = read_budget_table()
   rows = {
     **EXPECTED_BUDGETS,
@@ -833,13 +839,21 @@ def validate(errors: list[str]) -> int:
     if len(chat.read_text(encoding="utf-8")) > CHATGPT_CHAR_CAP:
       errors.append(f"rules/wenyan/{chat.name} exceeds 1,500 Unicode chars")
 
+
+def check_parity(errors: list[str]) -> None:
   check_lint_scope(errors)
   check_refs_parity(errors)
   check_system_prompt_parity(errors)
   check_root_copies(errors)
-  check_case_collisions(errors)
 
-  return len(skills)
+
+def validate(errors: list[str]) -> int:
+  skills = run_check("skills", errors, lambda: check_skills(errors))
+  run_check("links", errors, lambda: check_links(errors))
+  run_check("budgets", errors, lambda: check_budgets(errors))
+  run_check("parity", errors, lambda: check_parity(errors))
+  run_check("paths", errors, lambda: check_case_collisions(errors))
+  return skills
 
 
 def check_case_collisions(errors: list[str], root: Path | None = None) -> None:
@@ -911,7 +925,7 @@ def main() -> int:
       print("README measurements already up to date.")
 
   errors: list[str] = []
-  skills = run_check("repository", errors, lambda: validate(errors))
+  skills = validate(errors)
   run_check(
     "Nemoizer domains",  # nonemo: NMO100
     errors,

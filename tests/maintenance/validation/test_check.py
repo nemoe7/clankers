@@ -110,6 +110,28 @@ def test_core_source_installs_to_agents(tmp_path):
   assert not (base / ".agents" / core.name).exists()
 
 
+def test_validation_stages_continue_after_stale_budget(monkeypatch, capsys):
+  budgets = check.read_budget_table()
+  row = next(iter(budgets))
+  budget_type, _ = budgets[row]
+  budgets[row] = (budget_type, "999,999,999")
+  monkeypatch.setattr(check, "read_budget_table", lambda: budgets)
+  monkeypatch.setattr(check, "parse_args", lambda: SimpleNamespace(update=False))
+  monkeypatch.setattr(check, "check_nemoizer", lambda errors: None)
+
+  assert check.main() == 1
+  output = capsys.readouterr().out
+  for stage in ("skills", "links", "budgets", "parity", "paths"):
+    assert f"== {stage} ..." in output
+  assert "FAIL budgets:" in output
+  assert f"README budget stale for {row}" in output
+  assert (
+    output.index("FAIL budgets:")
+    < output.index("== parity ...")
+    < output.index("== paths ...")
+  )
+
+
 def test_internal_links_checks_docs_and_skill_readmes(tmp_path, monkeypatch):
   docs = tmp_path / "docs"
   docs.mkdir()
