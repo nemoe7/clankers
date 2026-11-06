@@ -623,3 +623,42 @@ def test_send_during_delayed_pagination_preserves_older_messages() -> None:
       .count()
       == 1
     )
+
+
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("width", [1200, 390])
+def test_skip_poll_feedback_is_immediate_and_recovers(
+  fail: bool, width: int, tmp_path: Path
+) -> None:
+  with composer_page(width) as page:
+    page.evaluate(
+      """fail => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]) === '/poll/skip' && args[1]?.method === 'POST') {
+          await new Promise(resolve => { window.releaseSkip = resolve; });
+          if (fail) return new Response(JSON.stringify({error:'offline'}), {
+            status:503, headers:{'content-type':'application/json'}
+          });
+        }
+        return original(...args);
+      };
+    }""",
+      fail,
+    )
+    page.locator("#skip-poll").click()
+    page.wait_for_function("typeof window.releaseSkip === 'function'")
+    assert page.locator("#skip-poll").get_attribute("data-state") == "good"
+    page.screenshot(path=str(tmp_path / f"skip-poll-{width}.png"))
+    page.evaluate("window.releaseSkip()")
+    if fail:
+      page.wait_for_function(
+        "document.querySelector('#skip-poll')?.dataset.state === 'bad'"
+      )
+      assert "offline" in page.locator("#skip-poll").get_attribute("title")
+      page.locator("#quiet-msgs").click()
+      assert page.locator("#skip-poll").get_attribute("data-state") == "bad"
+    else:
+      page.wait_for_function(
+        "document.querySelector('#skip-poll')?.dataset.state === 'good'"
+      )

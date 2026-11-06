@@ -66,6 +66,8 @@ let unreadEditedMsgId = null;
 let savedScrollTop = null;
 let pinnedToBottom = true;
 let skipPollFeedbackUntil = 0;
+let skipPollPending = false;
+let skipPollFailure = null;
 let visibleMessageCount = MESSAGE_PAGE_SIZE;
 
 export function expandMessageHistory() {
@@ -269,6 +271,7 @@ export function renderMessagesView(container, state, handlers) {
   const composerExpanded = Boolean(state.composerExpanded);
   const pendingSend = state.pendingSend;
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
+  const skipPollBad = skipPollFailure && Date.now() < skipPollFailure.until;
 
   const optimistic = state.optimisticMessage;
   const messages = state.messages || [];
@@ -409,9 +412,10 @@ export function renderMessagesView(container, state, handlers) {
               id="skip-poll"
               class="icon-button"
               type="button"
-              ${skipPollGood ? 'data-state="good"' : ""}
-              aria-label="Ask the agent to end its wait now"
-              title="Ask the agent to end its wait now"
+              ${skipPollGood ? 'data-state="good"' : skipPollBad ? 'data-state="bad"' : ""}
+              ${skipPollPending ? 'disabled aria-busy="true"' : ""}
+              aria-label="${skipPollBad ? escapeHtml(skipPollFailure.message) : "Ask the agent to end its wait now"}"
+              title="${skipPollBad ? escapeHtml(skipPollFailure.message) : "Ask the agent to end its wait now"}"
             >
               ${skipPollGood ? CHECK_SVG : SKIP_FORWARD_SVG}
             </button>
@@ -723,28 +727,49 @@ export function renderMessagesView(container, state, handlers) {
 
   const skipBtn = container.querySelector("#skip-poll");
   listen(skipBtn, "click", async () => {
-    try {
-      await handlers.onSkipPoll?.();
-    } catch (error) {
-      if (error?.message !== "Action canceled") {
-        skipBtn.dataset.state = "bad";
-        skipBtn.title = `Could not end the wait: ${error?.message || error}`;
-        setTimeout(() => {
-          if (!skipBtn.isConnected) return;
-          delete skipBtn.dataset.state;
-          skipBtn.title = "Ask the agent to end its wait now";
-        }, 1000);
-      }
-      return;
-    }
-    skipPollFeedbackUntil = Date.now() + 1000;
+    if (skipPollPending) return;
+    skipPollPending = true;
+    skipPollFailure = null;
+    skipPollFeedbackUntil = Infinity;
     skipBtn.dataset.state = "good";
     skipBtn.innerHTML = CHECK_SVG;
+    skipBtn.title = "Ask the agent to end its wait now";
+    skipBtn.setAttribute("aria-label", "Ask the agent to end its wait now");
+    skipBtn.disabled = true;
+    skipBtn.setAttribute("aria-busy", "true");
+    let error = null;
+    try {
+      await handlers.onSkipPoll?.();
+    } catch (cause) {
+      error = cause;
+    }
+    skipPollPending = false;
+    skipPollFeedbackUntil = error ? 0 : Date.now() + 1000;
+    if (error && error.message !== "Action canceled") {
+      skipPollFailure = { message: `Could not end the wait: ${error.message || error}`, until: Date.now() + 1000 };
+    }
+    const currentButton = container.querySelector("#skip-poll");
+    if (currentButton) {
+      currentButton.disabled = false;
+      currentButton.removeAttribute("aria-busy");
+      if (error) {
+        currentButton.innerHTML = SKIP_FORWARD_SVG;
+        if (error.message === "Action canceled") delete currentButton.dataset.state;
+        else {
+          currentButton.dataset.state = "bad";
+          currentButton.title = skipPollFailure.message;
+          currentButton.setAttribute("aria-label", skipPollFailure.message);
+        }
+      }
+    }
     setTimeout(() => {
       const curBtn = container.querySelector("#skip-poll");
-      if (curBtn && Date.now() >= skipPollFeedbackUntil) {
+      if (curBtn && !skipPollPending && Date.now() >= skipPollFeedbackUntil && (!skipPollFailure || Date.now() >= skipPollFailure.until)) {
+        skipPollFailure = null;
         delete curBtn.dataset.state;
         curBtn.innerHTML = SKIP_FORWARD_SVG;
+        curBtn.title = "Ask the agent to end its wait now";
+        curBtn.setAttribute("aria-label", "Ask the agent to end its wait now");
       }
     }, 1000);
   });

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show poll-skip feedback immediately, and surface failures.
+
 - Run scheduled bible checks every 10 minutes.
 
 - Select reports immediately while their contents load, and restore the previous selection on failure.
