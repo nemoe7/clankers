@@ -18,6 +18,8 @@ import sys
 import tempfile
 import threading
 import time
+import xml.etree.ElementTree as ET
+from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -51,6 +53,39 @@ WS_TICK_SECONDS = 0.25
 WS_HEARTBEAT_SECONDS = 10.0
 WS_IDLE_SECONDS = 35.0
 WS_MAX_MESSAGE = 16 * 1024 * 1024
+MERMAID_CACHE_LIMIT = 128
+MERMAID_SVG_LIMIT = 512_000
+MERMAID_SOURCE_LIMIT = 50_064
+MERMAID_SVG_ELEMENTS = frozenset(
+  {
+    "svg",
+    "g",
+    "defs",
+    "marker",
+    "path",
+    "rect",
+    "circle",
+    "ellipse",
+    "line",
+    "polyline",
+    "polygon",
+    "text",
+    "tspan",
+    "style",
+    "title",
+    "desc",
+    "clipPath",
+    "mask",
+    "pattern",
+    "linearGradient",
+    "radialGradient",
+    "stop",
+    "use",
+    "filter",
+    "feDropShadow",
+    "symbol",
+  }
+)
 
 MIME_OVERRIDES = {
   ".html": "text/html; charset=utf-8",
@@ -112,6 +147,40 @@ VIOLATION_TYPES = {
     "task-not-created",
   ),
 }
+
+
+def _safe_mermaid_svg(svg: str) -> bool:
+  if len(svg.encode("utf-8")) > MERMAID_SVG_LIMIT or "<!" in svg:
+    return False
+  try:
+    root = ET.fromstring(svg)
+  except ET.ParseError:
+    return False
+  if root.tag not in {"svg", "{http://www.w3.org/2000/svg}svg"}:
+    return False
+  for element in root.iter():
+    namespace, _, tag = element.tag.rpartition("}")
+    if namespace and namespace != "{http://www.w3.org/2000/svg":
+      return False
+    if tag not in MERMAID_SVG_ELEMENTS:
+      return False
+    values = list(element.attrib.values())
+    if tag == "style":
+      values.append(element.text or "")
+    for name, value in element.attrib.items():
+      local_name = name.rsplit("}", 1)[-1].lower()
+      if local_name.startswith("on") or (
+        local_name == "href" and not value.startswith("#")
+      ):
+        return False
+    for value in values:
+      if "\\" in value or re.search(
+        r"javascript:|vbscript:|data:text/html|@import|expression\s*\(|url\s*\(\s*['\"]?\s*(?!#)",
+        value,
+        re.IGNORECASE,
+      ):
+        return False
+  return True
 
 
 def _body_bool(value: Any, default: bool) -> bool:
@@ -200,6 +269,13 @@ class SteeringApp:
     repo_name: str | None = None,
   ) -> None:
     self.store = store
+    self._mermaid_cache: OrderedDict[str, str] = OrderedDict()
+    self._mermaid_cache_dir = (
+      Path(store.db_path).parent / "mermaid-cache"
+      if store.db_path != ":memory:"
+      else None
+    )
+    self._mermaid_lock = threading.Lock()
     self._browser_write = threading.local()
     self._clean_uncommitted_uploads()
     default_assets = Path(__file__).resolve().parents[2] / "assets"
@@ -301,6 +377,8 @@ class SteeringApp:
     self.router.add("POST", "/agent-interrupt", self._handle_agent_interrupt)
     self.router.add("POST", "/timezone", self._handle_set_timezone)
     self.router.add("POST", "/markdown", self._handle_render_markdown)
+    self.router.add("POST", "/mermaid-cache", self._handle_cache_mermaid)
+    self.router.add("GET", "/mermaid-cache/{key}", self._handle_get_mermaid)
     self.router.add("GET", "/state/snapshot", self._handle_state_snapshot)
     self.router.add("GET", "/state/changes", self._handle_state_changes)
     self.router.add("POST", "/state/merge", self._handle_state_merge)
@@ -365,7 +443,11 @@ class SteeringApp:
         )
       else:
         status, payload = handler(params, query, request_body)
-      if method.upper() in {"POST", "PATCH", "DELETE"} and 200 <= status < 300:
+      if (
+        method.upper() in {"POST", "PATCH", "DELETE"}
+        and path != "/mermaid-cache"
+        and 200 <= status < 300
+      ):
         self._state_version = getattr(self, "_state_version", 0) + 1
       return (status, payload)
     except DirtyTreeError as exc:
@@ -1012,6 +1094,73 @@ class SteeringApp:
       headings=headings,
     )
     return (int(HTTPStatus.OK), {"html": rendered, "headings": headings})
+
+  def _handle_cache_mermaid(
+    self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]
+  ) -> tuple[int, Any]:
+    source, svg = body.get("source"), body.get("svg")
+    if not isinstance(source, str) or not source or len(source) > MERMAID_SOURCE_LIMIT:
+      raise ValueError("Invalid Mermaid source")
+    if not isinstance(svg, str) or not _safe_mermaid_svg(svg):
+      raise ValueError("Invalid Mermaid SVG")
+    key = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    with self._mermaid_lock:
+      if self._mermaid_cache_dir is not None:
+        self._mermaid_cache_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+          mode="w", encoding="utf-8", dir=self._mermaid_cache_dir, delete=False
+        ) as temporary:
+          temporary_path = Path(temporary.name)
+          try:
+            temporary.write(svg)
+          except BaseException:
+            temporary_path.unlink(missing_ok=True)
+            raise
+        try:
+          os.replace(temporary_path, self._mermaid_cache_dir / f"{key}.svg")
+        finally:
+          temporary_path.unlink(missing_ok=True)
+        files = sorted(
+          (
+            path
+            for path in self._mermaid_cache_dir.glob("*.svg")
+            if re.fullmatch(r"[0-9a-f]{64}\.svg", path.name) and not path.is_symlink()
+          ),
+          key=lambda path: path.stat().st_mtime_ns,
+        )
+        for old in files[:-MERMAID_CACHE_LIMIT]:
+          old.unlink(missing_ok=True)
+      self._mermaid_cache[key] = svg
+      self._mermaid_cache.move_to_end(key)
+      if len(self._mermaid_cache) > MERMAID_CACHE_LIMIT:
+        self._mermaid_cache.popitem(last=False)
+    return (int(HTTPStatus.OK), {"key": key})
+
+  def _handle_get_mermaid(
+    self, params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    key = params["key"]
+    if not re.fullmatch(r"[0-9a-f]{64}", key):
+      raise ValueError("Invalid Mermaid cache key")
+    with self._mermaid_lock:
+      svg = self._mermaid_cache.get(key)
+      if svg is None and self._mermaid_cache_dir is not None:
+        path = self._mermaid_cache_dir / f"{key}.svg"
+        try:
+          if not path.is_symlink() and path.stat().st_size <= MERMAID_SVG_LIMIT:
+            candidate = path.read_text(encoding="utf-8")
+            if _safe_mermaid_svg(candidate):
+              svg = candidate
+              self._mermaid_cache[key] = svg
+              if len(self._mermaid_cache) > MERMAID_CACHE_LIMIT:
+                self._mermaid_cache.popitem(last=False)
+        except (OSError, UnicodeError):
+          pass
+      if svg is not None:
+        self._mermaid_cache.move_to_end(key)
+    if svg is None:
+      raise KeyError("Mermaid cache entry not found")
+    return (int(HTTPStatus.OK), {"svg": svg})
 
   def _handle_list_messages(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any

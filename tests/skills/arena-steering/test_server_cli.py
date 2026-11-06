@@ -13,7 +13,7 @@ from http import HTTPStatus
 from pathlib import Path
 
 import pytest
-from arena_steering import __version__, cli
+from arena_steering import __version__, cli, server
 from arena_steering.blocked_bash import append_blocked_bash
 from arena_steering.cli import main as cli_main
 from arena_steering.markdown import render_markdown, render_report_markdown
@@ -4302,5 +4302,76 @@ def test_clear_rolls_back_when_a_delete_fails() -> None:
       store.clear()
     assert len(app.messages.list_messages(unread_only=False, include_hidden=True)) == 1
     assert len(app.tasks.list_tasks()) == 1
+  finally:
+    store.close()
+
+
+def test_mermaid_cache_persists_without_changing_state_version(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  try:
+    source = "flowchart LR\n  A --> B"
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>diagram</text></svg>'
+    before = app.data_version()
+    status, result = app.dispatch(
+      "POST", "/mermaid-cache", {"source": source, "svg": svg}
+    )
+    assert status == HTTPStatus.OK
+    key = result["key"]
+    assert app.data_version() == before
+    fresh_app = SteeringApp(store)
+    assert fresh_app.dispatch("GET", f"/mermaid-cache/{key}") == (
+      HTTPStatus.OK,
+      {"svg": svg},
+    )
+    unsafe_diagrams = [
+      '<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect onload="alert(1)"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><style>@import "https://evil.test";</style></svg>',
+      '<!DOCTYPE svg [<!ENTITY x "bad">]><svg>&x;</svg>',
+    ]
+    for unsafe in unsafe_diagrams:
+      assert (
+        app.dispatch("POST", "/mermaid-cache", {"source": source, "svg": unsafe})[0]
+        == HTTPStatus.BAD_REQUEST
+      )
+    assert fresh_app.dispatch("GET", f"/mermaid-cache/{key}") == (
+      HTTPStatus.OK,
+      {"svg": svg},
+    )
+    assert app.dispatch("GET", "/mermaid-cache/not-a-hash")[0] == HTTPStatus.BAD_REQUEST
+    (tmp_path / "mermaid-cache" / f"{key}.svg").write_text(
+      unsafe_diagrams[0], encoding="utf-8"
+    )
+    assert (
+      SteeringApp(store).dispatch("GET", f"/mermaid-cache/{key}")[0]
+      == HTTPStatus.NOT_FOUND
+    )
+  finally:
+    store.close()
+
+
+def test_mermaid_cache_bounds_files_without_removing_unrelated_files(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.setattr(server, "MERMAID_CACHE_LIMIT", 2)
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  cache = tmp_path / "mermaid-cache"
+  cache.mkdir()
+  unrelated = cache / "notes.svg"
+  unrelated.write_text("keep", encoding="utf-8")
+  try:
+    keys = []
+    for source in ("one", "two", "three"):
+      status, result = app.dispatch(
+        "POST", "/mermaid-cache", {"source": source, "svg": "<svg></svg>"}
+      )
+      assert status == HTTPStatus.OK
+      keys.append(result["key"])
+    assert not (cache / f"{keys[0]}.svg").exists()
+    assert all((cache / f"{key}.svg").exists() for key in keys[1:])
+    assert unrelated.read_text(encoding="utf-8") == "keep"
   finally:
     store.close()

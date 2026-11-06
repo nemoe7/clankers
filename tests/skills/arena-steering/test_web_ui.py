@@ -5032,3 +5032,166 @@ def test_report_recommendations_preselect_without_becoming_owner_answers(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_mermaid_thumbnail_preserves_code_footprint(tmp_path: Path, width: int) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "diagram-preview",
+    "Diagram preview",
+    "# Diagram preview\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Second] --> C[Third] --> D[Fourth] --> E[End]\n```\n",
+  )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": width, "height": 844})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      page.locator('#report .code-block[data-mermaid-state="rendered"]').wait_for()
+      assert page.evaluate("""async () => {
+        const {sanitizeMermaidSvg} = await import('/static/assets/markdown.js');
+        const unsafe = [
+          '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1"><rect onload="alert(1)"/></svg>',
+          '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1"><style>body { display: none }</style></svg>',
+          '<svg xmlns="http://www.w3.org/2000/svg" id="mermaid-steering-1"><style>#mermaid-steering-1 ~ body { display: none }</style></svg>',
+        ];
+        return unsafe.every(input => sanitizeMermaidSvg(input) === null);
+      }""")
+      page.wait_for_function(
+        "Object.keys(localStorage).some(key => key.startsWith('steer:mermaid:v2:'))"
+      )
+      block = page.locator("#report .code-block:has(code.language-mermaid)")
+      diagram_box = block.bounding_box()
+      assert diagram_box
+      assert (
+        block.locator(".mermaid-svg").evaluate(
+          "element => getComputedStyle(element).userSelect"
+        )
+        == "none"
+      )
+      block.locator(".preview-code-mermaid").click()
+      code_box = block.bounding_box()
+      assert code_box
+      assert abs(diagram_box["width"] - code_box["width"]) <= 1
+      assert abs(diagram_box["height"] - code_box["height"]) <= 1
+      block.locator(".preview-code-mermaid").click()
+      thumbnail = block.locator(".mermaid-svg").bounding_box()
+      page.screenshot(path=str(tmp_path / f"diagram-thumbnail-{width}.png"))
+      block.locator(".mermaid-svg").click()
+      assert page.locator("#image-modal").evaluate("element => element.open")
+      modal = page.locator("#image-modal-stage svg").bounding_box()
+      assert thumbnail and modal and modal["height"] > thumbnail["height"]
+      page.screenshot(path=str(tmp_path / f"diagram-modal-{width}.png"))
+      initial_key = page.evaluate(
+        "Object.keys(localStorage).find(key => key.startsWith('steer:mermaid:v2:')).split(':').pop()"
+      )
+      page.add_init_script("""(() => {
+        const original = window.fetch.bind(window);
+        window.cacheReads = 0;
+        window.cacheWrites = 0;
+        window.cacheStatuses = [];
+        window.cacheUrls = [];
+        window.fetch = async (...args) => {
+          if (String(args[0]).startsWith('/mermaid-cache/')) { window.cacheReads++; window.cacheUrls.push(String(args[0])); }
+          if (String(args[0]) === '/mermaid-cache') window.cacheWrites++;
+          const response = await original(...args);
+          if (String(args[0]).startsWith('/mermaid-cache/')) window.cacheStatuses.push(response.status);
+          return response;
+        };
+      })();""")
+      page.reload()
+      page.locator('#report .code-block[data-mermaid-state="rendered"]').wait_for()
+      assert page.evaluate("window.cacheReads") == 0
+      assert page.evaluate("window.cacheWrites") == 0
+      page.evaluate("""() => {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('steer:mermaid:v2:')) localStorage.removeItem(key);
+        }
+      }""")
+      page.reload()
+      page.locator('#report .code-block[data-mermaid-state="rendered"]').wait_for()
+      assert page.evaluate("window.cacheReads") == 1
+      assert page.evaluate("window.cacheWrites") == 0, (
+        initial_key,
+        page.evaluate("window.cacheUrls"),
+        page.evaluate("window.cacheStatuses"),
+      )
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_mermaid_common_diagrams_persist_in_server_cache(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "diagrams",
+    "Diagrams",
+    "# Diagrams\n\n"
+    "```mermaid\nflowchart LR\n  A --> B\n```\n\n"
+    "```mermaid\nsequenceDiagram\n  Alice->>Bob: Hello\n  Bob-->>Alice: Hi\n```\n\n"
+    "```mermaid\nclassDiagram\n  Animal <|-- Duck\n```\n\n"
+    "```mermaid\nstateDiagram-v2\n  [*] --> Ready\n```\n\n"
+    "```mermaid\npie\n  \"Cats\" : 3\n  \"Dogs\" : 5\n```\n\n"
+    "```mermaid\nerDiagram\n  CUSTOMER ||--o{ ORDER : places\n```\n\n"
+    "```mermaid\ngantt\n  dateFormat YYYY-MM-DD\n  section Work\n  Task :a, 2026-01-01, 2d\n```\n\n"
+    "```mermaid\nflowchart LR\n  A --> B\n```\n",
+  )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": 1200, "height": 844})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      page.locator("#tab-reports").click()
+      page.wait_for_function(
+        "document.querySelectorAll('#report [data-mermaid-state=rendered]').length === 8"
+      )
+      ids = page.locator('#report .mermaid-diagram [id], #report .mermaid-diagram > svg[id]').evaluate_all(
+        "elements => elements.map(element => element.id)"
+      )
+      assert len(ids) == len(set(ids))
+      page.wait_for_function(
+        "Object.keys(localStorage).filter(key => key.startsWith('steer:mermaid:v2:')).length === 7"
+      )
+      keys = page.evaluate(
+        "Object.keys(localStorage).filter(key => key.startsWith('steer:mermaid:v2:')).map(key => key.split(':').pop())"
+      )
+      for key in keys:
+        assert page.request.get(
+          f"http://127.0.0.1:{server.server_port}/mermaid-cache/{key}"
+        ).ok
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

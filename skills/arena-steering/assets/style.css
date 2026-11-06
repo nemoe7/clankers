@@ -332,11 +332,27 @@ pre > code {
   padding-right: 62px;
 }
 
-.code-block[data-mermaid-state="pending"] > pre,
-.code-block[data-mermaid-state="rendered"] > pre,
-.code-block[data-md-state="rendered"] > pre,
-.code-block:not([data-mermaid-state="code"]):not([data-mermaid-state="fallback"]) > pre:has(> code.language-mermaid) {
+.code-block[data-md-state="rendered"] > pre {
   display: none;
+}
+
+.code-block[data-mermaid-state] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+}
+
+.code-block[data-mermaid-state] > .code-block-header {
+  grid-area: 1 / 1;
+}
+
+.code-block[data-mermaid-state] > pre {
+  grid-area: 2 / 1;
+}
+
+.code-block[data-mermaid-state="pending"] > pre,
+.code-block[data-mermaid-state="rendered"] > pre {
+  visibility: hidden;
 }
 
 .code-block[data-mermaid-state="code"] > .mermaid-diagram {
@@ -344,21 +360,24 @@ pre > code {
 }
 
 .mermaid-diagram {
-  width: 100%;
-  padding: 16px;
-  border-radius: 0;
-  overflow-x: auto;
+  grid-area: 2 / 1;
+  position: absolute;
+  inset: 0;
+  padding: 4px;
+  overflow: hidden;
   background-color: hsl(var(--surface-secondary));
+  user-select: none;
 }
 
 .mermaid-svg {
   display: block;
   width: 100%;
   max-width: 100%;
-  height: auto;
+  height: 100%;
   margin-inline: auto;
   color: hsl(var(--text-primary));
   font-family: inherit;
+  user-select: none;
 }
 
 .preview-code-mermaid,

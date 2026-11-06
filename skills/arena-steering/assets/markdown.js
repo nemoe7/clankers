@@ -159,10 +159,17 @@ export function highlightCodeBlocks(rootEl = document) {
   }
 }
 
+const MERMAID_SVG_ELEMENTS = new Set([
+  "svg", "g", "defs", "marker", "path", "rect", "circle", "ellipse", "line",
+  "polyline", "polygon", "text", "tspan", "style", "title", "desc", "clipPath",
+  "mask", "pattern", "linearGradient", "radialGradient", "stop", "use", "filter",
+  "feDropShadow", "symbol",
+]);
+
 export function sanitizeMermaidSvg(svgText) {
   if (typeof svgText !== "string") return null;
   const trimmed = svgText.trim();
-  if (!/^<svg\b[\s\S]*<\/svg>$/i.test(trimmed)) return null;
+  if (!/^<svg\b[\s\S]*<\/svg>$/i.test(trimmed) || trimmed.includes("<!")) return null;
   if (
     /<(script|foreignobject|iframe|object|embed|audio|video|canvas|applet|meta|link)\b/i.test(
       trimmed
@@ -180,15 +187,104 @@ export function sanitizeMermaidSvg(svgText) {
   if (/\b(?:xlink:)?href\s*=\s*["']?\s*(?!#)/i.test(trimmed)) {
     return null;
   }
-  if (!/\bclass\s*=\s*["'][^"']*mermaid-svg/i.test(trimmed)) {
-    return trimmed.replace(/^<svg\b/i, '<svg class="mermaid-svg" role="img"');
+  if (typeof DOMParser === "undefined") return null;
+  const parsed = new DOMParser().parseFromString(trimmed, "image/svg+xml");
+  if (parsed.documentElement.localName !== "svg" || parsed.querySelector("parsererror")) return null;
+  const rootId = parsed.documentElement.id;
+  if (!/^mermaid-steering-\d+$/.test(rootId)) return null;
+  for (const element of parsed.querySelectorAll("*")) {
+    if (element.namespaceURI !== "http://www.w3.org/2000/svg" || !MERMAID_SVG_ELEMENTS.has(element.localName)) return null;
+    const values = [...element.attributes].map((attribute) => {
+      const name = attribute.localName.toLowerCase();
+      if (name.startsWith("on") || (name === "href" && !attribute.value.startsWith("#"))) return null;
+      return attribute.value;
+    });
+    if (values.includes(null)) return null;
+    if (element.localName === "style") {
+      const css = element.textContent || "";
+      values.push(css);
+      try {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(css);
+        for (const rule of sheet.cssRules) {
+          if (rule.type === CSSRule.KEYFRAMES_RULE && ["dash", "edge-animation-frame"].includes(rule.name)) continue;
+          if (rule.type !== CSSRule.STYLE_RULE) return null;
+          const scope = `#${rootId}`;
+          if (rule.selectorText.split(",").some((selector) => {
+            const value = selector.trim();
+            return (value !== scope && !value.startsWith(`${scope} `)) || /[+~]/.test(value);
+          })) return null;
+        }
+      } catch {
+        return null;
+      }
+    }
+    if (values.some((value) => /\\|javascript:|vbscript:|data:text\/html|@import|expression\s*\(|url\s*\(\s*["']?\s*(?!#)/i.test(value))) return null;
   }
-  return trimmed;
+  return trimmed.replace(/^<svg\b[^>]*>/i, (opening) => {
+    if (/\bclass\s*=\s*["'][^"']*\bmermaid-svg\b/i.test(opening)) return opening;
+    if (/\bclass\s*=\s*["']/i.test(opening)) {
+      return opening.replace(/\bclass\s*=\s*(["'])/i, 'class=$1mermaid-svg ');
+    }
+    return opening.replace(/^<svg\b/i, '<svg class="mermaid-svg"');
+  });
 }
 
 let mermaidSeq = 0;
 let mermaidInitialized = false;
 const mermaidSvgCache = new Map();
+const mermaidPending = new WeakSet();
+const MERMAID_CACHE_PREFIX = "steer:mermaid:v2:";
+const MERMAID_BROWSER_CACHE_LIMIT = 16;
+
+function rememberMermaidSvg(source, svg) {
+  mermaidSvgCache.delete(source);
+  mermaidSvgCache.set(source, svg);
+  if (mermaidSvgCache.size > MERMAID_BROWSER_CACHE_LIMIT) {
+    mermaidSvgCache.delete(mermaidSvgCache.keys().next().value);
+  }
+}
+
+async function mermaidCacheKey(source) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(MERMAID_CACHE_PREFIX + source));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function readMermaidBrowserCache(key) {
+  try {
+    return sanitizeMermaidSvg(localStorage.getItem(MERMAID_CACHE_PREFIX + key));
+  } catch {
+    return null;
+  }
+}
+
+function writeMermaidBrowserCache(key, svg) {
+  try {
+    const keys = Object.keys(localStorage).filter((item) => item.startsWith(MERMAID_CACHE_PREFIX));
+    while (keys.length >= MERMAID_BROWSER_CACHE_LIMIT) localStorage.removeItem(keys.shift());
+    localStorage.setItem(MERMAID_CACHE_PREFIX + key, svg);
+  } catch {
+    // Cache storage is optional.
+  }
+}
+
+async function readMermaidServerCache(key) {
+  try {
+    const response = await fetch(`/mermaid-cache/${key}`);
+    if (!response.ok) return null;
+    return sanitizeMermaidSvg((await response.json()).svg);
+  } catch {
+    return null;
+  }
+}
+
+function writeMermaidServerCache(source, svg) {
+  fetch("/mermaid-cache", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source: MERMAID_CACHE_PREFIX + source, svg }),
+  }).catch(() => {});
+}
 
 export function initializeMermaid() {
   const lib = globalThis.mermaid;
@@ -266,6 +362,23 @@ function mountMermaidDiagram(block, codeEl, rawSource, safeSvg) {
     block.insertBefore(diagramDiv, preEl);
   }
   diagramDiv.innerHTML = safeSvg;
+  // Cached diagrams can have the same Mermaid IDs, even when their sources differ.
+  // Give each mounted copy its own IDs and local references.
+  const svg = diagramDiv.querySelector("svg");
+  const instance = ++mermaidSeq;
+  const ids = new Map();
+  for (const element of [svg, ...svg.querySelectorAll("[id]")]) {
+    if (!element.id) continue;
+    ids.set(element.id, element === svg ? `mermaid-steering-${instance}` : `mermaid-instance-${instance}-${element.id}`);
+  }
+  const rewriteRefs = (value) => value.replace(/#([\w-]+)/g, (match, id) => ids.has(id) ? `#${ids.get(id)}` : match);
+  for (const element of [svg, ...svg.querySelectorAll("*")]) {
+    for (const attribute of [...element.attributes]) {
+      if (attribute.name === "id" && ids.has(attribute.value)) element.setAttribute("id", ids.get(attribute.value));
+      else element.setAttribute(attribute.name, rewriteRefs(attribute.value));
+    }
+    if (element.localName === "style") element.textContent = rewriteRefs(element.textContent || "");
+  }
   block.dataset.mermaidState = "rendered";
 }
 
@@ -279,47 +392,65 @@ export async function hydrateMermaidBlocks(rootEl = document) {
   for (const codeEl of codeNodes) {
     const block = codeEl.closest(".code-block");
     if (
-      !block ||
+      !block || mermaidPending.has(block) ||
       (block.dataset.mermaidState &&
         block.dataset.mermaidState !== "pending")
     ) {
       continue;
     }
-    const rawSource = (codeEl.textContent || "").trim();
-    if (!rawSource) {
-      block.dataset.mermaidState = "fallback";
-      block.querySelector(".preview-code-mermaid")?.remove();
-      continue;
-    }
-    const cachedSvg = mermaidSvgCache.get(rawSource);
-    if (cachedSvg) {
-      mountMermaidDiagram(block, codeEl, rawSource, cachedSvg);
-      continue;
-    }
-    if (!lib?.render) {
-      block.dataset.mermaidState = "fallback";
-      block.querySelector(".preview-code-mermaid")?.remove();
-      continue;
-    }
+    mermaidPending.add(block);
     try {
-      mermaidSeq += 1;
-      const rendered = await lib.render(
-        `mermaid-steering-${mermaidSeq}`,
-        rawSource
-      );
-      const svgRaw = typeof rendered === "string" ? rendered : rendered?.svg;
-      const safeSvg = sanitizeMermaidSvg(svgRaw);
-      if (!safeSvg) {
+      const rawSource = (codeEl.textContent || "").trim();
+      if (!rawSource) {
         block.dataset.mermaidState = "fallback";
         block.querySelector(".preview-code-mermaid")?.remove();
         continue;
       }
-      mermaidSvgCache.set(rawSource, safeSvg);
-      if (!block.isConnected) continue;
-      mountMermaidDiagram(block, codeEl, rawSource, safeSvg);
-    } catch {
-      block.dataset.mermaidState = "fallback";
-      block.querySelector(".preview-code-mermaid")?.remove();
+      let key = null;
+      try {
+        key = await mermaidCacheKey(rawSource);
+      } catch {
+        // Rendering still works without a cache key.
+      }
+      const cachedSvg = mermaidSvgCache.get(rawSource) ||
+        (key && (readMermaidBrowserCache(key) || await readMermaidServerCache(key)));
+      if (cachedSvg) {
+        rememberMermaidSvg(rawSource, cachedSvg);
+        if (key) writeMermaidBrowserCache(key, cachedSvg);
+        if (block.isConnected) mountMermaidDiagram(block, codeEl, rawSource, cachedSvg);
+        continue;
+      }
+      if (!lib?.render) {
+        block.dataset.mermaidState = "fallback";
+        block.querySelector(".preview-code-mermaid")?.remove();
+        continue;
+      }
+      try {
+        mermaidSeq += 1;
+        const rendered = await lib.render(
+          `mermaid-steering-${mermaidSeq}`,
+          rawSource
+        );
+        const svgRaw = typeof rendered === "string" ? rendered : rendered?.svg;
+        const safeSvg = sanitizeMermaidSvg(svgRaw);
+        if (!safeSvg) {
+          block.dataset.mermaidState = "fallback";
+          block.querySelector(".preview-code-mermaid")?.remove();
+          continue;
+        }
+        rememberMermaidSvg(rawSource, safeSvg);
+        if (key) {
+          writeMermaidBrowserCache(key, safeSvg);
+          writeMermaidServerCache(rawSource, safeSvg);
+        }
+        if (!block.isConnected) continue;
+        mountMermaidDiagram(block, codeEl, rawSource, safeSvg);
+      } catch {
+        block.dataset.mermaidState = "fallback";
+        block.querySelector(".preview-code-mermaid")?.remove();
+      }
+    } finally {
+      mermaidPending.delete(block);
     }
   }
 }
