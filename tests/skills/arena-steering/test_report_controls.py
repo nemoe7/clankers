@@ -28,7 +28,7 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
     + "## Decision\n\n"
     + '<!-- question {"id":"decision","label":"Decision"} -->\n'
     + "Choose one.\n"
-    + '- ( ) Continue <!-- option {"label":"Continue"} -->\n'
+    + '- (x) Continue <!-- option {"label":"Continue"} -->\n'
   )
   app.reports.publish_report("controls", "Report controls", body)
   for idx in range(4):
@@ -228,7 +228,7 @@ def test_submit_preserves_label_and_disables_during_request() -> None:
     "choice",
     "Choice",
     '# Choice\n\n<!-- question {"id":"choice","label":"Choice"} -->\n'
-    'Choose one.\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    'Choose one.\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
   )
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)

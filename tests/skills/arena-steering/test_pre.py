@@ -2935,7 +2935,7 @@ def test_http_answer_ack_resets_count_only_after_last_blocker(
     "choice",
     "Choice",
     '<!-- question {"id":"pick","label":"Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
   )
   app.reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab0021")
   app.messages.send_message("Other blocker", msg_id="ab0022", hidden=True)
@@ -3631,7 +3631,7 @@ def test_exit_counts_latest_report_answer_with_notes(_isolate_state: Path) -> No
     "choice",
     "Choice",
     '<!-- question {"id":"pick","label":"Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
   )
   reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1004")
   store.close()
@@ -3654,7 +3654,7 @@ def test_exit_labels_hidden_violation_separately_from_note_and_answer(
     "choice",
     "Choice",
     '<!-- question {"id":"pick","label":"Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
   )
   reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1007")
   store.close()

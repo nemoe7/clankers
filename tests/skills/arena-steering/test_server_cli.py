@@ -156,7 +156,7 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
       "decision",
       "Decision",
       '<!-- question {"id":"pick","label":"Pick"} -->\n'
-      'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+      'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
     )
     app.tasks.create_task(
       "blocked",
@@ -461,7 +461,7 @@ def test_cli_poll_skips_with_only_blocked_tasks(tmp_path: Path) -> None:
       "decision",
       "Decision",
       '<!-- question {"id":"pick","label":"Pick"} -->\n'
-      'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+      'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
     )
     app.tasks.create_task(
       "blocked", "Blocked task", size=2, report_ids=["decision"], details=["Wait."]
@@ -783,7 +783,7 @@ def test_tasks_view_uses_first_unblocked_upcoming_task(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -971,7 +971,7 @@ def test_http_report_body_lock_allows_explicit_same_id_republication(
   app = SteeringApp(store)
   body = (
     '<!-- question {"id":"choice","label":"Choose"} -->\n'
-    'Choose\n- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+    'Choose\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
   )
   status, _ = app.dispatch(
     "POST", "/reports", {"id": "decision", "title": "Decision", "body": body}
@@ -1026,7 +1026,7 @@ def test_state_changes_sync_same_second_messages_and_answers(tmp_path: Path) -> 
   body = (
     '<!-- question {"id":"choice","label":"Choice"} -->\n'
     "Choice\n"
-    '- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+    '- (x) Yes <!-- option {"label":"Yes"} -->\n'
   )
   app.reports.publish_report("decision", "Decision", body)
   app.reports.submit_answer("decision", {"choice": "Yes"}, answer_id="aa1003")
@@ -2852,7 +2852,7 @@ def test_cli_single_task_keeps_persisted_answer_details(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "select", "label": "Select?"} -->\n'
       "Select?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -2915,7 +2915,7 @@ def test_ack_answer_creates_task_with_report_link(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "select", "label": "Select?"} -->\n'
       "Select?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -2950,7 +2950,7 @@ def _seed_report_removal_batch(state_dir: Path) -> str:
   body = (
     '<!-- question {"id":"choice", "label":"Choice"} -->\n'
     "Choose one\n"
-    '- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+    '- (x) Yes <!-- option {"label":"Yes"} -->\n'
     '- ( ) No <!-- option {"label":"No"} -->\n'
   )
   store, _, tasks, reports = cli.open_services(state_dir)
@@ -3091,7 +3091,7 @@ def _seed_ack_batch(state_dir: Path) -> None:
     (
       '<!-- question {"id":"choice", "label":"Choice"} -->\n'
       "Choose one\n"
-      '- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+      '- (x) Yes <!-- option {"label":"Yes"} -->\n'
       '- ( ) No <!-- option {"label":"No"} -->\n'
     ),
   )
@@ -3304,7 +3304,7 @@ def test_message_ack_route_returns_report_answer(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choose?"} -->\n'
       "Choose?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -3506,7 +3506,7 @@ def test_browser_write_replay_survives_restart(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choose?"} -->\n'
       "Choose?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -3544,7 +3544,7 @@ def test_browser_write_replay_concurrent(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choose?"} -->\n'
       "Choose?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -3620,7 +3620,7 @@ def test_annotated_report_submission_and_trusted_html(tmp_path: Path) -> None:
     '<mark data-example="yes">trusted</mark> ==plain==\n\n'
     '<!-- question {"id":"decision","label":"Decision"} -->\n'
     "Which path?\n\n"
-    '- ( ) A <!-- option {"label":"Use A"} -->\n'
+    '- (x) A <!-- option {"label":"Use A"} -->\n'
     '- ( ) B <!-- option {"label":"Use B"} -->\n'
   )
   status, result = app.dispatch(
@@ -3661,7 +3661,7 @@ def test_annotated_report_rejects_bad_metadata_and_preserves_code_fences(
   assert status == HTTPStatus.BAD_REQUEST
   mixed = (
     '<!-- question {"id":"choice","label":"Choice"} -->\nQuestion?\n'
-    '- ( ) A <!-- option {"label":"A"} -->\n'
+    '- (x) A <!-- option {"label":"A"} -->\n'
     '- [ ] B <!-- option {"label":"B"} -->\n'
   )
   status, _ = app.dispatch(
@@ -3725,7 +3725,7 @@ def test_annotated_checkbox_labels_and_legacy_saved_report(tmp_path: Path) -> No
   body = (
     '<!-- question {"id":"features","label":"Features"} -->\n'
     "Which features?\n"
-    '- [ ] A <!-- option {"label":"Use A"} -->\n'
+    '- [x] A <!-- option {"label":"Use A"} -->\n'
     '- [ ] B <!-- option {"label":"Use B"} -->\n'
   )
   status, _ = app.dispatch(
@@ -3758,7 +3758,7 @@ def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> N
     (
       '<!-- question {"id": "select", "label": "Select?"} -->\n'
       "Select?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -3874,7 +3874,7 @@ def test_cli_pr_update_blocks_session_local_ids(
     "decision-report",
     "Decision",
     '<!-- question {"id": "select", "label": "Select?"} -->\n'
-    'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+    'Select?\n- (x) Yes <!-- option {"label": "Yes"} -->\n',
   )
   reports.submit_answer("decision-report", {"select": "Yes"}, answer_id="cc22dd")
   store.close()
@@ -3935,7 +3935,7 @@ def test_cli_pr_update_blocks_retained_answer_after_report_removal(
     "gone-report",
     "Decision",
     '<!-- question {"id": "select", "label": "Select?"} -->\n'
-    'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+    'Select?\n- (x) Yes <!-- option {"label": "Yes"} -->\n',
   )
   answer = reports.submit_answer("gone-report", {"select": "Yes"}, answer_id="dd33ee")
   reports.ack_answer("gone-report", answer.id, "Read")
@@ -3999,7 +3999,7 @@ def test_cli_bare_task_shows_first_unblocked_without_details(tmp_path: Path) -> 
     "waiting-report",
     "Decision",
     '<!-- question {"id": "select", "label": "Select?"} -->\n'
-    'Select?\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+    'Select?\n- (x) Yes <!-- option {"label": "Yes"} -->\n',
   )
   tasks.create_task(
     "blocked-task",

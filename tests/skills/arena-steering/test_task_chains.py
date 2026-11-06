@@ -19,7 +19,7 @@ from arena_steering.store import SqliteStore
 
 QUESTION = (
   '<!-- question {"id":"choice","label":"Choice?"} -->\n'
-  'Choice?\n- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+  'Choice?\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
 )
 FIRST_COMMIT = "a" * 40
 SECOND_COMMIT = "b" * 40

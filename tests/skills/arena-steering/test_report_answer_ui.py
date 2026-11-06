@@ -27,7 +27,7 @@ def test_saved_report_answer_can_be_edited_during_refresh(
     "Decision",
     '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
     "Choice?\n"
-    '- ( ) A <!-- option {"label": "A"} -->\n'
+    '- (x) A <!-- option {"label": "A"} -->\n'
     '- ( ) B <!-- option {"label": "B"} -->\n',
   )
   app.reports.submit_answer("decision", {"choice": "A"}, answer_id="ab9002")
@@ -99,7 +99,7 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )

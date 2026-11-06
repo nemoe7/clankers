@@ -138,7 +138,7 @@ def test_answer_wakes_poll_without_lock_inversion() -> None:
     "choice",
     "Choice",
     '<!-- question {"id": "pick", "label": "Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label": "Yes"} -->\n',
+    'Pick\n- (x) Yes <!-- option {"label": "Yes"} -->\n',
   )
   delivered: list[dict] = []
   poller = threading.Thread(

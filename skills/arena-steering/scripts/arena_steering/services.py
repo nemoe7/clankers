@@ -1379,6 +1379,9 @@ class ReportService:
     blocks, fields = parse_report_markdown(body)
     if any(not field.annotated for field in fields):
       raise ValueError("Fielded reports require question and option comments")
+    for field in fields:
+      if field.type in {"choice", "checkbox"} and not field.recommended:
+        raise ValueError(f"Report field {field.id!r} needs a preselected option")
     warnings = unparsed_strike_lines(body)
     if warnings and not allow_unparsed_markers:
       raise ValueError(f"Possible unparsed strike markers on lines: {warnings}")

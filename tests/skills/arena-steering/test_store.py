@@ -540,7 +540,7 @@ def test_old_task_answer_snapshots_are_not_migrated(tmp_path):
     (
       '<!-- question {"id": "select", "label": "Select?"} -->\n'
       "Select?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -767,7 +767,7 @@ def test_legacy_blocked_tasks_keep_derived_blocking_after_upgrade(
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
     ),
   )
   tasks.create_task(

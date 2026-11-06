@@ -1638,7 +1638,7 @@ def test_report_answer_textareas_grow_and_enter_never_submits(
     '<!-- question {"id":"text","label":"Text response"} -->\n'
     "Text response: ___\n\n"
     '<!-- question {"id":"choice","label":"Choose"} -->\n'
-    'Choose one:\n- ( ) First <!-- option {"label":"First"} -->\n',
+    'Choose one:\n- (x) First <!-- option {"label":"First"} -->\n',
   )
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1717,7 +1717,7 @@ def test_report_custom_answer_caret_matches_text_answer_padding(
     '<!-- question {"id":"text","label":"Text response"} -->\n'
     "Text response: ___\n\n"
     '<!-- question {"id":"choice","label":"Choose"} -->\n'
-    'Choose one:\n- ( ) First <!-- option {"label":"First"} -->\n',
+    'Choose one:\n- (x) First <!-- option {"label":"First"} -->\n',
   )
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1790,7 +1790,7 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
     '<!-- question {"id":"text","label":"Text response"} -->\n'
     "Text response: ___\n\n"
     '<!-- question {"id":"choice","label":"Choose one"} -->\n'
-    'Choose one:\n- ( ) First <!-- option {"label":"First"} -->\n',
+    'Choose one:\n- (x) First <!-- option {"label":"First"} -->\n',
   )
   answer = app.reports.submit_answer("type-ramp", {"text": "Reply", "choice": "First"})
   app.reports.ack_answer("type-ramp", answer.id, "Acknowledged with `code`.")
@@ -2087,7 +2087,7 @@ def test_task_answer_details_render_once_and_wrap_on_mobile(tmp_path: Path) -> N
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      f'- ( ) {answer} <!-- option {{"label": "{answer}"}} -->\n'
+      f'- (x) {answer} <!-- option {{"label": "{answer}"}} -->\n'
     ),
   )
   task = app.tasks.create_task(

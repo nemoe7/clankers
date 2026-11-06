@@ -65,7 +65,7 @@ def _publish_answer_message_report(reports: ReportService) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
@@ -609,7 +609,7 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
@@ -654,7 +654,7 @@ def test_linking_an_answered_report_does_not_copy_details(tmp_path) -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
@@ -689,7 +689,7 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
     (
       '<!-- question {"id": "field", "label": "Original label?"} -->\n'
       "Original label?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
@@ -707,7 +707,7 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
     (
       '<!-- question {"id": "field", "label": "New label?"} -->\n'
       "New label?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
       '- ( ) B <!-- option {"label": "B"} -->\n'
     ),
   )
@@ -750,7 +750,7 @@ def test_concurrent_report_answers_keep_unique_details(tmp_path) -> None:
     (
       '<!-- question {"id": "select", "label": "Select?"} -->\n'
       "Select?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -786,7 +786,7 @@ def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> Non
     (
       '<!-- question {"id": "select", "label": "Select?"} -->\n'
       "Select?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
@@ -830,7 +830,7 @@ def test_report_blocking_follows_answer_need_not_acknowledgement() -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
     ),
   )
   tasks.create_task("work", "Work", size=3, details=["Review"], report_ids=["plain"])
@@ -862,10 +862,10 @@ def test_ack_adds_full_details_and_identical_submission_is_unchanged(tmp_path) -
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      f'- ( ) {option} <!-- option {{"label": "{option}"}} -->\n'
+      f'- (x) {option} <!-- option {{"label": "{option}"}} -->\n'
       '\n<!-- question {"id": "second", "label": "Second?"} -->\n'
       "Second?\n"
-      f'- ( ) {other} <!-- option {{"label": "{other}"}} -->\n'
+      f'- (x) {other} <!-- option {{"label": "{other}"}} -->\n'
     ),
   )
   for task_id in ("one", "two"):
@@ -907,7 +907,7 @@ def test_manual_task_detail_limit_survives_generated_long_detail(tmp_path) -> No
     (
       '<!-- question {"id": "choice", "label": "Choice"} -->\n'
       "Choice\n"
-      f'- ( ) {option} <!-- option {{"label": "{option}"}} -->\n'
+      f'- (x) {option} <!-- option {{"label": "{option}"}} -->\n'
     ),
   )
   with pytest.raises(ValueError, match="120"):
@@ -984,7 +984,7 @@ def test_unlinked_report_staleness_starts_when_ack_is_seen() -> None:
     "idle-report",
     "Idle report",
     '<!-- question {"id":"pick","label":"Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n'
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
     '- ( ) No <!-- option {"label":"No"} -->\n',
   )
   reports.publish_report("fieldless-report", "Fieldless report", "# Fieldless")
@@ -1050,7 +1050,7 @@ def test_report_pin_and_linked_task_staleness_survive_restart(tmp_path) -> None:
     "idle-report",
     "Idle report",
     '<!-- question {"id":"pick","label":"Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
   )
   answer = reports.submit_answer("idle-report", {"pick": "Yes"}, answer_id="aa1003")
   reports.ack_answer("idle-report", answer.id, "Read")
@@ -1116,7 +1116,7 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) Yes <!-- option {"label": "Yes"} -->\n'
+      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
     ),
   )
   reports.submit_answer("answered-report", {"choice": "Yes"}, answer_id="abc123")
@@ -1156,7 +1156,7 @@ def test_ack_existing_long_answer_bypasses_manual_detail_limit() -> None:
     (
       '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
       "Choice?\n"
-      '- ( ) A <!-- option {"label": "A"} -->\n'
+      '- (x) A <!-- option {"label": "A"} -->\n'
     ),
   )
   long_answer = "a" * 180
@@ -1197,7 +1197,7 @@ def test_ack_seen_timestamp_syncs_and_old_seen_flag_does_not_migrate() -> None:
     "seen-report",
     "Seen report",
     '<!-- question {"id":"pick","label":"Pick"} -->\n'
-    'Pick\n- ( ) Yes <!-- option {"label":"Yes"} -->\n',
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n',
   )
   answer = reports.submit_answer("seen-report", {"pick": "Yes"}, answer_id="aa1002")
   reports.ack_answer("seen-report", answer.id, "Read")

@@ -66,7 +66,7 @@ Docs and code phases need a clean tree and a unique full Git commit hash. Operat
 | `steer report rm ID [ID ...]` | `Dismissed reports: ...` | 0 on removal, 1 on error |
 | `steer report rm --stale` | `Dismissed reports: ...` | 0 on removal, 1 on error |
 
-The source is an ignored workspace file, not a commit artifact. Fielded questions use `<!-- question {"id":"...","label":"..."} -->` and labelled options.
+The source is an ignored workspace file, not a commit artifact. Fielded questions use `<!-- question {"id":"...","label":"..."} -->` and labelled options. Mark at least one option in each radio or checkbox field with `(x)` or `[x]`.
 
 `(x)` marks a default, not an answer. After the first answer, `steer report pub` rejects body edits under the same ID. Removal detaches task links but retains task details and answer history.
 

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Require a preselected option in every radio or checkbox report field.
+
 - Send a hidden blocking survey request from Survey Again while preserving results.
 
 - Make bare `steer survey` print the image question and path, and retire `-i`.

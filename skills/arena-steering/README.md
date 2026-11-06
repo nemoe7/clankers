@@ -214,7 +214,7 @@ Select checks
 Notes
 ```
 
-Radio options use `( )`, and checkbox options use `[ ]`. A question without options is a text field. V2 adds a `Something else...` input automatically.
+Radio options use `( )`, and checkbox options use `[ ]`. Mark at least one option in each radio or checkbox field with `(x)` or `[x]`. A question without options is a text field. V2 adds a `Something else...` input automatically.
 
 Selecting SQLite produces `Storage: Use SQLite`. Custom answers use the entered text.
 
