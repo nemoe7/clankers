@@ -193,24 +193,46 @@ def test_name_rotates_only_as_a_verb():
     root = Path(directory)
     note = root / "note.md"
     note.write_text(
-      "Name the variable.\nIt names each field.\n"
-      "Use the name of the file.\nRename the file later.\n",
+      "Name the variable.\nIt names each field.\nNaming the variable matters.\n"
+      "The field is named in the table.\nThe value is named under the rule.\n"
+      "The value is named by the report.\nUse a file named note.md.\n"
+      "Use a named tuple and named breakpoints.\nUse the name of the file.\n"
+      "Rename the file; leave unnamed and nameless items.\n",
       encoding="utf-8",
     )
     result = run(cwd=directory)
     for expected in (
       "note.md:1: [NMO901] (advisory) Name -> specify",
       "note.md:2: [NMO901] (advisory) names -> specify",
+      "note.md:3: [NMO901] (advisory) Naming -> specify",
+      "note.md:4: [NMO901] (advisory) named -> specify",
+      "note.md:5: [NMO901] (advisory) named -> specify",
+      "note.md:6: [NMO901] (advisory) named -> specify",
     ):
       assert expected in result.stdout
-    for line_number in (3, 4):
+    for line_number in (7, 8, 9, 10):
       assert f"note.md:{line_number}: [NMO901]" not in result.stdout
     result = run("--format", cwd=directory)
     assert result.returncode == 0, result.stderr
     assert note.read_text(encoding="utf-8") == (
-      "Specify the variable.\nIt specifies each field.\n"
-      "Use the name of the file.\nRename the file later.\n"
+      "Specify the variable.\nIt specifies each field.\nSpecifying the variable matters.\n"
+      "The field is specified in the table.\nThe value is specified under the rule.\n"
+      "The value is specified by the report.\nUse a file named note.md.\n"
+      "Use a named tuple and named breakpoints.\nUse the name of the file.\n"
+      "Rename the file; leave unnamed and nameless items.\n"
     )
+
+
+def test_name_verb_rotation_leaves_python_identifiers_untouched():
+  import tempfile
+
+  with tempfile.TemporaryDirectory() as directory:
+    source = Path(directory) / "example.py"
+    original = "if named in the and naming:\n  pass\n"
+    source.write_text(original, encoding="utf-8")
+    result = run("--format", cwd=directory)
+    assert result.returncode == 0, result.stderr
+    assert source.read_text(encoding="utf-8") == original
 
 
 def test_rule_ids_suppress_only_the_named_rotation():

@@ -12,6 +12,10 @@ This log has no Unreleased section.
 
 - Add `-v` and `--verbose` logging for file scans and worker start or completion (`scripts/nemoize.py`).
 
+### Fixed
+
+- Cover `naming` and restricted `named` verb forms in `NMO901`.
+
 ## [0.1.14]
 
 ### Fixed

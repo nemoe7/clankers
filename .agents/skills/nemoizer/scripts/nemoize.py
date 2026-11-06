@@ -169,6 +169,8 @@ NAME_VERB_PATTERN = (
   r"|(?<=\bcontrol )|(?<=\btable )|(?<=\brule )|(?<=\bclause )|(?<=\breport )"
   r"|(?<=\bconfig )|(?<=\bscript )|(?<=\bcheck )|(?<=\btool )|(?<=\bpage )|(?<=, and ))"
   r"names(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their|[A-Z])[A-Za-z]*)"
+  r"|(?<![A-Za-z0-9_$.\/-])naming(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+[A-Za-z]+)"
+  r"|(?<![A-Za-z0-9_$.\/-])named(?=\s+(?:in|under|by)\s+the\s+[A-Za-z]+)"
   r")"
 )
 ROTATIONS = (
