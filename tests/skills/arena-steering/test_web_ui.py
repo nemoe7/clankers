@@ -7162,3 +7162,58 @@ def test_external_ack_appears_live(tmp_path: Path, transport: str) -> None:
     thread.join(timeout=5)
     writer_store.close()
     server_store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("motion", ["no-preference", "reduce"])
+def test_message_reference_highlights_bubble_not_row(
+  tmp_path: Path, motion: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("Target message", msg_id="aa0001")
+  app.messages.send_message("Child message", msg_id="aa0002", parent_ids=["aa0001"])
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.emulate_media(reduced_motion=motion)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        row = page.locator('.message[data-msg-id="aa0001"]')
+        bubble = row.locator(".message-bubble")
+        bubble.wait_for()
+        normal = bubble.evaluate("el => getComputedStyle(el).backgroundColor")
+        row_color = row.evaluate("el => getComputedStyle(el).backgroundColor")
+        page.locator(
+          '.message[data-msg-id="aa0002"] .reply-parent-chip[data-reference-id="aa0001"]'
+        ).click()
+        row.locator(".message-bubble").wait_for()
+        page.wait_for_function(
+          """normal => getComputedStyle(document.querySelector(
+            '.message[data-msg-id="aa0001"] .message-bubble'
+          )).backgroundColor !== normal""",
+          arg=normal,
+        )
+        assert row.evaluate("el => getComputedStyle(el).backgroundColor") == row_color
+        duration = bubble.evaluate("el => getComputedStyle(el).transitionDuration")
+        assert (duration != "0s") == (motion == "no-preference")
+        page.screenshot(path=str(tmp_path / f"bubble-transition-{motion}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

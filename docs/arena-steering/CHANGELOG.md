@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Highlight message bubbles with a subtle color transition.
+
 - Keep Reports attention indicators inside the tab hover area.
 
 - Use full questions and specific option labels in report fields.
