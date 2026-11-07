@@ -71,6 +71,20 @@ Docs and code phases need a clean tree and a unique full Git commit hash. Operat
 
 The source is an ignored workspace file, not a commit artifact. Fielded questions use `<!-- question {"id":"...","label":"..."} -->` and labelled options. Mark at least one option in each radio or checkbox field with `(x)` or `[x]`.
 
+For example:
+
+```markdown
+<!-- question {"id":"reuse","label":"How should the validation logic be reused?"} -->
+How should the validation logic be reused?
+- (x) Extract a shared validation helper. <!-- option {"label":"Extract a shared validation helper"} -->
+- ( ) Duplicate the validation logic. <!-- option {"label":"Duplicate the validation logic"} -->
+
+<!-- question {"id":"clause","label":"Should the rule forbid direct pushes?"} -->
+Should the rule forbid direct pushes?
+- (x) Approve forbidding direct pushes. <!-- option {"label":"Approve forbidding direct pushes"} -->
+- ( ) Reject forbidding direct pushes. <!-- option {"label":"Reject forbidding direct pushes"} -->
+```
+
 `(x)` marks a default, not an answer. After the first answer, `steer report pub` rejects body edits under the same ID. Removal detaches task links but retains task details and answer history.
 
 ## Survey and installed skills

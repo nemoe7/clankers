@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Use full questions and specific option labels in report fields.
+
 - Preserve newer message acknowledgements when send confirmations arrive late.
 
 - Match Reports header attention indicators to their picker sizes.
