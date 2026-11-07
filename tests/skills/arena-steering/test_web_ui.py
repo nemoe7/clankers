@@ -722,24 +722,23 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#survey-open").click()
-        page.locator(".survey-cap-pill").first.hover()
-        page.locator(".survey-cap-pill:first-child .survey-answer-tooltip").wait_for(
-          state="visible"
+        page.locator(".survey-cap-pill").first.wait_for()
+        assert page.locator(".survey-cap-pill .survey-answer-tooltip").count() == 0
+        assert page.locator(".survey-cap-pill").first.get_attribute("tabindex") is None
+        assert page.locator("table.survey-results th").all_inner_texts() == [
+          "ID",
+          "Confidence",
+        ]
+        assert page.locator(".survey-field-chip").count() == 0
+        page.locator(".survey-id-trigger").first.scroll_into_view_if_needed()
+        page.locator(".survey-id-trigger").first.hover()
+        first_tip = page.locator(".survey-id-wrap").first.locator(
+          ".survey-answer-tooltip"
         )
-        first = page.evaluate("""() => {
-          const rect = selector => document.querySelector(selector).getBoundingClientRect();
-          const tip = document.querySelector('.survey-cap-pill:first-child .survey-answer-tooltip');
-          const tooltip = tip.getBoundingClientRect();
-          const pill = rect('.survey-cap-pill:first-child');
-          const heading = rect('.survey-section-label');
-          return {
-            background: getComputedStyle(tip).backgroundColor,
-            tooltipTop: tooltip.top, tooltipBottom: tooltip.bottom,
-            pillTop: pill.top, headingTop: heading.top, headingBottom: heading.bottom
-          };
-        }""")
-        assert first["background"] == "rgb(255, 255, 255)"
-        first_tip = page.locator(".survey-cap-pill:first-child .survey-answer-tooltip")
+        first_tip.wait_for(state="visible")
+        assert first_tip.evaluate("el => getComputedStyle(el).backgroundColor") == (
+          "rgb(255, 255, 255)"
+        )
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") in (
           "tooltip-from-above",
           "tooltip-from-below",
@@ -747,39 +746,20 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         page.emulate_media(reduced_motion="reduce")
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") == "none"
         assert (
-          page.locator(
-            ".survey-cap-pill:first-child .survey-answer-val"
-          ).first.evaluate("el => getComputedStyle(el).color")
+          first_tip.locator(".survey-answer-val").first.evaluate(
+            "el => getComputedStyle(el).color"
+          )
           == "rgb(24, 24, 24)"
-        )
-        assert first["tooltipTop"] >= first["pillTop"] - 1
-        assert (
-          first["tooltipTop"] >= first["headingBottom"] - 1
-          or first["tooltipBottom"] <= first["headingTop"] + 1
-        )
-        page.locator(".survey-cap-pill").last.hover()
-        page.locator(".survey-cap-pill:last-child .survey-answer-tooltip").wait_for(
-          state="visible"
         )
         sizes = page.evaluate("""() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect();
-          const shell = rect('#modal-shell');
-          const tooltip = rect('.survey-cap-pill:last-child .survey-answer-tooltip');
           const footer = rect('#modal-actions');
           const body = document.querySelector('#modal-body');
           return {
-            shellLeft: shell.left, shellRight: shell.right,
-            tooltipLeft: tooltip.left, tooltipRight: tooltip.right,
             footerTop: footer.top, footerBottom: footer.bottom,
             bodyHeight: body.clientHeight, contentHeight: body.scrollHeight
           };
         }""")
-        assert sizes["tooltipLeft"] >= sizes["shellLeft"] - 1
-        assert sizes["tooltipRight"] <= sizes["shellRight"] + 1
-        last_tip = page.locator(".survey-cap-pill:last-child .survey-answer-tooltip")
-        assert last_tip.evaluate(
-          "el => el.getBoundingClientRect().bottom <= innerHeight"
-        )
         assert sizes["footerTop"] >= 0
         assert sizes["footerBottom"] <= height
         if height < 400:
@@ -5734,10 +5714,10 @@ def test_survey_refresh_preserves_focus_when_results_are_unchanged(
         };
       }""")
       page.locator("#survey-open").click()
-      page.locator(".survey-cap-pill").first.wait_for()
+      page.locator(".survey-id-trigger").first.wait_for()
       page.wait_for_function("typeof window.releaseSurvey === 'function'")
-      page.locator(".survey-cap-pill").first.focus()
-      focused = page.locator(".survey-cap-pill").first.element_handle()
+      page.locator(".survey-id-trigger").first.focus()
+      focused = page.locator(".survey-id-trigger").first.element_handle()
       page.evaluate("window.releaseSurvey()")
       page.wait_for_function("window.surveyReturned === true")
       assert focused.evaluate("el => el.isConnected && document.activeElement === el")
@@ -7611,11 +7591,11 @@ def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
         assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
         page.keyboard.press("Escape")
         page.locator("#survey-open").click()
-        pill = page.locator(".survey-cap-pill").first
+        trigger = page.locator(".survey-id-trigger").first
         page.mouse.move(600, 700)
         page.wait_for_timeout(650)
-        pill.hover()
-        tip = pill.locator(".survey-answer-tooltip")
+        trigger.hover()
+        tip = page.locator(".survey-id-wrap").first.locator(".survey-answer-tooltip")
         page.wait_for_timeout(200)
         assert tip.is_hidden()
         tip.wait_for(state="visible", timeout=1000)

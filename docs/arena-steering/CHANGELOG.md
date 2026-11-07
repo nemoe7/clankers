@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Grade survey fields with salted SHA-256 substrings, split `S2E5P` names, and simplify the survey modal.
+
 - Parse inline code spans in report field questions and options, and align option inputs with line one.
 
 - Retry failed browser write actions automatically three times with the same request ID, removing manual retry controls.

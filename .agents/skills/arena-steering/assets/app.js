@@ -64,16 +64,13 @@ function renderSurveyModalContent(survey) {
         const state = item.correct === true ? "ok" : item.correct === false ? "bad" : "warn";
         const icon = item.correct === true ? SURVEY_OK_SVG : item.correct === false ? SURVEY_BAD_SVG : SURVEY_WARN_SVG;
         const label = CAPABILITY_LABELS[item.id] || item.id;
-        return `<div class="survey-cap-pill ${state}" tabindex="0"><span class="survey-status ${state}">${icon}</span><div class="survey-cap-text"><code>${escapeHtml(item.id)}</code><span class="survey-cap-label">${escapeHtml(label)}</span></div>${renderAnswerTooltip(item.answer)}</div>`;
+        return `<div class="survey-cap-pill ${state}"><span class="survey-status ${state}">${icon}</span><div class="survey-cap-text"><code>${escapeHtml(item.id)}</code><span class="survey-cap-label">${escapeHtml(label)}</span></div></div>`;
       })
       .join("");
     const calRows = calItems
       .map((item) => {
         const state = item.correct === true ? "ok" : item.correct === false ? "bad" : "warn";
         const icon = item.correct === true ? SURVEY_OK_SVG : item.correct === false ? SURVEY_BAD_SVG : SURVEY_WARN_SVG;
-        const entries = item.answer && typeof item.answer === "object" ? Object.entries(item.answer) : [];
-        const knownCount = entries.filter(([, v]) => formatSurveyFieldValue(v).toLowerCase() !== "unknown").length;
-        const fieldLabel = knownCount === 0 ? "unknown" : `${knownCount}/${entries.length} fields`;
         const pct = Math.max(0, Math.min(100, Math.round(Number(item.confidence || 0) * 100)));
         return `<tr>
           <td>
@@ -85,7 +82,6 @@ function renderSurveyModalContent(survey) {
               </span>
             </div>
           </td>
-          <td><span class="survey-field-chip">${escapeHtml(fieldLabel)}</span></td>
           <td>
             <div class="survey-confidence" style="--confidence-pct: ${pct}%">
               <div class="survey-confidence-track"><span class="survey-confidence-fill"></span></div>
@@ -106,7 +102,6 @@ function renderSurveyModalContent(survey) {
           <thead>
             <tr>
               <th scope="col">ID</th>
-              <th scope="col">Fields</th>
               <th scope="col">Confidence</th>
             </tr>
           </thead>
@@ -1701,9 +1696,7 @@ function positionSurveyTooltip(trigger) {
   if (!tip || !body) return;
   tip.classList.add("above");
   const box = tip.getBoundingClientRect();
-  const heading = trigger.matches(".survey-cap-pill") ? body.querySelector(".survey-section-label")?.getBoundingClientRect() : null;
-  const coversHeading = heading && box.top < heading.bottom && box.bottom > heading.top && box.left < heading.right && box.right > heading.left;
-  if (box.top < body.getBoundingClientRect().top || coversHeading) tip.classList.remove("above");
+  if (box.top < body.getBoundingClientRect().top) tip.classList.remove("above");
 }
 
 function showSurveyTooltip(target) {
@@ -1738,7 +1731,7 @@ function requestTooltip(target, kind, immediate = false) {
 }
 
 function tooltipTarget(node) {
-  const survey = node?.closest?.(".survey-id-wrap, .survey-cap-pill");
+  const survey = node?.closest?.(".survey-id-wrap");
   if (survey?.querySelector(".survey-answer-tooltip")) return { target: survey, kind: "survey" };
   const title = node?.closest?.("[title]");
   if (title && !title.dataset.tooltip) return { target: title, kind: "title" };
