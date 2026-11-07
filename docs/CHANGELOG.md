@@ -8,6 +8,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-07
 
+### Removed
+
+#### maintenance
+
+- Remove the Gitleaks workflow and configuration.
+
 ### Changed
 
 #### rules
