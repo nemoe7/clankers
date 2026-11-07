@@ -720,6 +720,23 @@ def test_push_workflows_ignore_synced_agents_directory():
     assert ".agents/**" in ignored, name
 
 
+def test_gitleaks_ignores_only_reviewed_historical_fingerprints():
+  fingerprints = {
+    line
+    for line in (gate_workflows.ROOT / ".gitleaksignore").read_text().splitlines()
+    if line and not line.startswith("#")
+  }
+  assert fingerprints == {
+    "a0388c738acd6ef3b6ff64b0356f7d72f1e51112:tests/userscripts/arena.test.cjs:generic-api-key:4466",
+    "64d12831bf3a6de9506ebcddf9ca876f01d481e7:tests/userscripts/arena.test.cjs:generic-api-key:4466",
+    "734ade279196921b3bca730f9ea781a0402f31f8:maintenance/userscripts.checks.cjs:generic-api-key:28",
+    "5247ffae708d932dcb0d36e9b2d9695f6e8a80f9:agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
+    "2570f54179ce53033ceb8238e3279cea24edaff1:agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
+    "060c3fc9e3f153642461ce62e0fbaf23bde94579:skills/agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
+    "869e05abee723846d47e270edd6b31a4ad4116e6:skills/agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
+  }
+
+
 def test_gitleaks_ignores_installed_agents_and_keeps_default_rules():
   import re
   import tomllib
