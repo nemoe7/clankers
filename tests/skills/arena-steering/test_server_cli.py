@@ -3447,6 +3447,71 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   )
 
 
+def test_dead_detached_run_gets_failure_marker_and_can_be_reused(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  process = subprocess.Popen([sys.executable, "-c", "pass"])
+  process.wait(timeout=5)
+  exit_path = runs / "dead.exit"
+  log_path = runs / "dead.log"
+  (runs / "dead.json").write_text(
+    json.dumps(
+      {"pid": process.pid, "exit_path": str(exit_path), "log_path": str(log_path)}
+    ),
+    encoding="utf-8",
+  )
+  from arena_steering.gates import FileGateStatus
+
+  assert not FileGateStatus(state_dir).is_running("dead")
+  code, output, _ = _run_cli(state_dir, "run", "logs", "dead")
+  assert code == 0 and "exit 1" in output
+  assert exit_path.read_text().strip() == "1"
+  code, _, error = _run_cli(
+    state_dir, "run", "start", "dead", "--", sys.executable, "-c", "pass"
+  )
+  assert code == 0, error
+
+
+def test_live_run_identity_and_existing_verdict_are_preserved(tmp_path: Path) -> None:
+  from arena_steering.gates import process_identity, run_is_running
+
+  exit_path = tmp_path / "live.exit"
+  identity = process_identity(os.getpid())
+  record = {
+    "pid": os.getpid(),
+    "exit_path": str(exit_path),
+    "process_identity": list(identity[1:]) if identity else None,
+  }
+  assert run_is_running(record)
+  assert not exit_path.exists()
+  if identity:
+    record["process_identity"] = ["wrong-start", identity[2]]
+    assert not run_is_running(record)
+    assert exit_path.read_text().strip() == "1"
+  exit_path.write_text("0\n")
+  assert not run_is_running(record)
+  assert exit_path.read_text().strip() == "0"
+
+
+def test_zombie_run_is_marked_failed(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  from arena_steering import gates
+
+  exit_path = tmp_path / "zombie.exit"
+  monkeypatch.setattr(gates, "process_identity", lambda pid: ("Z", "123", "boot"))
+  record = {
+    "pid": os.getpid(),
+    "exit_path": str(exit_path),
+    "process_identity": ["123", "boot"],
+  }
+  assert not gates.run_is_running(record)
+  assert exit_path.read_text().strip() == "1"
+
+
 def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> None:
   import sys
 
