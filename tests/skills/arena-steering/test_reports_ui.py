@@ -519,6 +519,27 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
             assert top_button.is_hidden()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             pane = page.locator("#view-reports")
+            if width >= 1200:
+              top_edges = page.evaluate("""() => Object.fromEntries(
+                ['#report-main', '#report-toc', '.report-rail'].map(selector =>
+                  [selector, document.querySelector(selector).getBoundingClientRect().top])
+              )""")
+              assert abs(top_edges["#report-toc"] - top_edges["#report-main"]) <= 1, (
+                top_edges
+              )
+              assert abs(top_edges[".report-rail"] - top_edges["#report-main"]) <= 1, (
+                top_edges
+              )
+              page.set_viewport_size({"width": 1280, "height": 325})
+              page.wait_for_function("""() => ['#report-toc', '.report-rail'].every(selector =>
+                Math.abs(document.querySelector(selector).getBoundingClientRect().top -
+                  document.querySelector('#report-main').getBoundingClientRect().top) <= 1)
+              """)
+              page.set_viewport_size({"width": width, "height": height})
+              page.wait_for_function("""() => Math.abs(
+                document.querySelector('#report-toc').getBoundingClientRect().top -
+                document.querySelector('#report-main').getBoundingClientRect().top) <= 1
+              """)
             assert pane.evaluate("el => el.scrollHeight > el.clientHeight * 3")
             scroll_ratio = pane.evaluate("""el => {
               const maxScroll = el.scrollHeight - el.clientHeight;

@@ -285,6 +285,14 @@ function hydrateReportsWithCache(summaries) {
   return merged;
 }
 
+function syncReportRailTop() {
+  const panel = document.getElementById("view-reports");
+  if (!panel || panel.hidden) return;
+  document.documentElement.style?.setProperty?.(
+    "--reports-rail-top", `${Math.max(0, panel.getBoundingClientRect().top)}px`
+  );
+}
+
 function syncViewportHeight() {
   const vv = window.visualViewport;
   const vvScale = vv?.scale > 0 ? vv.scale : 1;
@@ -320,6 +328,7 @@ function syncViewportHeight() {
   document.documentElement.style?.setProperty?.(
     "--app-offset-top", `${keyboardOpen ? Math.max(0, vv?.offsetTop || 0) : 0}px`
   );
+  syncReportRailTop();
   if (
     ((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) &&
     typeof window.scrollTo === "function"
@@ -1063,6 +1072,7 @@ function renderApp(state) {
   if (messagesEl) messagesEl.hidden = state.activeTab !== "messages";
   if (tasksEl) tasksEl.hidden = state.activeTab !== "tasks";
   if (reportsEl) reportsEl.hidden = state.activeTab !== "reports";
+  if (state.activeTab === "reports") syncReportRailTop();
   markVisibleReport(state);
 
   if (state.activeTab !== "reports") lastReportRenderSignature = null;

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Align desktop Reports sidebars with the top of the report content.
+
 - Enlarge and inset the mobile Reports submit button, keeping it above the keyboard.
 
 - Share ID chip styling and remove the composer Parents label.
