@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Align Steering modals, timestamps, edge fades, live dot, busy state, dark tooltips, and filter persistence with Nuu recipes.
+
 - Grade survey fields with salted SHA-256 substrings, split `S2E5P` names, and simplify the survey modal.
 
 - Parse inline code spans in report field questions and options, and align option inputs with line one.

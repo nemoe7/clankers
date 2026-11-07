@@ -220,9 +220,17 @@ async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet =
     return cached.report;
   }
   const loadKey = `${reportId}:${expectedModifiedAt || ""}`;
-  if (pendingReportLoads.has(loadKey)) return pendingReportLoads.get(loadKey);
-  const load = (async () => {
-    if (!quiet) setLoading(true);
+  if (pendingReportLoads.has(loadKey)) {
+    const existing = pendingReportLoads.get(loadKey);
+    if (!quiet && existing.quiet) {
+      existing.quiet = false;
+      setLoading(true);
+    }
+    return existing.promise;
+  }
+  const entry = { quiet, promise: null };
+  entry.promise = (async () => {
+    if (!entry.quiet) setLoading(true);
     try {
       const res = await api.getReport(reportId);
       if (res?.report) {
@@ -238,12 +246,12 @@ async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet =
       }
       return null;
     } finally {
-      if (!quiet) setLoading(false);
+      if (!entry.quiet) setLoading(false);
       pendingReportLoads.delete(loadKey);
     }
   })();
-  pendingReportLoads.set(loadKey, load);
-  return load;
+  pendingReportLoads.set(loadKey, entry);
+  return entry.promise;
 }
 
 function hydrateReportsWithCache(summaries) {
@@ -349,10 +357,12 @@ function setLoading(active) {
     if (panel.getAttribute("data-loading") !== "true") {
       loadingStartAt = Date.now();
       panel.setAttribute("data-loading", "true");
+      panel.setAttribute("aria-busy", "true");
     }
   } else {
     loadingCount = Math.max(0, loadingCount - 1);
     if (loadingCount === 0) {
+      panel.setAttribute("aria-busy", "false");
       const elapsed = Date.now() - loadingStartAt;
       if (elapsed >= 200) {
         panel.setAttribute("data-loading", "done");
@@ -1694,9 +1704,19 @@ function positionSurveyTooltip(trigger) {
   const tip = trigger?.querySelector(".survey-answer-tooltip");
   const body = trigger?.closest(".modal-body");
   if (!tip || !body) return;
+  tip.style.left = "";
   tip.classList.add("above");
   const box = tip.getBoundingClientRect();
-  if (box.top < body.getBoundingClientRect().top) tip.classList.remove("above");
+  const bodyRect = body.getBoundingClientRect();
+  if (box.top < bodyRect.top) tip.classList.remove("above");
+  const nextBox = tip.getBoundingClientRect();
+  const maxRight = Math.min(bodyRect.right, window.innerWidth - 8);
+  const minLeft = Math.max(bodyRect.left, 8);
+  if (nextBox.right > maxRight) {
+    tip.style.left = `${Math.round(maxRight - nextBox.right)}px`;
+  } else if (nextBox.left < minLeft) {
+    tip.style.left = `${Math.round(minLeft - nextBox.left)}px`;
+  }
 }
 
 function showSurveyTooltip(target) {

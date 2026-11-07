@@ -2,6 +2,7 @@
 
 const TAB_STORAGE_KEY = "steer:activeTab";
 const REPORT_STORAGE_KEY = "steer:selectedReportId";
+const SEARCH_STORAGE_KEY = "steer:searchQuery";
 const DRAFT_STORAGE_KEY = "steer:messageDraft";
 const COMPOSER_STATE_KEY = "steer:composerState";
 const VALID_TABS = new Set(["messages", "tasks", "reports"]);
@@ -73,12 +74,13 @@ function readComposerState() {
 export function createStore(initial = {}) {
   const savedTab = readSessionValue(TAB_STORAGE_KEY);
   const savedReportId = readSessionValue(REPORT_STORAGE_KEY);
+  const savedSearch = readSessionValue(SEARCH_STORAGE_KEY) || "";
   const composer = readComposerState();
   let composerHadSavedState = composer.parents.length > 0 || composer.attachments.length > 0;
   const state = {
     activeTab: VALID_TABS.has(savedTab) ? savedTab : "messages",
     messages: [],
-    searchQuery: "",
+    searchQuery: savedSearch,
     messagesHasMore: false,
     messagesError: "",
     messagesLoading: false,
@@ -116,6 +118,9 @@ export function createStore(initial = {}) {
       }
       if (VALID_TABS.has(state.activeTab)) {
         writeSessionValue(TAB_STORAGE_KEY, state.activeTab);
+      }
+      if ("searchQuery" in change) {
+        writeSessionValue(SEARCH_STORAGE_KEY, state.searchQuery);
       }
       if (state.selectedReportId !== undefined) {
         writeSessionValue(REPORT_STORAGE_KEY, state.selectedReportId);
