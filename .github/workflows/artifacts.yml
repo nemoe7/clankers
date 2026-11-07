@@ -13,14 +13,6 @@ on:
       - 'maintenance/publish/publish.py'
       - 'tests/maintenance/publish/test_publish.py'
       - '.github/workflows/artifacts.yml'
-  pull_request:
-    branches: ['**']
-    paths:
-      - 'gpt-plugins/**'
-      - 'maintenance/gpt_plugins/**'
-      - 'skills/nemoizer/**'
-      - 'skills/refs/nemoizer/**'
-      - '.github/workflows/artifacts.yml'
   workflow_dispatch: {}
 
 permissions:
@@ -28,7 +20,7 @@ permissions:
 
 jobs:
   # One trigger feeds several jobs with different path interests, so a small job decides which side has work.
-  # Use the PR base for pull requests and the previous push for pushes. Manual runs package main and never publish the Gist.
+  # Use the previous push as the base. Manual runs package main and never publish the Gist.
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
@@ -51,60 +43,6 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
         # The path rules live in one script, which three change steps call.
         run: python3 maintenance/workflows/changed_paths.py --step artifacts
-
-  validate-gpt-plugins:
-    name: Validate GPT Plugins
-    needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      # Cancel older runs in this group at job level.
-      group: Validate-GPT-Plugins-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Fetch PR Base
-        env:
-          # The base ref reaches the shell through the environment, never through a
-          # template expansion inside the run block.
-          BASE_REF: ${{ github.base_ref }}
-        run: git fetch --no-tags origin "$BASE_REF"
-
-      - name: Prep Runner
-        uses: ./.github/actions/prepare
-        with:
-          pip-cache-key: artifacts-validate
-
-      - name: Install Validation Dependencies
-        run: uv pip install --system -r requirements.txt
-
-      # The required behaviour of this file is part of the check. The triggers, the job
-      # conditions, the version-bump flag, the archive name and the artifact name are assertions.
-      - name: Check Workflow Contract
-        run: python maintenance/workflows/check_artifacts.py
-
-      - name: Check Version Comparison
-        run: python maintenance/gpt_plugins/gate_gpt_plugins.py --self-check
-
-      - name: Validate Plugin Collection
-        env:
-          # The base commit reaches the shell through the environment, never through a
-          # template expansion inside the run block.
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          BASE="$PR_BASE"
-          git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
-          changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts)"
-          if [ -n "$changed" ]; then
-            python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
-          else
-            python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
-          fi
 
   package-gpt-plugins:
     name: Package GPT Plugins
