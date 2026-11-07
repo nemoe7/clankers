@@ -27,7 +27,7 @@ Activation is a human step, and delivery is not activation. `.github/workflows/d
 
 Put this exact line in the first message of the session. Put it in the custom-instructions field of the platform: `Read and apply AGENTS.md and ARENA.md at the repository root before your first edit. confirm in one line.` The preamble of the file then requires an Arena agent that reads it to apply it. It also requires an agent that did not receive it in context to open it before the first edit.
 
-Root `ARENA.md` is a symlink to `rules/ARENA.md`. Edit the source file only. `.github/workflows/distribute.yml` pushes that source to target repositories. `maintenance/check.py` rejects a missing or different root target.
+Root `ARENA.md` is a copy of `rules/ARENA.md`. Keep both files byte-identical. `.github/workflows/distribute.yml` pushes the source to target repositories. `maintenance/check.py` rejects a missing or different root copy.
 
 ### Emphasis
 
@@ -111,7 +111,7 @@ The checker reports every problem it finds in:
 - Both ChatGPT custom-instruction character limits.
 - A license declaration on every skill that records `metadata.upstream`, and the `LICENSE.txt` file that the declaration points at.
 - Refs/live rule parity: identical section headings in the same order, and each live section holding no more rule lines than its refs baseline.
-- The byte identity of the root `ARENA.md` link target and `rules/ARENA.md`.
+- The byte identity of the root `ARENA.md` copy and `rules/ARENA.md`.
 - Tracked Git paths whose names differ only by letter case.
 
 ## Prose lint
