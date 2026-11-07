@@ -1098,6 +1098,191 @@ def test_send_hover_changes_background_without_resizing(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+def test_contained_buttons_hide_default_box_and_reveal_on_hover_and_press(
+  tmp_path: Path,
+) -> None:
+  transparent = "rgba(0, 0, 0, 0)"
+  style_probe = """el => {
+    const s = getComputedStyle(el);
+    const box = el.getBoundingClientRect().toJSON();
+    return {
+      background: s.backgroundColor,
+      border: s.borderColor,
+      width: box.width,
+      height: box.height,
+    };
+  }"""
+  with composer_page(1200) as page:
+    page.locator("#msg").fill("Draft message")
+    page.mouse.move(0, 0)
+    for selector in (
+      "#send",
+      "#blocked-bash-open",
+      "#agent-interrupt",
+      "#skip-poll",
+      "#quiet-msgs",
+    ):
+      btn = page.locator(selector)
+      idle = btn.evaluate(style_probe)
+      assert idle["background"] == transparent, f"{selector} idle bg"
+      assert idle["border"] == transparent, f"{selector} idle border"
+
+      btn.hover()
+      page.wait_for_function(
+        """([sel, clear]) => {
+          const s = getComputedStyle(document.querySelector(sel));
+          return s.backgroundColor !== clear;
+        }""",
+        arg=[selector, transparent],
+      )
+      hovered = btn.evaluate(style_probe)
+      assert hovered["background"] != transparent, f"{selector} hover bg"
+      assert hovered["border"] == transparent, f"{selector} hover border"
+      assert hovered["width"] == pytest.approx(idle["width"])
+      assert hovered["height"] == pytest.approx(idle["height"])
+
+      box_rect = btn.bounding_box()
+      assert box_rect is not None
+      page.mouse.move(
+        box_rect["x"] + box_rect["width"] / 2,
+        box_rect["y"] + box_rect["height"] / 2,
+      )
+      page.mouse.down()
+      assert btn.evaluate("el => el.matches(':active')")
+      active = btn.evaluate(style_probe)
+      assert active["background"] != transparent, f"{selector} active bg"
+      assert active["border"] == transparent, f"{selector} active border"
+      # Move off target before mouseup so we do not trigger modal/submit clicks.
+      page.mouse.move(0, 0)
+      page.mouse.up()
+      page.wait_for_function(
+        """([sel, clear]) => {
+          const s = getComputedStyle(document.querySelector(sel));
+          return s.backgroundColor === clear && s.borderColor === clear;
+        }""",
+        arg=[selector, transparent],
+      )
+
+    # Toggle-pressed state keeps background visible after pointer leaves.
+    quiet = page.locator("#quiet-msgs")
+    quiet.click()
+    page.mouse.move(0, 0)
+    assert quiet.get_attribute("aria-pressed") == "true"
+    page.wait_for_function(
+      """clear => {
+        const s = getComputedStyle(document.querySelector('#quiet-msgs'));
+        return s.backgroundColor !== clear;
+      }""",
+      arg=transparent,
+    )
+    quiet_pressed = quiet.evaluate(style_probe)
+    assert quiet_pressed["background"] != transparent
+    assert quiet_pressed["border"] == transparent
+
+    interrupt = page.locator("#agent-interrupt")
+    page.evaluate(
+      "el => el.setAttribute('aria-pressed', 'true')", interrupt.element_handle()
+    )
+    page.mouse.move(0, 0)
+    page.wait_for_function(
+      """clear => {
+        const s = getComputedStyle(document.querySelector('#agent-interrupt'));
+        return s.backgroundColor !== clear;
+      }""",
+      arg=transparent,
+    )
+    interrupt_pressed = interrupt.evaluate(style_probe)
+    assert interrupt_pressed["background"] != transparent
+
+    # Publish a fielded report and verify rail icon buttons vs Submit Answer CTA.
+    base_url = page.url.split("/?", 1)[0]
+    report_md = (
+      '# Button check\n\n<!-- question {"id":"action","label":"Pick an action"} -->\n'
+      'Pick an action\n- (x) Keep current <!-- option {"label":"Keep current"} -->\n'
+      '- ( ) Change later <!-- option {"label":"Change later"} -->\n'
+    )
+    assert page.request.post(
+      f"{base_url}/reports",
+      data={"id": "button-check", "title": "Button check", "body": report_md},
+    ).ok
+    page.locator("#tab-reports").click()
+    page.locator("#report-submit-float").wait_for()
+    page.mouse.move(0, 0)
+
+    for rail_selector in ("#copy-report-btn", "#dismiss-report-btn"):
+      rail_btn = page.locator(rail_selector)
+      rail_idle = rail_btn.evaluate(style_probe)
+      assert rail_idle["background"] == transparent
+      assert rail_idle["border"] == transparent
+      rail_btn.hover()
+      page.wait_for_function(
+        """([sel, clear]) => {
+          const s = getComputedStyle(document.querySelector(sel));
+          return s.backgroundColor !== clear;
+        }""",
+        arg=[rail_selector, transparent],
+      )
+      rail_hover = rail_btn.evaluate(style_probe)
+      assert rail_hover["background"] != transparent
+      assert rail_hover["border"] == transparent
+      page.mouse.move(0, 0)
+
+    submit_idle = page.locator("#report-submit-float").evaluate(style_probe)
+    assert submit_idle["background"] != transparent
+    page.screenshot(path=str(tmp_path / "reports-submit-unchanged.png"))
+
+    mobile_context = page.context.browser.new_context(
+      viewport={"width": 390, "height": 800},
+      is_mobile=True,
+      has_touch=True,
+      reduced_motion="reduce",
+    )
+    try:
+      mobile_page = mobile_context.new_page()
+      mobile_page.goto(page.url, wait_until="domcontentloaded")
+      mobile_page.locator("#msg").fill("Mobile touch draft")
+      assert not mobile_page.evaluate(
+        "() => matchMedia('(hover: hover) and (pointer: fine)').matches"
+      )
+      mobile_btn = mobile_page.locator("#skip-poll")
+      rect = mobile_btn.bounding_box()
+      assert rect is not None
+      cx = round(rect["x"] + rect["width"] / 2)
+      cy = round(rect["y"] + rect["height"] / 2)
+      mobile_page.mouse.move(cx, cy)
+      mobile_page.mouse.down()
+      mobile_page.wait_for_function(
+        """clear => {
+          const s = getComputedStyle(document.querySelector('#skip-poll'));
+          return s.backgroundColor !== clear;
+        }""",
+        arg=transparent,
+      )
+      mobile_page.mouse.up()
+      mobile_page.wait_for_function(
+        """clear => {
+          const s = getComputedStyle(document.querySelector('#skip-poll'));
+          return s.backgroundColor === clear && s.borderColor === clear;
+        }""",
+        arg=transparent,
+      )
+      # Touch tap leaves pointer on button on mobile, yet background stays clear.
+      mobile_page.touchscreen.tap(cx, cy)
+      mobile_page.wait_for_function(
+        """clear => {
+          const s = getComputedStyle(document.querySelector('#skip-poll'));
+          return s.backgroundColor === clear && s.borderColor === clear;
+        }""",
+        arg=transparent,
+      )
+    finally:
+      mobile_context.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_reload_preserves_parents_and_completed_uploads_only(width: int) -> None:
   with composer_page(width) as page:

@@ -405,16 +405,9 @@ pre > code {
     background-color var(--fast) var(--ease);
 }
 
-.preview-code-mermaid:hover,
 .preview-code-mermaid[aria-pressed="true"],
-.preview-code-md:hover,
 .preview-code-md[aria-pressed="true"] {
   color: hsl(var(--text-primary));
-  border-color: hsl(var(--border-strong));
-}
-
-.preview-code-mermaid[aria-pressed="true"],
-.preview-code-md[aria-pressed="true"] {
   background-color: hsl(var(--surface-raised));
 }
 
@@ -440,11 +433,6 @@ pre > code {
     color var(--fast) var(--ease),
     border-color var(--fast) var(--ease),
     background-color var(--fast) var(--ease);
-}
-
-.copy-code:hover {
-  color: hsl(var(--text-primary));
-  border-color: hsl(var(--border-strong));
 }
 
 .copy-code[data-state="good"],
@@ -649,10 +637,6 @@ code.msg-id[data-state="bad"],
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
-}
-
-#survey-open:hover {
-  background-color: hsl(var(--surface-tertiary));
 }
 
 #connection-dot {
@@ -863,9 +847,7 @@ mark.search-hit {
   cursor: pointer;
 }
 
-.survey-id-trigger:hover,
 .survey-id-trigger:focus-visible {
-  border-color: hsl(var(--border-strong));
   background: hsl(var(--surface-raised));
 }
 
@@ -1155,18 +1137,10 @@ mark.search-hit {
   color: hsl(var(--interactive-on-cta));
 }
 
-.btn-primary:hover {
-  background-color: hsl(var(--interactive-cta-hover));
-}
-
 .btn-secondary {
   background-color: hsl(var(--interactive-cta-secondary));
   color: hsl(var(--text-primary));
   border-color: hsl(var(--border-medium));
-}
-
-.btn-secondary:hover {
-  background-color: hsl(var(--interactive-cta-secondary-hover));
 }
 
 .btn-danger {
@@ -1317,8 +1291,8 @@ select,
   height: 34px;
   padding: 0;
   border-radius: 6px;
-  border: 1px solid hsl(var(--border-medium));
-  background-color: hsl(var(--surface-secondary));
+  border: 1px solid transparent;
+  background-color: transparent;
   color: hsl(var(--text-primary));
   display: inline-flex;
   align-items: center;
@@ -1328,10 +1302,6 @@ select,
     background-color var(--fast) var(--ease),
     border-color var(--fast) var(--ease),
     color var(--fast) var(--ease);
-}
-
-.icon-button:hover:not(:disabled) {
-  background-color: hsl(var(--surface-tertiary));
 }
 
 .arena-tooltip {
@@ -1447,7 +1417,6 @@ select,
 
 #quiet-msgs[aria-pressed="true"] {
   background-color: hsl(var(--surface-raised));
-  border-color: hsl(var(--border-strong));
   color: hsl(var(--text-primary));
 }
 
@@ -1666,10 +1635,6 @@ select,
   height: 60px;
 }
 
-.message-attachment-preview:hover {
-  border-color: var(--accent);
-}
-
 .message-attachment-preview img {
   display: block;
   width: 100%;
@@ -1764,12 +1729,6 @@ code.msg-id {
 .reply-parent-chip > code:not(.msg-id),
 #report .reply-parent-chip > code:not(.msg-id) {
   font-size: 11px;
-}
-
-.reply-parent-chip:hover,
-.composer-reply-chip:hover {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 .composer-reply-bar {
@@ -1884,10 +1843,6 @@ code.msg-id {
   cursor: pointer;
 }
 
-.composer-attachment-chip button:hover {
-  color: var(--accent);
-}
-
 .msgs-layout:has(> #compose.composer-expanded) > .log-card {
   display: none;
 }
@@ -1946,14 +1901,11 @@ code.msg-id {
 .composer-shell .icon-button {
   width: 30px;
   height: 30px;
-  border-color: transparent;
-  background-color: transparent;
 }
 
 .composer-shell #attach-file { grid-area: attach; }
 .composer-shell #preview-msg { grid-area: preview; margin-left: -4px; }
-.composer-shell #send { grid-area: send; border-color: hsl(var(--border-medium)); background-color: hsl(var(--surface-secondary)); }
-.composer-shell #send:hover:not(:disabled) { background-color: hsl(var(--surface-tertiary)); }
+.composer-shell #send { grid-area: send; }
 .composer-shell #send[aria-busy="true"] svg { animation: composer-spinner 1s linear infinite; }
 @keyframes composer-spinner { to { transform: rotate(360deg); } }
 .composer-shell #composer-expand { position: absolute; top: 0; right: 0; }
@@ -1991,12 +1943,8 @@ code.msg-id {
   pointer-events: none;
 }
 
-:is(#attach-file, #preview-msg, #composer-expand):hover:not(:disabled) {
-  background: hsl(var(--surface-tertiary));
-}
-
 #preview-msg[aria-pressed="true"], #composer-expand[aria-expanded="true"] {
-  background: hsl(var(--surface-raised));
+  background-color: hsl(var(--surface-raised));
 }
 
 #msg {
@@ -2291,11 +2239,6 @@ code.msg-id {
   font-size: 12px;
 }
 
-.report-toc-link:hover {
-  color: hsl(var(--text-primary));
-  background-color: hsl(var(--surface-secondary));
-}
-
 .report-toc-link.active,
 .report-toc-link[aria-current="true"] {
   color: hsl(var(--text-primary));
@@ -2333,11 +2276,6 @@ code.msg-id {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-}
-
-.report-picker-toggle:hover {
-  color: hsl(var(--text-primary));
-  background-color: hsl(var(--surface-secondary));
 }
 
 .report-picker-toggle svg {
@@ -2394,10 +2332,6 @@ code.msg-id {
   font-size: 12px;
   cursor: pointer;
   transition: background-color var(--fast) var(--ease);
-}
-
-:is(.log-edited, .log-newest, .report-scroll-top):hover {
-  background-color: hsl(var(--surface-secondary) / 0.9);
 }
 
 [data-toc-flash="true"] {
@@ -2491,11 +2425,6 @@ code.msg-id {
 .report-picker-link.is-unseen {
   color: hsl(var(--text-primary));
   font-weight: 600;
-}
-
-.report-picker-link:hover {
-  color: hsl(var(--text-primary));
-  background-color: hsl(var(--surface-secondary));
 }
 
 .report-picker-link.is-active,
@@ -3398,7 +3327,7 @@ article#report.report img,
   z-index: 1;
   top: 16px;
   right: 16px;
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   color: white;
 }
@@ -3427,14 +3356,72 @@ article#report.report img,
 }
 
 @media (hover: hover) and (pointer: fine) {
-  :is(.tab-btn, .icon-button, .btn-secondary, .preview-code-mermaid, .preview-code-md,
-    .copy-code, .survey-id-trigger, .survey-cap-pill,
-    .message-attachment-preview, .composer-reply-chip,
-    .composer-attachment-chip button, .parent-id-button, .task-title,
-    .report-toc-link, .report-picker-toggle, .report-picker-link):hover:not(:disabled) {
+  :is(.tab-btn, .icon-button, .btn-secondary, #survey-open, .survey-id-trigger,
+    .survey-cap-pill, .message-attachment-preview, .composer-reply-chip,
+    .reply-parent-chip, .composer-attachment-chip button, .parent-id-button,
+    .task-title, .report-toc-link, .report-picker-toggle,
+    .report-picker-link):hover:not(:disabled) {
     background-color: hsl(var(--surface-tertiary));
+  }
+
+  :is(.tab-btn, .survey-cap-pill, .composer-attachment-chip button,
+    .parent-id-button, .task-title):hover:not(:disabled) {
     border-radius: 6px;
   }
+
+  :is(.preview-code-mermaid, .preview-code-md, .copy-code, .report-toc-link,
+    .report-picker-toggle, .report-picker-link):hover:not(:disabled) {
+    color: hsl(var(--text-primary));
+    background-color: hsl(var(--surface-tertiary));
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: hsl(var(--interactive-cta-hover));
+  }
+
+  :is(.log-edited, .log-newest, .report-scroll-top):hover:not(:disabled) {
+    background-color: hsl(var(--surface-secondary) / 0.9);
+  }
+
+  .message-attachment-preview:hover {
+    border-color: var(--accent);
+  }
+
+  :is(.reply-parent-chip, .composer-reply-chip,
+    .composer-attachment-chip button):hover:not(:disabled) {
+    color: var(--accent);
+  }
+
+  :is(.reply-parent-chip, .composer-reply-chip):hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+}
+
+:is(.tab-btn, .icon-button, #survey-open, .survey-id-trigger,
+  .composer-attachment-chip button, .report-toc-link, .report-picker-toggle,
+  .report-picker-link):active:not(:disabled) {
+  background-color: hsl(var(--surface-tertiary));
+}
+
+:is(.tab-btn, .composer-attachment-chip button):active:not(:disabled) {
+  border-radius: 6px;
+}
+
+:is(.preview-code-mermaid, .preview-code-md, .copy-code):active:not(:disabled) {
+  color: hsl(var(--text-primary));
+  background-color: hsl(var(--surface-raised));
+}
+
+.btn-primary:active:not(:disabled) {
+  background-color: hsl(var(--interactive-cta-hover));
+}
+
+.btn-secondary:active:not(:disabled) {
+  background-color: hsl(var(--interactive-cta-secondary-hover));
+}
+
+:is(.log-edited, .log-newest, .report-scroll-top):active:not(:disabled) {
+  background-color: hsl(var(--surface-secondary) / 0.9);
 }
 
 /* A visible end marker records a rendered reply list, not a reply count. */
