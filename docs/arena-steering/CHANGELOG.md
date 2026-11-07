@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Require an explicit task size whenever task details are added or removed.
+
 - Suppress the mobile browser tap overlay across the v2 interface.
 
 - Align desktop Reports sidebars with the top of the report content.

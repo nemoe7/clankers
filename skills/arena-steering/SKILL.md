@@ -42,9 +42,9 @@ steer tasks [-f, --full]
 steer task <id>
 steer task new <id> "<title>" -z <size> [-T <type>]... [-p <priority>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-k <task-id>]
 steer task finish <id> [-c <full-commit>]
-steer task mod <id> deets <text>
-steer task mod <id> deets rm <1-based-index>
-steer task mod <id> links [msg|report|task] <id> [-A "<detail>"] [--delete <number>]
+steer task mod <id> deets <text> -z <size>
+steer task mod <id> deets rm <1-based-index> -z <size>
+steer task mod <id> links [msg|report|task] <id> [-A "<detail>"] [--delete <number>] [-z <size>]
 steer task mod <id> links rm msg|report|task <id>
 steer task mod <id> status|title|type|scope <value>
 steer task unlink <id> [msg|report|task] <link-id>

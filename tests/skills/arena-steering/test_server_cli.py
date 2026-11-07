@@ -117,7 +117,9 @@ def test_cli_task_reminders_for_ack_and_nonempty_read(tmp_path: Path) -> None:
     assert "steer task mod <task-id> links msg <message-id>" not in out
     code, out, err = _run_cli(state_dir, "ack", MSG_ID_CLI, "Working on it")
     assert (code, err) == (0, "")
-    assert f"steer task mod <task-id> links msg {MSG_ID_CLI} -A '<detail>'" in out
+    assert (
+      f"steer task mod <task-id> links msg {MSG_ID_CLI} -A '<detail>' -z <size>" in out
+    )
     assert "If msg asks for work or details, add to task" in out  # nonemo: NMT100
     assert "add it to a task" not in _run_cli(state_dir, "read")[1]
   finally:
@@ -925,6 +927,7 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
       "status": "finished",
       "commit_hash": TEST_COMMIT_HASH,
       "details": ["Registered REST endpoints."],
+      "size": 3,
     },
   )
   assert status == int(HTTPStatus.OK)
@@ -1969,12 +1972,14 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   ]
 
   code, out, _ = _run_cli(
-    state_dir, "task", "mod", TASK_ID_CLI, "deets", SECOND_DETAIL_TOKEN
+    state_dir, "task", "mod", TASK_ID_CLI, "deets", SECOND_DETAIL_TOKEN, "-z", "3"
   )
   assert code == 0
   assert SECOND_DETAIL_TOKEN in out
 
-  code, out, _ = _run_cli(state_dir, "task", "mod", TASK_ID_CLI, "deets", "rm", "2")
+  code, out, _ = _run_cli(
+    state_dir, "task", "mod", TASK_ID_CLI, "deets", "rm", "2", "-z", "3"
+  )
   assert code == 0
   assert SECOND_DETAIL_TOKEN not in out
 
@@ -3187,9 +3192,9 @@ def test_cli_ack_batches_messages_and_report_answers(tmp_path: Path) -> None:
   assert out == (
     "ok ab1001 ab1002 ab1003\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1001 -A '<detail>'\n"
+    "steer task mod <task-id> links msg ab1001 -A '<detail>' -z <size>\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1002 -A '<detail>'\n"
+    "steer task mod <task-id> links msg ab1002 -A '<detail>' -z <size>\n"
   )
   store, _, _, reports = cli.open_services(state_dir)
   assert store.get_message("ab1001").acks == ["One shared reply"]
@@ -3224,7 +3229,7 @@ def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> N
   assert code == 0, err
   assert out == (
     "ok ab1011\nIf msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1011 -A '<detail>'\n"
+    "steer task mod <task-id> links msg ab1011 -A '<detail>' -z <size>\n"
   )
   store, messages, _, _ = cli.open_services(state_dir)
   assert store.get_message("ab1011").acks == ["Received"]
@@ -3254,7 +3259,7 @@ def test_cli_ack_rejects_id_only_reply_and_keeps_message_pending() -> None:
     assert code == 0, err
     assert out == (
       "ok ab1014\nIf msg asks for work or details, add to task\n"
-      "steer task mod <task-id> links msg ab1014 -A '<detail>'\n"
+      "steer task mod <task-id> links msg ab1014 -A '<detail>' -z <size>\n"
     )
     assert store.get_message("ab1014").acks == ["Reviewed the change"]
   finally:
@@ -3962,7 +3967,9 @@ def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> N
   reports.ack_answer("decision", answer.id, "Read")
   store.close()
 
-  code, out, err = _run_cli(state_dir, "task", "mod", "work", "deets", "rm", "2")
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "deets", "rm", "2", "-z", "3"
+  )
   assert code == 0, err
   assert "Select?: Yes" not in out
 
@@ -4313,7 +4320,7 @@ def test_cli_ack_reports_only_actual_task_detail_additions(tmp_path: Path) -> No
   assert code == 0, error
   assert "work" in first and "Note: Yes" in first
   store, _, tasks, _ = cli.open_services(state_dir)
-  tasks.mod_deets_rm("work", 2)
+  tasks.mod_deets_rm("work", 2, size=3)
   store.close()
   code, repeated, error = _run_cli(state_dir, "ack", answer.id, "Received again")
   assert code == 0, error
@@ -5041,11 +5048,31 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   code, _, err = _run_cli(state_dir, "task", "mod", "work", "links", "msg", "ab1234")
   assert code != 0 and "detail" in err
   code, _, err = _run_cli(
-    state_dir, "task", "mod", "work", "links", "msg", "ab1234", "-A", "Follow up"
+    state_dir,
+    "task",
+    "mod",
+    "work",
+    "links",
+    "msg",
+    "ab1234",
+    "-A",
+    "Follow up",
+    "-z",
+    "2",
   )
   assert (code, err) == (0, "")
   code, _, err = _run_cli(
-    state_dir, "task", "mod", "work", "links", "msg", "ab1235", "--delete", "2"
+    state_dir,
+    "task",
+    "mod",
+    "work",
+    "links",
+    "msg",
+    "ab1235",
+    "--delete",
+    "2",
+    "-z",
+    "2",
   )
   assert (code, err) == (0, "")
   store, _, tasks, _ = cli.open_services(state_dir)
@@ -5053,3 +5080,49 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   assert task.msg_ids == ["ab1234", "ab1235"]
   assert task.details == ["First", "Follow up"]
   store.close()
+
+
+def test_cli_task_detail_changes_require_size_flag(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, messages, tasks, reports = cli.open_services(state_dir)
+  messages.send_message("Follow up", msg_id="ab3001", blocking=False)
+  reports.publish_report("doc", "Doc", "# Plain\n")
+  tasks.create_task("work", "Work", size=3, details=["First", "Second"])
+  store.close()
+
+  for missing in (
+    ("task", "mod", "work", "deets", "Third"),
+    ("task", "mod", "work", "deets", "rm", "2"),
+    ("task", "mod", "work", "links", "msg", "ab3001", "-A", "Follow up"),
+    ("task", "mod", "work", "links", "report", "doc", "--delete", "2"),
+  ):
+    code, _, err = _run_cli(state_dir, *missing)
+    assert code == 1 and "size" in err.lower()
+
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "deets", "Preserve --update flag", "-z", "3"
+  )
+  assert (code, err) == (0, "")
+  assert "Size: 3" in out and "Preserve --update flag" in out
+
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "deets", "-z", "5", "rm", "2"
+  )
+  assert (code, err) == (0, "")
+  assert "Size: 5" in out
+
+  code, out, err = _run_cli(
+    state_dir,
+    "task",
+    "mod",
+    "work",
+    "links",
+    "msg",
+    "ab3001",
+    "-A",
+    "Linked",
+    "-z",
+    "8",
+  )
+  assert (code, err) == (0, "")
+  assert "Size: 8" in out and "Linked" in out
