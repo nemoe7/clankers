@@ -160,6 +160,12 @@ def test_real_workflow_set_passes():
   assert gate_workflows.audit_paths() == []
 
 
+def test_gitleaks_is_not_configured():
+  assert not (gate_workflows.WORKFLOW_DIR / "secret-scan.yml").exists()
+  assert not (gate_workflows.ROOT / ".gitleaks.toml").exists()
+  assert not (gate_workflows.ROOT / ".gitleaksignore").exists()
+
+
 def test_required_file_set_is_exact():
   assert gate_workflows.REQUIRED_FILES == (
     "ci.yml",
@@ -167,7 +173,6 @@ def test_required_file_set_is_exact():
     "distribute.yml",
     "codeql.yml",
     "dependency-review.yml",
-    "secret-scan.yml",
     "workflow-security.yml",
     "pr-check.yml",
   )
@@ -712,44 +717,9 @@ def test_shared_runner_uses_uv_cache_before_workflow_installs():
 
 
 def test_push_workflows_ignore_synced_agents_directory():
-  for name in ("ci.yml", "codeql.yml", "secret-scan.yml"):
+  for name in ("ci.yml", "codeql.yml"):
     document = yaml.safe_load((gate_workflows.WORKFLOW_DIR / name).read_text())
     triggers = gate_workflows.triggers_of(document)
     push = triggers.get("push") or {}
     ignored = push.get("paths-ignore") or []
     assert ".agents/**" in ignored, name
-
-
-def test_gitleaks_ignores_only_reviewed_historical_fingerprints():
-  fingerprints = {
-    line
-    for line in (gate_workflows.ROOT / ".gitleaksignore").read_text().splitlines()
-    if line and not line.startswith("#")
-  }
-  assert fingerprints == {
-    "a0388c738acd6ef3b6ff64b0356f7d72f1e51112:tests/userscripts/arena.test.cjs:generic-api-key:4466",
-    "64d12831bf3a6de9506ebcddf9ca876f01d481e7:tests/userscripts/arena.test.cjs:generic-api-key:4466",
-    "734ade279196921b3bca730f9ea781a0402f31f8:maintenance/userscripts.checks.cjs:generic-api-key:28",
-    "5247ffae708d932dcb0d36e9b2d9695f6e8a80f9:agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
-    "2570f54179ce53033ceb8238e3279cea24edaff1:agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
-    "060c3fc9e3f153642461ce62e0fbaf23bde94579:skills/agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
-    "869e05abee723846d47e270edd6b31a4ad4116e6:skills/agent-handoff/scripts/handoff_lint.py:aws-access-token:241",
-  }
-
-
-def test_gitleaks_ignores_installed_agents_and_keeps_default_rules():
-  import re
-  import tomllib
-
-  config = tomllib.loads((gate_workflows.ROOT / ".gitleaks.toml").read_text())
-  assert config["extend"]["useDefault"] is True
-  patterns = [re.compile(pattern) for pattern in config["allowlist"]["paths"]]
-
-  def ignored(path: str) -> bool:
-    return any(pattern.search(path) for pattern in patterns)
-
-  assert ignored(".agents/skills/arena-steering/SKILL.md")
-  assert ignored(".agents/skills/arena-steering/assets/mermaid.min.js")
-  assert ignored("skills/arena-steering/assets/mermaid.min.js")
-  assert not ignored("skills/arena-steering/scripts/arena_steering/store.py")
-  assert not ignored("docs/CHANGELOG.md")

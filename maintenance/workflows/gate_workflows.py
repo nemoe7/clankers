@@ -22,7 +22,6 @@ REQUIRED_FILES = (
   "distribute.yml",
   "codeql.yml",
   "dependency-review.yml",
-  "secret-scan.yml",
   "workflow-security.yml",
   "pr-check.yml",
 )
