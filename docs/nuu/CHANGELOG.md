@@ -6,13 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
-## [0.1.74]
+## [0.2.0]
+
+### Added
+
+- **Unified Python CLI (`scripts/nuu.py`)**: Consolidate `nuu` onto nine subcommands (`audit`, `walk`, `measure`, `annotate`, `board`, `lint`, `collect`, `search`, `doctor`). Use `playwright>=1.49`, Markdown output, and exit codes `0`..`3`.
+- **Configuration v2 (`nuu.toml`, `references/nuu.toml`)**: Add `[paths]`, `[fonts]`, `[annotate]`, `[measure]`, `[board]`, `[audit]`, `[checks.severity]`, and `[[assets]]` with `<path>:<line>:<col>` parse/schema errors and unknown-key warnings.
+- **Marker collector (`nuu collect`)**: Scan `nonuu:`, `nuu-deviation:`, and `nuurecipe:` comments across web and Python sources, flagging unknown recipe slugs (`RCP001`).
 
 ### Changed
 
-- **Windows UTF-8 handling (`scripts/*.py`)**: Decode child-process text pipes as strict UTF-8 and reconfigure CLI output streams to UTF-8.
-- **Stylesheet alignment (`references/style.css`)**: Raise dark `--scrollbar-thumb` to `#767686`, pad `.button` at `8px 16px`, and add `.button--danger` plus token aliases. Set `.pill` to `var(--space-5)` (`24px`) and scope reduced-motion rules.
-- **Recipe alignment (`references/recipes/*.md`)**: Match text-paired `.ico-slot`, `.btn-spinner`, and `.ico-svg` to `1lh` (`ICN102`), snap `.dot` variants onto the `4px` scale, and link recipe example PNGs. Align `table-to-cards` (`60em`), `scroll-edge-fade` (`24px`/`32px`/`15px`), opaque tooltips, tabular timestamps, and `ACC207`.
+- **Browser and renderer lookup (`scripts/*.py`)**: Replace `$CHROMIUM_PATH` and `$NUU_CONFIG` with `-x` -> `$CHROMIUM_BIN` -> `PATH`, `$CHROMIUM_LIB`, `$CHROMIUM_FONTS`, and `$NUU_RENDERER` (`auto`, `chromium`, `bitmap`).
+- **Severity model (`scripts/nuu.py`)**: Restrict rule severities to `"error"` and `"review"` so `[checks.severity]` overrides control `lint` and `audit` exit status.
+
+### Removed
+
+- **Legacy Node and JSON surfaces (`scripts/browser.cjs`, `scripts/uiux.py`)**: Remove `browser.cjs`, `uiux.py`, `nuu extract`, legacy `NU*` rule aliases, `-T design`, and JSON CLI inputs/outputs.
 
 ## [0.1.73]
 

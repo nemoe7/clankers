@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -197,30 +196,51 @@ def build_parser() -> argparse.ArgumentParser:
     help="Base URL, port, or HTML file path to walk.",
   )
   parser.add_argument(
-    "-s",
-    "--script",
+    "-c",
+    "--config",
     type=Path,
     default=None,
-    help="Optional Python walk script defining @step functions or capture_views().",
+    help="Optional path to nuu.toml.",
   )
   parser.add_argument(
-    "-V",
-    "--views",
-    action="store_true",
-    help="Capture named views via capture_views() instead of running @step functions.",
+    "-S",
+    "--session",
+    default="default",
+    help="Session name for interactive MCP walks.",
   )
   parser.add_argument(
     "-o",
-    "--out",
+    "--output",
     type=Path,
-    default=Path("/tmp/walk"),
+    default=Path("./nuu-artifacts"),
     help="Directory where step or view PNGs are written.",
+  )
+  parser.add_argument(
+    "-g",
+    "--gif",
+    type=Path,
+    default=None,
+    help="Optional GIF89a output path.",
+  )
+  parser.add_argument(
+    "--video",
+    nargs="?",
+    const="walk.webm",
+    default=None,
+    help="Optional WebM recording output path.",
+  )
+  parser.add_argument(
+    "-t",
+    "--timeout",
+    type=int,
+    default=20,
+    help="Navigation and action timeout in seconds.",
   )
   parser.add_argument(
     "-x",
     "--executable",
-    default=os.environ.get("CHROMIUM_PATH") or None,
-    help="Optional browser executable path (defaults to CHROMIUM_PATH if set).",
+    default=None,
+    help="Optional browser executable path (falls back to $CHROMIUM_BIN or PATH).",
   )
   return parser
 
@@ -230,51 +250,41 @@ def main(argv: Sequence[str] | None = None) -> int:
     if hasattr(stream, "reconfigure"):
       stream.reconfigure(encoding="utf-8", errors="replace")
   args = build_parser().parse_args(argv)
-  demo = Demo(demo_url := Demo().url_for(args.target))
-  module = load_walk_module(args.script) if args.script is not None else None
+  from nuu import chromium_launch_kwargs, ensure_artifacts_dir, load_nuu_config
+
   try:
+    load_nuu_config(None, args.config)
+    target_path = Path(str(args.target))
+    is_py_script = target_path.suffix.lower() == ".py" and target_path.is_file()
+    module = load_walk_module(target_path) if is_py_script else None
+    demo_url = Demo().url_for("http://127.0.0.1:1500" if is_py_script else args.target)
+    demo = Demo(demo_url)
     from playwright.sync_api import sync_playwright
-  except ImportError as exc:
-    print(f"Playwright is required to run browser walks: {exc}", file=sys.stderr)
+
+    out_dir = ensure_artifacts_dir(args.output)
+    launch_opts = chromium_launch_kwargs(args.executable)
+    with sync_playwright() as pw:
+      browser = pw.chromium.launch(**launch_opts)
+      try:
+
+        def make_page(viewport: tuple[int, int]) -> Any:
+          ctx = browser.new_context(
+            viewport={"width": viewport[0], "height": viewport[1]},
+            color_scheme="dark",
+          )
+          return ctx.new_page()
+
+        if module is not None:
+          run_steps_with_factory(make_page, demo, out_dir=out_dir)
+        else:
+          page = make_page((1920, 957))
+          walker = Walker(page, demo)
+          walker.goto(demo_url)
+          (out_dir / "walk.png").write_bytes(walker.screenshot())
+      finally:
+        browser.close()
+    print(f"# Walk Complete\n\n- Output: `{out_dir}`\n", end="")
+    return 0
+  except Exception as exc:
+    print(f"error: {exc}", file=sys.stderr)
     return 1
-
-  args.out.mkdir(parents=True, exist_ok=True)
-  launch_opts: dict[str, Any] = {"headless": True}
-  if args.executable:
-    launch_opts["executable_path"] = str(args.executable)
-  with sync_playwright() as pw:
-    browser = pw.chromium.launch(**launch_opts)
-    try:
-      if args.views:
-        context = browser.new_context(
-          viewport={"width": 1280, "height": 800},
-          color_scheme="dark",
-        )
-        page = context.new_page()
-        walker = Walker(page, demo)
-        custom_capture = getattr(module, "capture_views", None) if module else None
-        shots = (
-          custom_capture(walker, demo)
-          if callable(custom_capture)
-          else capture_views(walker, demo, {"dashboard": demo_url})
-        )
-        for name, png_bytes in shots.items():
-          (args.out / f"{name}.png").write_bytes(png_bytes)
-        context.close()
-        return 0
-
-      def make_page(viewport: tuple[int, int]) -> Any:
-        ctx = browser.new_context(
-          viewport={"width": viewport[0], "height": viewport[1]},
-          color_scheme="dark",
-        )
-        return ctx.new_page()
-
-      run_steps_with_factory(make_page, demo, out_dir=args.out)
-    finally:
-      browser.close()
-  return 0
-
-
-if __name__ == "__main__":
-  raise SystemExit(main())
