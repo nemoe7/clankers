@@ -922,10 +922,8 @@ mark.search-hit {
   left: auto;
 }
 
-.survey-id-wrap:hover .survey-answer-tooltip,
-.survey-id-wrap:focus-within .survey-answer-tooltip,
-.survey-cap-pill:hover .survey-answer-tooltip,
-.survey-cap-pill:focus-within .survey-answer-tooltip {
+.survey-answer-tooltip.tooltip-active,
+.survey-answer-tooltip.tooltip-closing {
   display: block;
 }
 
@@ -1360,6 +1358,16 @@ select,
     to { opacity: 1; translate: 0 0; }
   }
 
+  @keyframes tooltip-close-below {
+    from { opacity: 0; translate: 0 4px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
+  @keyframes tooltip-close-above {
+    from { opacity: 0; translate: 0 -4px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
   .arena-tooltip,
   .survey-answer-tooltip {
     animation: tooltip-from-above 150ms ease-out;
@@ -1370,6 +1378,16 @@ select,
   #preview-msg[data-tooltip]::before,
   #preview-msg[data-tooltip]::after {
     animation: tooltip-from-below 150ms ease-out;
+  }
+
+  .arena-tooltip.tooltip-closing,
+  .survey-answer-tooltip.tooltip-closing {
+    animation: tooltip-close-above 150ms ease-out reverse forwards;
+  }
+
+  .arena-tooltip.above.tooltip-closing,
+  .survey-answer-tooltip.above.tooltip-closing {
+    animation-name: tooltip-close-below;
   }
 }
 

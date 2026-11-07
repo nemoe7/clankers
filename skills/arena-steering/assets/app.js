@@ -1527,16 +1527,46 @@ function initEvents() {
 }
 
 let activeTooltip = null;
+let pendingTooltip = null;
+let lastTooltipClosedAt = -Infinity;
+const tooltipCloseTimers = new WeakMap();
+const TOOLTIP_DELAY = 500;
+const TOOLTIP_ANIMATION = 150;
+
+function cancelPendingTooltip() {
+  if (!pendingTooltip) return;
+  clearTimeout(pendingTooltip.timer);
+  pendingTooltip = null;
+}
 
 function hideTitleTooltip() {
+  cancelPendingTooltip();
   if (!activeTooltip) return;
-  const { target, title, describedBy, addedLabel, tip } = activeTooltip;
-  if (!target.hasAttribute("title")) target.setAttribute("title", title);
-  if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
-  if (describedBy === null) target.removeAttribute("aria-describedby");
-  else target.setAttribute("aria-describedby", describedBy);
-  tip.remove();
+  const { target, title, describedBy, addedLabel, tip, kind } = activeTooltip;
   activeTooltip = null;
+  lastTooltipClosedAt = performance.now();
+  if (kind === "title") {
+    if (!target.hasAttribute("title")) target.setAttribute("title", title);
+    if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
+    if (describedBy === null) target.removeAttribute("aria-describedby");
+    else target.setAttribute("aria-describedby", describedBy);
+    tip.removeAttribute("id");
+    tip.removeAttribute("role");
+    tip.setAttribute("aria-hidden", "true");
+  } else {
+    tip.classList.remove("tooltip-active");
+  }
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (kind === "title") tip.remove();
+    return;
+  }
+  tip.classList.add("tooltip-closing");
+  const timer = setTimeout(() => {
+    tip.classList.remove("tooltip-closing");
+    if (kind === "title") tip.remove();
+    tooltipCloseTimers.delete(tip);
+  }, TOOLTIP_ANIMATION);
+  tooltipCloseTimers.set(tip, timer);
 }
 
 function positionTitleTooltip(target, tip) {
@@ -1572,7 +1602,7 @@ function showTitleTooltip(target) {
   target.setAttribute("aria-describedby", [describedBy, tip.id].filter(Boolean).join(" "));
   (target.closest("dialog[open]") || document.body).append(tip);
   positionTitleTooltip(target, tip);
-  activeTooltip = { target, title, describedBy, addedLabel, tip };
+  activeTooltip = { target, title, describedBy, addedLabel, tip, kind: "title" };
 }
 
 function positionSurveyTooltip(trigger) {
@@ -1586,35 +1616,77 @@ function positionSurveyTooltip(trigger) {
   if (box.top < body.getBoundingClientRect().top || coversHeading) tip.classList.remove("above");
 }
 
+function showSurveyTooltip(target) {
+  const tip = target?.querySelector(".survey-answer-tooltip");
+  if (!tip) return;
+  const timer = tooltipCloseTimers.get(tip);
+  if (timer) clearTimeout(timer);
+  tooltipCloseTimers.delete(tip);
+  tip.classList.remove("tooltip-closing");
+  tip.classList.add("tooltip-active");
+  positionSurveyTooltip(target);
+  activeTooltip = { target, tip, kind: "survey" };
+}
+
+function requestTooltip(target, kind, immediate = false) {
+  if (!target) return;
+  if (activeTooltip?.target === target) {
+    cancelPendingTooltip();
+    return;
+  }
+  if (pendingTooltip?.target === target && !immediate) return;
+  const showNow = immediate || Boolean(activeTooltip) || performance.now() - lastTooltipClosedAt <= TOOLTIP_DELAY;
+  hideTitleTooltip();
+  const show = () => {
+    pendingTooltip = null;
+    if (!target.isConnected) return;
+    if (kind === "survey") showSurveyTooltip(target);
+    else showTitleTooltip(target);
+  };
+  if (showNow) show();
+  else pendingTooltip = { target, timer: setTimeout(show, TOOLTIP_DELAY) };
+}
+
+function tooltipTarget(node) {
+  const survey = node?.closest?.(".survey-id-wrap, .survey-cap-pill");
+  if (survey?.querySelector(".survey-answer-tooltip")) return { target: survey, kind: "survey" };
+  const title = node?.closest?.("[title]");
+  if (title && !title.dataset.tooltip) return { target: title, kind: "title" };
+  if (activeTooltip?.target.contains(node)) return { target: activeTooltip.target, kind: activeTooltip.kind };
+  return null;
+}
+
 document.addEventListener("mouseover", (event) => {
-  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
-  const target = event.target.closest?.("[title]");
-  if (target) showTitleTooltip(target);
+  const match = tooltipTarget(event.target);
+  if (match) requestTooltip(match.target, match.kind);
   else if (activeTooltip && !activeTooltip.target.contains(event.target)) hideTitleTooltip();
 });
 document.addEventListener("mouseout", (event) => {
-  if (activeTooltip && !(event.relatedTarget instanceof Node && activeTooltip.target.contains(event.relatedTarget)) && document.activeElement !== activeTooltip.target) hideTitleTooltip();
+  const target = pendingTooltip?.target || activeTooltip?.target;
+  if (!target) return;
+  if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return;
+  if (target.contains(document.activeElement)) return;
+  hideTitleTooltip();
 });
 document.addEventListener("focusin", (event) => {
-  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
-  if (event.target.matches?.(":focus-visible")) showTitleTooltip(event.target.closest?.("[title]"));
+  if (!event.target.matches?.(":focus-visible")) return;
+  const match = tooltipTarget(event.target);
+  if (match) requestTooltip(match.target, match.kind, true);
 });
 document.addEventListener("focusout", () => hideTitleTooltip());
 document.addEventListener("click", () => hideTitleTooltip(), true);
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideTitleTooltip(); });
 window.addEventListener("resize", hideTitleTooltip);
-document.addEventListener("scroll", () => {
-  hideTitleTooltip();
-  positionSurveyTooltip(document.querySelector(".survey-id-wrap:hover, .survey-cap-pill:hover, .survey-id-wrap:focus-within, .survey-cap-pill:focus-within"));
-}, true);
+document.addEventListener("scroll", hideTitleTooltip, true);
 new MutationObserver(() => {
+  if (pendingTooltip && !pendingTooltip.target.isConnected) cancelPendingTooltip();
   if (!activeTooltip) return;
-  const { target, tip, addedLabel } = activeTooltip;
+  const { target, tip, addedLabel, kind } = activeTooltip;
   if (!target.isConnected) {
     hideTitleTooltip();
     return;
   }
-  if (!target.hasAttribute("title")) return;
+  if (kind !== "title" || !target.hasAttribute("title")) return;
   const title = target.getAttribute("title").trim();
   if (!title) {
     hideTitleTooltip();

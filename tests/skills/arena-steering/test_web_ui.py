@@ -713,6 +713,9 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#survey-open").click()
         page.locator(".survey-cap-pill").first.hover()
+        page.locator(".survey-cap-pill:first-child .survey-answer-tooltip").wait_for(
+          state="visible"
+        )
         first = page.evaluate("""() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect();
           const tip = document.querySelector('.survey-cap-pill:first-child .survey-answer-tooltip');
@@ -745,6 +748,9 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
           or first["tooltipBottom"] <= first["headingTop"] + 1
         )
         page.locator(".survey-cap-pill").last.hover()
+        page.locator(".survey-cap-pill:last-child .survey-answer-tooltip").wait_for(
+          state="visible"
+        )
         sizes = page.evaluate("""() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect();
           const shell = rect('#modal-shell');
@@ -768,7 +774,12 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         assert sizes["footerBottom"] <= height
         if height < 400:
           assert sizes["contentHeight"] > sizes["bodyHeight"]
+        page.locator(".survey-id-trigger").last.scroll_into_view_if_needed()
+        page.mouse.move(0, 0)
         page.locator(".survey-id-trigger").last.hover()
+        page.locator(".survey-id-wrap:hover .survey-answer-tooltip").wait_for(
+          state="visible"
+        )
         bounds = page.locator(".survey-id-wrap:hover .survey-answer-tooltip").evaluate(
           """el => {
             const tip = el.getBoundingClientRect();
@@ -6430,7 +6441,7 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         dot_color = dot.evaluate("el => getComputedStyle(el).backgroundColor")
         button.hover()
         tip = page.get_by_role("tooltip").filter(has_text="Open survey results")
-        assert tip.is_visible()
+        tip.wait_for(state="visible")
         page.screenshot(path=str(tmp_path / "animated-tooltip.png"))
         styles = tip.evaluate("""el => ({
           bg: getComputedStyle(el).backgroundColor,
@@ -6464,6 +6475,7 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         page.get_by_role("heading", name="Survey Verification").wait_for()
         page.get_by_role("button", name="Close dialog").click()
         page.keyboard.press("Tab")
+        button.evaluate("el => el.blur()")
         button.focus()
         assert tip.is_visible()
         page.keyboard.press("Escape")
@@ -7417,6 +7429,94 @@ def test_touch_tap_overlay_is_disabled_without_hiding_keyboard_focus(
         assert page.locator("#tap-probe").evaluate(
           "el => el.matches(':focus-visible') && parseFloat(getComputedStyle(el).outlineWidth) > 0"
         )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(json.dumps(survey.template()))
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          for (const [id, left] of [['first', 100], ['second', 250]]) {
+            const button = document.createElement('button');
+            button.id = id; button.title = id;
+            button.textContent = id;
+            button.style.cssText = `position:fixed;top:200px;left:${left}px;z-index:1000`;
+            document.body.append(button);
+          }
+        }""")
+        first = page.locator("#first")
+        first.hover()
+        page.wait_for_timeout(200)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.mouse.move(600, 700)
+        page.wait_for_timeout(450)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        first.hover()
+        page.wait_for_timeout(200)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.locator("#arena-title-tooltip").wait_for(timeout=1000)
+        page.locator("#second").hover()
+        assert (
+          page.locator("#arena-title-tooltip").text_content(timeout=200) == "second"
+        )
+        first.hover()
+        assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
+        page.wait_for_timeout(200)
+        page.mouse.move(600, 700)
+        closing = page.locator(".arena-tooltip.tooltip-closing")
+        assert closing.count() == 1
+        assert (
+          closing.evaluate("el => getComputedStyle(el).animationDirection") == "reverse"
+        )
+        assert closing.evaluate(
+          "el => el.getAnimations().some(animation => animation.playState === 'running')"
+        )
+        page.locator("#second").hover()
+        assert (
+          page.locator("#arena-title-tooltip").text_content(timeout=200) == "second"
+        )
+        page.mouse.move(600, 700)
+        page.wait_for_timeout(650)
+        first.hover()
+        page.wait_for_timeout(200)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.mouse.move(600, 700)
+        page.keyboard.press("Tab")
+        first.focus()
+        assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
+        page.keyboard.press("Escape")
+        page.locator("#survey-open").click()
+        pill = page.locator(".survey-cap-pill").first
+        page.mouse.move(600, 700)
+        page.wait_for_timeout(650)
+        pill.hover()
+        tip = pill.locator(".survey-answer-tooltip")
+        page.wait_for_timeout(200)
+        assert tip.is_hidden()
+        tip.wait_for(state="visible", timeout=1000)
       finally:
         browser.close()
   finally:
