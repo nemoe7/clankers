@@ -955,7 +955,7 @@ def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None
   not os.environ.get("CHROMIUM_BIN"),
   reason="Set CHROMIUM_BIN for the extracted browser",
 )
-def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
+def test_reports_bottom_fade_only_hides_for_mobile_keyboard(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store)
@@ -991,6 +991,26 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
           page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
           page.locator("#tab-reports").click()
           page.locator(".field-text-input").focus()
+          chip_styles = page.evaluate("""() => {
+            const field = document.querySelector('.field-id-chip');
+            const parent = document.createElement('button');
+            parent.className = 'reply-parent-chip';
+            parent.innerHTML = '<code>note</code>';
+            field.parentElement.append(parent);
+            const style = element => {
+              const outer = getComputedStyle(element);
+              const inner = getComputedStyle(element.querySelector('code'));
+              return [outer.borderRadius, outer.backgroundColor, outer.borderColor,
+                outer.padding, inner.fontSize, element.getBoundingClientRect().height];
+            };
+            const result = [style(field), style(parent)];
+            parent.remove();
+            return result;
+          }""")
+          assert chip_styles[0] == chip_styles[1], chip_styles
+          page.screenshot(
+            path=str(tmp_path / f"report-field-chip-{width}-{motion}.png")
+          )
           pane = page.locator("#view-reports")
           pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
           assert pane.evaluate("el => el.scrollHeight > el.clientHeight * 2")
