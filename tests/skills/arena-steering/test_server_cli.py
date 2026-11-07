@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import os
+import re
 import runpy
 import sqlite3
 import subprocess
@@ -1387,13 +1388,17 @@ def test_state_merge_removes_only_uploads_orphaned_by_deletions(tmp_path: Path) 
   _, uploaded = source_app.dispatch(
     "POST", "/uploads", {"name": "shared.txt", "text": "shared"}
   )
-  attachment = uploaded["attachment"]
-  for message_id in ("ab1001", "ab1002"):
-    source_app.dispatch(
-      "POST",
-      "/messages",
-      {"id": message_id, "body": "Shared.", "attachments": [attachment]},
-    )
+  _, first_msg = source_app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "ab1001", "body": "Shared.", "attachments": [uploaded["attachment"]]},
+  )
+  attachment = first_msg["message"]["attachments"][0]
+  source_app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "ab1002", "body": "Shared.", "attachments": [attachment]},
+  )
   _, snapshot = source_app.dispatch("GET", "/state/snapshot")
   target_app.dispatch("POST", "/state/merge", snapshot)
   _, pushed = target_app.dispatch(
@@ -1444,7 +1449,7 @@ def test_state_merge_stale_deletion_keeps_later_edit_and_upload(tmp_path: Path) 
     "POST", "/uploads", {"name": "keep.txt", "text": "content"}
   )
   attachment = uploaded["attachment"]
-  app.dispatch(
+  _, sent = app.dispatch(
     "POST",
     "/messages",
     {"id": "ab1003", "body": "Before", "attachments": [attachment]},
@@ -1464,7 +1469,7 @@ def test_state_merge_stale_deletion_keeps_later_edit_and_upload(tmp_path: Path) 
   assert merged["skipped"] == ["ab1003"]
   assert merged["assets_removed"] == []
   assert store.get_message("ab1003").body == "Later edit"
-  assert Path(attachment["path"]).is_file()
+  assert Path(sent["message"]["attachments"][0]["path"]).is_file()
   _, assets = app.dispatch("GET", "/state/assets")
   assert len(assets["assets"]) == 1
   store.close()
@@ -2206,7 +2211,10 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert msg["body"] == "See attached paste."
   assert len(msg["attachments"]) == 1
   paste_attachment = msg["attachments"][0]
-  assert paste_attachment["name"] == "pasted-text.txt"
+  assert re.fullmatch(r"1-pasted-lines-[0-9]{10,}\.txt", paste_attachment["name"])
+  assert (
+    Path(paste_attachment["path"]).name == f"{msg['id']}-{paste_attachment['name']}"
+  )
   assert Path(paste_attachment["path"]).read_text(encoding="utf-8") == long_paste
 
   many_lines = "\n".join(
@@ -2220,6 +2228,12 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert status == int(HTTPStatus.CREATED)
   assert created["message"]["body"] == "Pasted text attached."
   assert len(created["message"]["attachments"]) == 1
+  many_att = created["message"]["attachments"][0]
+  assert re.fullmatch(
+    rf"{PASTE_ATTACHMENT_LINE_THRESHOLD}-pasted-lines-[0-9]{{10,}}\.txt",
+    many_att["name"],
+  )
+  assert Path(many_att["path"]).name == f"{created['message']['id']}-{many_att['name']}"
 
   status, created = app.dispatch(
     "POST",
@@ -2232,6 +2246,10 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert status == int(HTTPStatus.CREATED)
   assert created["message"]["parent_ids"] == [msg["id"]]
   assert created["message"]["attachments"][0]["name"] == "spec.md"
+  assert (
+    Path(created["message"]["attachments"][0]["path"]).name
+    == f"{created['message']['id']}-spec.md"
+  )
   store.close()
 
 
@@ -2257,7 +2275,7 @@ def test_message_attachments_expose_only_present_served_upload_urls(
   )
   assert status == int(HTTPStatus.CREATED)
   returned = created["message"]["attachments"]
-  assert returned[0]["url"] == image["url"]
+  assert returned[0]["url"] == f"/static/uploads/{created['message']['id']}-sample.png"
   assert "url" not in returned[1]
   assert "url" not in returned[2]
 
@@ -5126,3 +5144,139 @@ def test_cli_task_detail_changes_require_size_flag(tmp_path: Path) -> None:
   )
   assert (code, err) == (0, "")
   assert "Size: 8" in out and "Linked" in out
+
+
+LOST_MARKER = " (lost)"
+
+
+def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  png_b64 = base64.b64encode(b"\x89PNG\r\n\x1a\npng").decode("ascii")
+
+  # 1. Named staged file keeps original name in composer, gets {msgID}- on send.
+  _, staged_named = app.dispatch(
+    "POST",
+    "/uploads",
+    {"name": "diagram.png", "content_base64": png_b64, "_request_id": "req-up-1"},
+  )
+  assert staged_named["attachment"]["name"] == "diagram.png"
+
+  # 2. Unnamed file gets {epoch_ms}.{ext} in composer, {msgID}-{epoch_ms}.{ext} on send.
+  _, staged_unnamed = app.dispatch(
+    "POST",
+    "/uploads",
+    {
+      "name": "",
+      "content_type": "image/png",
+      "content_base64": png_b64,
+      "_request_id": "req-up-2",
+    },
+  )
+  unnamed_name = staged_unnamed["attachment"]["name"]
+  assert re.fullmatch(r"[0-9]{10,}\.png", unnamed_name)
+
+  # 3. Pasted lines get {N}-pasted-lines-{epoch_ms}.txt, then {msgID}- on send.
+  pasted_lines = "\n".join(f"row {idx}" for idx in range(20))
+  _, staged_paste = app.dispatch(
+    "POST",
+    "/uploads",
+    {
+      "name": "20-pasted-lines-1762507200123.txt",
+      "text": pasted_lines,
+      "_request_id": "req-up-3",
+    },
+  )
+  assert staged_paste["attachment"]["name"] == "20-pasted-lines-1762507200123.txt"
+
+  status, sent = app.dispatch(
+    "POST",
+    "/messages",
+    {
+      "id": "ca1001",
+      "body": "Three templates",
+      "attachments": [
+        staged_named["attachment"],
+        staged_unnamed["attachment"],
+        staged_paste["attachment"],
+      ],
+    },
+  )
+  assert status == int(HTTPStatus.CREATED)
+  atts = sent["message"]["attachments"]
+  assert [a["name"] for a in atts] == [
+    "diagram.png",
+    unnamed_name,
+    "20-pasted-lines-1762507200123.txt",
+  ]
+  assert [Path(a["path"]).name for a in atts] == [
+    "ca1001-diagram.png",
+    f"ca1001-{unnamed_name}",
+    "ca1001-20-pasted-lines-1762507200123.txt",
+  ]
+  for att in atts:
+    assert Path(att["path"]).parent == state_dir / "uploads"
+    assert Path(att["path"]).is_file()
+
+  # Validation failure on task mod must NOT move files on disk.
+  app.tasks.create_task("first-task", "First task", size=3, details=["Initial"])
+  with pytest.raises(ValueError, match="size"):
+    app.tasks.mod_links_add("first-task", "ca1001", link_type="msg")
+  assert (state_dir / "uploads" / "ca1001-diagram.png").is_file()
+  assert not (state_dir / "uploads" / "first-task").exists()
+
+  # Linking moves files into uploads/{taskID}/ and updates message paths + details.
+  updated_first = app.tasks.mod_links_add(
+    "first-task", "ca1001", link_type="msg", size=5
+  )
+  first_folder = state_dir / "uploads" / "first-task"
+  assert (first_folder / "ca1001-diagram.png").is_file()
+  assert not (state_dir / "uploads" / "ca1001-diagram.png").exists()
+  reloaded_msg = app.messages.get_message("ca1001")
+  assert Path(reloaded_msg.attachments[0].path) == first_folder / "ca1001-diagram.png"
+  assert any(
+    "uploads/first-task/ca1001-diagram.png" in d for d in updated_first.details
+  )
+
+  # Linking a second task copies into uploads/{secondTaskID}/ while preserving first.
+  second = app.tasks.create_task(
+    "second-task", "Second task", size=3, msg_ids=["ca1001"]
+  )
+  second_folder = state_dir / "uploads" / "second-task"
+  assert (first_folder / "ca1001-diagram.png").is_file()
+  assert (second_folder / "ca1001-diagram.png").is_file()
+  assert any("uploads/second-task/ca1001-diagram.png" in d for d in second.details)
+
+  # Dynamic (lost) detection when a task/message file disappears on disk.
+  version_before = app.data_version()
+  (first_folder / "ca1001-diagram.png").unlink()
+  assert app.data_version() != version_before
+
+  _, msg_payload = app.dispatch("GET", "/messages/ca1001")
+  first_att = msg_payload["message"]["attachments"][0]
+  assert first_att["present"] is False
+  assert first_att["lost"] is True
+  assert "url" not in first_att
+
+  _, tasks_payload = app.dispatch("GET", "/tasks")
+  first_serialized = next(
+    item for item in tasks_payload["tasks"] if item["id"] == "first-task"
+  )
+  second_serialized = next(
+    item for item in tasks_payload["tasks"] if item["id"] == "second-task"
+  )
+  assert any(
+    d.endswith(f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}")
+    for d in first_serialized["details"]
+  )
+  assert not any(d.endswith(LOST_MARKER) for d in second_serialized["details"])
+  store.close()
+
+  code, msg_out, err = _run_cli(state_dir, "msg", "ca1001")
+  assert (code, err) == (0, "")
+  assert f"ca1001-diagram.png (11 B){LOST_MARKER}" in msg_out
+
+  code, task_out, err = _run_cli(state_dir, "task", "first-task")
+  assert (code, err) == (0, "")
+  assert f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}" in task_out

@@ -8,6 +8,10 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Name unnamed and pasted composer uploads with epoch milliseconds and prepend `{messageID}-` on disk after send.
+
+- Relocate task-linked files under `uploads/{taskID}/` and mark missing files `(lost)` dynamically.
+
 - Set link color to `#299bff`, restore solid disc message markers, and lower the mobile `New reply` pill.
 
 - Remove `855x325` from Nuu audit viewports and lock mobile orientation to portrait.

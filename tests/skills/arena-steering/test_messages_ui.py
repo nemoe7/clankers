@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import itertools
 import os
+import re
 import subprocess
 import threading
 from collections.abc import Iterator
@@ -1565,7 +1566,7 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           ).all_text_contents() == ["bb0001", "reference"]
           assert short.locator(
             ".message-attachments .receipt-filename"
-          ).all_text_contents() == ["notes.txt (missing)", "other.txt (missing)"]
+          ).all_text_contents() == ["notes.txt (lost)", "other.txt (lost)"]
           image_button = short.get_by_role("button", name="View image layout.png")
           image_button.scroll_into_view_if_needed()
           page.wait_for_function(
@@ -2675,6 +2676,110 @@ def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
       assert EXPECTED_PORTRAIT_ORIENTATION in mobile_metrics["locked"]
       assert mobile_metrics["editedTopCss"] > desktop_metrics["editedTopCss"]
       assert mobile_metrics["editedTopRect"] > mobile_metrics["toolbarBottomRect"]
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN to run the browser regression",
+)
+def test_composer_paste_unnamed_templates_and_dynamic_lost_ui(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  png_bytes = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
+  )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": 1372, "height": 883})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      composer = page.locator("#msg")
+      composer.wait_for(state="visible")
+
+      # 1. Stage a named file via file input, a clipboard image paste, and pasted lines.
+      named_path = tmp_path / "architecture.png"
+      named_path.write_bytes(png_bytes)
+      page.locator("#composer-file-input").set_input_files(str(named_path))
+      page.wait_for_function(
+        "() => document.querySelectorAll('.composer-attachment-chip').length === 1"
+      )
+
+      page.evaluate(
+        """(b64) => {
+          const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+          const file = new File([bytes], 'image.png', { type: 'image/png' });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+          document.querySelector('#msg').dispatchEvent(ev);
+        }""",
+        base64.b64encode(png_bytes).decode("ascii"),
+      )
+      page.wait_for_function(
+        "() => document.querySelectorAll('.composer-attachment-chip').length === 2"
+      )
+
+      many_lines = "\\n".join(f"line {i}" for i in range(18))
+      page.evaluate(
+        f"""() => {{
+          const dt = new DataTransfer();
+          dt.setData('text/plain', '{many_lines}');
+          const ev = new ClipboardEvent('paste', {{ clipboardData: dt, bubbles: true, cancelable: true }});
+          document.querySelector('#msg').dispatchEvent(ev);
+        }}"""
+      )
+      page.wait_for_function(
+        "() => document.querySelectorAll('.composer-attachment-chip[data-upload-status=\"ready\"]').length === 3"
+      )
+
+      staged_names = page.evaluate(
+        "() => Array.from(document.querySelectorAll('.composer-attachment-name'), el => el.getAttribute('title'))"
+      )
+      assert staged_names[0] == "architecture.png"
+      assert re.fullmatch(r"[0-9]{10,}\.png", staged_names[1])
+      assert re.fullmatch(r"18-pasted-lines-[0-9]{10,}\.txt", staged_names[2])
+
+      composer.fill("Send three templates")
+      page.locator("#send").click()
+      page.wait_for_function(
+        "() => document.querySelectorAll('.message:not([data-msg-id^=\"pending-\"])').length === 1"
+      )
+
+      sent = app.messages.list_messages(include_hidden=False)[0]
+      assert [Path(att.path).name for att in sent.attachments] == [
+        f"{sent.id}-architecture.png",
+        f"{sent.id}-{staged_names[1]}",
+        f"{sent.id}-{staged_names[2]}",
+      ]
+
+      # Link to task and delete the pasted-lines file on disk to verify dynamic (lost).
+      app.tasks.create_task("ui-reloc-task", "UI relocation", size=3, msg_ids=[sent.id])
+      relocated = (
+        state_dir / "uploads" / "ui-reloc-task" / f"{sent.id}-{staged_names[2]}"
+      )
+      assert relocated.is_file()
+      relocated.unlink()
+
+      page.reload()
+      page.locator(f'.message[data-msg-id="{sent.id}"]').wait_for(state="visible")
+      assert page.locator(
+        f'.message[data-msg-id="{sent.id}"] .receipt-filename'
+      ).all_text_contents() == [f"{staged_names[2]} (lost)"]
       browser.close()
   finally:
     server.shutdown()

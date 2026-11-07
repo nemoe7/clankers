@@ -117,7 +117,8 @@ def open_services(
 ) -> tuple[SqliteStore, MessageService, TaskService, ReportService]:
   """Open SqliteStore and domain services for a state directory."""
   store = SqliteStore(state_dir / "state.sqlite3")
-  messages = MessageService(store, store, store, store)
+  uploads_dir = state_dir / "uploads"
+  messages = MessageService(store, store, store, store, uploads_dir=uploads_dir)
   tree_check = completion_tree_check(state_dir)
   tasks = TaskService(
     store,
@@ -126,6 +127,7 @@ def open_services(
     gates=FileGateStatus(state_dir),
     clean_tree_verifier=tree_check,
     on_dirty_finish=messages.flag_dirty_finish if tree_check is not None else None,
+    uploads_dir=uploads_dir,
   )
   reports = ReportService(
     store,
@@ -587,7 +589,7 @@ def _run_ack(
           print(f"- {detail}", file=out)
   if created:
     _, blocked = tasks.get_task(created.id)
-    _print_single_task(created, blocked, out)
+    _print_single_task(created, blocked, out, tasks=tasks)
   return 0
 
 
@@ -636,7 +638,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
       print("No current task.", file=out)
     else:
       task, blocked = current
-      _print_single_task(task, blocked, out, include_details=bool(args))
+      _print_single_task(task, blocked, out, include_details=bool(args), tasks=tasks)
     return 0
   subcmd = args[0]
   if subcmd == "new":
@@ -674,7 +676,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
       },
     )
     _, blocked = tasks.get_task(task.id)
-    _print_single_task(task, blocked, out)
+    _print_single_task(task, blocked, out, tasks=tasks)
     return 0
 
   if subcmd == "finish":
@@ -684,7 +686,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     parsed = finish_p.parse_args(args[1:])
     task = tasks.finish_phase(parsed.id, commit_hash=parsed.commit)
     _, blocked = tasks.get_task(task.id)
-    _print_single_task(task, blocked, out)
+    _print_single_task(task, blocked, out, tasks=tasks)
     return 0
 
   if subcmd == "rm":
@@ -709,12 +711,12 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
         "Usage: steer task unlink <id> [<msg|report|task|gate>] <link-id>"
       )
     _, blocked = tasks.get_task(updated.id)
-    _print_single_task(updated, blocked, out)
+    _print_single_task(updated, blocked, out, tasks=tasks)
     return 0
 
   if len(args) == 1:
     task, blocked = tasks.get_task(subcmd)
-    _print_single_task(task, blocked, out)
+    _print_single_task(task, blocked, out, tasks=tasks)
     return 0
 
   raise ValueError(f"Unrecognized task arguments: {args}")
@@ -843,7 +845,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
     )
 
   _, blocked = tasks.get_task(updated.id)
-  _print_single_task(updated, blocked, out)
+  _print_single_task(updated, blocked, out, tasks=tasks)
   return 0
 
 
@@ -861,7 +863,7 @@ def _run_rename(
     return 0
   print(f"Renamed task {parsed.old_id} -> {renamed.id}", file=out)
   _, blocked = tasks.get_task(renamed.id)
-  _print_single_task(renamed, blocked, out)
+  _print_single_task(renamed, blocked, out, tasks=tasks)
   return 0
 
 
@@ -1930,6 +1932,8 @@ def _print_delivered(
 
 
 def _print_message(msg: Message, out: TextIO) -> None:
+  from .services import is_attachment_present
+
   print(f"`{msg.id}`", file=out)
   if msg.parent_refs:
     parents = (
@@ -1941,7 +1945,11 @@ def _print_message(msg: Message, out: TextIO) -> None:
   if msg.body:
     print(msg.body, file=out)
   for att in msg.attachments:
-    print(f"attachment: {att.name} -> {att.path} ({att.size_bytes} B)", file=out)
+    lost_suffix = "" if is_attachment_present(att) else " (lost)"
+    print(
+      f"attachment: {att.name} -> {att.path} ({att.size_bytes} B){lost_suffix}",
+      file=out,
+    )
   for ack_text in msg.acks:
     print(f"ack: {ack_text}", file=out)
 
@@ -1962,8 +1970,15 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
 
 
 def _print_single_task(
-  task: Task, blocked: bool, out: TextIO, *, include_details: bool = True
+  task: Task,
+  blocked: bool,
+  out: TextIO,
+  *,
+  include_details: bool = True,
+  tasks: TaskService | None = None,
 ) -> None:
+  from .services import format_task_detail_status
+
   state_str = f"{task.status}, blocked" if blocked else task.status
   print(f"task {task.id}, status {state_str}, type {_task_type_label(task)}", file=out)
   print(task.title, file=out)
@@ -1980,7 +1995,15 @@ def _print_single_task(
   if include_details:
     print(f"- Priority: {task.effective_priority}", file=out)
     print(f"- Size: {task.size}", file=out)
-    for idx, line in enumerate(task.details, 1):
+    rendered_details = (
+      tasks.format_task_details(task)
+      if tasks is not None
+      else [
+        format_task_detail_status(line, uploads_dir=resolve_state_dir() / "uploads")
+        for line in task.details
+      ]
+    )
+    for idx, line in enumerate(rendered_details, 1):
       print(f"- [{idx}] {line}", file=out)
 
 

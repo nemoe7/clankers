@@ -1691,8 +1691,15 @@ select,
 }
 
 .receipt-filename {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.receipt-filename > .message-attachment-name {
+  padding: 0;
 }
 
 #log-empty {

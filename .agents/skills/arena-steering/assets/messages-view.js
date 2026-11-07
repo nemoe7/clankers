@@ -347,14 +347,15 @@ export function renderMessagesView(container, state, handlers) {
             ? `<span class="receipt-file">${attachments
                 .map((att) => {
                   const name = escapeHtml(att.name || "");
-                  const preview = att.present !== false && typeof att.url === "string"
+                  const isLost = Boolean(att.lost) || att.present === false;
+                  const preview = !isLost && typeof att.url === "string"
                     && att.url.startsWith("/static/uploads/")
                     && /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(String(att.name || ""));
                   const displayName = renderAttachmentName(att.name);
                   if (preview) {
                     return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${displayName}</span></button>`;
                   }
-                  return `<span class="message-attachment-file"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${att.present === false ? " (missing)" : ""}</span></span>`;
+                  return `<span class="message-attachment-file"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${isLost ? " (lost)" : ""}</span></span>`;
                 })
                 .join("")}</span>`
             : "";
@@ -948,18 +949,45 @@ export function renderMessagesView(container, state, handlers) {
     const pastedText = event.clipboardData?.getData("text/plain") || "";
     if (files.length) {
       if (!pastedText) event.preventDefault();
-      await handlers.onStageComposerFiles?.(files);
+      const baseMs = Date.now();
+      const unnamedFiles = files.map((file, idx) => {
+        const rawName = String(file?.name || "").trim();
+        const dot = rawName.lastIndexOf(".");
+        const nameExt = dot >= 0 && dot < rawName.length - 1
+          ? rawName.slice(dot).replace(/[^A-Za-z0-9.]/g, "").slice(0, 20).toLowerCase()
+          : "";
+        const mime = String(file?.type || "").split(";", 1)[0].trim().toLowerCase();
+        const mimeExt = {
+          "image/png": ".png",
+          "image/jpeg": ".jpg",
+          "image/webp": ".webp",
+          "image/gif": ".gif",
+          "image/svg+xml": ".svg",
+          "image/bmp": ".bmp",
+          "image/avif": ".avif",
+          "text/plain": ".txt",
+          "text/markdown": ".md",
+          "application/json": ".json",
+          "application/pdf": ".pdf",
+        }[mime] || ".bin";
+        const ext = nameExt.length > 1 ? nameExt : mimeExt;
+        return new File([file], `${baseMs + idx}${ext}`, { type: file.type });
+      });
+      await handlers.onStageComposerFiles?.(unnamedFiles);
       return;
     }
-    const lineCount = pastedText.split("\n").length;
+    const lineCount = pastedText.split(/\r\n|\r|\n/).length;
     if (
       Array.from(pastedText).length > PASTE_ATTACHMENT_CHAR_THRESHOLD ||
       lineCount >= PASTE_ATTACHMENT_LINE_THRESHOLD
     ) {
       event.preventDefault();
-      const pasteFile = new File([pastedText], "pasted-text.txt", {
-        type: "text/plain",
-      });
+      const epochMs = Date.now();
+      const pasteFile = new File(
+        [pastedText],
+        `${lineCount}-pasted-lines-${epochMs}.txt`,
+        { type: "text/plain" },
+      );
       await handlers.onStageComposerFiles?.([pasteFile]);
     }
   });
