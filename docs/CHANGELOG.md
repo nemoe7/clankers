@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Specify the stale-report reminder command (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 - Remove the code-scanning requirement (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 
 #### maintenance
