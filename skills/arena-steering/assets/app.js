@@ -311,6 +311,10 @@ function syncViewportHeight() {
     Math.max(innerHeight, docHeight) - vvHeight >= MOBILE_KEYBOARD_MIN_SHRINK
   );
   document.documentElement.toggleAttribute("data-mobile-keyboard-open", keyboardOpen);
+  document.documentElement.style?.setProperty?.(
+    "--reports-keyboard-inset",
+    `${keyboardOpen ? Math.max(0, innerHeight - ((vv?.offsetTop || 0) + vvHeight)) : 0}px`
+  );
   // A panned visual viewport starts below the layout viewport. Keep the shell
   // within that visible region rather than leaving an offset-sized bottom gap.
   document.documentElement.style?.setProperty?.(
