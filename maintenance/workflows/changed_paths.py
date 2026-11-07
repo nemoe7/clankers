@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shlex
 import subprocess
+import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from fnmatch import fnmatch
 from pathlib import Path
@@ -55,6 +59,73 @@ def git(arguments: Sequence[str], repo: str = ".") -> subprocess.CompletedProces
   return subprocess.run(
     ["git", *arguments], cwd=repo, capture_output=True, text=True, check=False
   )
+
+
+def surface_digest(repo: str, patterns: Sequence[str], shared: Sequence[str]) -> str:
+  """Hash tracked index entries for a surface without consulting commit history."""
+  paths = (*patterns, *shared)
+  if not paths:
+    raise ValueError("A digest surface needs explicit paths")
+  result = subprocess.run(
+    ["git", "ls-files", "-s", "-z", "--", *paths],
+    cwd=repo,
+    capture_output=True,
+    check=True,
+  )
+  return hashlib.sha256(result.stdout).hexdigest()
+
+
+def load_ledger(path: Path) -> dict[str, dict[str, str]]:
+  """Treat missing, incompatible, or malformed cached ledgers as misses."""
+  try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+  except (OSError, ValueError):
+    return {}
+  if not isinstance(data, dict) or data.get("version") != 1:
+    return {}
+  entries = data.get("surfaces")
+  if not isinstance(entries, dict):
+    return {}
+  return {
+    name: entry
+    for name, entry in entries.items()
+    if isinstance(name, str)
+    and isinstance(entry, dict)
+    and isinstance(entry.get("digest"), str)
+    and re.fullmatch(r"[0-9a-f]{64}", entry["digest"])
+    and isinstance(entry.get("commit"), str)
+    and entry["commit"]
+  }
+
+
+def ledger_hit(entries: Mapping[str, dict[str, str]], name: str, digest: str) -> bool:
+  return entries.get(name, {}).get("digest") == digest
+
+
+def record_surface(
+  path: Path, name: str, digest: str, commit: str, passed: bool
+) -> None:
+  """Save a pass atomically, or remove the old entry after a failure."""
+  if not name or not re.fullmatch(r"[0-9a-f]{64}", digest) or not commit:
+    raise ValueError("A surface, SHA-256 digest, and commit are required")
+  entries = load_ledger(path)
+  if passed:
+    entries[name] = {"digest": digest, "commit": commit}
+  else:
+    entries.pop(name, None)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  temporary = None
+  try:
+    with tempfile.NamedTemporaryFile(
+      "w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+      temporary = Path(handle.name)
+      json.dump({"version": 1, "surfaces": entries}, handle, sort_keys=True)
+      handle.write("\n")
+    temporary.replace(path)
+  finally:
+    if temporary is not None:
+      temporary.unlink(missing_ok=True)
 
 
 def event_base(env: Mapping[str, str], repo: str = ".") -> str | None:
@@ -145,6 +216,7 @@ MODULE_TESTS = {
   "Workflow and Distribution": (
     "tests/maintenance/workflows/test_changed_paths.py",
     "tests/maintenance/workflows/test_check_artifacts.py",
+    "tests/maintenance/workflows/test_codeql_filter.py",
     "tests/maintenance/workflows/test_gate_workflows.py",
     "tests/github/actions/test_distribute_sync.py",
   ),
@@ -155,6 +227,7 @@ ARCHIVED_TEST_PREFIX = "docs/archive/"
 MODULE_PATHS = {
   "Preview": (
     "skills/arena-steering/*",
+    "tests/skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
   ),
   "Nemoizer": (  # nonemo: NMO100
@@ -185,6 +258,7 @@ MODULE_PATHS = {
     ".github/workflows/*",
     ".github/actions/distribute-sync/*",
     "maintenance/workflows/check_artifacts.py",
+    "maintenance/workflows/codeql_filter.py",
     "maintenance/workflows/gate_workflows.py",
     "tests/maintenance/workflows/*",
     "tests/maintenance/workflows/test_check_artifacts.py",
@@ -220,6 +294,123 @@ SHARED_TEST_PATHS = (
   ".github/actions/prepare/*",
   "maintenance/workflows/changed_paths.py",
 )
+
+
+# Gate code, dependencies, and runner setup invalidate every cached result.
+CI_SHARED_PATHS = (
+  *SHARED_TEST_PATHS,
+  "tests/conftest.py",
+  "tests/*/conftest.py",
+)
+
+
+def surface_key(name: str) -> str:
+  return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def ci_surfaces() -> dict[str, tuple[str, ...]]:
+  surfaces = {
+    "ruff": ("*.py", "*.pyi", "*.ipynb", "pyproject.toml", "ruff.toml", ".ruff.toml"),
+    "markdownlint": ("*.md", ".markdownlint*", "package.json", "package-lock.json"),
+    # The repository gate scans all text, validates paths, and checks parity.
+    "repo_check": (".",),
+  }
+  for name, tests in MODULE_TESTS.items():
+    extra = {
+      "GPT Plugins": ("skills/nemoizer/*", "skills/refs/nemoizer/*"),
+      "Repository Prose and Validation": (".",),
+    }.get(name, ())
+    surfaces["module_" + surface_key(name)] = (
+      *MODULE_PATHS[name],
+      *tests,
+      *MODULE_NODE_TESTS.get(name, ()),
+      *extra,
+    )
+  return surfaces
+
+
+def step_collect(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
+  check_module_ownership(repo)
+  path = Path(env.get("CI_LEDGER", ".cache/ci-ledger.json"))
+  entries = load_ledger(path)
+  if env.get("GITHUB_ACTIONS") == "true" and not env.get("CI_ENVIRONMENT"):
+    raise ValueError("CI_ENVIRONMENT is required on GitHub Actions")
+  misses = {}
+  digests = {}
+  for name, patterns in ci_surfaces().items():
+    inputs = surface_digest(repo, patterns, CI_SHARED_PATHS)
+    fingerprint = env.get("CI_ENVIRONMENT", "")
+    digest = hashlib.sha256(f"{inputs}\0{fingerprint}".encode()).hexdigest()
+    misses[name] = not ledger_hit(entries, name, digest)
+    digests[name] = digest
+    write_output(output, "digest_" + name, digest)
+    write_output(output, "run_" + name, str(misses[name]).lower())
+  test_surfaces = [
+    name for name in misses if name.startswith("module_") and misses[name]
+  ]
+  write_output(output, "test_surfaces", ",".join(test_surfaces))
+  write_output(output, "digests", json.dumps(digests, separators=(",", ":")))
+  # Test suites can invoke the bundled Node parser or tokenizer.
+  npm_needed = bool(test_surfaces) or misses["markdownlint"] or misses["repo_check"]
+  write_output(output, "npm_needed", str(npm_needed).lower())
+  return 0
+
+
+def step_record(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
+  name = env.get("CI_SURFACE", "")
+  status = env.get("CI_RESULT", "")
+  if name not in ci_surfaces() or status not in ("success", "failure", "skipped"):
+    raise ValueError("Expected a known surface and step outcome")
+  if status != "skipped":
+    record_surface(
+      Path(env.get("CI_LEDGER", ".cache/ci-ledger.json")),
+      name,
+      env.get("CI_DIGEST", ""),
+      env.get("GITHUB_SHA", ""),
+      status == "success",
+    )
+  return 0
+
+
+def step_test(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
+  """Run selected suites together and record them only when the whole union passes."""
+  selected = env.get("CI_TEST_SURFACES", "").split(",")
+  selected = [name for name in selected if name]
+  names = {"module_" + surface_key(name): name for name in MODULE_TESTS}
+  if len(selected) != len(set(selected)) or any(name not in names for name in selected):
+    raise ValueError("Unknown or duplicate test surface")
+  digests = json.loads(env.get("CI_DIGESTS", "{}"))
+  if not isinstance(digests, dict) or any(name not in digests for name in selected):
+    raise ValueError("Missing test-surface digest")
+  python_tests = []
+  node_tests = []
+  extra_commands = []
+  for key in selected:
+    name = names[key]
+    python_tests.extend(MODULE_TESTS[name])
+    node_tests.extend(MODULE_NODE_TESTS.get(name, ()))
+    extra_commands.extend(
+      shlex.split(command) for command in MODULE_COMMANDS.get(name, ())
+    )
+  commands = []
+  if python_tests:
+    commands.append([sys.executable, "-m", "pytest", "-q", *python_tests])
+  if node_tests:
+    commands.append(["node", "--test", *node_tests])
+  commands.extend(extra_commands)
+  failed = False
+  for command in commands:
+    print("$ " + shlex.join(command), flush=True)
+    failed |= subprocess.run(command, cwd=repo, check=False).returncode != 0
+  for name in selected:
+    record_surface(
+      Path(env.get("CI_LEDGER", ".cache/ci-ledger.json")),
+      name,
+      digests[name],
+      env.get("GITHUB_SHA", ""),
+      not failed,
+    )
+  return int(failed)
 
 
 def module_matrix(files: Sequence[str] | None) -> list[dict[str, str]]:
@@ -281,6 +472,9 @@ def step_module_tests(env: Mapping[str, str], output: Path, repo: str = ".") -> 
 STEPS = {
   "module-tests": step_module_tests,
   "artifacts": step_artifacts,
+  "collect": step_collect,
+  "record": step_record,
+  "test": step_test,
 }
 
 

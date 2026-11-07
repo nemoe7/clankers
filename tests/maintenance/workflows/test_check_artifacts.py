@@ -19,22 +19,9 @@ def findings(document: dict) -> list[str]:
   return check_artifacts.findings_for(copy.deepcopy(document))
 
 
-def upload_step(document: dict) -> dict:
-  return next(
-    step
-    for step in document["jobs"]["package-gpt-plugins"]["steps"]
-    if str(step.get("uses", "")).startswith("actions/upload-artifact")
-  )
-
-
 def test_the_repository_workflow_passes():
   document = workflow()
   assert findings(document) == []
-  runs = check_artifacts.step_runs(document["jobs"]["validate-gpt-plugins"])
-  assert (
-    "skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts"
-    in runs
-  )
 
 
 def test_the_command_reports_the_workflow(capsys):
@@ -64,35 +51,40 @@ def test_a_missing_push_path_fails():
   )
 
 
-def test_a_changed_pull_request_path_set_fails():
+def test_a_pull_request_trigger_fails():
   document = workflow()
-  document["on"]["pull_request"]["paths"].append("rules/**")
-  assert any("pull request paths changed" in finding for finding in findings(document))
+  document["on"]["pull_request"] = {"branches": ["**"]}
+  assert any(
+    "must not run on pull requests" in finding for finding in findings(document)
+  )
 
 
 def test_a_reworded_job_condition_fails():
   document = workflow()
-  document["jobs"]["package-gpt-plugins"]["if"] = "github.ref == 'refs/heads/main'"
+  document["jobs"]["release-gpt-plugins"]["if"] = "github.ref == 'refs/heads/main'"
   assert any(
-    "package-gpt-plugins lost its event condition" in finding
+    "release-gpt-plugins lost its event condition" in finding
     for finding in findings(document)
   )
 
 
-def test_a_validation_job_that_packages_fails():
+def test_an_artifact_upload_fails():
   document = workflow()
-  document["jobs"]["validate-gpt-plugins"]["steps"].append(
-    {"name": "Zip", "run": "zip -r gpt-plugins.zip gpt-plugins"}
+  document["jobs"]["release-gpt-plugins"]["steps"].append(
+    {"uses": "actions/upload-artifact@v7"}
   )
-  assert any("must not zip an archive" in finding for finding in findings(document))
+  assert any("locally verified archives" in finding for finding in findings(document))
 
 
-def test_a_named_artifact_upload_fails():
+def test_release_step_must_honor_changes():
   document = workflow()
-  upload_step(document)["with"]["name"] = "plugins"
-  assert any(
-    "filename as the artifact name" in finding for finding in findings(document)
+  step = next(
+    step
+    for step in document["jobs"]["release-gpt-plugins"]["steps"]
+    if "gh release upload" in step.get("run", "")
   )
+  step.pop("if")
+  assert any("honor the package change" in finding for finding in findings(document))
 
 
 def test_a_missing_publish_check_fails():
@@ -148,7 +140,7 @@ def test_publishing_guards_ignore_display_names():
   write_actions = copy.deepcopy(document)
   write_actions["jobs"]["release-gpt-plugins"]["permissions"]["actions"] = "write"
   leak_token = copy.deepcopy(document)
-  leak_token["jobs"]["validate-gpt-plugins"]["env"] = {
+  leak_token["jobs"]["release-gpt-plugins"]["env"] = {
     "GH_TOKEN": "${{ secrets.GIST_TOKEN }}"
   }
   for changed in (interrupt, write_contents, write_actions, leak_token):

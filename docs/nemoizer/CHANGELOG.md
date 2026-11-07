@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.16]
+
+### Fixed
+
+- Align rotation guidance with explicit forms and current mappings.
+
+### Removed
+
+- Remove self-maintenance instructions from the usage skill.
+
 ## [0.1.15]
 
 ### Added

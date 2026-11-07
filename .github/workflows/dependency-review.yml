@@ -3,6 +3,43 @@ name: Dependency Review
 on:
   pull_request:
     branches: ['**']
+    # Cover dependency manifests and action references, including nested projects.
+    paths:
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/setup.py'
+      - '**/setup.cfg'
+      - '**/Pipfile*'
+      - '**/poetry.lock'
+      - '**/uv.lock'
+      - '**/package*.json'
+      - '**/yarn.lock'
+      - '**/pnpm-lock.yaml'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/Gemfile*'
+      - '**/pom.xml'
+      - '**/gradle*'
+      - '**/Dockerfile*'
+      - '**/composer.json'
+      - '**/composer.lock'
+      - '**/*.csproj'
+      - '**/*.fsproj'
+      - '**/*.vbproj'
+      - '**/packages.config'
+      - '**/packages.lock.json'
+      - '**/mix.exs'
+      - '**/mix.lock'
+      - '**/pubspec.yaml'
+      - '**/pubspec.lock'
+      - '**/Podfile*'
+      - '**/Package.swift'
+      - '**/Package.resolved'
+      - '**/environment*.yml'
+      - '**/environment*.yaml'
+      - '.github/**'
 
 permissions:
   contents: read

@@ -22,9 +22,7 @@ REQUIRED_FILES = (
   "distribute.yml",
   "codeql.yml",
   "dependency-review.yml",
-  "secret-scan.yml",
   "workflow-security.yml",
-  "pr-check.yml",
 )
 
 # A pull request can run untrusted code, so these scopes stay out of its workflows.

@@ -519,6 +519,27 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
             assert top_button.is_hidden()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             pane = page.locator("#view-reports")
+            if width >= 1200:
+              top_edges = page.evaluate("""() => Object.fromEntries(
+                ['#report-main', '#report-toc', '.report-rail'].map(selector =>
+                  [selector, document.querySelector(selector).getBoundingClientRect().top])
+              )""")
+              assert abs(top_edges["#report-toc"] - top_edges["#report-main"]) <= 1, (
+                top_edges
+              )
+              assert abs(top_edges[".report-rail"] - top_edges["#report-main"]) <= 1, (
+                top_edges
+              )
+              page.set_viewport_size({"width": 1280, "height": 325})
+              page.wait_for_function("""() => ['#report-toc', '.report-rail'].every(selector =>
+                Math.abs(document.querySelector(selector).getBoundingClientRect().top -
+                  document.querySelector('#report-main').getBoundingClientRect().top) <= 1)
+              """)
+              page.set_viewport_size({"width": width, "height": height})
+              page.wait_for_function("""() => Math.abs(
+                document.querySelector('#report-toc').getBoundingClientRect().top -
+                document.querySelector('#report-main').getBoundingClientRect().top) <= 1
+              """)
             assert pane.evaluate("el => el.scrollHeight > el.clientHeight * 3")
             scroll_ratio = pane.evaluate("""el => {
               const maxScroll = el.scrollHeight - el.clientHeight;
@@ -608,6 +629,13 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               };
             }""")
             pane_box, submit, top = (geometry[key] for key in ("pane", "submit", "top"))
+            if width == 411:
+              assert submit["height"] >= 48, geometry
+              assert width - submit["x"] - submit["width"] >= 24, geometry
+              assert styles["submitInset"] >= 16, styles
+            if width == 1372:
+              assert submit["height"] < 48, geometry
+              assert styles["submitInset"] == 24, styles
             pane_bottom = pane_box["y"] + pane_box["height"]
             if motion == "no-preference":
               assert abs(pane_bottom - height) <= 1, geometry
@@ -955,7 +983,7 @@ def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None
   not os.environ.get("CHROMIUM_BIN"),
   reason="Set CHROMIUM_BIN for the extracted browser",
 )
-def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
+def test_reports_bottom_fade_only_hides_for_mobile_keyboard(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store)
@@ -991,6 +1019,26 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard() -> None:
           page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
           page.locator("#tab-reports").click()
           page.locator(".field-text-input").focus()
+          chip_styles = page.evaluate("""() => {
+            const field = document.querySelector('.field-id-chip');
+            const parent = document.createElement('button');
+            parent.className = 'reply-parent-chip';
+            parent.innerHTML = '<code>note</code>';
+            field.parentElement.append(parent);
+            const style = element => {
+              const outer = getComputedStyle(element);
+              const inner = getComputedStyle(element.querySelector('code'));
+              return [outer.borderRadius, outer.backgroundColor, outer.borderColor,
+                outer.padding, inner.fontSize, element.getBoundingClientRect().height];
+            };
+            const result = [style(field), style(parent)];
+            parent.remove();
+            return result;
+          }""")
+          assert chip_styles[0] == chip_styles[1], chip_styles
+          page.screenshot(
+            path=str(tmp_path / f"report-field-chip-{width}-{motion}.png")
+          )
           pane = page.locator("#view-reports")
           pane.evaluate("el => { el.scrollTop = el.scrollHeight / 2; }")
           assert pane.evaluate("el => el.scrollHeight > el.clientHeight * 2")
@@ -1673,11 +1721,15 @@ def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
         }""")
         geometry = page.evaluate("""() => ({
           shellBottom: document.querySelector('.app-shell').getBoundingClientRect().bottom,
+          submitBottom: document.querySelector('#report-submit-float').getBoundingClientRect().bottom,
           visibleBottom: visualViewport.offsetTop + visualViewport.height,
           keyboard: document.documentElement.hasAttribute('data-mobile-keyboard-open'),
         })""")
         assert geometry["keyboard"], geometry
         assert abs(geometry["shellBottom"] - geometry["visibleBottom"]) < 1, geometry
+        assert 16 <= geometry["visibleBottom"] - geometry["submitBottom"] <= 17, (
+          geometry
+        )
         page.screenshot(path=str(tmp_path / "keyboard-offset.png"))
         page.evaluate("""() => {
           delete visualViewport.height;
@@ -1686,6 +1738,9 @@ def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
         }""")
         assert page.locator(".app-shell").evaluate(
           "el => Math.abs(el.getBoundingClientRect().top) < 1"
+        )
+        assert page.locator("#report-submit-float").evaluate(
+          "el => Math.abs(innerHeight - el.getBoundingClientRect().bottom - 16) < 1"
         )
       finally:
         browser.close()

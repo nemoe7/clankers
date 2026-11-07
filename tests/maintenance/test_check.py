@@ -74,10 +74,10 @@ def test_grouped_budgets_are_empty_after_v1_archive():
   assert check.EXPECTED_GROUPS == {}
 
 
-def test_root_arena_symlinks_to_rule_source():
+def test_root_arena_is_regular_copy_of_rule_source():
   root = check.ROOT / "ARENA.md"
-  assert root.is_symlink()
-  assert root.readlink() == Path("rules/ARENA.md")
+  assert root.is_file()
+  assert not root.is_symlink()
   assert root.read_bytes() == (check.RULES / "ARENA.md").read_bytes()
 
 

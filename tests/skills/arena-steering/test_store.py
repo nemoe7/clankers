@@ -25,6 +25,53 @@ def test_package_exposes_current_semver_version() -> None:
   assert __version__ == EXPECTED_INITIAL_VERSION
 
 
+def test_retry_token_save_preserves_typed_message_metadata(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "retry-metadata.sqlite3")
+  messages = [
+    Message(
+      id="aa0011",
+      body="Violation",
+      hidden=True,
+      violation_type="rule",
+      violation_clause_file="ARENA.md",
+    ),
+    Message(
+      id="aa0012",
+      body="Answer",
+      hidden=True,
+      type="report_answer",
+      answer_data={"report_id": "report", "values": {"choice": "yes"}},
+    ),
+  ]
+  for message in messages:
+    saved = store.save_message_once(message, message.id, "same-content")
+    replay = store.save_message_once(message, message.id, "same-content")
+    assert saved == message
+    assert replay == message
+    assert store.get_message(message.id) == message
+    with pytest.raises(ValueError, match="different content"):
+      store.save_message_once(message, message.id, "different-content")
+  store.close()
+
+
+def test_retry_token_insert_rolls_back_message_on_receipt_failure(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "retry-rollback.sqlite3")
+  with store.transaction():
+    store._conn.execute(
+      "CREATE TRIGGER fail_receipt BEFORE INSERT ON message_requests BEGIN SELECT RAISE(ABORT, 'receipt failed'); END"
+    )
+  import sqlite3
+
+  with pytest.raises(sqlite3.IntegrityError, match="receipt failed"):
+    store.save_message_once(
+      Message(id="aa0013", body="Atomic"), "request", "fingerprint"
+    )
+  assert store.get_message("aa0013") is None
+  store.close()
+
+
 def test_message_strict_hex_id_and_status_ladder() -> None:
   msg = Message(
     id="a1b2c3",

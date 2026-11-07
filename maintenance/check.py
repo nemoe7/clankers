@@ -70,8 +70,8 @@ EXPECTED_BUDGETS = {
 # No grouped asset budgets remain after the v1 archive.
 EXPECTED_GROUPS = {}
 
-# Root `ARENA.md` links to the source that distribution pushes to target repos.
-# The byte check still guards the link target and any accidental replacement.
+# Root `ARENA.md` copies the source that distribution pushes to target repos.
+# The byte check guards against drift.
 ROOT_COPIES = ("ARENA.md",)
 
 REFS = RULES / "refs"

@@ -147,6 +147,7 @@ a {
 }
 
 * {
+  -webkit-tap-highlight-color: transparent;
   scrollbar-width: thin; /* nonuu: SPC001 */
   scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent; /* nonuu: SPC001 */
 }
@@ -921,10 +922,8 @@ mark.search-hit {
   left: auto;
 }
 
-.survey-id-wrap:hover .survey-answer-tooltip,
-.survey-id-wrap:focus-within .survey-answer-tooltip,
-.survey-cap-pill:hover .survey-answer-tooltip,
-.survey-cap-pill:focus-within .survey-answer-tooltip {
+.survey-answer-tooltip.tooltip-active,
+.survey-answer-tooltip.tooltip-closing {
   display: block;
 }
 
@@ -1359,6 +1358,16 @@ select,
     to { opacity: 1; translate: 0 0; }
   }
 
+  @keyframes tooltip-close-below {
+    from { opacity: 0; translate: 0 4px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
+  @keyframes tooltip-close-above {
+    from { opacity: 0; translate: 0 -4px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+
   .arena-tooltip,
   .survey-answer-tooltip {
     animation: tooltip-from-above 150ms ease-out;
@@ -1369,6 +1378,16 @@ select,
   #preview-msg[data-tooltip]::before,
   #preview-msg[data-tooltip]::after {
     animation: tooltip-from-below 150ms ease-out;
+  }
+
+  .arena-tooltip.tooltip-closing,
+  .survey-answer-tooltip.tooltip-closing {
+    animation: tooltip-close-above 150ms ease-out reverse forwards;
+  }
+
+  .arena-tooltip.above.tooltip-closing,
+  .survey-answer-tooltip.above.tooltip-closing {
+    animation-name: tooltip-close-below;
   }
 }
 
@@ -1742,7 +1761,8 @@ code.msg-id {
 }
 
 .reply-parent-chip,
-.composer-reply-chip {
+.composer-reply-chip,
+.field-id-chip {
   display: inline-flex;
   align-items: center;
   min-height: 0;
@@ -1762,7 +1782,9 @@ code.msg-id {
 }
 
 .reply-parent-chip > code:not(.msg-id),
-#report .reply-parent-chip > code:not(.msg-id) {
+.composer-reply-chip > code:not(.msg-id),
+#report .reply-parent-chip > code:not(.msg-id),
+#report .field-id-chip > code:not(.msg-id) {
   font-size: 11px;
 }
 
@@ -1782,12 +1804,6 @@ code.msg-id {
 
 .composer-reply-bar[hidden] {
   display: none;
-}
-
-.composer-reply-label {
-  color: hsl(var(--text-tertiary));
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .message[data-highlight="true"] .message-bubble {
@@ -2597,7 +2613,7 @@ article#report.report img,
 @media (min-width: 75em) {
   .report-toc {
     position: fixed;
-    top: 76px;
+    top: var(--reports-rail-top, 63px);
     right: calc(50vw + 466px);
     width: min(216px, calc(50vw - 478px));
     z-index: 2;
@@ -2613,7 +2629,7 @@ article#report.report img,
 
   .report-rail {
     position: fixed;
-    top: 76px;
+    top: var(--reports-rail-top, 63px);
     bottom: 0;
     left: calc(50vw + 466px);
     width: min(216px, calc(50vw - 478px));
@@ -2774,11 +2790,7 @@ article#report.report img,
 .field-id-chip {
   flex: none;
   white-space: nowrap;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background-color: var(--code-bg) !important;
-  color: hsl(var(--text-tertiary));
-  font-size: 12px;
+  cursor: default;
 }
 
 .options {
@@ -2857,7 +2869,7 @@ article#report.report img,
 .report-submit-float {
   position: fixed;
   right: max(16px, calc((100vw - 900px) / 2));
-  bottom: var(--reports-submit-bottom);
+  bottom: calc(var(--reports-submit-bottom) + var(--reports-keyboard-inset, 0px));
   z-index: 6;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
 }
@@ -2875,6 +2887,23 @@ article#report.report img,
   #view-reports:has(#report-submit-float) {
     --reports-submit-bottom: max(8px, env(safe-area-inset-bottom));
     margin-bottom: max(36px, calc(env(safe-area-inset-bottom) + 28px));
+  }
+}
+
+@media (max-width: 60em) {
+  #view-reports:has(#report-submit-float) {
+    --reports-submit-bottom: max(16px, env(safe-area-inset-bottom));
+    margin-bottom: calc(var(--reports-submit-bottom) + 52px);
+  }
+
+  .report-submit-float {
+    min-height: 48px;
+    padding-inline: 20px;
+    right: max(24px, calc(env(safe-area-inset-right) + 16px));
+  }
+
+  .report-submit-row > #report-submit {
+    min-height: 48px;
   }
 }
 
@@ -3429,7 +3458,7 @@ article#report.report img,
 @media (hover: hover) and (pointer: fine) {
   :is(.tab-btn, .icon-button, .btn-secondary, .preview-code-mermaid, .preview-code-md,
     .copy-code, .survey-id-trigger, .survey-cap-pill,
-    .message-attachment-preview, .composer-reply-chip,
+    .message-attachment-preview, .composer-reply-chip, .reply-parent-chip,
     .composer-attachment-chip button, .parent-id-button, .task-title,
     .report-toc-link, .report-picker-toggle, .report-picker-link):hover:not(:disabled) {
     background-color: hsl(var(--surface-tertiary));

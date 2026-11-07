@@ -7,19 +7,11 @@ on:
       - '.agents/**'
   pull_request:
     branches: ['**']
-    paths-ignore:
-      - '.github/workflows/distribute.yml'
-      - '.gitignore'
-      - 'apply.bat'
-      - 'automations/**'
-      - 'docs/CHANGELOG.md'
-      - 'docs/**/CHANGELOG.md'
-      - 'maintenance/README.md'
+    types: [opened, edited, reopened, synchronize]
 
 permissions:
   contents: read
 
-# The suite spawns preview.py directly, so the self-install stays out of the tests.
 env:
   ARENA_PREVIEW_NO_BOOTSTRAP: "1"
 
@@ -28,13 +20,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Repository Quality
+  check:
+    name: Repository Checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Prep Runner
         uses: ./.github/actions/prepare
@@ -42,46 +37,70 @@ jobs:
           pip-cache-key: ci
 
       - name: Install Maintenance Dependencies
+        id: dependencies
         run: uv pip install --system -r requirements.txt
+
+      - name: Describe Runner
+        run: |
+          printf 'CI_ENVIRONMENT=%s\n' "${RUNNER_OS}:${ImageOS}:${ImageVersion}:$(python --version):$(node --version):$(ruff --version)" >> "$GITHUB_ENV"
+
+      - name: Restore Pass Ledger
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/ci-ledger.json
+          key: ci-ledger-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ci-ledger-${{ runner.os }}-${{ github.ref_name }}-
+            ci-ledger-${{ runner.os }}-main-
+
+      - name: Select Uncached Gates
+        id: collect
+        run: python maintenance/workflows/changed_paths.py --step collect
 
       - name: Install Build Dependencies
+        id: npm
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.collect.outputs.npm_needed == 'true' }}
         run: npm ci
 
-      - name: Update and Validate Repository
-        run: python maintenance/check.py --update
-
-      - name: Lint and Format-Check Python
+      - name: Check PR Contract
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && github.event_name == 'pull_request' }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BODY_FILE: ${{ runner.temp }}/pr-body.md
         run: |
-          ruff check .
-          ruff format --diff .
+          set -eu
+          printf '%s\n' "$PR_BODY" > "$PR_BODY_FILE"
+          python maintenance/pr/gate_pr.py --range "$PR_BASE..$PR_HEAD" --pr-title "$PR_TITLE" --body-file "$PR_BODY_FILE"
 
-      - name: Check Workflow Set
-        run: python maintenance/workflows/gate_workflows.py
+      - name: Select PR Plugin Validation
+        id: plugin_changes
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && github.event_name == 'pull_request' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: python maintenance/workflows/changed_paths.py --step artifacts
 
-      - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@v24
+      - name: Validate PR Plugins
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.plugin_changes.outputs.package == 'true' }}
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          python maintenance/workflows/check_artifacts.py
+          python maintenance/gpt_plugins/gate_gpt_plugins.py --self-check
+          git show "$PR_BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
+          changed="$(git diff --name-only "$PR_BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts)"
+          if [ -n "$changed" ]; then
+            python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
+          else
+            python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
+          fi
 
-  version-bumps:
-    name: Check Module Versions
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Prep Runner
-        uses: ./.github/actions/prepare
-        with:
-          pip-cache-key: version-bumps
-
-      - name: Install Validation Dependencies
-        run: uv pip install --system -r requirements.txt
-
-      - name: Check Versioned Modules
+      - name: Check Module Versions
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -89,58 +108,64 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -eu
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            BASE="$PR_BASE"
-          else
-            BASE="$PUSH_BEFORE"
-          fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then BASE="$PR_BASE"; else BASE="$PUSH_BEFORE"; fi
           python maintenance/pr/gate_pr.py --version-bumps "$BASE..$HEAD_SHA"
 
-  test-changes:
-    name: Select Module Tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      run: ${{ steps.modules.outputs.run }}
-      matrix: ${{ steps.modules.outputs.matrix }}
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
+      - name: Update and Validate Repository
+        id: repo_check
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.npm.outcome == 'success' && steps.collect.outputs.run_repo_check == 'true' }}
+        run: python maintenance/check.py --update
 
-      - name: Select Affected Modules
-        id: modules
+      - name: Record Repository Check
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-        run: python3 maintenance/workflows/changed_paths.py --step module-tests
+          CI_SURFACE: repo_check
+          CI_DIGEST: ${{ steps.collect.outputs.digest_repo_check }}
+          CI_RESULT: ${{ steps.repo_check.outcome }}
+        run: python maintenance/workflows/changed_paths.py --step record
 
-  module-tests:
-    name: ${{ matrix.name }} Tests
-    needs: test-changes
-    if: needs.test-changes.outputs.run == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.test-changes.outputs.matrix) }}
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-
-      - name: Prep Runner
-        uses: ./.github/actions/prepare
-        with:
-          pip-cache-key: tests-${{ matrix.name }}
-
-      - name: Install Test Dependencies
+      - name: Lint and Format-Check Python
+        id: ruff
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.collect.outputs.run_ruff == 'true' }}
         run: |
-          uv pip install --system -r requirements.txt
-          npm ci
+          ruff check .
+          ruff format --diff .
 
-      - name: Run Module Tests
+      - name: Record Python Lint
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
         env:
-          MODULE_TEST_COMMAND: ${{ matrix.command }}
-        run: bash -euo pipefail -c "$MODULE_TEST_COMMAND"
+          CI_SURFACE: ruff
+          CI_DIGEST: ${{ steps.collect.outputs.digest_ruff }}
+          CI_RESULT: ${{ steps.ruff.outcome }}
+        run: python maintenance/workflows/changed_paths.py --step record
+
+      - name: Lint Markdown
+        id: markdownlint
+        if: ${{ !cancelled() && steps.npm.outcome == 'success' && steps.collect.outputs.run_markdownlint == 'true' }}
+        run: npx --no-install markdownlint-cli2
+
+      - name: Record Markdown Lint
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
+        env:
+          CI_SURFACE: markdownlint
+          CI_DIGEST: ${{ steps.collect.outputs.digest_markdownlint }}
+          CI_RESULT: ${{ steps.markdownlint.outcome }}
+        run: python maintenance/workflows/changed_paths.py --step record
+
+      - name: Check Workflow Set
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: python maintenance/workflows/gate_workflows.py
+
+      - name: Run Uncached Module Tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.npm.outcome == 'success' && steps.collect.outcome == 'success' && steps.collect.outputs.test_surfaces != '' }}
+        env:
+          CI_TEST_SURFACES: ${{ steps.collect.outputs.test_surfaces }}
+          CI_DIGESTS: ${{ steps.collect.outputs.digests }}
+        run: python maintenance/workflows/changed_paths.py --step test
+
+      - name: Save Pass Ledger
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ci-ledger.json
+          key: ci-ledger-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}

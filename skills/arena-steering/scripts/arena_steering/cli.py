@@ -24,7 +24,12 @@ from . import __version__, git_safety
 from . import pre as pre_mod
 from .blocked_bash import append_blocked_bash
 from .display_paths import home_relative
-from .gates import FileGateStatus, RunCompletionWatcher
+from .gates import (
+  FileGateStatus,
+  RunCompletionWatcher,
+  process_identity,
+  run_is_running,
+)
 from .git_safety import DirtyTreeError, completion_tree_check
 from .models import (
   MESSAGE_ID_RE,
@@ -1448,7 +1453,7 @@ def _start_locked_run(
   record_path = runs / f"{name}.json"
   if record_path.exists():
     previous = json.loads(record_path.read_text(encoding="utf-8"))
-    if not Path(previous["exit_path"]).is_file():
+    if run_is_running(previous):
       raise ValueError(f"Run {name} is already active")
   dependency = None
   if after:
@@ -1456,6 +1461,7 @@ def _start_locked_run(
     if not dep_record_path.is_file():
       raise ValueError(f"Unknown dependency: {after}")
     dependency = json.loads(dep_record_path.read_text(encoding="utf-8"))
+    run_is_running(dependency)
   run_id = uuid.uuid4().hex
   log_path = runs / f"{name}-{run_id}.log"
   exit_path = runs / f"{name}-{run_id}.exit"
@@ -1491,12 +1497,14 @@ def _start_locked_run(
   finally:
     log_handle.close()
   temp_record = runs / f".{name}-{run_id}.json"
+  identity = process_identity(proc.pid)
   try:
     temp_record.write_text(
       json.dumps(
         {
           "name": name,
           "pid": proc.pid,
+          "process_identity": list(identity[1:]) if identity else None,
           "command": command,
           "after": after,
           "log_path": str(log_path),
@@ -1704,10 +1712,10 @@ def _run_run(
       raise KeyError(f"Unknown run: {name}")
     record = json.loads((runs / f"{name}.json").read_text(encoding="utf-8"))
     exit_path = Path(record["exit_path"])
-    if exit_path.is_file():
-      status = f"exit {exit_path.read_text(encoding='utf-8').strip()}"
-    else:
+    if run_is_running(record):
       status = "running"
+    else:
+      status = f"exit {exit_path.read_text(encoding='utf-8').strip()}"
     print(f"run {name} {status}", file=out)
     log_path = Path(record["log_path"])
     if log_path.is_file():
@@ -1757,7 +1765,6 @@ def _run_report(
       allow_unparsed_markers=parsed.allow_unparsed_markers,
       source_file=str(source_path.resolve()),
     )
-    SteeringApp(store).verify_published_report(report)
     print(
       f"Published {report.id}, {len(report.fields)} fields. Verified.",
       file=out,

@@ -30,7 +30,7 @@ To fix this issue, rewrite the text as follows:
 Do not send this type of token.
 ```
 
-Note: Each rotation matches the word stem in lower, capital, and upper case. Proper-name variations of `nemoizer` and `the nemoizer` in any case rotate to lowercase `nemoizer` with no leading `the`. Use `# nonemo: NMO100` or `<!-- nonemo: NMO100 -->` when an identifier or false friend must keep its spelling.
+Note: Rotations match listed word forms case-insensitively, subject to their context and boundary rules. Proper-name variations rotate to lowercase `nemoizer`; a preceding `the` stays when the name modifies certain nouns. Use `# nonemo: NMO100` or `<!-- nonemo: NMO100 -->` when an identifier or false friend must keep its spelling.
 
 Rationale: Plain, consistent words are shorter and easier to scan across documentation and code.
 

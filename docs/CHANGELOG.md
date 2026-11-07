@@ -8,10 +8,39 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-07
 
-### Changed
+### Removed
 
 #### maintenance
 
+- Remove the Gitleaks workflow and configuration.
+
+### Changed
+
+#### arena-steering
+
+- Preserve typed message metadata on retry-token saves.
+- Mark dead detached runs as failed so their task gates can recover.
+- Preserve staged uploads when verifying published reports.
+- Delay initial hover tooltips, with immediate keyboard focus and a brief rapid-switch window.
+
+#### rules
+
+- Specify the stale-report reminder command (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Remove the code-scanning requirement (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
+#### maintenance
+
+- Exclude minified, archived, and vendored material from the root Nemoizer scan.
+- Filter CodeQL language scans conservatively and restrict dependency reviews to dependency and workflow changes.
+- Group plugin release and rules publication into separate credential-isolated jobs.
+- Validate and sync distribution targets in one job, preserving remote reconciliation.
+- Group read-only CI checks into one job, including PR plugin validation, and reuse successful input digests.
+- Guard the archived Arena proxy tests against returning to the active test matrix.
+- Refresh Ponytail and its audit skill from upstream `96608e0`, keeping only those two skills.
+- Add pass-ledger collection and recording primitives for CI surfaces (`maintenance/workflows/changed_paths.py`).
+- Run workflow lint, security audit, and contract checks in one job (`.github/workflows/workflow-security.yml`).
+- Ignore seven reviewed historical test-fixture findings in Gitleaks (`.gitleaksignore`).
+- Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
 - Expand Markdownlint coverage and remove the fixed scope guard (`.markdownlint-cli2.jsonc`, `maintenance/check.py`).
 
 ## 2026-11-06

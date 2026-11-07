@@ -321,3 +321,227 @@ def test_node_test_ownership_is_complete_and_unique():
 def test_root_nemoizer_config_selects_validation_tests():
   selected = changed_paths.module_matrix(["nemoizer.toml"])
   assert {row["name"] for row in selected} == {"Repository Prose and Validation"}
+
+
+def test_surface_digest_tracks_selected_inputs_and_shared_lockfile(tmp_path):
+  repo = init_repo(tmp_path)
+  write(repo, {"requirements.txt": "ruff==1\n", "unrelated.txt": "one\n"})
+  git(repo, "add", "-A")
+  patterns = ("skills/arena-steering/*",)
+  shared = ("requirements.txt",)
+  initial = changed_paths.surface_digest(str(repo), patterns, shared)
+  write(repo, {"unrelated.txt": "two\n"})
+  git(repo, "add", "-A")
+  assert changed_paths.surface_digest(str(repo), patterns, shared) == initial
+  write(repo, {"requirements.txt": "ruff==2\n"})
+  git(repo, "add", "-A")
+  assert changed_paths.surface_digest(str(repo), patterns, shared) != initial
+  write(repo, {"skills/arena-steering/scripts/runtime.py": "changed\n"})
+  git(repo, "add", "-A")
+  assert changed_paths.surface_digest(str(repo), patterns, shared) != initial
+
+
+def test_surface_digest_ignores_commit_history(tmp_path):
+  repo = init_repo(tmp_path)
+  initial = changed_paths.surface_digest(str(repo), ("skills/*",), ())
+  git(repo, "commit", "--allow-empty", "-q", "-m", "chore: new history")
+  assert changed_paths.surface_digest(str(repo), ("skills/*",), ()) == initial
+
+
+def test_pass_ledger_records_only_success_and_removes_failures(tmp_path):
+  ledger = tmp_path / "cache" / "ci-ledger.json"
+  changed_paths.record_surface(ledger, "ruff", "a" * 64, "commit-a", True)
+  changed_paths.record_surface(ledger, "markdownlint", "b" * 64, "commit-a", True)
+  changed_paths.record_surface(ledger, "ruff", "c" * 64, "commit-b", False)
+  records = changed_paths.load_ledger(ledger)
+  assert "ruff" not in records
+  assert records["markdownlint"] == {"digest": "b" * 64, "commit": "commit-a"}
+  assert not changed_paths.ledger_hit(records, "ruff", "c" * 64)
+  assert changed_paths.ledger_hit(records, "markdownlint", "b" * 64)
+
+
+def test_corrupt_ledger_is_a_miss(tmp_path):
+  ledger = tmp_path / "ci-ledger.json"
+  ledger.write_text("not json", encoding="utf-8")
+  assert changed_paths.load_ledger(ledger) == {}
+  changed_paths.record_surface(ledger, "ruff", "a" * 64, "commit", True)
+  assert changed_paths.ledger_hit(changed_paths.load_ledger(ledger), "ruff", "a" * 64)
+
+
+def test_collect_and_record_distinct_surfaces(tmp_path):
+  repo = init_repo(tmp_path)
+  ledger = tmp_path / "ci-ledger.json"
+  output = tmp_path / "outputs"
+  env = {"CI_LEDGER": str(ledger), "GITHUB_SHA": "abc"}
+  assert changed_paths.step_collect(env, output, str(repo)) == 0
+  values = dict(line.split("=", 1) for line in outputs(output).splitlines())
+  assert values["run_ruff"] == "true"
+  assert values["run_module_preview"] == "true"
+  assert values["npm_needed"] == "true"
+  env |= {
+    "CI_SURFACE": "ruff",
+    "CI_RESULT": "success",
+    "CI_DIGEST": values["digest_ruff"],
+  }
+  assert changed_paths.step_record(env, output, str(repo)) == 0
+  output.unlink()
+  assert changed_paths.step_collect(env, output, str(repo)) == 0
+  values = dict(line.split("=", 1) for line in outputs(output).splitlines())
+  assert values["run_ruff"] == "false"
+  assert values["run_module_preview"] == "true"
+  output.unlink()
+  assert (
+    changed_paths.step_collect(
+      env | {"CI_ENVIRONMENT": "new runner"}, output, str(repo)
+    )
+    == 0
+  )
+  values = dict(line.split("=", 1) for line in outputs(output).splitlines())
+  assert values["run_ruff"] == "true"
+  assert (
+    changed_paths.step_record(env | {"CI_RESULT": "failure"}, output, str(repo)) == 0
+  )
+  assert not changed_paths.load_ledger(ledger)
+
+
+def test_repo_check_digest_covers_userscripts_and_steering_assets(tmp_path):
+  repo = init_repo(tmp_path)
+  patterns = changed_paths.ci_surfaces()["repo_check"]
+  before = changed_paths.surface_digest(
+    str(repo), patterns, changed_paths.CI_SHARED_PATHS
+  )
+  write(repo, {"userscripts/arena.user.js": "changed\n"})
+  git(repo, "add", "-A")
+  after = changed_paths.surface_digest(
+    str(repo), patterns, changed_paths.CI_SHARED_PATHS
+  )
+  assert after != before
+  write(repo, {"skills/arena-steering/assets/app.js": "changed\n"})
+  git(repo, "add", "-A")
+  assert (
+    changed_paths.surface_digest(str(repo), patterns, changed_paths.CI_SHARED_PATHS)
+    != after
+  )
+
+
+def test_preview_digest_covers_browser_test_fixtures(tmp_path):
+  repo = init_repo(tmp_path)
+  patterns = changed_paths.ci_surfaces()["module_preview"]
+  before = changed_paths.surface_digest(
+    str(repo), patterns, changed_paths.CI_SHARED_PATHS
+  )
+  write(repo, {"tests/skills/arena-steering/fixtures/reload_isolation.py": "changed\n"})
+  git(repo, "add", "-A")
+  assert (
+    changed_paths.surface_digest(str(repo), patterns, changed_paths.CI_SHARED_PATHS)
+    != before
+  )
+
+
+def test_retired_proxy_tests_live_only_in_arena_archive():
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  for proxy, filename in (
+    ("arena-egress-proxy", "test_arena_proxy.py"),
+    ("arena-preview-proxy", "test_preview_proxy.py"),
+  ):
+    archived = root / "docs/archive/arena-skill/tests" / proxy / filename
+    former = root / "tests/skills" / proxy / filename
+    assert archived.is_file()
+    assert not former.exists()
+    assert changed_paths.module_matrix([str(archived.relative_to(root))]) == []
+
+
+def test_ci_uses_one_read_only_job_and_saves_attempt_scoped_ledger():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  triggers = workflow.get("on", workflow.get(True))
+  assert set(triggers["pull_request"]["types"]) >= {
+    "opened",
+    "edited",
+    "reopened",
+    "synchronize",
+  }
+  assert not triggers["pull_request"].get("paths-ignore")
+  assert workflow["permissions"] == {"contents": "read"}
+  assert set(workflow["jobs"]) == {"check"}
+  steps = workflow["jobs"]["check"]["steps"]
+  runs = "\n".join(step.get("run", "") for step in steps)
+  assert "changed_paths.py --step collect" in runs
+  assert "changed_paths.py --step record" in runs
+  assert "gate_pr.py" in runs and "--pr-title" in runs and "--version-bumps" in runs
+  caches = [step for step in steps if "actions/cache/save@" in step.get("uses", "")]
+  assert caches and "github.run_attempt" in caches[0]["with"]["key"]
+
+
+def test_ci_keeps_pr_plugin_validation_on_matching_changes():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  steps = workflow["jobs"]["check"]["steps"]
+  selector = next(step for step in steps if step.get("id") == "plugin_changes")
+  validation = next(step for step in steps if step.get("name") == "Validate PR Plugins")
+  assert "github.event_name == 'pull_request'" in selector["if"]
+  assert selector["env"]["PR_BASE"] == "${{ github.event.pull_request.base.sha }}"
+  assert "steps.plugin_changes.outputs.package == 'true'" in validation["if"]
+  for marker in (
+    "check_artifacts.py",
+    "--self-check",
+    "--base-manifest",
+    "gate_gpt_plugins.py",
+  ):
+    assert marker in validation["run"]
+  assert "skills/nemoizer/references" in validation["run"]
+  assert "actions/upload-artifact" not in str(steps)
+
+
+def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatch):
+  from types import SimpleNamespace
+
+  ledger = tmp_path / "ci-ledger.json"
+  selected = "module_preview,module_userscripts"
+  digests = {
+    name: ("a" if name.endswith("preview") else "b") * 64
+    for name in selected.split(",")
+  }
+  env = {
+    "CI_LEDGER": str(ledger),
+    "GITHUB_SHA": "abc",
+    "CI_TEST_SURFACES": selected,
+    "CI_DIGESTS": json.dumps(digests),
+  }
+  commands = []
+
+  def run(command, **kwargs):
+    commands.append(command)
+    return SimpleNamespace(returncode=1 if command[0] == "node" else 0)
+
+  monkeypatch.setattr(changed_paths.subprocess, "run", run)
+  assert changed_paths.step_test(env, tmp_path / "out", str(tmp_path)) == 1
+  assert not changed_paths.load_ledger(ledger)
+  pytest_commands = [command for command in commands if "pytest" in command]
+  assert len(pytest_commands) == 1
+  assert any(command[:2] == ["node", "--test"] for command in commands)
+  monkeypatch.setattr(
+    changed_paths.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0)
+  )
+  assert changed_paths.step_test(env, tmp_path / "out", str(tmp_path)) == 0
+  assert set(changed_paths.load_ledger(ledger)) == set(selected.split(","))
+
+
+def test_ci_never_records_passes_after_dependency_install_fails():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  steps = workflow["jobs"]["check"]["steps"]
+  by_id = {step.get("id"): step for step in steps if step.get("id")}
+  assert "steps.dependencies.outcome == 'success'" in by_id["repo_check"]["if"]
+  assert "steps.npm.outcome == 'success'" in by_id["repo_check"]["if"]
+  assert "steps.dependencies.outcome == 'success'" in by_id["ruff"]["if"]
+  assert "steps.npm.outcome == 'success'" in by_id["markdownlint"]["if"]
+  tests = next(step for step in steps if "--step test" in step.get("run", ""))
+  assert "steps.dependencies.outcome == 'success'" in tests["if"]
+  assert "steps.npm.outcome == 'success'" in tests["if"]

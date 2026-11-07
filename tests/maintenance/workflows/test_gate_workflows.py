@@ -130,26 +130,45 @@ def test_distribution_one_run_removal_is_scoped_and_validated(monkeypatch):
     assert not calls
 
 
+def test_distribution_validates_each_domain_before_push(monkeypatch):
+  from pathlib import Path
+  from types import SimpleNamespace
+
+  planner = distribution_planner()
+  plan = planner.build_plan()
+  calls = []
+
+  def run(arguments, *, env, check):
+    calls.append(env)
+    return SimpleNamespace(returncode=1 if env["SKILLS"] == "nuu" else 0)
+
+  monkeypatch.setattr(planner.subprocess, "run", run)
+  assert (
+    planner.validate_domains(
+      plan["domains"], Path(planner.__file__).with_name("sync.sh"), {}
+    )
+    == 1
+  )
+  assert len(calls) == len(plan["domains"])
+  assert all(env["VALIDATE_ONLY"] == "true" for env in calls)
+  assert [env["REPOS"] for env in calls] == [row["repos"] for row in plan["domains"]]
+
+
 def test_distribution_has_domain_rows_and_one_push_job():
   from pathlib import Path
 
   path = Path(__file__).resolve().parents[3] / ".github/workflows/distribute.yml"
   document = yaml.safe_load(path.read_text())
   jobs = document["jobs"]
-  assert jobs["domains"]["strategy"]["fail-fast"] is False
-  assert "needs.plan.outputs.matrix" in jobs["domains"]["strategy"]["matrix"]
-  assert jobs["domains"]["needs"] == "plan"
-  assert set(jobs["push"]["needs"]) == {"plan", "domains"}
+  assert set(jobs) == {"sync"}
   assert document["concurrency"]["cancel-in-progress"] is False
-  checks = [
-    step
-    for step in jobs["domains"]["steps"]
-    if step.get("uses") == "./.github/actions/distribute-sync"
-  ]
-  assert checks and checks[0]["with"]["validate-only"] is True
-  pushes = [step for step in jobs["push"]["steps"] if "--push" in step.get("run", "")]
-  assert len(pushes) == len(checks)
-  assert "TARGETS_JSON" in pushes[0]["env"]
+  steps = jobs["sync"]["steps"]
+  check = next(i for i, step in enumerate(steps) if "--validate" in step.get("run", ""))
+  push = next(i for i, step in enumerate(steps) if "--push" in step.get("run", ""))
+  assert check < push
+  assert steps[push]["env"]["TARGETS_JSON"] == "${{ steps.plan.outputs.targets }}"
+  assert "if" not in steps[push]
+  assert "CLANKERS_DIST_PAT" not in steps[check].get("env", {})
 
 
 def test_base_document_passes():
@@ -160,6 +179,12 @@ def test_real_workflow_set_passes():
   assert gate_workflows.audit_paths() == []
 
 
+def test_gitleaks_is_not_configured():
+  assert not (gate_workflows.WORKFLOW_DIR / "secret-scan.yml").exists()
+  assert not (gate_workflows.ROOT / ".gitleaks.toml").exists()
+  assert not (gate_workflows.ROOT / ".gitleaksignore").exists()
+
+
 def test_required_file_set_is_exact():
   assert gate_workflows.REQUIRED_FILES == (
     "ci.yml",
@@ -167,9 +192,7 @@ def test_required_file_set_is_exact():
     "distribute.yml",
     "codeql.yml",
     "dependency-review.yml",
-    "secret-scan.yml",
     "workflow-security.yml",
-    "pr-check.yml",
   )
 
 
@@ -331,50 +354,41 @@ def test_ci_triggers_main_push_and_all_branch_pull_requests():
   triggers = gate_workflows.triggers_of(load_workflow("ci.yml"))
   assert triggers["push"]["branches"] == ["main"]
   assert triggers["pull_request"]["branches"] == ["**"]
-  ignored = triggers["pull_request"]["paths-ignore"]
-  assert "docs/CHANGELOG.md" in ignored
-  assert "docs/**/CHANGELOG.md" in ignored
-  assert "CHANGELOG.md" not in ignored
+  assert "paths-ignore" not in triggers["pull_request"]
+  assert "edited" in triggers["pull_request"]["types"]
 
 
 def test_artifacts_triggers_keep_both_path_families():
   triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
-  pr_paths = triggers["pull_request"]["paths"]
-  assert "gpt-plugins/**" in push_paths and "gpt-plugins/**" in pr_paths
+  assert "gpt-plugins/**" in push_paths
   assert "rules/**" in push_paths and "!rules/refs/**" in push_paths
-  # Rule publishing never runs from a pull request.
-  assert not any(path.startswith("rules/") for path in pr_paths)
+  assert "pull_request" not in triggers
   assert ".github/workflows/artifacts.yml" in push_paths
   assert "workflow_dispatch" in triggers
 
 
 def test_artifacts_job_gating_preserves_the_original_semantics():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  validate = jobs["validate-gpt-plugins"]["if"]
-  package = jobs["package-gpt-plugins"]["if"]
-  publish = jobs["publish-clankers-rules"]["if"]
-  assert "github.event_name == 'pull_request'" in validate
-  assert "needs.changes.outputs.package == 'true'" in validate
-  assert "github.ref == 'refs/heads/main'" in package
-  assert "github.event_name != 'pull_request'" in package
-  assert "needs.changes.outputs.package == 'true'" in package
+  release = jobs["release-gpt-plugins"]
+  publisher = jobs["publish-clankers-rules"]
+  publish = publisher["if"]
+  assert set(jobs) == {"release-gpt-plugins", "publish-clankers-rules"}
+  assert "github.ref == 'refs/heads/main'" in release["if"]
+  assert "github.event_name != 'pull_request'" in release["if"]
+  assert "steps.detect.outputs.package == 'true'" in release["steps"][-1]["if"]
   assert "github.event_name == 'push'" in publish
   assert "github.ref == 'refs/heads/main'" in publish
-  assert "needs.changes.outputs.rules == 'true'" in publish
+  assert "steps.detect.outputs.rules == 'true'" in publisher["steps"][-1]["if"]
   # The publisher never runs from a manual dispatch.
   assert "workflow_dispatch" not in publish
 
 
 def test_artifacts_job_concurrency_moves_to_job_level():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  assert jobs["validate-gpt-plugins"]["concurrency"] == {
-    "group": "Validate-GPT-Plugins-${{ github.ref }}",
-    "cancel-in-progress": True,
-  }
-  assert jobs["package-gpt-plugins"]["concurrency"] == {
-    "group": "Package-GPT-Plugins-${{ github.ref }}",
-    "cancel-in-progress": True,
+  assert jobs["release-gpt-plugins"]["concurrency"] == {
+    "group": "Release-GPT-Plugins-${{ github.repository }}",
+    "cancel-in-progress": False,
   }
   assert jobs["publish-clankers-rules"]["concurrency"] == {
     "group": "publish-clankers-rules-${{ github.repository }}",
@@ -461,8 +475,7 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists(monkeypatch):
     "nemoizer": "nemoizer_repos",
   }
   steps = [step for job in jobs.values() for step in job["steps"]]
-  plan_step = next(step for step in steps if step.get("id") == "plan")
-  assert plan_step["env"] == {
+  assert jobs["sync"]["env"] == {
     planner.INPUTS[domain]: "${{ inputs." + name + " }}"
     for domain, name in manual.items()
   }
@@ -645,25 +658,23 @@ def test_guarded_from_pull_request_reads_the_condition():
 def test_artifacts_excludes_retired_proxy_publishing():
   triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
-  pr_paths = triggers["pull_request"]["paths"]
   assert not any("arena-skill" in entry for entry in push_paths)
-  assert not any("arena-skill" in entry for entry in pr_paths)
+  assert "pull_request" not in triggers
   assert triggers["workflow_dispatch"] == {}
 
 
 def test_changes_job_reports_the_artifact_groups():
-  job = load_workflow("artifacts.yml")["jobs"]["changes"]
-  assert set(job["outputs"]) == {"package", "rules"}
-  script = "\n".join(step.get("run", "") for step in job["steps"])
-  # The path rules moved to one script, so the job carries no path case block.
-  assert "maintenance/workflows/changed_paths.py --step artifacts" in script
-  assert "case " not in script
+  jobs = load_workflow("artifacts.yml")["jobs"]
+  for job in jobs.values():
+    script = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "maintenance/workflows/changed_paths.py --step artifacts" in script
+    assert "case " not in script
 
 
 def test_artifacts_release_job_keeps_the_release_semantics():
   job = load_workflow("artifacts.yml")["jobs"]["release-gpt-plugins"]
   assert job["permissions"] == {"contents": "write"}
-  assert "needs.changes.outputs.package == 'true'" in job["if"]
+  assert "steps.detect.outputs.package == 'true'" in job["steps"][-1]["if"]
   assert "github.event_name != 'pull_request'" in job["if"]
   assert job["concurrency"] == {
     "group": "Release-GPT-Plugins-${{ github.repository }}",
@@ -712,7 +723,7 @@ def test_shared_runner_uses_uv_cache_before_workflow_installs():
 
 
 def test_push_workflows_ignore_synced_agents_directory():
-  for name in ("ci.yml", "codeql.yml", "secret-scan.yml"):
+  for name in ("ci.yml", "codeql.yml"):
     document = yaml.safe_load((gate_workflows.WORKFLOW_DIR / name).read_text())
     triggers = gate_workflows.triggers_of(document)
     push = triggers.get("push") or {}
@@ -720,19 +731,47 @@ def test_push_workflows_ignore_synced_agents_directory():
     assert ".agents/**" in ignored, name
 
 
-def test_gitleaks_ignores_installed_agents_and_keeps_default_rules():
-  import re
-  import tomllib
+def test_workflow_security_runs_all_checks_in_one_job():
+  path = gate_workflows.WORKFLOW_DIR / "workflow-security.yml"
+  workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+  assert set(gate_workflows.jobs_of(workflow)) == {"lint"}
+  steps = workflow["jobs"]["lint"]["steps"]
+  commands = "\n".join(step.get("run", "") for step in steps)
+  assert "actionlint -color .github/workflows/*.yml" in commands
+  assert "zizmor --config .github/zizmor.yml" in commands
+  assert "python maintenance/workflows/gate_workflows.py" in commands
+  assert "schedule" in gate_workflows.triggers_of(workflow)
 
-  config = tomllib.loads((gate_workflows.ROOT / ".gitleaks.toml").read_text())
-  assert config["extend"]["useDefault"] is True
-  patterns = [re.compile(pattern) for pattern in config["allowlist"]["paths"]]
 
-  def ignored(path: str) -> bool:
-    return any(pattern.search(path) for pattern in patterns)
+def test_codeql_filter_keeps_scheduled_scans_and_unknown_inputs_safe():
+  document = load_workflow("codeql.yml")
+  assert "schedule" in gate_workflows.triggers_of(document)
+  assert "workflow_dispatch" in gate_workflows.triggers_of(document)
+  steps = document["jobs"]["analyze"]["steps"]
+  select = next(step for step in steps if step.get("id") == "select")
+  assert (
+    'git show "$PR_BASE_SHA:maintenance/workflows/codeql_filter.py"' in select["run"]
+  )
+  assert "echo 'run=true'" in select["run"]
+  checkout = next(
+    step for step in steps if step.get("uses", "").startswith("actions/checkout@")
+  )
+  assert checkout["with"]["persist-credentials"] is False
+  for step in steps:
+    if step.get("uses", "").startswith("github/codeql-action/"):
+      assert step["if"] == "steps.select.outputs.run == 'true'"
 
-  assert ignored(".agents/skills/arena-steering/SKILL.md")
-  assert ignored(".agents/skills/arena-steering/assets/mermaid.min.js")
-  assert ignored("skills/arena-steering/assets/mermaid.min.js")
-  assert not ignored("skills/arena-steering/scripts/arena_steering/store.py")
-  assert not ignored("docs/CHANGELOG.md")
+
+def test_dependency_review_filters_all_current_manifest_families_and_actions():
+  paths = gate_workflows.triggers_of(load_workflow("dependency-review.yml"))[
+    "pull_request"
+  ]["paths"]
+  for pattern in (
+    "**/requirements*.txt",
+    "**/pyproject.toml",
+    "**/uv.lock",
+    "**/package*.json",
+    "**/Dockerfile*",
+    ".github/**",
+  ):
+    assert pattern in paths
