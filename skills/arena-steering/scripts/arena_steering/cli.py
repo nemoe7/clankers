@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
@@ -66,6 +67,42 @@ def _snippet_words(text: str, max_words: int = 6) -> str:
   if len(words) <= max_words:
     return " ".join(words)
   return " ".join(words[:max_words]) + "..."
+
+
+ARENA_PROCS_DIR = pre_mod.ARENA_PROCS_DIR
+
+
+def _validate_serve_process_title(stdout: TextIO) -> None:
+  """Require `start_process` named `{repo} - Steering` inside Arena sandboxes."""
+  procs_dir = ARENA_PROCS_DIR
+  if not procs_dir.is_dir():
+    return
+  try:
+    fd = stdout.fileno()
+  except (AttributeError, OSError, io.UnsupportedOperation):
+    return
+  proc_fd = Path(f"/proc/self/fd/{fd}")
+  if not proc_fd.exists():
+    return
+  out_path = proc_fd.resolve()
+  expected = pre_mod.expected_steering_process_name()
+  if out_path.name != "out.log" or out_path.parent.parent != procs_dir.resolve():
+    raise ValueError(f"Start steer serve via start_process named {expected!r}")
+  meta_path = out_path.parent / "meta.json"
+  try:
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError) as exc:
+    raise ValueError(
+      f"Cannot read start_process metadata for steer serve ({expected!r})"
+    ) from exc
+  if not isinstance(meta, dict):
+    raise TypeError(f"Invalid start_process metadata for steer serve ({expected!r})")
+  expected = pre_mod.expected_steering_process_name(meta.get("cwd"))
+  actual = meta.get("name")
+  if actual != expected:
+    raise ValueError(
+      f"Steering start_process name must be {expected!r}, got {actual!r}"
+    )
 
 
 def resolve_state_dir() -> Path:
@@ -332,6 +369,7 @@ def main(
       messages.clear_poll_repeat()
     if cmd == "serve":
       serve_p.parse_args(cmd_args)
+      _validate_serve_process_title(stdout)
       app = SteeringApp(store)
       httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
       port = int(httpd.server_address[1])
@@ -481,6 +519,7 @@ def main(
     return 1
   except (
     KeyError,
+    TypeError,
     ValueError,
     IndexError,
     OSError,
