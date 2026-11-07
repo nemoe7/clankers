@@ -16,10 +16,12 @@ import { createStore, writePendingSend } from "./state.js";
 import { expandTaskTarget, renderTasksView } from "./tasks-view.js";
 import { mountRelativeTimers, relativeTime } from "./timestamps.js";
 
-const CHECK_SVG = `<svg class="lucide lucide-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const SURVEY_OK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const SURVEY_BAD_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
-const SURVEY_WARN_SVG = `<svg class="lucide lucide-circle-question-mark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>`;
+import {
+  CHECK_14_SVG as CHECK_SVG,
+  SURVEY_BAD_SVG,
+  SURVEY_OK_SVG,
+  SURVEY_WARN_SVG,
+} from "./icons.js";
 const CAPABILITY_LABELS = {
   R3S0N: "Reasoning",
   V1S0N: "Vision",
@@ -78,7 +80,7 @@ function renderSurveyModalContent(survey) {
             <div class="survey-result-id">
               <span class="survey-status ${state}">${icon}</span>
               <span class="survey-id-wrap">
-                <button type="button" class="survey-id-trigger"><code>${escapeHtml(item.id)}</code></button>
+                <button type="button" class="survey-id-trigger quiet-btn"><code>${escapeHtml(item.id)}</code></button>
                 ${renderAnswerTooltip(item.answer)}
               </span>
             </div>

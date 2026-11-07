@@ -1,18 +1,20 @@
 // Reports tab view with left TOC rail, center report column, and right report selector rail.
 
-import { reconcileView } from "./dom.js";
+import { reconcileView, renderParentChip } from "./dom.js";
 import { escapeHtml } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
 import { copyText } from "./copy.js";
 
-const COPY_SVG = `<svg class="lucide lucide-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`;
-const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const DISMISS_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
-const SEND_SVG = `<svg class="lucide lucide-send" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>`;
-const UNANSWERED_SVG = `<svg class="lucide lucide-circle-help report-picker-help-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>`;
-const CHEVRON_DOWN_SVG = `<svg class="lucide lucide-chevron-down" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"></path></svg>`;
-const ARROW_UP_SVG = `<svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>`;
+import {
+  ARROW_UP_SVG,
+  CHECK_SVG,
+  CHEVRON_DOWN_14_SVG as CHEVRON_DOWN_SVG,
+  COPY_SVG,
+  DISMISS_SVG,
+  SEND_PLANE_SVG as SEND_SVG,
+  UNANSWERED_SVG,
+} from "./icons.js";
 
 const CUSTOM_SENTINEL = "__custom__";
 const TOC_TOP_THRESHOLD_PX = 48;
@@ -222,7 +224,7 @@ export function renderReportsView(container, state, handlers) {
     (task.links?.report_ids || task.report_ids || []).includes(activeReport.id)
   );
   const taskLinksHtml = linkedTasks.length
-    ? `<span class="report-task-links">${linkedTasks.map(task => `<button type="button" class="reply-parent-chip" data-reference-type="task" data-reference-id="${escapeHtml(task.id)}" aria-label="Open task ${escapeHtml(task.id)}"><code>${escapeHtml(task.id)}</code></button>`).join(" ")}</span>`
+    ? `<span class="report-task-links">${linkedTasks.map((task) => renderParentChip("task", task.id)).join(" ")}</span>`
     : "";
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
@@ -262,7 +264,7 @@ export function renderReportsView(container, state, handlers) {
       (h, idx) => `
       <a
         href="#${escapeHtml(h.id)}"
-        class="report-toc-link ${idx === 0 ? "active" : ""}"
+        class="report-toc-link quiet-btn ${idx === 0 ? "active" : ""}"
         data-toc-target="${escapeHtml(h.id)}"
         data-level="${h.level}"
         aria-current="${idx === 0 ? "true" : "false"}"
@@ -289,7 +291,7 @@ export function renderReportsView(container, state, handlers) {
       return `
         <button
           type="button"
-          class="report-picker-link report-nav-item ${isActive ? "is-active active" : ""} ${isUnseen ? "is-unseen" : "is-seen"} ${needsAnswer ? "needs-answer" : ""}"
+          class="report-picker-link report-nav-item quiet-btn ${isActive ? "is-active active" : ""} ${isUnseen ? "is-unseen" : "is-seen"} ${needsAnswer ? "needs-answer" : ""}"
           data-report-id="${escapeHtml(rep.id)}"
           aria-current="${isActive ? "true" : "false"}"
         >
@@ -350,7 +352,7 @@ export function renderReportsView(container, state, handlers) {
           <button
             type="button"
             id="report-picker-toggle"
-            class="report-picker-toggle"
+            class="report-picker-toggle quiet-btn"
             aria-expanded="${mobilePickerCollapsed ? "false" : "true"}"
             aria-controls="report-picker"
           >
@@ -360,7 +362,7 @@ export function renderReportsView(container, state, handlers) {
           <div class="report-rail-actions">
             <button
               type="button"
-              class="icon-button"
+              class="icon-button quiet-btn"
               id="copy-report-btn"
               data-copy-report="${escapeHtml(activeReport.id)}"
               aria-label="Copy report ${escapeHtml(activeReport.id)}"
@@ -368,7 +370,7 @@ export function renderReportsView(container, state, handlers) {
             >${COPY_SVG}</button>
             <button
               type="button"
-              class="icon-button"
+              class="icon-button quiet-btn"
               id="dismiss-report-btn"
               data-dismiss-report="${escapeHtml(activeReport.id)}"
               aria-label="Dismiss report ${escapeHtml(activeReport.id)}"
@@ -404,7 +406,7 @@ export function renderReportsView(container, state, handlers) {
       <button
         type="button"
         id="report-scroll-top"
-        class="report-scroll-top"
+        class="scroll-jump-btn report-scroll-top"
         aria-label="Scroll to top"
         hidden
       >${ARROW_UP_SVG}</button>
