@@ -19,6 +19,7 @@ import time
 import tokenize
 import tomllib
 from concurrent.futures import FIRST_COMPLETED, Future, wait
+from itertools import pairwise
 from pathlib import Path
 
 try:
@@ -144,18 +145,32 @@ from prose import (
   workflow_name_spans,
 )
 
-# (name, avoided pattern, plain word).
-# A stem word that takes its own plain word.
-EXCEPTIONS = {
+# Exact inflections and their replacements.
+ROTATION_FORMS = {
+  "transmit": "send",
+  "transmits": "sends",
+  "transmitted": "sent",
+  "transmitting": "sending",
+  "transmitter": "sender",
+  "transmitters": "senders",
+  "pick": "select",
+  "picks": "selects",
+  "picked": "selected",
+  "picking": "selecting",
   "picker": "selector",
   "pickers": "selectors",
+  "kind": "type",
+  "kinds": "types",
+  "repository": "repo",
   "repositories": "repos",
   "pull request": "PR",
   "pull requests": "PRs",
+  "name": "specify",
   "names": "specifies",
   "named": "specified",
   "naming": "specifying",
 }
+
 NEMOIZER_MODIFIED_NOUNS = (
   r"rules?|lists?|linters?|prose|skills?|configs?|checks?|scripts?|"
   r"parsers?|suites?|tests?|plugins?|domains?|targets?|markers?"
@@ -164,39 +179,44 @@ KEEP_LOWER = {"nemoizer"}
 NAME_VERB_PATTERN = (
   r"(?:"
   r"(?:(?<=^)|(?<=\n)|(?<=^- )|(?<=\* )|(?<=\. )|(?<=, and )"
-  r"|(?<=, or )|(?<=\bto )|(?<=\bmust )|(?<=\bcan )|(?<=\bmay )|(?<=\bwill ))"
-  r"name(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+(?!few\b)[A-Za-z]+)"
+  r"|(?<=, or )|(?<=\bto )|(?<=\bmust )|(?<=\bcan )|(?<=\bmay )|(?<=\bwill )"
+  r"|(?<=\bshould )|(?<=\bnever )|(?<=\balways )|(?<=\bnot )|(?<=\bplease )|(?<=\balso ))"
+  r"name(?=\s+(?:(?:the|a|an|each|every|all|any|this|that|its|their)\s+(?!few\b)[A-Za-z]+|[A-Za-z]+s\b))"
   r"|"
   r"(?:(?<=\bit )|(?<=\bthat )|(?<=\bwhich )|(?<=\bwho )|(?<=\bsheet )"
   r"|(?<=\bcontrol )|(?<=\btable )|(?<=\brule )|(?<=\bclause )|(?<=\breport )"
   r"|(?<=\bconfig )|(?<=\bscript )|(?<=\bcheck )|(?<=\btool )|(?<=\bpage )|(?<=, and ))"
   r"names(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their|[A-Z])[A-Za-z]*)"
+  r"|(?<![A-Za-z0-9_$.\/-])names(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+[A-Za-z]+)"
   r"|(?<![A-Za-z0-9_$.\/-])naming(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+[A-Za-z]+)"
   r"|(?<![A-Za-z0-9_$.\/-])named(?=\s+(?:in|under|by)\s+the\s+[A-Za-z]+)"
   r")"
 )
+
+
+def rotation_pattern(prefix):
+  """Match only the listed inflections, outside identifiers and paths."""
+  forms = (form for form in ROTATION_FORMS if form.startswith(prefix))
+  choices = "|".join(re.escape(form) for form in sorted(forms, key=len, reverse=True))
+  return rf"(?<![A-Za-z0-9_$.\/-])(?:{choices})(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9_])"
+
+
 ROTATIONS = (
+  ("pick", rotation_pattern("pick"), "select"),
+  ("transmit", rotation_pattern("transmit"), "send"),
+  ("kind", r"(?<!\bbe )(?<!\bin )" + rotation_pattern("kind"), "type"),
+  ("repository", rotation_pattern("repositor"), "repo"),
   (
-    "pick",
-    r"(?<![A-Za-z0-9_$.\/-])pick\w*(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9_])",
-    "select",
+    "pull request",
+    r"(?<![A-Za-z0-9])(?:"
+    + "|".join(
+      re.escape(form).replace(r"\ ", r"[ \t]+")
+      for form in sorted(ROTATION_FORMS, key=len, reverse=True)
+      if form.startswith("pull request")
+    )
+    + r")(?![A-Za-z0-9])",
+    "PR",
   ),
-  (
-    "transmit",
-    r"(?<![A-Za-z0-9_$.\/-])transmit\w*(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9_])",
-    "send",
-  ),
-  (
-    "kind",
-    r"(?<![A-Za-z0-9_$.\/-])kinds?(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9_])",
-    "type",
-  ),
-  (
-    "repository",
-    r"(?<![A-Za-z0-9_$.\/-])repositor(?:y|ies)(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9_])",
-    "repo",
-  ),
-  ("pull request", r"(?<![A-Za-z0-9])pull[ \t]+requests?(?![A-Za-z0-9])", "PR"),
   ("name", NAME_VERB_PATTERN, "specify"),
   (
     "nemoizer",
@@ -956,9 +976,7 @@ def plain(word, name, use):
   if name in KEEP_LOWER:
     return use
   normalized = " ".join(word.lower().split())
-  form = EXCEPTIONS.get(normalized) or re.sub(
-    re.escape(name), use, word, flags=re.IGNORECASE
-  )
+  form = ROTATION_FORMS[normalized]
   if word.isupper():
     return form.upper()
   if word[:1].isupper():
@@ -988,6 +1006,8 @@ def collapse_list_articles(line):
 
 PROTECTED_ROTATE_SPAN = re.compile(
   r"(`+)(?:(?!\1).)+?\1"
+  r"|(?<=\()https?://[^\s)]+(?=\))"
+  r"|https?://[^\s<>]+"
   r"|\$\{\{.*?\}\}"
   r"|:(?:param|type|ivar|vartype|keyword)\s+[A-Za-z0-9_]+\s*:"
   r"|^\s*(?:-\s+)?[A-Za-z0-9_.-]+\s*:(?=\s|$)"
@@ -1080,6 +1100,32 @@ def format_summary(findings):
   )
 
 
+def fenced_lines(lines):
+  """Return physical line numbers inside Markdown fences, including delimiters."""
+  result = set()
+  fence = None
+  for number, line in enumerate(lines, 1):
+    marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+    if fence is not None or marker:
+      result.add(number)
+    if marker:
+      if fence is None:
+        fence = marker[1]
+      elif (
+        marker[1][0] == fence[0]
+        and len(marker[1]) >= len(fence)
+        and not line[marker.end() :].strip()
+      ):
+        fence = None
+  return result
+
+
+def rotation_legend(line):
+  return bool(
+    re.match(r"^\|\s*`?avoid`?\s*\|\s*`?use`?\s*\|", line.strip(), re.IGNORECASE)
+  )
+
+
 def scan(targets, ignores, audit=False, verbose=False):
   """Return findings and all exclusion markers with locations and rule IDs."""
   findings, marks = [], []
@@ -1110,8 +1156,11 @@ def scan(targets, ignores, audit=False, verbose=False):
       line_pairs = sorted(prose_map.items())
     else:
       line_pairs = list(enumerate(lines, 1))
+    fenced = (
+      fenced_lines(lines) if path.suffix.lower() in {".md", ".markdown"} else set()
+    )
     for number, line in line_pairs:
-      if TABLE_ROW.match(line.strip()):
+      if number in fenced or rotation_legend(line):
         continue
       excluded = file_ids | line_ids[number - 1]
       visible = mask_protected_spans(
@@ -1128,13 +1177,34 @@ def scan(targets, ignores, audit=False, verbose=False):
         code = RULE_IDS[name]
         if suppressed(code, excluded, name):
           continue
-        target_line = prose_visible if (is_code and code == "NMO901") else visible
+        target_line = prose_visible if is_code else visible
         if not target_line:
           continue
         for word in sorted(set(re.findall(pattern, target_line, flags=re.IGNORECASE))):
           if name in KEEP_LOWER and word == use:
             continue
           findings.append(format_finding(path, number, code, f"{word} -> {use}", line))
+    if not is_code:
+      for _, _, _, numbers in prose_blocks(text):
+        for previous, current in pairwise(numbers):
+          if current != previous + 1:
+            continue
+          if "NMO901" in file_ids | line_ids[previous - 1] | line_ids[current - 1]:
+            continue
+          left = mask_protected_spans(lines[previous - 1])
+          right = mask_protected_spans(lines[current - 1])
+          match = re.search(
+            r"(?<![A-Za-z0-9])pull[ \t]*\n[ \t]*requests?(?![A-Za-z0-9])",
+            left + "\n" + right,
+            flags=re.IGNORECASE,
+          )
+          if match:
+            word = " ".join(match.group(0).split())
+            findings.append(
+              format_finding(
+                path, previous, "NMO901", f"{word} -> PR", lines[previous - 1]
+              )
+            )
   return findings, marks
 
 
@@ -1166,13 +1236,30 @@ def format_paths(targets, ignores, out=None):
       if not any("NMO902" in (file_ids | line_ids[ln - 1]) for ln in group):
         dense_lines.update(group)
     rewritten, touched = [], False
+    fenced = (
+      fenced_lines(lines) if path.suffix.lower() in {".md", ".markdown"} else set()
+    )
     for number, line in enumerate(lines, 1):
-      if TABLE_ROW.match(line.strip()):
+      if number in fenced or rotation_legend(line):
         rewritten.append(line)
         continue
       suppressed = set(file_ids | line_ids[number - 1])
-      if is_code and prose_map is not None and number not in prose_map:
-        suppressed.add("NMO901")
+      if is_code:
+        prose = prose_map.get(number, "") if prose_map is not None else ""
+        changed_line = line
+        for fragment in prose.splitlines():
+          if fragment and changed_line.count(fragment) == 1:
+            rotated_fragment = rotate(fragment, suppressed)
+            if number in dense_lines and "NMO902" not in suppressed:
+              rotated_fragment = collapse_list_articles(rotated_fragment)
+            changed_line = changed_line.replace(fragment, rotated_fragment, 1)
+        if changed_line != line:
+          print(f"{path}:{number}: -{line}", file=out)
+          print(f"{path}:{number}: +{changed_line}", file=out)
+          changed += 1
+          touched = True
+        rewritten.append(changed_line)
+        continue
       collapse_the = number in dense_lines and "NMO902" not in suppressed
       parts, start = [], 0
       for marker in MARKER.finditer(line):

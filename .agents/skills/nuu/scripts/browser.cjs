@@ -1144,7 +1144,29 @@ async function interactiveBounds(locator) {
   }
 }
 
-async function flow(page, context, steps, output, timeout, viewportMeta = {}) {
+async function feedbackSnapshot(page, selector) {
+  return page.evaluate(sel => {
+    const visible = el => {
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' &&
+        Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
+    };
+    const target = document.querySelector(sel);
+    const name = target && visible(target)
+      ? (target.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
+        .map(id => document.getElementById(id)?.textContent || '').join(' ').trim() ||
+        target.getAttribute('aria-label') ||
+        (target.matches('input[type="button"], input[type="submit"], input[type="reset"]') ? target.value : '') ||
+        target.innerText || target.getAttribute('title') || ''
+      : '';
+    const statuses = [...document.querySelectorAll('[role="status"], [role="alert"], [aria-live]:not([aria-live="off"])')]
+      .filter(visible).map(el => (el.innerText || '').trim()).filter(Boolean);
+    return {name: name.trim(), statuses};
+  }, selector);
+}
+
+async function flow(page, context, steps, output, timeout, viewportMeta = {}, checkFeedback = false) {
   const results = [];
   let assertions = 0;
   for (const [index, step] of steps.entries()) {
@@ -1161,7 +1183,29 @@ async function flow(page, context, steps, output, timeout, viewportMeta = {}) {
       const target = step.selector ? page.locator(step.selector) : null;
       const beforeDimensions = await interactiveBounds(target);
       if (step.action === 'goto') await page.goto(url(step.url), {timeout});
-      if (step.action === 'click') await target.click({timeout});
+      if (step.action === 'click') {
+        const beforeFeedback = checkFeedback ? await feedbackSnapshot(page, step.selector) : null;
+        await target.click({timeout});
+        if (beforeFeedback) {
+          const deadline = Date.now() + timeout;
+          const pending = /\b(?:loading|saving|sending|pending|processing|working|waiting|submitting)\b/i;
+          row.feedback = null;
+          do {
+            const after = await feedbackSnapshot(page, step.selector);
+            const candidates = [after.name !== beforeFeedback.name ? after.name : '',
+              ...after.statuses.filter(text => !beforeFeedback.statuses.includes(text))];
+            const candidate = candidates.find(text => text &&
+              (!pending.test(text) || /\b(?:complete|completed|done|success|successful|succeeded|failed|failure|error)\b/i.test(text)));
+            if (candidate) {
+              row.feedback = candidate;
+              break;
+            }
+            if (Date.now() >= deadline) break;
+            await page.waitForTimeout(Math.min(100, deadline - Date.now()));
+          } while (Date.now() < deadline);
+          if (!row.feedback) row.missingFeedback = true;
+        }
+      }
       if (step.action === 'fill') await target.fill(String(step.value), {timeout});
       if (step.action === 'press') await target.press(step.key, {timeout});
       if (step.action === 'hover') await target.hover({timeout});
@@ -1433,7 +1477,7 @@ async function run() {
             // A live audit must open its overlays at each house viewport.
             // Other commands retain the first-capture-only flow contract.
             if (captures.length === 1 || (request.command === 'audit' && request.flow?.length)) {
-              row.flow = await flow(page, context, request.flow || [], output, timeout, {width, scheme, motion});
+              row.flow = await flow(page, context, request.flow || [], output, timeout, {width, scheme, motion}, request.command === 'audit');
             }
             if (captures.length === 1 && request.edit) {
               const edit = request.edit;
@@ -1486,6 +1530,11 @@ async function run() {
     if (row.flow.status === 'failed') findings.push({rule: 'RUN101', severity: 'error', location, evidence: row.flow});
     if (Array.isArray(row.flow?.steps)) {
       for (const stepRow of row.flow.steps) {
+        if (stepRow.missingFeedback) {
+          findings.push({rule: 'ACC206', severity: 'review', criterion: 'clause-9',
+            selector: stepRow.selector, location,
+            evidence: `No changed visible name or status text after click on ${stepRow.selector} within the flow timeout`});
+        }
         if (stepRow.dimensionShift) {
           findings.push({
             rule: 'ACC205',

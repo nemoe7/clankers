@@ -65,6 +65,7 @@ Suppress a rule-ID finding on a line with `nonuu: <ID>` (legacy `NU*` aliases re
 | `ACC203` | Rendered `a11y` / live `audit` | Focus halo or tooltip is clipped; live audits also check visible dialog/overlay text and controls against all four viewport and clipping edges, occlusion, and missing tooltip/popover backgrounds (Clause 33) |
 | `ACC204` | Source (`lint`) | CSS `:hover`, `:focus`, or `:active` rule shifts layout dimensions |
 | `ACC205` | Rendered `a11y` | Interactive control changes dimensions on focus, `aria-busy`, disabled state, or a measured flow action |
+| `ACC206` | Live `audit` | No changed visible name or status text after a flow click within the flow timeout; review inferred feedback for a completed or failed outcome |
 | `RUN001` | Browser (`audit`) | Uncaught `pageerror` or `console.error` during capture |
 | `RUN101`–`RUN102` | Browser (`audit`) | Flow step failure (`RUN101`) or `--ready SELECTOR` timeout (`RUN102`) |
 
