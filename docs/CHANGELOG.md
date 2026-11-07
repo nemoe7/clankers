@@ -10,6 +10,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### rules
+
+- Remove the code-scanning requirement (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
 #### maintenance
 
 - Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
