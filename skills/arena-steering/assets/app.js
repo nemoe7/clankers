@@ -362,10 +362,13 @@ function setLoading(active) {
 }
 
 let messageEpoch = 0;
+let messageRequests = 0;
 let olderPageRequest = null;
 let loadedMessageKey = null;
 let olderPageErrorKey = null;
 let historyCache = null;
+let hiddenMessageCache = null;
+let loadedMessageRevision = null;
 let searchBase = null;
 
 export function messageMatchesQuery(message, query) {
@@ -391,10 +394,12 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
     olderPageErrorKey = null;
     store.setState({ ...(preserve ? {} : { messages: [], messagesHasMore: false }), messagesError: "", messagesLoading: true });
   }
+  messageRequests += 1;
   try {
     const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim(), requestId: state.optimisticMessage?.requestId || "" };
     const result = await api.listMessages({ ...options, before });
     if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
+    if (hiddenMessageCache && !state.showHidden && hiddenMessageCache.revision !== result.revision) hiddenMessageCache.dirty = true;
     let fresh = result.messages || [];
     let hasMore = result.has_more;
     if (!before && previous.length) {
@@ -412,6 +417,7 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
       : fresh;
     const current = store.getState();
+    if (!before) loadedMessageRevision = result.revision;
     if (result.pending_message_id && current.optimisticMessage?.requestId === options.requestId) {
       current.optimisticMessage.serverId = result.pending_message_id;
     }
@@ -432,6 +438,8 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
       store.setState({ messagesError: `Could not load messages: ${error.message}`, messagesLoading: false });
     }
     return null;
+  } finally {
+    messageRequests -= 1;
   }
 }
 
@@ -714,11 +722,25 @@ const handlers = {
     await api.skipPoll();
   },
   async onToggleHidden() {
-    const nextHidden = !store.getState().showHidden;
+    const state = store.getState();
+    const nextHidden = !state.showHidden;
+    const query = (state.searchQuery || "").trim();
     historyCache = null;
-    const messages = store.getState().messages || [];
-    store.setState({ showHidden: nextHidden, messages: nextHidden ? messages : messages.filter((message) => !message.hidden) });
-    await fetchMessagePage({ reset: true, preserve: true });
+    searchBase = null;
+    messageEpoch += 1;
+    if (!nextHidden) {
+      hiddenMessageCache = { query, messages: state.messages || [], hasMore: state.messagesHasMore, revision: loadedMessageRevision, dirty: Boolean(state.messagesLoading || messageRequests) || loadedMessageRevision == null };
+      const visible = (state.messages || []).filter((message) => !message.hidden);
+      store.setState({ showHidden: false, messages: visible, messagesLoading: false });
+      loadedMessageKey = messageQueryKey(store.getState());
+      if (!visible.length && state.messagesHasMore) await fetchMessagePage({ reset: true });
+      return;
+    }
+    const cached = hiddenMessageCache?.query === query ? hiddenMessageCache : null;
+    if (cached) loadedMessageRevision = cached.revision;
+    store.setState({ showHidden: true, ...(cached ? { messages: cached.messages, messagesHasMore: cached.hasMore, messagesLoading: false } : {}) });
+    loadedMessageKey = messageQueryKey(store.getState());
+    if (!cached || cached.dirty || messageRequests) await fetchMessagePage({ reset: true, preserve: true });
   },
   onSearchChange(query) {
     const state = store.getState();

@@ -544,6 +544,13 @@ class SqliteStore:
       messages = [msg for msg in messages if msg.is_unread]
     return messages
 
+  def message_revision(self) -> int:
+    with self._lock:
+      row = self._conn.execute(
+        "SELECT COALESCE(MAX(revision_us), 0) FROM state_row_versions WHERE table_name = 'messages'"
+      ).fetchone()
+    return int(row[0])
+
   def list_message_page(
     self,
     *,

@@ -1190,6 +1190,7 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     include_all = query.get("all", ["0"])[0] in {"1", "true"}
     include_hidden = query.get("hidden", ["0"])[0] in {"1", "true"}
+    revision = self.store.message_revision()
     items, total, has_more = self.messages.list_message_page(
       unread_only=not include_all,
       include_hidden=include_hidden,
@@ -1201,6 +1202,7 @@ class SteeringApp:
       "messages": [self._serialize_message(item) for item in items],
       "total": total,
       "has_more": has_more,
+      "revision": revision,
     }
     request_id = query.get("request_id", [""])[0]
     if request_id:

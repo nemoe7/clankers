@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Cache hidden messages across visibility toggles.
+
 - Highlight message bubbles with a subtle color transition.
 
 - Keep Reports attention indicators inside the tab hover area.

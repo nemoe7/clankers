@@ -957,3 +957,24 @@ def test_partial_tombstone_upgrade_replaces_stale_state_triggers(
   store.save_message(Message(id="ab1201", body="After upgrade"))
   assert {row["id"] for row in store.export_rows()["messages"]} == {"ab1200", "ab1201"}
   store.close()
+
+
+def test_message_revision_tracks_only_message_changes() -> None:
+  store = SqliteStore()
+  try:
+    initial = store.message_revision()
+    store.save_task_queue([Task(id="task", title="Task", size=1)])
+    assert store.message_revision() == initial
+    message = Message(id="aa0001", body="Hidden", hidden=True)
+    store.save_message(message)
+    created = store.message_revision()
+    assert created > initial
+    message.body = "Updated"
+    store.save_message(message)
+    updated = store.message_revision()
+    assert updated > created
+    with store.transaction():
+      store._conn.execute("DELETE FROM messages WHERE id = ?", (message.id,))
+    assert store.message_revision() > updated
+  finally:
+    store.close()

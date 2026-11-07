@@ -7217,3 +7217,126 @@ def test_message_reference_highlights_bubble_not_row(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_hidden_messages_are_cached_across_toggles(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("Visible", msg_id="aa0001")
+  app.messages.send_message("Hidden", msg_id="aa0002", hidden=True)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        calls: list[str] = []
+        page.on(
+          "request",
+          lambda request: (
+            calls.append(request.url) if "/messages?" in request.url else None
+          ),
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('.message[data-msg-id="aa0001"]').wait_for()
+        toggle = page.locator("#quiet-msgs")
+        toggle.click()
+        hidden = page.locator('.message[data-msg-id="aa0002"]')
+        hidden.wait_for()
+        calls.clear()
+        toggle.click()
+        hidden.wait_for(state="detached")
+        toggle.click()
+        hidden.wait_for()
+        assert calls == []
+        toggle.click()
+        hidden.wait_for(state="detached")
+        with page.expect_response(lambda response: "/messages?" in response.url):
+          pass
+        calls.clear()
+        toggle.click()
+        hidden.wait_for()
+        assert calls == []
+        toggle.click()
+        hidden.wait_for(state="detached")
+        app.messages.send_message("New hidden", msg_id="aa0003", hidden=True)
+        with page.expect_request(lambda request: "/messages?" in request.url):
+          pass
+        toggle.click()
+        page.locator('.message[data-msg-id="aa0003"]').wait_for()
+        page.screenshot(path=str(tmp_path / "hidden-cache.png"))
+        toggle.click()
+        page.locator('.message[data-msg-id="aa0003"]').wait_for(state="detached")
+        page.evaluate("""() => {
+          const original = window.fetch;
+          window.holdNextMessage = true;
+          window.fetch = async (url, options) => {
+            if (window.holdNextMessage && String(url).startsWith('/messages?')) {
+              window.holdNextMessage = false;
+              await new Promise(resolve => { window.releaseMessage = resolve; });
+            }
+            return original(url, options);
+          };
+        }""")
+        app.messages.send_message("Racing hidden", msg_id="aa0004", hidden=True)
+        page.wait_for_function("() => typeof window.releaseMessage === 'function'")
+        toggle.click()
+        page.locator('.message[data-msg-id="aa0004"]').wait_for()
+        page.evaluate("() => window.releaseMessage()")
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_hidden_toggle_loads_visible_history_when_page_is_all_hidden() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("Older visible", msg_id="aa0001")
+  for index in range(40):
+    app.messages.send_message(f"Hidden {index}", msg_id=f"bb{index:04x}", hidden=True)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('.message[data-msg-id="aa0001"]').wait_for()
+        toggle = page.locator("#quiet-msgs")
+        toggle.click()
+        page.locator('.message[data-msg-id="bb0027"]').wait_for()
+        toggle.click()
+        page.locator('.message[data-msg-id="aa0001"]').wait_for()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
