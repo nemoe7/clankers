@@ -422,3 +422,16 @@ def test_repo_check_digest_covers_userscripts_and_steering_assets(tmp_path):
     changed_paths.surface_digest(str(repo), patterns, changed_paths.CI_SHARED_PATHS)
     != after
   )
+
+
+def test_retired_proxy_tests_live_only_in_arena_archive():
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  for proxy, filename in (
+    ("arena-egress-proxy", "test_arena_proxy.py"),
+    ("arena-preview-proxy", "test_preview_proxy.py"),
+  ):
+    archived = root / "docs/archive/arena-skill/tests" / proxy / filename
+    former = root / "tests/skills" / proxy / filename
+    assert archived.is_file()
+    assert not former.exists()
+    assert changed_paths.module_matrix([str(archived.relative_to(root))]) == []
