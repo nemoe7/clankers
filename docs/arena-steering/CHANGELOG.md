@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Suppress the mobile browser tap overlay across the v2 interface.
+
 - Align desktop Reports sidebars with the top of the report content.
 
 - Enlarge and inset the mobile Reports submit button, keeping it above the keyboard.

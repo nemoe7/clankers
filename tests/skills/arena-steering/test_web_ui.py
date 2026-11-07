@@ -7382,3 +7382,45 @@ def test_hidden_toggle_loads_visible_history_when_page_is_all_hidden() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_touch_tap_overlay_is_disabled_without_hiding_keyboard_focus(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  server = create_http_server(SteeringApp(store), host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799}, has_touch=True)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          const box = document.createElement('div');
+          box.innerHTML = '<button id="tap-probe">Button</button><a href="#">Link</a><input>';
+          document.body.append(box);
+        }""")
+        colors = page.evaluate("""() => [...document.querySelectorAll('#tap-probe, #tap-probe ~ a, #tap-probe ~ input')]
+          .map(el => getComputedStyle(el).webkitTapHighlightColor)""")
+        assert colors == ["rgba(0, 0, 0, 0)"] * 3
+        page.keyboard.press("Tab")
+        page.locator("#tap-probe").focus()
+        assert page.locator("#tap-probe").evaluate(
+          "el => el.matches(':focus-visible') && parseFloat(getComputedStyle(el).outlineWidth) > 0"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

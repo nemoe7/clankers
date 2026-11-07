@@ -147,6 +147,7 @@ a {
 }
 
 * {
+  -webkit-tap-highlight-color: transparent;
   scrollbar-width: thin; /* nonuu: SPC001 */
   scrollbar-color: hsl(var(--surface-raised-alt) / 0.4) transparent; /* nonuu: SPC001 */
 }
