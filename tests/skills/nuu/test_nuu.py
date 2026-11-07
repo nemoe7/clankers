@@ -2394,7 +2394,13 @@ def test_house_style_amendments_stay_synced():
   for root in (live_root, ref_root):
     css = (root / "references/style.css").read_text(encoding="utf-8")
     assert css.count("--scrollbar-thumb: #767682;") == 2
-    assert css.count("--scrollbar-thumb: #62626e;") == 2
+    assert css.count("--scrollbar-thumb: #767686;") == 2
+    assert "padding: var(--space-2) var(--space-4);" in css
+    assert ".button--danger {" in css
+    assert "min-height: var(--space-5);" in css
+    assert "--radius-md: 6px;" in css
+    assert "--font-sans: var(--font);" in css
+    assert "*, *::before" not in css.split("@media (prefers-reduced-motion: reduce)")[1]
     assert "@media (pointer: coarse)" in css
     assert "min-height: var(--touch);" in css
     assert "border-radius: 50%;" not in css
@@ -2412,11 +2418,30 @@ def test_house_style_amendments_stay_synced():
 
     modal = (root / "references/recipes/modal-manager.md").read_text(encoding="utf-8")
     assert "padding: var(--space-5);" in modal
+    assert "<!-- Lucide Icons - ISC License -->" in modal
     loading = (root / "references/recipes/loading-bar.md").read_text(encoding="utf-8")
     assert "cubic-bezier(0.16" not in loading
     assert "var(--ease)" in loading
+    assert "width: 1lh;" in loading
     live_dot = (root / "references/recipes/live-dot.md").read_text(encoding="utf-8")
     assert "animation: none" in live_dot
+    assert "width: 1lh;" in live_dot
+    assert ".dot-sm { width: 4px;" in live_dot
+    assert ".dot-lg { width: 12px;" in live_dot
+    table_cards = (root / "references/recipes/table-to-cards.md").read_text(
+      encoding="utf-8"
+    )
+    assert "max-width: 60em" in table_cards
+    edge_fade = (root / "references/recipes/scroll-edge-fade.md").read_text(
+      encoding="utf-8"
+    )
+    assert "--edge-fade: 24px; --edge-ramp: 32px; --scrollbar-carve: 15px;" in edge_fade
+    timestamps = (root / "references/recipes/relative-timestamps.md").read_text(
+      encoding="utf-8"
+    )
+    assert "var(--font-mono)" in timestamps
+    page_mem = (root / "references/recipes/page-memory.md").read_text(encoding="utf-8")
+    assert "ACC207" in page_mem
     ranges = (root / "references/recipes/range-sliders.md").read_text(encoding="utf-8")
     assert "at most 11 major-division ticks" in ranges
 

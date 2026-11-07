@@ -31,6 +31,11 @@ Prevent non-scrolling container clipping (`SPC204`), unintended sibling box over
   position: fixed;
   z-index: 30;
   max-width: min(320px, calc(100vw - 16px));
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
   pointer-events: none;
 }
 ```
