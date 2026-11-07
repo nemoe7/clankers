@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.2.1]
+
+### Added
+
+- **Stylesheet-driven design boards (`scripts/annotate.py`)**: Resolve semantic colors, fonts, and radii from configured `:root` and dark-scheme stylesheet tokens for browser and bitmap output.
+- **Routed design boards**: Add `orthogonal`, `scurve`, and `straight` arrows, custom canvases, responsive captures, and detailed anatomy, style-guide, and focus presets.
+
+### Changed
+
+- **Annotation and board specs**: Require TOML inputs and preserve configurable HTML/JavaScript icon-table extraction through `[icons].file` and `table`.
+
 ## [0.2.0]
 
 ### Added
