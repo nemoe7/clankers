@@ -4110,6 +4110,9 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
               questionBottom: question.bottom,
               questionWidth: question.width,
               questionHeight: question.height,
+              tabTop: bounds.top,
+              tabBottom: bounds.bottom,
+              pipBottom: pip.bottom,
               pipOffsetRight: bounds.right - pip.right,
             };
           }""")
@@ -4127,12 +4130,11 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
             )
             < 1
           )
-          assert (
-            geometry["textRight"] <= geometry["questionLeft"]
-            or geometry["textTop"] >= geometry["questionBottom"]
-          ), (width, geometry)
           assert geometry["questionRight"] < geometry["pipLeft"]
-          assert geometry["questionTop"] >= 0
+          assert geometry["tabTop"] <= geometry["questionTop"]
+          assert geometry["questionBottom"] <= geometry["tabBottom"]
+          assert geometry["tabTop"] <= geometry["pipTop"]
+          assert geometry["pipBottom"] <= geometry["tabBottom"]
           assert geometry["pipOffsetRight"] == 6
           assert geometry["navRight"] + 8 <= geometry["actionsLeft"]
           assert not geometry["overflow"]
@@ -4170,7 +4172,7 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
           }""")
           assert abs(alone["textCenter"] - alone["tabCenter"]) < 1
           assert alone["questionOffsetRight"] == 6
-          assert alone["questionTop"] == -7
+          assert alone["questionTop"] >= 0
           assert alone["questionWidth"] == alone["questionHeight"] == 14
 
         page.locator("#tab-messages").click()

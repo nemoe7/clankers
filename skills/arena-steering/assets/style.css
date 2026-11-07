@@ -1109,7 +1109,7 @@ mark.search-hit {
 }
 
 #report-pip {
-  top: -4.5px;
+  top: 8.5px;
 }
 
 #report-pip.is-unseen-ack {
@@ -1118,7 +1118,7 @@ mark.search-hit {
 
 #report-needs-answer {
   position: absolute;
-  top: -8px;
+  top: 5px;
   right: 17px;
   display: inline-flex;
   width: 14px;
@@ -2743,7 +2743,7 @@ article#report.report img,
 
 @media (max-height: 30em) {
   .topbar {
-    padding: 8px 12px 6px;
+    padding: 6px 12px;
   }
 
   .main-content {
