@@ -3882,3 +3882,65 @@ def test_due_instruction_checkpoint_waits_for_active_poll(_isolate_state: Path) 
     assert len(messages.pending_ids()) == 1
   finally:
     store.close()
+
+
+def test_native_file_preparation_records_edit_without_bash_gate(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Pending work")
+  root = pre.repo_root().resolve()
+  target = root / "tests" / "skills" / "arena-steering" / "test_pre.py"
+  checks = []
+  for index in range(1, len(target.relative_to(root).parts)):
+    parts = target.relative_to(root).parts[:index]
+    path = root.joinpath(*parts)
+    checks.append(
+      f"[ -e '{path}' ] && [ ! -d '{path}' ] "
+      f"&& {{ printf 'FILE:%s\\n' '{'/'.join(parts)}'; exit 0; }}"
+    )
+  checks.extend(
+    [f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}", "printf 'OK\\n'"]
+  )
+  line = "/bin/bash -l -c " + "\n".join(checks)
+  mkdir = f"mkdir -p '{target.parent}'"
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  for launcher, command in (
+    (line, checks[0].split(" && ", 1)[0]),
+    (f"/bin/bash -l -c {mkdir}", mkdir),
+  ):
+    code, output = _run("pre", "-l", launcher, "-c", command, "-s", "bash")
+    assert code == pre.CONTINUE, output
+    store, messages, _, _ = cli.open_services(_isolate_state)
+    assert messages.tool_activity()["tool"] == "edit"
+    assert store.get_meta(pre.CALL_COUNT_META) == str(pre.GATE_THRESHOLD)
+    store.close()
+
+
+def test_native_file_activity_rejects_unsafe_mkdir(tmp_path: Path) -> None:
+  checkout = tmp_path / "checkout"
+  checkout.mkdir()
+  outside = tmp_path / "outside"
+  outside.mkdir()
+  (checkout / "link").symlink_to(outside, target_is_directory=True)
+  for path in (
+    outside,
+    checkout / "link",
+    checkout / ".." / "outside",
+    checkout / "$(touch marker)",
+  ):
+    command = f"mkdir -p '{path}'"
+    assert (
+      pre.native_tool_name(
+        f"/bin/bash -l -c {command}", command, "bash", checkout_root=checkout
+      )
+      != "edit"
+    )
+  command = f"mkdir -p '{checkout}'"
+  assert (
+    pre.native_tool_name(
+      f"/bin/bash -l -c {command}", "source ~/.profile", "bash", checkout_root=checkout
+    )
+    != "edit"
+  )

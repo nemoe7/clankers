@@ -469,6 +469,21 @@ def native_tool_name(
   launcher = "/bin/bash -l -c "
   if _isolated_reader(launcher + current, current):
     return "read"
+  if _checkout_directory_validator(line, command, checkout_root):
+    return "edit"
+  mkdir = NATIVE_MKDIR_LAUNCHER.fullmatch(line.strip())
+  if (
+    mkdir
+    and command.strip() == mkdir.group(1)
+    and arena_maintenance_call(line, command, checkout_root=checkout_root)
+  ):
+    try:
+      root = (checkout_root or repo_root()).resolve()
+      path = Path(mkdir.group(2))
+      if ".." not in path.parts and path.resolve().is_relative_to(root):
+        return "edit"
+    except (OSError, RuntimeError, ValueError):
+      pass
   if not any(operator in current for operator in (";", "|", "&", "\n", "`", "$(")):
     try:
       words = shlex.split(current)

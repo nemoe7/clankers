@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Show native file preparation as Edit activity.
+
 - Cache hidden messages across visibility toggles.
 
 - Highlight message bubbles with a subtle color transition.
