@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Enlarge and inset the mobile Reports submit button, keeping it above the keyboard.
+
 - Share ID chip styling and remove the composer Parents label.
 
 - Require an atomic detail change when linking a new message to an existing task.

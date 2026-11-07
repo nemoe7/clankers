@@ -2850,7 +2850,7 @@ article#report.report img,
 .report-submit-float {
   position: fixed;
   right: max(16px, calc((100vw - 900px) / 2));
-  bottom: var(--reports-submit-bottom);
+  bottom: calc(var(--reports-submit-bottom) + var(--reports-keyboard-inset, 0px));
   z-index: 6;
   box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
 }
@@ -2868,6 +2868,23 @@ article#report.report img,
   #view-reports:has(#report-submit-float) {
     --reports-submit-bottom: max(8px, env(safe-area-inset-bottom));
     margin-bottom: max(36px, calc(env(safe-area-inset-bottom) + 28px));
+  }
+}
+
+@media (max-width: 60em) {
+  #view-reports:has(#report-submit-float) {
+    --reports-submit-bottom: max(16px, env(safe-area-inset-bottom));
+    margin-bottom: calc(var(--reports-submit-bottom) + 52px);
+  }
+
+  .report-submit-float {
+    min-height: 48px;
+    padding-inline: 20px;
+    right: max(24px, calc(env(safe-area-inset-right) + 16px));
+  }
+
+  .report-submit-row > #report-submit {
+    min-height: 48px;
   }
 }
 

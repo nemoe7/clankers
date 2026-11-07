@@ -608,6 +608,13 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
               };
             }""")
             pane_box, submit, top = (geometry[key] for key in ("pane", "submit", "top"))
+            if width == 411:
+              assert submit["height"] >= 48, geometry
+              assert width - submit["x"] - submit["width"] >= 24, geometry
+              assert styles["submitInset"] >= 16, styles
+            if width == 1372:
+              assert submit["height"] < 48, geometry
+              assert styles["submitInset"] == 24, styles
             pane_bottom = pane_box["y"] + pane_box["height"]
             if motion == "no-preference":
               assert abs(pane_bottom - height) <= 1, geometry
@@ -1693,11 +1700,15 @@ def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
         }""")
         geometry = page.evaluate("""() => ({
           shellBottom: document.querySelector('.app-shell').getBoundingClientRect().bottom,
+          submitBottom: document.querySelector('#report-submit-float').getBoundingClientRect().bottom,
           visibleBottom: visualViewport.offsetTop + visualViewport.height,
           keyboard: document.documentElement.hasAttribute('data-mobile-keyboard-open'),
         })""")
         assert geometry["keyboard"], geometry
         assert abs(geometry["shellBottom"] - geometry["visibleBottom"]) < 1, geometry
+        assert 16 <= geometry["visibleBottom"] - geometry["submitBottom"] <= 17, (
+          geometry
+        )
         page.screenshot(path=str(tmp_path / "keyboard-offset.png"))
         page.evaluate("""() => {
           delete visualViewport.height;
@@ -1706,6 +1717,9 @@ def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
         }""")
         assert page.locator(".app-shell").evaluate(
           "el => Math.abs(el.getBoundingClientRect().top) < 1"
+        )
+        assert page.locator("#report-submit-float").evaluate(
+          "el => Math.abs(innerHeight - el.getBoundingClientRect().bottom - 16) < 1"
         )
       finally:
         browser.close()
