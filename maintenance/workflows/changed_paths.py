@@ -9,6 +9,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import tempfile
 from collections.abc import Mapping, Sequence
 from fnmatch import fnmatch
@@ -225,6 +226,7 @@ ARCHIVED_TEST_PREFIX = "docs/archive/"
 MODULE_PATHS = {
   "Preview": (
     "skills/arena-steering/*",
+    "tests/skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
   ),
   "Nemoizer": (  # nonemo: NMO100
@@ -332,16 +334,22 @@ def step_collect(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
   if env.get("GITHUB_ACTIONS") == "true" and not env.get("CI_ENVIRONMENT"):
     raise ValueError("CI_ENVIRONMENT is required on GitHub Actions")
   misses = {}
+  digests = {}
   for name, patterns in ci_surfaces().items():
     inputs = surface_digest(repo, patterns, CI_SHARED_PATHS)
     fingerprint = env.get("CI_ENVIRONMENT", "")
     digest = hashlib.sha256(f"{inputs}\0{fingerprint}".encode()).hexdigest()
     misses[name] = not ledger_hit(entries, name, digest)
+    digests[name] = digest
     write_output(output, "digest_" + name, digest)
     write_output(output, "run_" + name, str(misses[name]).lower())
-  npm_needed = any(
-    misses[name] for name in ("markdownlint", "repo_check", "module_userscripts")
-  )
+  test_surfaces = [
+    name for name in misses if name.startswith("module_") and misses[name]
+  ]
+  write_output(output, "test_surfaces", ",".join(test_surfaces))
+  write_output(output, "digests", json.dumps(digests, separators=(",", ":")))
+  # Test suites can invoke the bundled Node parser or tokenizer.
+  npm_needed = bool(test_surfaces) or misses["markdownlint"] or misses["repo_check"]
   write_output(output, "npm_needed", str(npm_needed).lower())
   return 0
 
@@ -360,6 +368,47 @@ def step_record(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
       status == "success",
     )
   return 0
+
+
+def step_test(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
+  """Run selected suites together and record them only when the whole union passes."""
+  selected = env.get("CI_TEST_SURFACES", "").split(",")
+  selected = [name for name in selected if name]
+  names = {"module_" + surface_key(name): name for name in MODULE_TESTS}
+  if len(selected) != len(set(selected)) or any(name not in names for name in selected):
+    raise ValueError("Unknown or duplicate test surface")
+  digests = json.loads(env.get("CI_DIGESTS", "{}"))
+  if not isinstance(digests, dict) or any(name not in digests for name in selected):
+    raise ValueError("Missing test-surface digest")
+  python_tests = []
+  node_tests = []
+  extra_commands = []
+  for key in selected:
+    name = names[key]
+    python_tests.extend(MODULE_TESTS[name])
+    node_tests.extend(MODULE_NODE_TESTS.get(name, ()))
+    extra_commands.extend(
+      shlex.split(command) for command in MODULE_COMMANDS.get(name, ())
+    )
+  commands = []
+  if python_tests:
+    commands.append([sys.executable, "-m", "pytest", "-q", *python_tests])
+  if node_tests:
+    commands.append(["node", "--test", *node_tests])
+  commands.extend(extra_commands)
+  failed = False
+  for command in commands:
+    print("$ " + shlex.join(command), flush=True)
+    failed |= subprocess.run(command, cwd=repo, check=False).returncode != 0
+  for name in selected:
+    record_surface(
+      Path(env.get("CI_LEDGER", ".cache/ci-ledger.json")),
+      name,
+      digests[name],
+      env.get("GITHUB_SHA", ""),
+      not failed,
+    )
+  return int(failed)
 
 
 def module_matrix(files: Sequence[str] | None) -> list[dict[str, str]]:
@@ -423,6 +472,7 @@ STEPS = {
   "artifacts": step_artifacts,
   "collect": step_collect,
   "record": step_record,
+  "test": step_test,
 }
 
 

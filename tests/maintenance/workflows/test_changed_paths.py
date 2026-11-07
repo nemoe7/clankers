@@ -424,6 +424,20 @@ def test_repo_check_digest_covers_userscripts_and_steering_assets(tmp_path):
   )
 
 
+def test_preview_digest_covers_browser_test_fixtures(tmp_path):
+  repo = init_repo(tmp_path)
+  patterns = changed_paths.ci_surfaces()["module_preview"]
+  before = changed_paths.surface_digest(
+    str(repo), patterns, changed_paths.CI_SHARED_PATHS
+  )
+  write(repo, {"tests/skills/arena-steering/fixtures/reload_isolation.py": "changed\n"})
+  git(repo, "add", "-A")
+  assert (
+    changed_paths.surface_digest(str(repo), patterns, changed_paths.CI_SHARED_PATHS)
+    != before
+  )
+
+
 def test_retired_proxy_tests_live_only_in_arena_archive():
   root = Path(changed_paths.__file__).resolve().parents[2]
   for proxy, filename in (
@@ -435,3 +449,77 @@ def test_retired_proxy_tests_live_only_in_arena_archive():
     assert archived.is_file()
     assert not former.exists()
     assert changed_paths.module_matrix([str(archived.relative_to(root))]) == []
+
+
+def test_ci_uses_one_read_only_job_and_saves_attempt_scoped_ledger():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  triggers = workflow.get("on", workflow.get(True))
+  assert set(triggers["pull_request"]["types"]) >= {
+    "opened",
+    "edited",
+    "reopened",
+    "synchronize",
+  }
+  assert not triggers["pull_request"].get("paths-ignore")
+  assert workflow["permissions"] == {"contents": "read"}
+  assert set(workflow["jobs"]) == {"check"}
+  steps = workflow["jobs"]["check"]["steps"]
+  runs = "\n".join(step.get("run", "") for step in steps)
+  assert "changed_paths.py --step collect" in runs
+  assert "changed_paths.py --step record" in runs
+  assert "gate_pr.py" in runs and "--pr-title" in runs and "--version-bumps" in runs
+  caches = [step for step in steps if "actions/cache/save@" in step.get("uses", "")]
+  assert caches and "github.run_attempt" in caches[0]["with"]["key"]
+
+
+def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatch):
+  from types import SimpleNamespace
+
+  ledger = tmp_path / "ci-ledger.json"
+  selected = "module_preview,module_userscripts"
+  digests = {
+    name: ("a" if name.endswith("preview") else "b") * 64
+    for name in selected.split(",")
+  }
+  env = {
+    "CI_LEDGER": str(ledger),
+    "GITHUB_SHA": "abc",
+    "CI_TEST_SURFACES": selected,
+    "CI_DIGESTS": json.dumps(digests),
+  }
+  commands = []
+
+  def run(command, **kwargs):
+    commands.append(command)
+    return SimpleNamespace(returncode=1 if command[0] == "node" else 0)
+
+  monkeypatch.setattr(changed_paths.subprocess, "run", run)
+  assert changed_paths.step_test(env, tmp_path / "out", str(tmp_path)) == 1
+  assert not changed_paths.load_ledger(ledger)
+  pytest_commands = [command for command in commands if "pytest" in command]
+  assert len(pytest_commands) == 1
+  assert any(command[:2] == ["node", "--test"] for command in commands)
+  monkeypatch.setattr(
+    changed_paths.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0)
+  )
+  assert changed_paths.step_test(env, tmp_path / "out", str(tmp_path)) == 0
+  assert set(changed_paths.load_ledger(ledger)) == set(selected.split(","))
+
+
+def test_ci_never_records_passes_after_dependency_install_fails():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  steps = workflow["jobs"]["check"]["steps"]
+  by_id = {step.get("id"): step for step in steps if step.get("id")}
+  assert "steps.dependencies.outcome == 'success'" in by_id["repo_check"]["if"]
+  assert "steps.npm.outcome == 'success'" in by_id["repo_check"]["if"]
+  assert "steps.dependencies.outcome == 'success'" in by_id["ruff"]["if"]
+  assert "steps.npm.outcome == 'success'" in by_id["markdownlint"]["if"]
+  tests = next(step for step in steps if "--step test" in step.get("run", ""))
+  assert "steps.dependencies.outcome == 'success'" in tests["if"]
+  assert "steps.npm.outcome == 'success'" in tests["if"]
