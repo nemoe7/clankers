@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-steering
 
+- Mark dead detached runs as failed so their task gates can recover.
 - Preserve staged uploads when verifying published reports.
 - Delay initial hover tooltips, with immediate keyboard focus and a brief rapid-switch window.
 
