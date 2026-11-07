@@ -81,32 +81,10 @@ SYSTEM_PROMPTS = ROOT / "system-prompts"
 SYSTEM_PROMPT_PAIRS = ("NEMOGPT.md",)
 # A section header is a short bare line standing alone between blank lines.
 HEADER_MAX = 40
-LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
-
-# The markdownlint scope, recomputed from LINT_CONFIG on every run.
-EXPECTED_LINTED = (
-  "rules/ARENA.md",
-  "rules/CLINE.md",
-  "rules/CORE.md",
-  "rules/KILO.md",
-  "rules/refs/ARENA.md",
-  "rules/refs/CLINE.md",
-  "rules/refs/CORE.md",
-  "rules/refs/GUIDELINES.md",
-  "rules/refs/KILO.md",
-  "rules/refs/README.md",
-  "rules/wenyan/README.md",
-)
-
 NEMOIZE = "skills/nemoizer/scripts/nemoize.py"
 CODE_SPAN_RE = re.compile(r"(`+)[^`\n]*?\1")
 SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
 LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
-
-LINT_COUNT_CLAIMS = (
-  (RULES / "README.md", r"(\d+) files in all"),
-  (ROOT / "AGENTS.md", r"(\d+) files, `rules/refs/` included"),
-)
 
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
@@ -417,43 +395,6 @@ def check_internal_links(
       errors.append(f"{label}: broken internal link {target}")
 
 
-def strip_jsonc_comments(text: str) -> str:
-  return re.sub(r"^[ \t]*//.*$", "", text, flags=re.MULTILINE)
-
-
-def expand_ignore_pattern(pattern: str) -> set[Path]:
-  """Expand one markdownlint ignore pattern to the paths it excludes.
-
-  ``Path.glob`` resolves a trailing ``**`` to directories only. Markdownlint's
-  globby excludes everything below a matched directory, so
-  this check expands directory matches recursively.
-  """
-  matched: set[Path] = set()
-
-  for path in ROOT.glob(pattern):
-    matched.add(path)
-
-    if path.is_dir():
-      matched.update(path.rglob("*"))
-
-  return matched
-
-
-def linted_rule_files() -> set[Path]:
-  config = json.loads(strip_jsonc_comments(LINT_CONFIG.read_text(encoding="utf-8")))
-  selected: set[Path] = set()
-
-  for pattern in config.get("globs", []):
-    selected.update(path for path in ROOT.glob(pattern) if path.is_file())
-
-  ignored: set[Path] = set()
-
-  for pattern in config.get("ignores", []):
-    ignored.update(expand_ignore_pattern(pattern))
-
-  return selected - ignored
-
-
 def section_rule_counts(text: str) -> list[tuple[str, int]]:
   counts: list[tuple[str, int]] = []
   heading: str | None = None
@@ -569,37 +510,6 @@ def check_system_prompt_parity(errors: list[str]) -> None:
           f"{label} '{head}': {live_rules} lines vs {ref_rules} in refs; "
           "compression may merge lines but never add rules"
         )
-
-
-def check_lint_scope(errors: list[str]) -> None:
-  if not LINT_CONFIG.is_file():
-    errors.append(".markdownlint-cli2.jsonc is missing")
-    return
-
-  actual = tuple(
-    sorted(path.relative_to(ROOT).as_posix() for path in linted_rule_files())
-  )
-
-  if actual != EXPECTED_LINTED:
-    errors.append(
-      f"markdownlint scope changed: expected={list(EXPECTED_LINTED)} actual={list(actual)}"
-    )
-
-  for document, pattern in LINT_COUNT_CLAIMS:
-    relative = document.relative_to(ROOT)
-
-    if not document.is_file():
-      errors.append(f"{relative} is missing")
-      continue
-
-    match = re.search(pattern, document.read_text(encoding="utf-8"))
-
-    if match is None:
-      errors.append(f"{relative}: no documented markdownlint file count found")
-    elif int(match.group(1)) != len(actual):
-      errors.append(
-        f"{relative}: documented markdownlint count {match.group(1)} != actual {len(actual)}"
-      )
 
 
 def check_refs_parity(errors: list[str]) -> None:
@@ -841,7 +751,6 @@ def check_budgets(errors: list[str]) -> None:
 
 
 def check_parity(errors: list[str]) -> None:
-  check_lint_scope(errors)
   check_refs_parity(errors)
   check_system_prompt_parity(errors)
   check_root_copies(errors)
@@ -943,7 +852,7 @@ def main() -> int:
 
   print(
     f"Validation passed in {span:.2f}s: {skills} skills, "
-    "README measurements, the markdownlint scope, refs/live parity and the "
+    "README measurements, refs/live parity and the "
     "nemoizer prose domains checked."
   )
 

@@ -39,6 +39,8 @@ These files are overlays: CORE.md reaches the agent context automatically, and e
 
 Platform constraints made the three rule surfaces differ, so each row names one behavior per platform and nothing identical.
 
+<!-- markdownlint-disable MD033 -->
+
 | Domain | Agents | Arena | ChatGPT |
 | --- | --- | --- | --- |
 | Git/Hub | <ul><li>NEVER push unasked. </li><li>MUST branch from main. </li></ul> | <ul><li>ALWAYS push, PR open. </li><li>Rebase merge only. </li><li>NEVER merge even with authorization. </li><li>Planned list before commits. </li><li>GitHub reconnect after one retry. </li><li>CI reported at turn end. </li><li>Backoff polls for PR checks. </li></ul> | <ul><li>ALWAYS a PR. </li><li>ALWAYS rebase merge. </li><li>Poll all checks. </li><li>NEVER end before CI. </li><li>NEVER multiple commits. </li><li>Planned list first. </li></ul> |
@@ -47,6 +49,8 @@ Platform constraints made the three rule surfaces differ, so each row names one 
 | Mermaid Diagrams | Default where rendered. Phone-sized. | NEVER in chat. Docs only. | MUST for pipelines/flows unless target explicitly cannot render Mermaid. NEVER ASCII. |
 | Recommendation | Required on three or more options. | Required on three or more options. | — |
 | Platform Specific | <ul><li>Shell check first. </li></ul> | <ul><li>10-4 opens the first reply. </li><li>ALWAYS activate preview steering. </li><li>Negative rating on noncompliance. </li><li>Reports through the preview skill. </li><li>NEVER end with open tasks. </li><li>ALWAYS smallest task next. </li><li>Visibility question after first start. </li><li>Protected files, waiver only. </li><li>Suggest amendments only for a contributing rule gap. </li></ul> | <ul><li>ALWAYS think longer. </li></ul> |
+
+<!-- markdownlint-enable MD033 -->
 
 ## Install rules
 
@@ -99,5 +103,4 @@ python .\rules\apply.py
 
 ## Markdown lint scope
 
-Markdownlint covers the agent rule files under `rules/`, including `rules/refs/`, plus `rules/wenyan/README.md`. The documented lint set contains 11 files in all.
-
+Run `npx --yes markdownlint-cli2` from the repository root. `.markdownlint-cli2.jsonc` defines the scope.

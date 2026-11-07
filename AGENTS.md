@@ -62,7 +62,7 @@ Read these first:
 - Treat this as a rules/skills/workflows repository with maintenance build tooling and tests.
 - `maintenance/check.py` needs `markdown-it-py` and the npm package `gpt-tokenizer`.
 - It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
-  - It also checks the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
+  - It also checks refs/live rule parity and the root `ARENA.md` copy.
 - `.github/workflows/ci.yml` runs `python maintenance/check.py --update` on PRs targeting any branch, except changes limited to its `paths-ignore` list, and after every push to `main`.
 - It runs Ruff at the version `pyproject.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
@@ -154,7 +154,7 @@ Read these first:
 
 - 2-space indentation, overriding formatter defaults.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
+- Run `npx --yes markdownlint-cli2` from the repository root.
   - **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff, configured by `pyproject.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
 - Prose style: write and edit the documentation prose of this repository (`docs/` and every `README.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.

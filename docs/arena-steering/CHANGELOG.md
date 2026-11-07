@@ -412,6 +412,18 @@ This log has no Unreleased section.
 
 ### Added
 
+- `scripts/arena_steering/server.py`: Serve state snapshot, change, merge, and asset routes for an external container.
+- `scripts/arena_steering/store.py`: Export, stamp, and merge stored rows.
+- `scripts/arena_steering/cli.py`: Print a one-line restore notice when a merge changed state.
+- `scripts/arena_steering/cli.py`: Register `steer gate` and `steer skills`.
+- `scripts/arena_steering/cli.py`: Add the `gate` trap target, with no wrapper script.
+- `scripts/arena_steering/cli.py`: Add `worktree collect` to print a worktree patch against its merge base.
+- `assets/app.js`: Pinch the image viewer with two pointers.
+- `scripts/arena_steering/server.py`: Stamp finished runs into `data_version` so clients refresh on completion.
+- `scripts/arena_steering/cli.py`: Record the listening port in `server.json` while `steer serve` runs.
+- `assets/markdown.js`: Nest list items and render horizontal rules.
+- `assets/style.css`: Indent task items by 2ch and style horizontal rules.
+
 - `state-backup.md`: Document the planned v2 backup and clear contract.
 
 - `cli.py`, `services.py`: Pin or unpin reports to control stale removal.
@@ -494,20 +506,6 @@ This log has no Unreleased section.
 - `assets/style.css`: Fade the report and task columns only, leaving sidebars unblurred, and give the task toolbar its own edge fade.
 
 - `assets/messages-view.js`, `assets/style.css`: Match the v1 composer layout, icon buttons, and text size.
-
-### Added
-
-- `scripts/arena_steering/server.py`: Serve state snapshot, change, merge, and asset routes for an external container.
-- `scripts/arena_steering/store.py`: Export, stamp, and merge stored rows.
-- `scripts/arena_steering/cli.py`: Print a one-line restore notice when a merge changed state.
-- `scripts/arena_steering/cli.py`: Register `steer gate` and `steer skills`.
-- `scripts/arena_steering/cli.py`: Add the `gate` trap target, with no wrapper script.
-- `scripts/arena_steering/cli.py`: Add `worktree collect` to print a worktree patch against its merge base.
-- `assets/app.js`: Pinch the image viewer with two pointers.
-- `scripts/arena_steering/server.py`: Stamp finished runs into `data_version` so clients refresh on completion.
-- `scripts/arena_steering/cli.py`: Record the listening port in `server.json` while `steer serve` runs.
-- `assets/markdown.js`: Nest list items and render horizontal rules.
-- `assets/style.css`: Indent task items by 2ch and style horizontal rules.
 
 ### Fixed
 

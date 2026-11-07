@@ -208,4 +208,3 @@ The recorded setup used both `LD_LIBRARY_PATH` directories. SwiftShader needed t
 ### Known gap
 
 The sandbox lacks system fontconfig. One source-project test measures a column against a missing font, so it fails locally with no code defect: `test_the_pool_column_fits_the_longest_pool_name`. A monospace TTF through `@font-face` made it pass, which proves an environment defect. The other 51 assertions pass without that font.
-

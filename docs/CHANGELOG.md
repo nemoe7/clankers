@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-07
+
+### Changed
+
+#### maintenance
+
+- Expand Markdownlint coverage and remove the fixed scope guard (`.markdownlint-cli2.jsonc`, `maintenance/check.py`).
+
 ## 2026-11-06
 
 ### Changed

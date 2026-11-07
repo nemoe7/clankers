@@ -1,6 +1,17 @@
 {
-  "globs": ["rules/**/*.md"],
-  "ignores": ["*.md", "skills/**", "rules/CHATGPT.*", "rules/README.md", "rules/refs/kilo/**", "rules/kilo/**"],
+  "globs": [
+    "**/*.md",
+    "!**/AGENTS.md",
+    "!**/ARENA.md",
+    "!rules/**/!(README).md",
+    "!skills/**/!(README).md",
+    "!gpt-plugins/skills/**/!(README).md",
+    "!gpt-plugins/refs/**/!(README).md",
+    "!system-prompts/**/!(README).md",
+    "!automations/**/!(README).md",
+    "!docs/archive/**/!(README).md",
+    "!.agents/**"
+  ],
   "gitignore": true,
   "config": {
     "default": true,

@@ -1,11 +1,11 @@
-## Summary
+# Summary
 
-<one paragraph that describes the change>
+Describe the change in one paragraph.
 
 ## Changes
 
-- <concrete change>
+- *Concrete change*
 
 ## Validation
 
-- [ ] <check that ran>
+- [ ] *Check that ran*

@@ -70,11 +70,6 @@ def test_run_logged_prints_command_and_exit(monkeypatch, capsys):
   assert "exit 0: python 'script with spaces.py' ." in printed
 
 
-def test_lint_count_claims_include_root_agent_guide():
-  root = check.ROOT / "AGENTS.md"
-  assert any(document == root for document, _ in check.LINT_COUNT_CLAIMS)
-
-
 def test_grouped_budgets_are_empty_after_v1_archive():
   assert check.EXPECTED_GROUPS == {}
 
@@ -325,3 +320,43 @@ def test_check_case_collisions_rejects_case_only_tracked_duplicates(
   assert errors == [
     "case-colliding tracked paths: .github/PULL_REQUEST_TEMPLATE.md, .github/pull_request_template.md"
   ]
+
+
+def test_markdownlint_scope_includes_readmes_except_agents(tmp_path):
+  cli = check.ROOT / "node_modules" / ".bin" / "markdownlint-cli2"
+  if not cli.exists():
+    import pytest
+
+    pytest.skip("Install npm dependencies to run markdownlint")
+  shutil.copy2(check.ROOT / ".markdownlint-cli2.jsonc", tmp_path)
+  included = [
+    "README.md",
+    "docs/archive/old/README.md",
+    "rules/README.md",
+    "skills/example/README.md",
+    "automations/README.md",
+    "ordinary.md",
+  ]
+  excluded = [
+    ".agents/README.md",
+    ".agents/nested/README.md",
+    "AGENTS.md",
+    "docs/archive/old/notes.md",
+    "skills/example/SKILL.md",
+    "system-prompts/prompt.md",
+    "automations/job.md",
+  ]
+  for name in included + excluded:
+    path = tmp_path / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Not a heading\n", encoding="utf-8")
+  result = subprocess.run(
+    [str(cli)], cwd=tmp_path, capture_output=True, text=True, check=False
+  )
+  output = result.stdout + result.stderr
+  assert result.returncode == 1, output
+  errors = output.splitlines()
+  for name in included:
+    assert any(line.startswith(f"{name}:1 ") for line in errors), output
+  for name in excluded:
+    assert not any(line.startswith(f"{name}:1 ") for line in errors), output

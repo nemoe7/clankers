@@ -110,7 +110,6 @@ The checker reports every problem it finds in:
 - Internal links, README skill coverage, and recorded measurements.
 - Both ChatGPT custom-instruction character limits.
 - A license declaration on every skill that records `metadata.upstream`, and the `LICENSE.txt` file that the declaration points at.
-- The markdownlint scope, recomputed from `.markdownlint-cli2.jsonc` and compared with the counts this repository documents.
 - Refs/live rule parity: identical section headings in the same order, and each live section holding no more rule lines than its refs baseline.
 - The byte identity of the root `ARENA.md` link target and `rules/ARENA.md`.
 - Tracked Git paths whose names differ only by letter case.
