@@ -22,14 +22,8 @@ PUSH_PATHS = (
   "!rules/refs/**",
   ".github/workflows/artifacts.yml",
 )
-PACKAGE_IF = (
-  "needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main'"
-  " && github.event_name != 'pull_request'"
-)
-PUBLISH_IF = (
-  "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-  " && needs.changes.outputs.rules == 'true'"
-)
+RELEASE_IF = "github.ref == 'refs/heads/main' && github.event_name != 'pull_request'"
+PUBLISH_IF = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
 
 
 def step_runs(job: dict) -> str:
@@ -75,48 +69,58 @@ def findings_for(document: dict) -> list[str]:
       job_text(job)
     ):
       findings.append(f"{name} must not use the rules publishing token")
+  if set(jobs) != {"release-gpt-plugins", "publish-clankers-rules"}:
+    findings.append("artifact workflow must keep exactly two secret-isolated jobs")
   expected = (
-    ("package-gpt-plugins", PACKAGE_IF),
+    ("release-gpt-plugins", RELEASE_IF),
     ("publish-clankers-rules", PUBLISH_IF),
   )
   for name, condition in expected:
     job = jobs.get(name) or {}
     if job.get("if") != condition:
       findings.append(f"{name} lost its event condition, found {job.get('if')}")
-  for name in ("package-gpt-plugins", "publish-clankers-rules"):
-    if (jobs.get(name) or {}).get("needs") != "changes":
-      findings.append(f"{name} must need the changes job")
-
-  package = jobs.get("package-gpt-plugins") or {}
-  uploads = [
-    step
-    for step in package.get("steps", []) or []
-    if isinstance(step, dict)
-    and str(step.get("uses", "")).startswith("actions/upload-artifact")
-  ]
-  if not uploads:
-    findings.append("the package job uploads nothing")
-  else:
-    first = uploads[0]
-    with_block = first.get("with") or {}
-    if first.get("uses") != "actions/upload-artifact@v7":
-      findings.append(f"the archive upload must use @v7, found {first.get('uses')}")
-    if with_block.get("path") != "gpt-plugins.zip":
-      findings.append(
-        f"the archive upload must name gpt-plugins.zip, found {with_block.get('path')}"
-      )
-    if with_block.get("archive") is not False:
-      findings.append("a direct upload keeps `archive: false`")
-    if "name" in with_block:
-      findings.append("a direct upload keeps the filename as the artifact name")
-  if not any(
-    str(step.get("run", ""))
-    .strip()
-    .startswith("python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir ")
-    for step in package.get("steps", []) or []
-    if isinstance(step, dict)
+    steps = job.get("steps", []) or []
+    detect = [
+      step for step in steps if isinstance(step, dict) and step.get("id") == "detect"
+    ]
+    if len(detect) != 1 or "changed_paths.py --step artifacts" not in detect[0].get(
+      "run", ""
+    ):
+      findings.append(f"{name} must detect changed path groups")
+    group = "package" if name == "release-gpt-plugins" else "rules"
+    if detect:
+      position = steps.index(detect[0])
+      for step in steps[position + 1 :]:
+        if step.get("if") != f"steps.detect.outputs.{group} == 'true'":
+          findings.append(f"{name} steps must honor the {group} change result")
+          break
+  release = jobs.get("release-gpt-plugins") or {}
+  steps = release.get("steps", []) or []
+  if (release.get("permissions") or {}).get("contents") != "write":
+    findings.append("release job needs contents write")
+  if any(
+    "actions/upload-artifact" in str(step.get("uses", ""))
+    or "actions/download-artifact" in str(step.get("uses", ""))
+    for step in steps
   ):
-    findings.append("the package job runs no packaging step")
+    findings.append("release must use its locally verified archives")
+  markers = (
+    "gate_gpt_plugins.py --package-dir",
+    "gate_gpt_plugins.py --archive",
+    "gh release upload",
+  )
+  positions = [
+    next(
+      (index for index, step in enumerate(steps) if marker in step.get("run", "")), -1
+    )
+    for marker in markers
+  ]
+  if (
+    -1 in positions
+    or positions != sorted(positions)
+    or len(set(positions)) != len(positions)
+  ):
+    findings.append("release must build and verify archives before publishing")
   for marker in ("test_publish.py", "pytest", "publish.py"):
     if marker not in step_runs(jobs.get("publish-clankers-rules") or {}):
       findings.append(f"the publish job runs no {marker}")

@@ -19,14 +19,6 @@ def findings(document: dict) -> list[str]:
   return check_artifacts.findings_for(copy.deepcopy(document))
 
 
-def upload_step(document: dict) -> dict:
-  return next(
-    step
-    for step in document["jobs"]["package-gpt-plugins"]["steps"]
-    if str(step.get("uses", "")).startswith("actions/upload-artifact")
-  )
-
-
 def test_the_repository_workflow_passes():
   document = workflow()
   assert findings(document) == []
@@ -69,19 +61,30 @@ def test_a_pull_request_trigger_fails():
 
 def test_a_reworded_job_condition_fails():
   document = workflow()
-  document["jobs"]["package-gpt-plugins"]["if"] = "github.ref == 'refs/heads/main'"
+  document["jobs"]["release-gpt-plugins"]["if"] = "github.ref == 'refs/heads/main'"
   assert any(
-    "package-gpt-plugins lost its event condition" in finding
+    "release-gpt-plugins lost its event condition" in finding
     for finding in findings(document)
   )
 
 
-def test_a_named_artifact_upload_fails():
+def test_an_artifact_upload_fails():
   document = workflow()
-  upload_step(document)["with"]["name"] = "plugins"
-  assert any(
-    "filename as the artifact name" in finding for finding in findings(document)
+  document["jobs"]["release-gpt-plugins"]["steps"].append(
+    {"uses": "actions/upload-artifact@v7"}
   )
+  assert any("locally verified archives" in finding for finding in findings(document))
+
+
+def test_release_step_must_honor_changes():
+  document = workflow()
+  step = next(
+    step
+    for step in document["jobs"]["release-gpt-plugins"]["steps"]
+    if "gh release upload" in step.get("run", "")
+  )
+  step.pop("if")
+  assert any("honor the package change" in finding for finding in findings(document))
 
 
 def test_a_missing_publish_check_fails():
@@ -137,7 +140,7 @@ def test_publishing_guards_ignore_display_names():
   write_actions = copy.deepcopy(document)
   write_actions["jobs"]["release-gpt-plugins"]["permissions"]["actions"] = "write"
   leak_token = copy.deepcopy(document)
-  leak_token["jobs"]["package-gpt-plugins"]["env"] = {
+  leak_token["jobs"]["release-gpt-plugins"]["env"] = {
     "GH_TOKEN": "${{ secrets.GIST_TOKEN }}"
   }
   for changed in (interrupt, write_contents, write_actions, leak_token):

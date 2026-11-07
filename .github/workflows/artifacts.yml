@@ -19,190 +19,57 @@ permissions:
   contents: read
 
 jobs:
-  # One trigger feeds several jobs with different path interests, so a small job decides which side has work.
-  # Use the previous push as the base. Manual runs package main and never publish the Gist.
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      package: ${{ steps.detect.outputs.package }}
-      rules: ${{ steps.detect.outputs.rules }}
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Detect Changed Path Groups
-        id: detect
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_REF: ${{ github.ref }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-        # The path rules live in one script, which three change steps call.
-        run: python3 maintenance/workflows/changed_paths.py --step artifacts
-
-  package-gpt-plugins:
-    name: Package GPT Plugins
-    needs: changes
-    if: needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      # Cancel older runs in this group at job level.
-      group: Package-GPT-Plugins-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-
-      - name: Prep Runner
-        uses: ./.github/actions/prepare
-        with:
-          pip-cache-key: artifacts-package
-
-      - name: Install Validation Dependencies
-        run: uv pip install --system -r requirements.txt
-
-      - name: Check Workflow Contract
-        run: python maintenance/workflows/check_artifacts.py
-
-      - name: Build and Check Plugin Archives
-        run: python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir .
-
-      - name: Verify Archive
-        run: |
-          unzip -l gpt-plugins.zip
-          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
-
-      - name: Upload Plugin Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-plugins.zip
-          archive: false
-
-      - name: Upload gpt-quirks Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-quirks.zip
-          archive: false
-
-      - name: Upload gpt-handoff Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-handoff.zip
-          archive: false
-
-      - name: Upload gpt-planning Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-planning.zip
-          archive: false
-
-      - name: Upload gpt-github Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-github.zip
-          archive: false
-
-      - name: Upload gpt-display Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-display.zip
-          archive: false
-
-      - name: Upload gpt-question Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: gpt-question.zip
-          archive: false
-
-      - name: Upload nemoizer Archive
-        uses: actions/upload-artifact@v7
-        with:
-          path: nemoizer.zip
-          archive: false
-
-  publish-clankers-rules:
-    name: Publish Rules to Gist
-    needs: changes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      # A later main push supersedes an older pending run. Never interrupt a running reconciliation.
-      group: publish-clankers-rules-${{ github.repository }}
-      cancel-in-progress: false
-    steps:
-      - name: Check Out Pushed Rules
-        uses: actions/checkout@v7
-      - name: Prep Runner
-        uses: ./.github/actions/prepare
-        with:
-          pip-cache-key: artifacts-publish
-      - name: Install Test Dependencies
-        run: uv pip install --system pytest==9.1.1 pytest-xdist==3.6.1
-      - name: Test Reconciliation Fixtures Without GitHub Credentials
-        run: python3 -m pytest -q tests/maintenance/publish/test_publish.py
-      - name: Reconcile Secret Clankers-Rules Gist
-        # GIST_TOKEN needs Gists:write and repository Variables:write.
-        # Checkout uses GITHUB_TOKEN only. It cannot manage repository variables.
-        env:
-          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
-          GIST_ID: ${{ vars.GIST_ID }}
-        run: python3 maintenance/publish/publish.py
-
   release-gpt-plugins:
-    name: Release GPT Plugins
-    needs: [changes, package-gpt-plugins]
-    if: needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    name: Build and Release GPT Plugins
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     concurrency:
-      # Two main pushes serialize, so one release write never races another.
       group: Release-GPT-Plugins-${{ github.repository }}
       cancel-in-progress: false
-    # The release writes a tag and an asset, so this job alone carries the scope. Its `if`
-    # names a non-pull-request event, so no pull request code ever runs with it.
     permissions:
       contents: write
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
         with:
-          # The release step uses GH_TOKEN, so the checkout keeps no credentials.
+          fetch-depth: 0
           persist-credentials: false
-
+      - name: Detect Changed Path Groups
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: python3 maintenance/workflows/changed_paths.py --step artifacts
       - name: Prep Runner
+        if: steps.detect.outputs.package == 'true'
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: artifacts-release
-
       - name: Install Validation Dependencies
+        if: steps.detect.outputs.package == 'true'
         run: uv pip install --system -r requirements.txt
-
+      - name: Check Workflow Contract
+        if: steps.detect.outputs.package == 'true'
+        run: python maintenance/workflows/check_artifacts.py
+      - name: Build and Check Plugin Archives
+        if: steps.detect.outputs.package == 'true'
+        run: python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir .
+      - name: Verify Archives
+        if: steps.detect.outputs.package == 'true'
+        run: |
+          unzip -l gpt-plugins.zip
+          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
       - name: Read Manifest Version
         id: manifest
+        if: steps.detect.outputs.package == 'true'
         run: |
           set -eu
           version="$(python -c "import json; print(json.load(open('gpt-plugins/plugin.json'))['version'])")"
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
-
-      - name: Download Validated Archive
-        uses: actions/download-artifact@v8
-        with:
-          pattern: '*.zip'
-          merge-multiple: true
-          skip-decompress: true
-
-      - name: Verify Archive
-        run: |
-          unzip -l gpt-plugins.zip
-          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
-
       - name: Publish Release
+        if: steps.detect.outputs.package == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.manifest.outputs.version }}
@@ -217,3 +84,42 @@ jobs:
               --target "$GITHUB_SHA" \
               --notes "The GPT Plugins collection and seven single-skill plugins at version $VERSION. Archive checks do not prove ChatGPT import support."
           fi
+
+  publish-clankers-rules:
+    name: Publish Rules to Gist
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: publish-clankers-rules-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check Out Pushed Rules
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect Changed Path Groups
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: python3 maintenance/workflows/changed_paths.py --step artifacts
+      - name: Prep Runner
+        if: steps.detect.outputs.rules == 'true'
+        uses: ./.github/actions/prepare
+        with:
+          pip-cache-key: artifacts-publish
+      - name: Install Test Dependencies
+        if: steps.detect.outputs.rules == 'true'
+        run: uv pip install --system pytest==9.1.1 pytest-xdist==3.6.1
+      - name: Test Reconciliation Fixtures Without GitHub Credentials
+        if: steps.detect.outputs.rules == 'true'
+        run: python3 -m pytest -q tests/maintenance/publish/test_publish.py
+      - name: Reconcile Secret Clankers-Rules Gist
+        if: steps.detect.outputs.rules == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ vars.GIST_ID }}
+        run: python3 maintenance/publish/publish.py
