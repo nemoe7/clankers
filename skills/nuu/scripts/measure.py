@@ -912,6 +912,9 @@ def check_severities(project: Path) -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
   parser.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
   parser.add_argument("-k", "--scale", type=float, default=DEFAULT_SCALE)

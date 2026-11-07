@@ -61,7 +61,12 @@ os.execv(os.environ['REAL_GIT'], [os.environ['REAL_GIT'], *args])
 
 def git(repo, *arguments):
   return subprocess.run(
-    [GIT, *arguments], cwd=repo, capture_output=True, text=True, check=True
+    [GIT, *arguments],
+    cwd=repo,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=True,
   ).stdout.strip()
 
 
@@ -93,15 +98,15 @@ def fixture(tmp_path, scenario):
   seed = tmp_path / "seed"
   seed.mkdir()
   git(seed, "init", "--quiet", "--initial-branch=main")
-  (seed / "ARENA.md").write_text("old\n")
-  (seed / "owner.txt").write_text(OWNER_DATA)
+  (seed / "ARENA.md").write_text("old\n", encoding="utf-8")
+  (seed / "owner.txt").write_text(OWNER_DATA, encoding="utf-8")
   commit(seed, SUBJECT if scenario == "root" else "chore: base")
   if scenario == "merge":
     git(seed, "checkout", "--quiet", "-b", "side")
-    (seed / "side.txt").write_text("side\n")
+    (seed / "side.txt").write_text("side\n", encoding="utf-8")
     commit(seed, "side")
     git(seed, "checkout", "--quiet", "main")
-    (seed / "main.txt").write_text("main\n")
+    (seed / "main.txt").write_text("main\n", encoding="utf-8")
     commit(seed, "main")
     env = os.environ | {
       "GIT_AUTHOR_NAME": BOT_NAME,
@@ -129,7 +134,7 @@ def fixture(tmp_path, scenario):
   before = git(remote, "rev-parse", "refs/heads/main")
   parent = None if scenario in {"root", "merge"} else git(seed, "rev-parse", "HEAD^")
   if scenario == "race":
-    (seed / "human.txt").write_text("Concurrent target change.\n")
+    (seed / "human.txt").write_text("Concurrent target change.\n", encoding="utf-8")
     commit(seed, "human change", GIT_AUTHOR_NAME="Human", GIT_COMMITTER_NAME="Human")
   return remote, seed, before, parent
 
@@ -137,16 +142,18 @@ def fixture(tmp_path, scenario):
 def run_action(tmp_path, remote, seed, scenario, *, validate_only=False, payload=None):
   workspace = tmp_path / "source"
   workspace.mkdir(exist_ok=True)
-  (workspace / "rule.md").write_text("old\n" if scenario == "unchanged" else "new\n")
+  (workspace / "rule.md").write_text(
+    "old\n" if scenario == "unchanged" else "new\n", encoding="utf-8"
+  )
   if payload:
     for skill in payload.get("SKILLS", "").split():
       folder = workspace / "skills" / skill
       folder.mkdir(parents=True, exist_ok=True)
-      (folder / "SKILL.md").write_text(skill + "\n")
+      (folder / "SKILL.md").write_text(skill + "\n", encoding="utf-8")
     for name in payload.get("FILES", "").split():
       path = workspace / "github/workflows" / name
       path.parent.mkdir(parents=True, exist_ok=True)
-      path.write_text(name + "\n")
+      path.write_text(name + "\n", encoding="utf-8")
     git(workspace, "init", "--quiet", "--initial-branch=main")
     git(workspace, "add", "-A")
   home = tmp_path / "home"
@@ -154,7 +161,7 @@ def run_action(tmp_path, remote, seed, scenario, *, validate_only=False, payload
   binaries = tmp_path / "bin"
   binaries.mkdir()
   wrapper = binaries / "git"
-  wrapper.write_text(f"#!{sys.executable}\n" + WRAPPER)
+  wrapper.write_text(f"#!{sys.executable}\n" + WRAPPER, encoding="utf-8")
   wrapper.chmod(0o755)
   env = os.environ | {
     "HOME": str(home),
@@ -197,19 +204,22 @@ def run_action(tmp_path, remote, seed, scenario, *, validate_only=False, payload
     "GIT_COMMITTER_EMAIL",
   ):
     env.pop(name, None)
-  script = yaml.safe_load(ACTION.read_text())["runs"]["steps"][0]["run"]
+  script = yaml.safe_load(ACTION.read_text(encoding="utf-8"))["runs"]["steps"][0]["run"]
   result = subprocess.run(
     ["bash", "-c", script],
     cwd=workspace,
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     timeout=30,
   )
   log = tmp_path / "pushes.jsonl"
   pushes = (
-    [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+    [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    if log.exists()
+    else []
   )
   return result, pushes
 
@@ -267,7 +277,7 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   remote, seed, before, _ = fixture(tmp_path, "bot")
   stale = seed / ".agents/skills/nuu/stale.md"
   stale.parent.mkdir(parents=True)
-  stale.write_text("Stale target file\n")
+  stale.write_text("Stale target file\n", encoding="utf-8")
   commit(
     seed,
     "feat: add stale skill file",
@@ -280,7 +290,7 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   before = git(remote, "rev-parse", "refs/heads/main")
   retired = seed / ".agents/skills/arena-skill/SKILL.md"
   retired.parent.mkdir(parents=True)
-  retired.write_text("Retire this skill.\n")
+  retired.write_text("Retire this skill.\n", encoding="utf-8")
   commit(
     seed,
     "feat: add retired skill",
@@ -308,7 +318,7 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
     ):
       extra = source / "skills" / skill / repo_only
       extra.parent.mkdir(parents=True, exist_ok=True)
-      extra.write_text("repo-only\n")
+      extra.write_text("repo-only\n", encoding="utf-8")
   result, pushes = run_action(tmp_path, remote, seed, "bot", payload=payload)
   assert result.returncode == 0, result.stderr
   assert len(pushes) == 1
@@ -323,7 +333,7 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   for skill in payload["SKILLS"].split():
     assert (
       git(remote, "show", f"{after}:.agents/skills/{skill}/SKILL.md")
-      == (source / "skills" / skill / "SKILL.md").read_text().strip()
+      == (source / "skills" / skill / "SKILL.md").read_text(encoding="utf-8").strip()
     )
     assert git(
       remote, "ls-tree", "-r", "--name-only", after, f".agents/skills/{skill}"
@@ -331,7 +341,7 @@ def test_matching_domain_payloads_share_one_push(tmp_path):
   for name in payload["FILES"].split():
     assert (
       git(remote, "show", f"{after}:.github/workflows/{name}")
-      == (source / "github/workflows" / name).read_text().strip()
+      == (source / "github/workflows" / name).read_text(encoding="utf-8").strip()
     )
   assert git(remote, "show", f"{after}:owner.txt") == OWNER_DATA
 

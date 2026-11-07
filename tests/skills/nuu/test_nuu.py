@@ -27,6 +27,7 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
       cwd=tmp_path,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert process.returncode == expected, process.stderr or process.stdout
@@ -78,16 +79,23 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   collected = run("collect", expected=3)
   assert collected["suppressions"] and collected["marks"]
   assert collected["suppressions"][0]["rule"] == "ACC001"
-  css.write_text(before[css].decode() + "button:focus {outline: none !important;}\n")
+  css.write_text(
+    before[css].decode() + "button:focus {outline: none !important;}\n",
+    encoding="utf-8",
+  )
   assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"ACC201"}
   css.write_text(
-    before[css].decode() + "button:focus {outline: none;} /* nonuu: ACC201 */\n"
+    before[css].decode() + "button:focus {outline: none;} /* nonuu: ACC201 */\n",
+    encoding="utf-8",
   )
   assert not run("lint")["findings"]
-  css.write_text(before[css].decode() + "button:hover {padding: 12px 24px;}\n")
+  css.write_text(
+    before[css].decode() + "button:hover {padding: 12px 24px;}\n", encoding="utf-8"
+  )
   assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"ACC204"}
   css.write_text(
-    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: ACC204 */\n"
+    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: ACC204 */\n",
+    encoding="utf-8",
   )
   assert not run("lint")["findings"]
   css.write_bytes(before[css])
@@ -181,6 +189,7 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert sheet_extract.returncode == 0
@@ -205,6 +214,7 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert check_proc.returncode == 0
@@ -227,6 +237,7 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert ruler_proc.returncode == 0
@@ -273,6 +284,7 @@ def test_browser_rejects_unsafe_requests_before_dependency_checks(tmp_path):
       ["node", str(driver)],
       input=json.dumps({**base, **change}),
       text=True,
+      encoding="utf-8",
       capture_output=True,
       check=False,
       cwd=tmp_path,
@@ -291,7 +303,9 @@ def test_rendered_public_flow_and_live_evidence(tmp_path):
 
   if not os.environ.get("NEMO_UI_BROWSER_TEST"):
     pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  config = json.loads(
+    Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text(encoding="utf-8")
+  )
   markup = b"""<!doctype html><html><head><title>Tool fixture</title><style>
 body {margin:16px;font:16px sans-serif;background:#fff;color:#111}
 @media(prefers-color-scheme:dark){body{background:#111;color:#fff}}
@@ -363,11 +377,12 @@ byId('retry').addEventListener('click',submit);
     {"action": "focused", "selector": "#receipt"},
   ]
   flow_file = tmp_path / "flow.json"
-  flow_file.write_text(json.dumps(flow))
+  flow_file.write_text(json.dumps(flow), encoding="utf-8")
   edit_file = tmp_path / "edit.json"
   edited = "Transient fixture edit"
   edit_file.write_text(
-    json.dumps({"selector": "h1", "text": edited, "styles": {"color": "rgb(1, 2, 3)"}})
+    json.dumps({"selector": "h1", "text": edited, "styles": {"color": "rgb(1, 2, 3)"}}),
+    encoding="utf-8",
   )
   env = {**os.environ, **config.get("env", {})}
 
@@ -397,6 +412,7 @@ byId('retry').addEventListener('click',submit);
           *args,
         ],
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=False,
         env=env,
@@ -512,7 +528,9 @@ byId('retry').addEventListener('click',submit);
         != edit["after"]["elements"][0]["values"]["color"]
       )
       assert source.read_bytes() == markup
-      flow_file.write_text(json.dumps([{"action": "visible", "selector": "#absent"}]))
+      flow_file.write_text(
+        json.dumps([{"action": "visible", "selector": "#absent"}]), encoding="utf-8"
+      )
       failed = run("flow", "--flow", str(flow_file), expected=1)
       assert failed["findings"] and failed["captures"][0]["flow"]["status"] == "failed"
       assert all(
@@ -528,7 +546,9 @@ byId('retry').addEventListener('click',submit);
       for name in ("before_screenshot", "after_screenshot"):
         screenshot = Path(edit[name])
         shutil.copyfile(screenshot, artifact / screenshot.name)
-      (artifact / "report.json").write_text(json.dumps(report, indent=2))
+      (artifact / "report.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+      )
     finally:
       server.shutdown()
       thread.join()
@@ -544,7 +564,9 @@ def test_rendered_survey_dialog_actions_and_tooltip_stay_visible(tmp_path):
 
   if not os.environ.get("NEMO_UI_BROWSER_TEST"):
     pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  config = json.loads(
+    Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text(encoding="utf-8")
+  )
   markup = """<!doctype html><html><head><style>
 *,*::before,*::after {box-sizing:border-box}
 body {margin:0;background:#171717;color:#eee;font:14px sans-serif}
@@ -625,6 +647,7 @@ button {font:inherit;min-height:32px}
         input=json.dumps(request),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         env={**os.environ, **config.get("env", {})},
       )
@@ -670,7 +693,9 @@ def test_live_audit_inspects_open_overlays_at_every_house_viewport(tmp_path):
 
   if not os.environ.get("NEMO_UI_BROWSER_TEST"):
     pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  config = json.loads(
+    Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text(encoding="utf-8")
+  )
   page = tmp_path / "index.html"
   page.write_text(
     """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
@@ -741,6 +766,7 @@ dialog{width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 24px);
         input=json.dumps(request),
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         env={**os.environ, **config.get("env", {})},
       )
@@ -863,6 +889,7 @@ def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path)
           "--authorize-fetch",
         ],
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=False,
       )
@@ -935,6 +962,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
       str(spec_file),
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -966,6 +994,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
       "40,30,1,BIG,red",
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -987,6 +1016,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
       "1,1,10,10",
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1016,6 +1046,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
       }
     ),
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1094,6 +1125,7 @@ module.exports = {
       ["node", str(fake_nm / "browser.cjs")],
       input=json.dumps(req),
       text=True,
+      encoding="utf-8",
       capture_output=True,
       check=False,
       env={
@@ -1337,6 +1369,7 @@ module.exports = {
       str(board_out),
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1504,6 +1537,7 @@ def test_design_boards_and_html_typography(tmp_path):
       str(out_dir),
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1540,6 +1574,7 @@ def test_design_boards_and_html_typography(tmp_path):
       str(only_dir),
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1572,6 +1607,7 @@ def test_design_boards_and_html_typography(tmp_path):
       str(tmp_path / "bad-shot-out"),
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1602,6 +1638,7 @@ def test_design_boards_and_html_typography(tmp_path):
       str(tmp_path / "bad-style-out"),
     ],
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1774,6 +1811,7 @@ def test_design_boards_and_html_typography(tmp_path):
     ],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert collect_dev.returncode == 0, collect_dev.stdout + collect_dev.stderr
@@ -2380,6 +2418,7 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     [sys.executable, str(SCRIPT), "lint", "--project", str(lint_proj)],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   lint_payload = json.loads(lint_res.stdout)
@@ -2524,6 +2563,7 @@ def test_measure_review_severity_and_heading_boundary(tmp_path):
       cwd=tmp_path,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
 
@@ -2612,7 +2652,9 @@ def test_live_audit_checks_completed_feedback_for_each_click(tmp_path):
 
   if not os.environ.get("NEMO_UI_BROWSER_TEST"):
     pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
+  config = json.loads(
+    Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text(encoding="utf-8")
+  )
   markup = b"""<!doctype html><html><head><title>Feedback fixture</title></head>
   <body style="background:#222;color:white"><button id="copy">Copy</button>
   <button id="save">Save</button><button id="submit">Submit</button>
@@ -2646,7 +2688,7 @@ def test_live_audit_checks_completed_feedback_for_each_click(tmp_path):
 
   project = tmp_path / "project"
   (project / "docs").mkdir(parents=True)
-  (project / "docs" / "design.md").write_text("# Design\n")
+  (project / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
   flow_file = tmp_path / "flow.json"
   flow_file.write_text(
     json.dumps(
@@ -2664,7 +2706,8 @@ def test_live_audit_checks_completed_feedback_for_each_click(tmp_path):
           "input",
         )
       ]
-    )
+    ),
+    encoding="utf-8",
   )
   with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -2693,6 +2736,7 @@ def test_live_audit_checks_completed_feedback_for_each_click(tmp_path):
           str(tmp_path / "artifacts"),
         ],
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=False,
         env={**os.environ, **config.get("env", {})},

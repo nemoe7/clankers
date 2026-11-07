@@ -12,7 +12,12 @@ import pytest
 
 def git(repo: Path, *arguments: str) -> str:
   result = subprocess.run(
-    ["git", *arguments], cwd=repo, capture_output=True, text=True, check=True
+    ["git", *arguments],
+    cwd=repo,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=True,
   )
   return result.stdout.strip()
 
@@ -456,7 +461,9 @@ def test_ci_uses_one_read_only_job_and_saves_attempt_scoped_ledger():
   import yaml
 
   root = Path(changed_paths.__file__).resolve().parents[2]
-  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  workflow = yaml.safe_load(
+    (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+  )
   triggers = workflow.get("on", workflow.get(True))
   assert set(triggers["pull_request"]["types"]) >= {
     "opened",
@@ -480,7 +487,9 @@ def test_ci_keeps_pr_plugin_validation_on_matching_changes():
   import yaml
 
   root = Path(changed_paths.__file__).resolve().parents[2]
-  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  workflow = yaml.safe_load(
+    (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+  )
   steps = workflow["jobs"]["check"]["steps"]
   selector = next(step for step in steps if step.get("id") == "plugin_changes")
   validation = next(step for step in steps if step.get("name") == "Validate PR Plugins")
@@ -536,7 +545,9 @@ def test_ci_never_records_passes_after_dependency_install_fails():
   import yaml
 
   root = Path(changed_paths.__file__).resolve().parents[2]
-  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  workflow = yaml.safe_load(
+    (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+  )
   steps = workflow["jobs"]["check"]["steps"]
   by_id = {step.get("id"): step for step in steps if step.get("id")}
   assert "steps.dependencies.outcome == 'success'" in by_id["repo_check"]["if"]

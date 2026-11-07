@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 import gate_pr
+import pytest
 
 VALID_BODY = """## Summary
 
@@ -288,6 +290,7 @@ def test_ste_lint_selftest_passes():
     [sys.executable, str(gate_pr.STE_LINT), "--selftest"],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stdout + result.stderr
@@ -442,6 +445,7 @@ def run_hook(hook, repo, message_path, message):
     cwd=repo,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   return result, message_path.read_text(encoding="utf-8")
@@ -508,3 +512,48 @@ def test_installed_commit_hook():
   assert spec_limit and hook_limit, "subject limits must be in the spec and hook"
   assert int(spec_limit.group(1)) == int(hook_limit.group(1))
   print("Commit message hook checks passed without a runtime specification")
+
+
+def test_git_pipe_rejects_invalid_utf8_and_main_reconfigures_streams(
+  monkeypatch, tmp_path: Path
+) -> None:
+  fake_bin = tmp_path / "bin"
+  fake_bin.mkdir()
+  fake_git = fake_bin / "git"
+  fake_git.write_bytes(b"#!/bin/sh\nprintf '\\377\\376'\n")
+  fake_git.chmod(0o755)
+  monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
+  with pytest.raises(UnicodeDecodeError):
+    gate_pr._git("status")
+
+  calls: list[tuple[str, str]] = []
+
+  class FakeStream:
+    def reconfigure(self, *, encoding: str, errors: str) -> None:
+      calls.append((encoding, errors))
+
+    def write(self, _text: str) -> int:
+      return 0
+
+    def flush(self) -> None:
+      return None
+
+  monkeypatch.setattr(gate_pr.sys, "stdout", FakeStream())
+  monkeypatch.setattr(gate_pr.sys, "stderr", FakeStream())
+  body = tmp_path / "body.md"
+  body.write_text(
+    VALID_BODY + "- [x] Keep `\u201ccurly\u201d \u2192 \u6587\u8a00` intact.\n",
+    encoding="utf-8",
+  )
+  assert (
+    gate_pr.main(
+      [
+        "--pr-title",
+        "fix: decode child pipes as strict utf-8",
+        "--body-file",
+        str(body),
+      ]
+    )
+    == 0
+  )
+  assert calls == [("utf-8", "replace"), ("utf-8", "replace")]

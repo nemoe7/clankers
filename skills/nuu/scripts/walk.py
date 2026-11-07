@@ -226,6 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   args = build_parser().parse_args(argv)
   demo = Demo(demo_url := Demo().url_for(args.target))
   module = load_walk_module(args.script) if args.script is not None else None

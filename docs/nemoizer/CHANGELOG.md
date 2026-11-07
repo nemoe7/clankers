@@ -10,6 +10,7 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Reconfigure `markers.py` CLI output streams to UTF-8 on Windows consoles.
 - Align rotation guidance with explicit forms and current mappings.
 
 ### Removed

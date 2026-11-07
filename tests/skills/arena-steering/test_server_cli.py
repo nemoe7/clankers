@@ -689,6 +689,7 @@ def test_cli_command_group_help_executable(tmp_path: Path, group: str) -> None:
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode == 0, result.stderr
   assert f"usage: steer {group}" in result.stdout
@@ -858,6 +859,7 @@ assert.match(upcoming, /data-task-id="legacy"/);
     cwd=Path(__file__).resolve().parents[3],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1428,7 +1430,7 @@ def test_state_merge_removes_only_uploads_orphaned_by_deletions(tmp_path: Path) 
     _, merged = target_app.dispatch("POST", "/state/merge", change)
     assert merged["deleted"] == [message_id]
     assert copy.exists() is keep_copy
-    assert staged_path.read_text() == "pending"
+    assert staged_path.read_text(encoding="utf-8") == "pending"
     assert prefix_path.read_bytes() == b"unattached prefix"
     cursor = change["state_version"]
   _, assets = target_app.dispatch("GET", "/state/assets")
@@ -2643,8 +2645,10 @@ def test_v2_handoff_template_matches_the_archive() -> None:
 
 def test_direct_job_log_recipe_uses_the_fetchable_url() -> None:
   root = Path(__file__).resolve().parents[3]
-  recipe = (root / "skills/arena-steering/references/recipes/job-logs.md").read_text()
-  skill = (root / "skills/arena-steering/SKILL.md").read_text()
+  recipe = (root / "skills/arena-steering/references/recipes/job-logs.md").read_text(
+    encoding="utf-8"
+  )
+  skill = (root / "skills/arena-steering/SKILL.md").read_text(encoding="utf-8")
   assert "references/recipes/job-logs.md" in skill
   assert "steer job-log -j" in recipe
   assert "functions.fetch_page" in recipe
@@ -2663,7 +2667,14 @@ def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> 
   state_dir.mkdir()
 
   def git(*args: str) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+      ["git", *args],
+      cwd=repo,
+      check=True,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+    )
 
   git("init", "-b", "main")
   git("config", "user.email", "steer@example.test")
@@ -2850,6 +2861,7 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2863,6 +2875,7 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert rejected.returncode != 0
@@ -3426,7 +3439,9 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   runs = state_dir / "runs"
   runs.mkdir()
   marker = runs / "verify.exit"
-  (runs / "verify.json").write_text(json.dumps({"exit_path": str(marker)}))
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(marker)}), encoding="utf-8"
+  )
   store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   status, created = app.dispatch(
@@ -3451,7 +3466,7 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   code, output, _ = _run_cli(state_dir, "task", "gate-task")
   assert code == 0 and "Gates: verify" in output and "blocked" in output.lower()
   for result in ("1", "0"):
-    marker.write_text(result)
+    marker.write_text(result, encoding="utf-8")
     task = app.dispatch("GET", "/tasks/gate-task")[1]["task"]
     assert task["blocked"] is False
     assert task["running_gate"] is False
@@ -3491,7 +3506,7 @@ def test_dead_detached_run_gets_failure_marker_and_can_be_reused(
   assert not FileGateStatus(state_dir).is_running("dead")
   code, output, _ = _run_cli(state_dir, "run", "logs", "dead")
   assert code == 0 and "exit 1" in output
-  assert exit_path.read_text().strip() == "1"
+  assert exit_path.read_text(encoding="utf-8").strip() == "1"
   code, _, error = _run_cli(
     state_dir, "run", "start", "dead", "--", sys.executable, "-c", "pass"
   )
@@ -3513,10 +3528,10 @@ def test_live_run_identity_and_existing_verdict_are_preserved(tmp_path: Path) ->
   if identity:
     record["process_identity"] = ["wrong-start", identity[2]]
     assert not run_is_running(record)
-    assert exit_path.read_text().strip() == "1"
-  exit_path.write_text("0\n")
+    assert exit_path.read_text(encoding="utf-8").strip() == "1"
+  exit_path.write_text("0\n", encoding="utf-8")
   assert not run_is_running(record)
-  assert exit_path.read_text().strip() == "0"
+  assert exit_path.read_text(encoding="utf-8").strip() == "0"
 
 
 def test_zombie_run_is_marked_failed(
@@ -3532,7 +3547,7 @@ def test_zombie_run_is_marked_failed(
     "process_identity": ["123", "boot"],
   }
   assert not gates.run_is_running(record)
-  assert exit_path.read_text().strip() == "1"
+  assert exit_path.read_text(encoding="utf-8").strip() == "1"
 
 
 def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> None:
@@ -3547,13 +3562,13 @@ def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> Non
     out=io.StringIO(),
   )
   assert result == 0
-  record = json.loads((state_dir / "runs" / "checks.json").read_text())
+  record = json.loads((state_dir / "runs" / "checks.json").read_text(encoding="utf-8"))
   marker = Path(record["exit_path"])
   deadline = time.monotonic() + 2
   while not marker.exists() and time.monotonic() < deadline:
     time.sleep(0.02)
-  assert marker.read_text().strip() == "7"
-  assert "ancestry checked" in Path(record["log_path"]).read_text()
+  assert marker.read_text(encoding="utf-8").strip() == "7"
+  assert "ancestry checked" in Path(record["log_path"]).read_text(encoding="utf-8")
 
 
 def test_run_start_rolls_back_link_on_launch_failure(
@@ -3619,12 +3634,12 @@ def test_linked_run_blocks_until_verdict(tmp_path: Path, exit_code: int) -> None
     store.close()
   finally:
     release.touch()
-  record = json.loads((state_dir / "runs" / "verify.json").read_text())
+  record = json.loads((state_dir / "runs" / "verify.json").read_text(encoding="utf-8"))
   marker = Path(record["exit_path"])
   deadline = time.monotonic() + 10
   while not marker.exists() and time.monotonic() < deadline:
     time.sleep(0.02)
-  assert marker.read_text().strip() == str(exit_code)
+  assert marker.read_text(encoding="utf-8").strip() == str(exit_code)
   store, _, tasks, _ = cli.open_services(state_dir)
   assert not tasks.get_task("gate-task")[1]
   store.close()
@@ -3753,12 +3768,12 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
   first = app.dispatch("POST", "/uploads", request)
   assert first[0] == HTTPStatus.CREATED
   upload_path = Path(first[1]["attachment"]["path"])
-  assert upload_path.read_text() == "hello"
+  assert upload_path.read_text(encoding="utf-8") == "hello"
   assert app.dispatch("POST", "/uploads", request) == first
   assert len(list(upload_path.parent.iterdir())) == 1
   stale_id = hashlib.sha256(b"abandoned").hexdigest()
   orphan = upload_path.parent / f"request-{stale_id}-0-sample.txt"
-  orphan.write_text("incomplete")
+  orphan.write_text("incomplete", encoding="utf-8")
   store.close()
   store = SqliteStore(db_path)
   app = SteeringApp(store)
@@ -3775,7 +3790,9 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
     },
   )
   assert status == HTTPStatus.CREATED
-  assert Path(long_upload["attachment"]["path"]).read_text() == "long name"
+  assert (
+    Path(long_upload["attachment"]["path"]).read_text(encoding="utf-8") == "long name"
+  )
   store.close()
 
 
@@ -4044,7 +4061,14 @@ def test_cli_worktree_collect_prints_the_patch(
     ["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-m", "init"],
   )
   for args in commits:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+      ["git", *args],
+      cwd=repo,
+      check=True,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+    )
   monkeypatch.chdir(repo)
 
   code, out, _ = _run_cli(cli.resolve_state_dir(), "worktree", "add", "probe")
@@ -4099,7 +4123,9 @@ def test_cli_pr_update_blocks_session_local_ids(
   reports.submit_answer("decision-report", {"select": "Yes"}, answer_id="cc22dd")
   store.close()
   body_file = tmp_path / "body.md"
-  body_file.write_text(f"Body cites {token}.\n" if location == "body" else "Body.\n")
+  body_file.write_text(
+    f"Body cites {token}.\n" if location == "body" else "Body.\n", encoding="utf-8"
+  )
   title = f"Title cites {token}" if location == "title" else "Safe title"
 
   def forbidden_run(*_args, **_kwargs):
@@ -4126,7 +4152,9 @@ def test_cli_pr_update_allows_unrelated_longer_hex_strings(
   messages.send_message("Hidden note", msg_id="aa11bb", hidden=True)
   store.close()
   body_file = tmp_path / "body.md"
-  body_file.write_text("A longer SHA aaa11bb9 is not the message ID.\n")
+  body_file.write_text(
+    "A longer SHA aaa11bb9 is not the message ID.\n", encoding="utf-8"
+  )
   calls = []
 
   def fake_run(args, **_kwargs):
@@ -4134,7 +4162,9 @@ def test_cli_pr_update_allows_unrelated_longer_hex_strings(
     return subprocess.CompletedProcess(
       args,
       0,
-      stdout=json.dumps({"title": "Safe title", "body": body_file.read_text()}),
+      stdout=json.dumps(
+        {"title": "Safe title", "body": body_file.read_text(encoding="utf-8")}
+      ),
       stderr="",
     )
 
@@ -4162,7 +4192,7 @@ def test_cli_pr_update_blocks_retained_answer_after_report_removal(
   reports.remove_report("gone-report")
   store.close()
   body_file = tmp_path / "body.md"
-  body_file.write_text("The response was dd33ee.\n")
+  body_file.write_text("The response was dd33ee.\n", encoding="utf-8")
 
   def forbidden_run(*_args, **_kwargs):
     raise AssertionError("An unsafe update must not call GitHub")
@@ -4183,7 +4213,7 @@ def test_cli_pr_update_reports_api_failures(
 
   state_dir = cli.resolve_state_dir()
   body_file = tmp_path / "body.md"
-  body_file.write_text("Body.\n")
+  body_file.write_text("Body.\n", encoding="utf-8")
   calls = []
 
   def fake_run(args, **_kwargs):
@@ -4809,13 +4839,18 @@ def test_installer_reports_runtime_paths_and_reuses_package(tmp_path: Path) -> N
   }
   for _ in range(2):
     result = subprocess.run(
-      [str(SCRIPT)], env=env, capture_output=True, text=True, check=True
+      [str(SCRIPT)],
+      env=env,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=True,
     )
     paths = dict(line.split("=", 1) for line in result.stdout.strip().splitlines())
     assert Path(paths["CHROMIUM_BIN"]).is_file()
     assert Path(paths["CHROMIUM_LIB"]).is_dir()
     assert Path(paths["CHROMIUM_FONTS"]).is_dir()
-  assert (cache / "npm-calls").read_text().splitlines() == ["invoked"]
+  assert (cache / "npm-calls").read_text(encoding="utf-8").splitlines() == ["invoked"]
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -4849,6 +4884,7 @@ def test_demo_reset_command_restores_samples_without_restarting(tmp_path: Path) 
       [sys.executable, str(DEMO_PATH), "--reset", "--port", str(server.server_port)],
       cwd=ROOT,
       text=True,
+      encoding="utf-8",
       capture_output=True,
       timeout=15,
       check=False,
@@ -4941,6 +4977,7 @@ def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
           ],
           cwd=ROOT,
           text=True,
+          encoding="utf-8",
           capture_output=True,
           timeout=15,
           check=False,

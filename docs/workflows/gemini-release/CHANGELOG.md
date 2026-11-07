@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.1]
+
+### Fixed
+
+- Reconfigure `stdout` and `stderr` to UTF-8 in `gemini_release.py` (`github/workflows/gemini_release.py`).
+
 ## [0.1.0]
 
 ### Added

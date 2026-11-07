@@ -57,7 +57,12 @@ def write_output(output: Path, name: str, value: str) -> None:
 def git(arguments: Sequence[str], repo: str = ".") -> subprocess.CompletedProcess:
   """Run one git command without raising, so a missing ref stays a normal answer."""
   return subprocess.run(
-    ["git", *arguments], cwd=repo, capture_output=True, text=True, check=False
+    ["git", *arguments],
+    cwd=repo,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
   )
 
 
@@ -479,6 +484,9 @@ STEPS = {
 
 
 def main(argv: list[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--step", required=True, choices=sorted(STEPS))
   parser.add_argument("--repo", default=".")

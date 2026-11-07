@@ -23,6 +23,7 @@ def run_reload_in_child(request: pytest.FixtureRequest) -> bool:
     env={**os.environ, CHILD_ENV: "1"},
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     timeout=90,
   )

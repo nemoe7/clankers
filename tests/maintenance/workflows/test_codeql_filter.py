@@ -49,7 +49,7 @@ def test_missing_base_schedule_and_diff_failure_run_every_language(
       ),
     )
     module.main()
-  assert output.read_text().splitlines() == ["run=true"] * 4
+  assert output.read_text(encoding="utf-8").splitlines() == ["run=true"] * 4
 
 
 def test_diff_selection_disables_rename_detection(monkeypatch, tmp_path):
@@ -65,4 +65,4 @@ def test_diff_selection_disables_rename_detection(monkeypatch, tmp_path):
 
   monkeypatch.setattr(module.subprocess, "run", run)
   module.main()
-  assert output.read_text() == "run=false\n"
+  assert output.read_text(encoding="utf-8") == "run=false\n"

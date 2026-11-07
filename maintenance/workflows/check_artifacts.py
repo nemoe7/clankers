@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import yaml
@@ -128,6 +129,9 @@ def findings_for(document: dict) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--workflow", default=str(WORKFLOW))
   arguments = parser.parse_args(argv)

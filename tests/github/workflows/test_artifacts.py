@@ -8,7 +8,9 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_release_builds_once_and_verifies_before_publication():
-  jobs = yaml.safe_load((ROOT / ".github/workflows/artifacts.yml").read_text())["jobs"]
+  jobs = yaml.safe_load(
+    (ROOT / ".github/workflows/artifacts.yml").read_text(encoding="utf-8")
+  )["jobs"]
   assert set(jobs) == {"release-gpt-plugins", "publish-clankers-rules"}
   steps = jobs["release-gpt-plugins"]["steps"]
   positions = [

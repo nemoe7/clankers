@@ -391,6 +391,7 @@ def test_reports_copy_uses_only_confirmed_selection_method() -> None:
     capture_output=True,
     check=True,
     text=True,
+    encoding="utf-8",
   )
 
 
@@ -1233,6 +1234,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
       ["node", "--check", str(js_path)],
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert proc.returncode == 0, proc.stderr
@@ -1746,6 +1748,7 @@ assert.match(container.innerHTML, /linked-task/);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1796,6 +1799,7 @@ assert.doesNotMatch(html, /Live steering active/);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1857,6 +1861,7 @@ for (const item of [hidden, seen, sent, acked]) {
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1992,6 +1997,7 @@ assert.equal(stage.firstElementChild, null);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2528,6 +2534,7 @@ assert.equal(state.composerAttachments.length, 0);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2566,6 +2573,7 @@ assert.equal(context.messageMatchesQuery(message, 'zzz'), false);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2834,7 +2842,7 @@ def test_task_search_highlights_matches_and_clear_collapses_details() -> None:
 
 
 def test_task_gate_shimmer_uses_two_blue_shades() -> None:
-  css = (ASSETS_DIR / "style.css").read_text()
+  css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
   rule = css.split('.task-title[data-gate-running="true"] {', 1)[1].split("}", 1)[0]
   assert "#90caf9" in rule
   assert "#42a5f5" in rule
@@ -5975,6 +5983,7 @@ for (const stamp of ['2026-11-06T19:16:41Z', '2026-11-06T00:03:04Z']) {
     env={**os.environ, "TZ": "UTC", "LANG": "en_US.UTF-8"},
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -6077,6 +6086,7 @@ assert.equal(values.has('steer:composerState'), false);
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr

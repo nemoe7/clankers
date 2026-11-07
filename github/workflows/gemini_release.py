@@ -18,7 +18,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # Each prompt follows rules/refs/GUIDELINES.md section 4: one rule per line, imperative,
 # testable, no rationale. The shared boundary lines come first.
@@ -1475,6 +1475,9 @@ def approve(repo, branch):
 
 
 def main():
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   repo = os.environ["GITHUB_REPOSITORY"]
   if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
     raise ValueError("Invalid repository")

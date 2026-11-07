@@ -169,6 +169,9 @@ def dismiss_blocked_bash(state_dir: Path, entry_id: str) -> None:
 if __name__ == "__main__":
   import sys
 
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   if len(sys.argv) != 4:
     raise SystemExit("Expected state directory, full line, and blocked command")
   append_blocked_bash(

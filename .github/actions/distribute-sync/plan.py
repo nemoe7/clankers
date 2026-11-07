@@ -144,6 +144,9 @@ def push_targets(targets, script, environment):
 
 
 def main():
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   if sys.argv[1:] == ["--push"]:
     targets = json.loads(os.environ["TARGETS_JSON"])
     return push_targets(targets, Path(__file__).with_name("sync.sh"), dict(os.environ))
