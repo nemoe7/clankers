@@ -16,6 +16,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### arena-steering
+
+- Delay initial hover tooltips, with immediate keyboard focus and a brief rapid-switch window.
+
 #### rules
 
 - Specify the stale-report reminder command (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
