@@ -961,7 +961,8 @@ steer poll
         {
           "id": "S2E5P",
           "answer": {
-            "full_name": "unknown",
+            "first_name": "unknown",
+            "last_name": "unknown",
             "organization": "unknown",
             "role": "unknown",
           },
