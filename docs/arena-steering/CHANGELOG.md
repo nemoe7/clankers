@@ -6,7 +6,13 @@ This log has no Unreleased section.
 
 ## [2.2.3]
 
+### Added
+
+- Seed baseline prose under `skills/refs/arena-steering/` and add worked report-label examples in `references/report-labels.md`.
+
 ### Changed
+
+- Require final-decision labels on report questions and options, forbidding question strings and placeholder labels.
 
 - Decode child-process text pipes as strict UTF-8 and reconfigure CLI streams to UTF-8 on Windows.
 

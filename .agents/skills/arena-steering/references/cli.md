@@ -36,9 +36,9 @@ An attached message adds each file path as a home-relative task detail without a
 | `steer task [-d]` | First runnable task or `No current task.` | 0 on inspection, 1 on error |
 | `steer task ID` | Status, phase, scope, links, priority, size, and details | 0 on inspection, 1 on error |
 | `steer task new ID TITLE -z SIZE [-p PRIORITY] [-T TYPE]... [-S SCOPE] [-d DETAIL]... [-m MSG] [-r REPORT] [-k TASK] [-g GATE]` | New task record | 0 on creation, 1 on invalid input or cycle |
-| `steer task mod ID deets TEXT` | Updated task record | 0 on update, 1 on error |
-| `steer task mod ID deets rm NUMBER` | Updated task without that detail | 0 on update, 1 on error |
-| `steer task mod ID links TYPE LINK [-A DETAIL] [--delete NUMBER]` | Updated links and details | 0 on update, 1 on error |
+| `steer task mod ID deets TEXT -z SIZE` | Updated task record | 0 on update, 1 on error |
+| `steer task mod ID deets rm NUMBER -z SIZE` | Updated task without that detail | 0 on update, 1 on error |
+| `steer task mod ID links TYPE LINK [-A DETAIL] [--delete NUMBER] [-z SIZE]` | Updated links and details | 0 on update, 1 on error |
 | `steer task mod ID links rm TYPE LINK` | Updated task without that link | 0 on update, 1 on error |
 | `steer task mod ID FIELD VALUE` | Updated priority, size, status, title, type, or scope | 0 on update, 1 on error |
 | `steer task mod ID types TYPE ...` | Updated ordered phases | 0 on update, 1 on error |
@@ -70,19 +70,20 @@ Docs and code phases need a clean tree and a unique full Git commit hash. Operat
 | `steer report rm --stale` | `Dismissed reports: ...` | 0 on removal, 1 on error |
 
 The source is an ignored workspace file, not a commit artifact. Fielded questions use `<!-- question {"id":"...","label":"..."} -->` and labelled options. Mark at least one option in each radio or checkbox field with `(x)` or `[x]`.
+Use the final decision on every question and option label, and NEVER use question strings or generic words like Decision or Answer. See [report-labels.md](report-labels.md) for worked examples.
 
 For example:
 
 ```markdown
-<!-- question {"id":"reuse","label":"How should the validation logic be reused?"} -->
+<!-- question {"id":"reuse","label":"Validation logic reuse method"} -->
 How should the validation logic be reused?
-- (x) Extract a shared validation helper. <!-- option {"label":"Extract a shared validation helper"} -->
-- ( ) Duplicate the validation logic. <!-- option {"label":"Duplicate the validation logic"} -->
+- (x) Extract a shared validation helper. <!-- option {"label":"Extract a shared validation helper."} -->
+- ( ) Duplicate the validation logic. <!-- option {"label":"Duplicate the validation logic."} -->
 
-<!-- question {"id":"clause","label":"Should the rule forbid direct pushes?"} -->
+<!-- question {"id":"clause","label":"Direct-push rule on protected branches"} -->
 Should the rule forbid direct pushes?
-- (x) Approve forbidding direct pushes. <!-- option {"label":"Approve forbidding direct pushes"} -->
-- ( ) Reject forbidding direct pushes. <!-- option {"label":"Reject forbidding direct pushes"} -->
+- (x) Approve forbidding direct pushes. <!-- option {"label":"Forbid direct pushes to protected branches."} -->
+- ( ) Reject forbidding direct pushes. <!-- option {"label":"Keep direct pushes allowed on protected branches."} -->
 ```
 
 `(x)` marks a default, not an answer. After the first answer, `steer report pub` rejects body edits under the same ID. Removal detaches task links but retains task details and answer history.

@@ -71,7 +71,11 @@ steer report rm <id|--stale>
 
 - Publish agent handoffs and cross-session specifications as unfielded Steering reports.
 - Every report field requires a statement `label` before its options (`- ( )`, `- (x)`, `- [ ]`, `- [x]`) or after `label: ___`.
-- Use the full question as each report field label, and give each option a specific, self-identifying label.
+- Set each question label to the final decision subject and each option label to the chosen outcome.
+- NEVER use question text or generic labels (`Decision`, `Answer`, `Option`, `Approve`).
+  - Wrong: `Decision: Answer`
+  - Right: `The method we should use: Share one helper class between tabs.`
+- Read [references/report-labels.md](references/report-labels.md) for worked examples across field types.
 - Write report option text as an imperative action, not a first-person statement or permission request.
 - Field IDs default to kebab-case of `label` with trailing `-` stripped, or come from an optional `<!-- field-id -->` comment above the field.
 - Radio (`choice`) and checkbox (`checkbox`) fields automatically render a built-in `"Something else..."` free-form input in the web UI.
