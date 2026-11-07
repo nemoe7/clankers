@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Ignore seven reviewed historical test-fixture findings in Gitleaks (`.gitleaksignore`).
 - Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
 - Expand Markdownlint coverage and remove the fixed scope guard (`.markdownlint-cli2.jsonc`, `maintenance/check.py`).
 
