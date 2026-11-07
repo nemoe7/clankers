@@ -30,11 +30,6 @@ def upload_step(document: dict) -> dict:
 def test_the_repository_workflow_passes():
   document = workflow()
   assert findings(document) == []
-  runs = check_artifacts.step_runs(document["jobs"]["validate-gpt-plugins"])
-  assert (
-    "skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts"
-    in runs
-  )
 
 
 def test_the_command_reports_the_workflow(capsys):
@@ -64,10 +59,12 @@ def test_a_missing_push_path_fails():
   )
 
 
-def test_a_changed_pull_request_path_set_fails():
+def test_a_pull_request_trigger_fails():
   document = workflow()
-  document["on"]["pull_request"]["paths"].append("rules/**")
-  assert any("pull request paths changed" in finding for finding in findings(document))
+  document["on"]["pull_request"] = {"branches": ["**"]}
+  assert any(
+    "must not run on pull requests" in finding for finding in findings(document)
+  )
 
 
 def test_a_reworded_job_condition_fails():
@@ -77,14 +74,6 @@ def test_a_reworded_job_condition_fails():
     "package-gpt-plugins lost its event condition" in finding
     for finding in findings(document)
   )
-
-
-def test_a_validation_job_that_packages_fails():
-  document = workflow()
-  document["jobs"]["validate-gpt-plugins"]["steps"].append(
-    {"name": "Zip", "run": "zip -r gpt-plugins.zip gpt-plugins"}
-  )
-  assert any("must not zip an archive" in finding for finding in findings(document))
 
 
 def test_a_named_artifact_upload_fails():
@@ -148,7 +137,7 @@ def test_publishing_guards_ignore_display_names():
   write_actions = copy.deepcopy(document)
   write_actions["jobs"]["release-gpt-plugins"]["permissions"]["actions"] = "write"
   leak_token = copy.deepcopy(document)
-  leak_token["jobs"]["validate-gpt-plugins"]["env"] = {
+  leak_token["jobs"]["package-gpt-plugins"]["env"] = {
     "GH_TOKEN": "${{ secrets.GIST_TOKEN }}"
   }
   for changed in (interrupt, write_contents, write_actions, leak_token):

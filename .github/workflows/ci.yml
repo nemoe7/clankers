@@ -75,6 +75,30 @@ jobs:
           printf '%s\n' "$PR_BODY" > "$PR_BODY_FILE"
           python maintenance/pr/gate_pr.py --range "$PR_BASE..$PR_HEAD" --pr-title "$PR_TITLE" --body-file "$PR_BODY_FILE"
 
+      - name: Select PR Plugin Validation
+        id: plugin_changes
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && github.event_name == 'pull_request' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: python maintenance/workflows/changed_paths.py --step artifacts
+
+      - name: Validate PR Plugins
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.plugin_changes.outputs.package == 'true' }}
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          python maintenance/workflows/check_artifacts.py
+          python maintenance/gpt_plugins/gate_gpt_plugins.py --self-check
+          git show "$PR_BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
+          changed="$(git diff --name-only "$PR_BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts)"
+          if [ -n "$changed" ]; then
+            python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
+          else
+            python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
+          fi
+
       - name: Check Module Versions
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         env:

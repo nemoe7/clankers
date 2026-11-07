@@ -475,6 +475,28 @@ def test_ci_uses_one_read_only_job_and_saves_attempt_scoped_ledger():
   assert caches and "github.run_attempt" in caches[0]["with"]["key"]
 
 
+def test_ci_keeps_pr_plugin_validation_on_matching_changes():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
+  steps = workflow["jobs"]["check"]["steps"]
+  selector = next(step for step in steps if step.get("id") == "plugin_changes")
+  validation = next(step for step in steps if step.get("name") == "Validate PR Plugins")
+  assert "github.event_name == 'pull_request'" in selector["if"]
+  assert selector["env"]["PR_BASE"] == "${{ github.event.pull_request.base.sha }}"
+  assert "steps.plugin_changes.outputs.package == 'true'" in validation["if"]
+  for marker in (
+    "check_artifacts.py",
+    "--self-check",
+    "--base-manifest",
+    "gate_gpt_plugins.py",
+  ):
+    assert marker in validation["run"]
+  assert "skills/nemoizer/references" in validation["run"]
+  assert "actions/upload-artifact" not in str(steps)
+
+
 def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatch):
   from types import SimpleNamespace
 

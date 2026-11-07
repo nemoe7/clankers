@@ -1,9 +1,4 @@
-"""Contract check for the artifacts workflow, which its own jobs run.
-
-The validation and packaging jobs each asserted this contract in an inline heredoc.
-Both now call this script, so one copy of the rule covers the pull request check.
-It also covers the main-branch package run.
-"""
+"""Contract check for the privileged artifacts workflow."""
 
 from __future__ import annotations
 
@@ -26,16 +21,6 @@ PUSH_PATHS = (
   "rules/**",
   "!rules/refs/**",
   ".github/workflows/artifacts.yml",
-)
-PULL_PATHS = (
-  "gpt-plugins/**",
-  "maintenance/gpt_plugins/**",
-  "skills/nemoizer/**",
-  "skills/refs/nemoizer/**",
-  ".github/workflows/artifacts.yml",
-)
-VALIDATE_IF = (
-  "github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'"
 )
 PACKAGE_IF = (
   "needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main'"
@@ -60,14 +45,13 @@ def findings_for(document: dict) -> list[str]:
   findings = audit_document(WORKFLOW.name, document)
   triggers = triggers_of(document)
   push = triggers.get("push") or {}
-  pull = triggers.get("pull_request") or {}
   if push.get("branches") != ["main"]:
     findings.append(f"push must target main alone, found {push.get('branches')}")
   for entry in PUSH_PATHS:
     if entry not in (push.get("paths") or []):
       findings.append(f"push paths miss {entry}")
-  if set(pull.get("paths") or []) != set(PULL_PATHS):
-    findings.append(f"pull request paths changed, found {pull.get('paths')}")
+  if "pull_request" in triggers:
+    findings.append("artifact publication must not run on pull requests")
   if "workflow_dispatch" not in triggers:
     findings.append("workflow_dispatch is missing")
 
@@ -92,7 +76,6 @@ def findings_for(document: dict) -> list[str]:
     ):
       findings.append(f"{name} must not use the rules publishing token")
   expected = (
-    ("validate-gpt-plugins", VALIDATE_IF),
     ("package-gpt-plugins", PACKAGE_IF),
     ("publish-clankers-rules", PUBLISH_IF),
   )
@@ -103,19 +86,6 @@ def findings_for(document: dict) -> list[str]:
   for name in ("package-gpt-plugins", "publish-clankers-rules"):
     if (jobs.get(name) or {}).get("needs") != "changes":
       findings.append(f"{name} must need the changes job")
-
-  validate = jobs.get("validate-gpt-plugins") or {}
-  validate_runs = step_runs(validate)
-  for marker in ("gate_gpt_plugins.py", "--base-manifest", "--self-check"):
-    if marker not in validate_runs:
-      findings.append(f"the validation job runs no {marker}")
-  for step in validate.get("steps", []) or []:
-    if not isinstance(step, dict):
-      continue
-    if str(step.get("run", "")).strip().startswith("zip -r "):
-      findings.append("the validation job must not zip an archive")
-    if str(step.get("uses", "")).startswith("actions/upload-artifact"):
-      findings.append("the validation job must not upload an artifact")
 
   package = jobs.get("package-gpt-plugins") or {}
   uploads = [
@@ -165,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
   if findings:
     print(f"{len(findings)} artifacts contract violation(s)")
     return 1
-  print(f"{path}: PR validation, main package, and rules publish are as required.")
+  print(f"{path}: Main package and rules publish are as required.")
   return 0
 
 

@@ -342,22 +342,18 @@ def test_ci_triggers_main_push_and_all_branch_pull_requests():
 def test_artifacts_triggers_keep_both_path_families():
   triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
-  pr_paths = triggers["pull_request"]["paths"]
-  assert "gpt-plugins/**" in push_paths and "gpt-plugins/**" in pr_paths
+  assert "gpt-plugins/**" in push_paths
   assert "rules/**" in push_paths and "!rules/refs/**" in push_paths
-  # Rule publishing never runs from a pull request.
-  assert not any(path.startswith("rules/") for path in pr_paths)
+  assert "pull_request" not in triggers
   assert ".github/workflows/artifacts.yml" in push_paths
   assert "workflow_dispatch" in triggers
 
 
 def test_artifacts_job_gating_preserves_the_original_semantics():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  validate = jobs["validate-gpt-plugins"]["if"]
   package = jobs["package-gpt-plugins"]["if"]
   publish = jobs["publish-clankers-rules"]["if"]
-  assert "github.event_name == 'pull_request'" in validate
-  assert "needs.changes.outputs.package == 'true'" in validate
+  assert "validate-gpt-plugins" not in jobs
   assert "github.ref == 'refs/heads/main'" in package
   assert "github.event_name != 'pull_request'" in package
   assert "needs.changes.outputs.package == 'true'" in package
@@ -370,10 +366,6 @@ def test_artifacts_job_gating_preserves_the_original_semantics():
 
 def test_artifacts_job_concurrency_moves_to_job_level():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  assert jobs["validate-gpt-plugins"]["concurrency"] == {
-    "group": "Validate-GPT-Plugins-${{ github.ref }}",
-    "cancel-in-progress": True,
-  }
   assert jobs["package-gpt-plugins"]["concurrency"] == {
     "group": "Package-GPT-Plugins-${{ github.ref }}",
     "cancel-in-progress": True,
@@ -647,9 +639,8 @@ def test_guarded_from_pull_request_reads_the_condition():
 def test_artifacts_excludes_retired_proxy_publishing():
   triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
-  pr_paths = triggers["pull_request"]["paths"]
   assert not any("arena-skill" in entry for entry in push_paths)
-  assert not any("arena-skill" in entry for entry in pr_paths)
+  assert "pull_request" not in triggers
   assert triggers["workflow_dispatch"] == {}
 
 
