@@ -1031,7 +1031,13 @@ class TaskService:
 
   @_transactional_task_write
   def mod_links_add(
-    self, task_id: str, link_id: str, *, link_type: str | None = None
+    self,
+    task_id: str,
+    link_id: str,
+    *,
+    link_type: str | None = None,
+    append_detail: str | None = None,
+    remove_detail: int | None = None,
   ) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned = link_id.strip()
@@ -1067,8 +1073,19 @@ class TaskService:
         f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
       )
 
+    details = list(target.details)
+    if remove_detail is not None:
+      if remove_detail < 1 or remove_detail > len(details):
+        raise IndexError(
+          f"Detail number {remove_detail} out of range (1..{len(details)})"
+        )
+      details.pop(remove_detail - 1)
+    if append_detail is not None:
+      details.append(append_detail)
+    self._validate_input_details(details, target.details)
     updated = self._copy_task(
       target,
+      details=details,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -1078,6 +1095,9 @@ class TaskService:
     )
     added_msg_ids = [msg_id for msg_id in msg_ids if msg_id not in target.msg_ids]
     updated = self._with_message_attachments(updated, added_msg_ids)
+    self._validate_message_link_details(target, updated, added_msg_ids)
+    if remove_detail is not None or added_msg_ids:
+      self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     self._replace_in_queue(queue, updated)
     return updated
@@ -1244,6 +1264,7 @@ class TaskService:
       msg_id for msg_id in updated.msg_ids if msg_id not in target.msg_ids
     ]
     updated = self._with_message_attachments(updated, added_msg_ids)
+    self._validate_message_link_details(target, updated, added_msg_ids)
     self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     if finishing:
@@ -1288,6 +1309,13 @@ class TaskService:
           raise ValueError(
             f"Task detail exceeds {TASK_DETAIL_MAX_LEN} characters ({len(text)}): {text!r}"
           )
+
+  @staticmethod
+  def _validate_message_link_details(
+    previous: Task, updated: Task, added_msg_ids: list[str]
+  ) -> None:
+    if added_msg_ids and Counter(previous.details) == Counter(updated.details):
+      raise ValueError("Adding a message link requires an added or deleted task detail")
 
   @staticmethod
   def _validate_details(task: Task) -> None:

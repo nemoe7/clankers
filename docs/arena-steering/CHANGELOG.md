@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Require an atomic detail change when linking a new message to an existing task.
+
 - Match report answer scroll fades to the report picker.
 
 - Keep message paging consistent when search changes during an older request.

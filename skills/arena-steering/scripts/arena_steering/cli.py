@@ -532,7 +532,7 @@ def _run_ack(
   for item in acked:
     if isinstance(item, Message):
       print("If msg asks for work or details, add to task", file=out)
-      print(f"steer task mod <task-id> links msg {item.id}", file=out)
+      print(f"steer task mod <task-id> links msg {item.id} -A '<detail>'", file=out)
     if isinstance(item, ReportAnswer):
       for task_id, details in item.task_details_added.items():
         print(f"Added to task {task_id}:", file=out)
@@ -693,14 +693,33 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
           "Usage: steer task mod <id> links rm <msg|report|task|gate> <id>"
         )
       updated = tasks.mod_links_rm(task_id, rest[1], rest[2])
-    elif len(rest) == 2 and rest[0].lower() in {"msg", "report", "task", "dep", "gate"}:
-      updated = tasks.mod_links_add(task_id, rest[1], link_type=rest[0])
     else:
-      if len(rest) != 1:
+      link_parser = argparse.ArgumentParser(prog="steer task mod links")
+      link_parser.add_argument("link", nargs="+")
+      link_parser.add_argument("-A", "--append", dest="append_detail")
+      link_parser.add_argument("--delete", dest="remove_detail", type=int)
+      parsed = link_parser.parse_args(rest)
+      if len(parsed.link) == 2 and parsed.link[0].lower() in {
+        "msg",
+        "report",
+        "task",
+        "dep",
+        "gate",
+      }:
+        link_type, link_id = parsed.link
+      elif len(parsed.link) == 1:
+        link_type, link_id = None, parsed.link[0]
+      else:
         raise ValueError(
-          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id>"
+          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> [-A detail] [--delete number]"
         )
-      updated = tasks.mod_links_add(task_id, rest[0])
+      updated = tasks.mod_links_add(
+        task_id,
+        link_id,
+        link_type=link_type,
+        append_detail=parsed.append_detail,
+        remove_detail=parsed.remove_detail,
+      )
   elif field == "deps":
     if rest[0] == "rm":
       if len(rest) != 2:

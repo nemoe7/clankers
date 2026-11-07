@@ -170,6 +170,7 @@ Arena-owned detached runs and exact platform utility calls do not spend the six-
 - Task details are unique after trimming whitespace.
 - Use `steer task mod ID deets TEXT` to append a detail and `steer task mod ID deets rm NUMBER` to remove one. The CLI displays detail numbers from 1.
 - Use `steer task mod ID links [msg|report|task|gate] LINK` to add a link. Use `steer task mod ID links rm TYPE LINK` to remove one, or `steer task mod ID deps [rm] TASK` for dependencies.
+- A new message link on an existing task needs a detail change: add `-A DETAIL` or `--delete NUMBER`. A new attachment path also counts.
 - Message IDs use six lowercase hexadecimal characters. Legacy parent IDs name existing messages.
 - Typed parent refs name existing messages, tasks, or reports. Both parent lists deduplicate in order.
 - Blocking messages move from `sent` to `seen` to `acked`. Non-blocking messages need no acknowledgement.

@@ -117,7 +117,7 @@ def test_cli_task_reminders_for_ack_and_nonempty_read(tmp_path: Path) -> None:
     assert "steer task mod <task-id> links msg <message-id>" not in out
     code, out, err = _run_cli(state_dir, "ack", MSG_ID_CLI, "Working on it")
     assert (code, err) == (0, "")
-    assert f"steer task mod <task-id> links msg {MSG_ID_CLI}" in out
+    assert f"steer task mod <task-id> links msg {MSG_ID_CLI} -A '<detail>'" in out
     assert "If msg asks for work or details, add to task" in out  # nonemo: NMT100
     assert "add it to a task" not in _run_cli(state_dir, "read")[1]
   finally:
@@ -3187,9 +3187,9 @@ def test_cli_ack_batches_messages_and_report_answers(tmp_path: Path) -> None:
   assert out == (
     "ok ab1001 ab1002 ab1003\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1001\n"
+    "steer task mod <task-id> links msg ab1001 -A '<detail>'\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1002\n"
+    "steer task mod <task-id> links msg ab1002 -A '<detail>'\n"
   )
   store, _, _, reports = cli.open_services(state_dir)
   assert store.get_message("ab1001").acks == ["One shared reply"]
@@ -3224,7 +3224,7 @@ def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> N
   assert code == 0, err
   assert out == (
     "ok ab1011\nIf msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1011\n"
+    "steer task mod <task-id> links msg ab1011 -A '<detail>'\n"
   )
   store, messages, _, _ = cli.open_services(state_dir)
   assert store.get_message("ab1011").acks == ["Received"]
@@ -3254,7 +3254,7 @@ def test_cli_ack_rejects_id_only_reply_and_keeps_message_pending() -> None:
     assert code == 0, err
     assert out == (
       "ok ab1014\nIf msg asks for work or details, add to task\n"
-      "steer task mod <task-id> links msg ab1014\n"
+      "steer task mod <task-id> links msg ab1014 -A '<detail>'\n"
     )
     assert store.get_message("ab1014").acks == ["Reviewed the change"]
   finally:
@@ -4912,3 +4912,27 @@ def test_installed_launcher_suggests_bare_steer_without_blocking(
   assert ("Use bare `steer`" in text) == warn
   if warn:
     assert "It works without the full path." in text
+
+
+def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, messages, tasks, _ = cli.open_services(state_dir)
+  messages.send_message("Follow up", msg_id="ab1234", blocking=False)
+  messages.send_message("Another", msg_id="ab1235", blocking=False)
+  tasks.create_task("work", "Work", size=2, details=["First", "Second"])
+  store.close()
+  code, _, err = _run_cli(state_dir, "task", "mod", "work", "links", "msg", "ab1234")
+  assert code != 0 and "detail" in err
+  code, _, err = _run_cli(
+    state_dir, "task", "mod", "work", "links", "msg", "ab1234", "-A", "Follow up"
+  )
+  assert (code, err) == (0, "")
+  code, _, err = _run_cli(
+    state_dir, "task", "mod", "work", "links", "msg", "ab1235", "--delete", "2"
+  )
+  assert (code, err) == (0, "")
+  store, _, tasks, _ = cli.open_services(state_dir)
+  task = tasks.get_task("work")[0]
+  assert task.msg_ids == ["ab1234", "ab1235"]
+  assert task.details == ["First", "Follow up"]
+  store.close()

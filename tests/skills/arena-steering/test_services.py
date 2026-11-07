@@ -1549,10 +1549,10 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
     tasks.get_task("plain")[0].priority,
   ) == (True, "P5")
   tasks.mod_links_rm("plain", "msg", "ab1020")
-  tasks.mod_links_add("plain", "ab1020", link_type="msg")
+  tasks.mod_links_add("plain", "ab1020", link_type="msg", append_detail="Relinked.")
   assert (tasks.get_task("plain")[0].priority, tasks.get_task("plain")[0].details) == (
     "P5",
-    ["Inspect.", *paths],
+    ["Inspect.", *paths, "Relinked."],
   )
   reopened.close()
 
@@ -2581,4 +2581,28 @@ def test_dependency_priority_rejects_lower_priority_but_not_larger_size():
     tasks.patch_task("later", {"priority": "P1"})
   assert tasks.get_task("urgent")[0].priority == "P2"
   assert tasks.get_task("later")[0].priority == "P3"
+  store.close()
+
+
+def test_existing_task_message_links_require_atomic_detail_change(
+  tmp_path: Path,
+) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("New work", msg_id="abc123", blocking=False)
+  tasks = app.tasks
+  tasks.create_task("work", "Work", size=2, details=["First", "Second"])
+  with pytest.raises(ValueError, match="detail"):
+    tasks.mod_links_add("work", "abc123", link_type="msg")
+  with pytest.raises(ValueError, match="detail"):
+    tasks.patch_task("work", {"msg_ids": ["abc123"], "details": ["Second", "First"]})
+  assert tasks.get_task("work")[0].msg_ids == []
+  linked = tasks.patch_task("work", {"msg_ids": ["abc123"], "details": ["First"]})
+  assert linked.msg_ids == ["abc123"]
+  assert linked.details == ["First"]
+  tasks.mod_links_add("work", "abc123", link_type="msg")
+  app.messages.send_message("More work", msg_id="abc124", blocking=False)
+  linked = tasks.mod_links_add("work", "abc124", link_type="msg", append_detail="More")
+  assert linked.msg_ids == ["abc123", "abc124"]
+  assert linked.details == ["First", "More"]
   store.close()
