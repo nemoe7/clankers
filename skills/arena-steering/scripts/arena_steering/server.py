@@ -34,14 +34,14 @@ from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
 from .display_paths import home_relative
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
-from .markdown import render_markdown, render_report_markdown
-from .markdown_fields import parse_report_markdown
+from .markdown import render_markdown
 from .models import Attachment, Task
 from .services import (
   POLL_FRESH_SECONDS,
   MessageService,
   ReportService,
   TaskService,
+  serialize_report_blocks,
   with_bible_read,
 )
 from .store import STATE_TABLES, SqliteStore
@@ -1534,22 +1534,7 @@ class SteeringApp:
     if cached is not None and cached[0] == report.body:
       payload["blocks"] = cached[1]
       return payload
-    blocks, _ = parse_report_markdown(report.body)
-    serialized_blocks: list[dict[str, Any]] = []
-    for btype, val in blocks:
-      if btype == "markdown":
-        block_headings: list[dict[str, Any]] = []
-        block_html = render_report_markdown(val, headings=block_headings)
-        serialized_blocks.append(
-          {
-            "type": "markdown",
-            "markdown": val,
-            "html": block_html,
-            "headings": block_headings,
-          }
-        )
-      else:
-        serialized_blocks.append({"type": "field", "field": val.to_dict()})
+    serialized_blocks = serialize_report_blocks(report.body)
     if getattr(report, "status", "") != "dismissed":
       _REPORT_RENDER_CACHE[report.id] = (report.body, serialized_blocks)
     payload["blocks"] = serialized_blocks

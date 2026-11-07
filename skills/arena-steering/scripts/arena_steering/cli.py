@@ -1757,7 +1757,6 @@ def _run_report(
       allow_unparsed_markers=parsed.allow_unparsed_markers,
       source_file=str(source_path.resolve()),
     )
-    SteeringApp(store).verify_published_report(report)
     print(
       f"Published {report.id}, {len(report.fields)} fields. Verified.",
       file=out,

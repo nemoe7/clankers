@@ -43,6 +43,23 @@ from .ports import (
   UtcClock,
 )
 
+
+def serialize_report_blocks(body: str) -> list[dict[str, Any]]:
+  """Render report blocks without constructing a web application."""
+  blocks, _ = parse_report_markdown(body)
+  serialized = []
+  for kind, value in blocks:
+    if kind == "markdown":
+      headings: list[dict[str, Any]] = []
+      rendered = render_report_markdown(value, headings=headings)
+      serialized.append(
+        {"type": "markdown", "markdown": value, "html": rendered, "headings": headings}
+      )
+    else:
+      serialized.append({"type": "field", "field": value.to_dict()})
+  return serialized
+
+
 REPORT_IDLE_INTERVAL = timedelta(minutes=30)
 POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
@@ -1450,7 +1467,7 @@ class ReportService:
   ) -> Report:
     if not isinstance(source_file, str) or "\n" in source_file or "\r" in source_file:
       raise ValueError("Report source file must be a single-line path")
-    blocks, fields = parse_report_markdown(body)
+    _, fields = parse_report_markdown(body)
     if any(not field.annotated for field in fields):
       raise ValueError("Fielded reports require question and option comments")
     for field in fields:
@@ -1459,11 +1476,7 @@ class ReportService:
     warnings = unparsed_strike_lines(body)
     if warnings and not allow_unparsed_markers:
       raise ValueError(f"Possible unparsed strike markers on lines: {warnings}")
-    rendered = [
-      render_report_markdown(value)
-      for block_type, value in blocks
-      if block_type == "markdown"
-    ]
+    rendered = serialize_report_blocks(body)
     saved = self._publish_report(report_id, title, body, fields, source_file)
     verified = self._reports.get_report(report_id)
     if (
@@ -1475,12 +1488,9 @@ class ReportService:
       or verified.source_file != source_file
     ):
       raise RuntimeError("Report publication verification failed after saving")
-    actual_blocks, _ = parse_report_markdown(verified.body)
-    if [
-      render_report_markdown(value)
-      for block_type, value in actual_blocks
-      if block_type == "markdown"
-    ] != rendered:
+    if [field.to_dict() for field in verified.fields] != [
+      field.to_dict() for field in fields
+    ] or serialize_report_blocks(verified.body) != rendered:
       raise RuntimeError("Report rendered verification failed after saving")
     return verified
 
