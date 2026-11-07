@@ -3944,3 +3944,120 @@ def test_native_file_activity_rejects_unsafe_mkdir(tmp_path: Path) -> None:
     )
     != "edit"
   )
+
+
+def _start_process_wrapper(
+  process_id: str, name: str, command: str, cwd: str
+) -> tuple[str, str]:
+  record = f"/tmp/arena-workspace/procs/{process_id}"
+  metadata = json.dumps(
+    {
+      "processId": process_id,
+      "name": name,
+      "command": command,
+      "cwd": cwd,
+      "startedAt": 1000,
+    },
+    separators=(",", ":"),
+  )
+  line = f"""/bin/bash -l -c mkdir -p '{record}'
+printf '%s' {shlex.quote(metadata)} > '{record}'/meta.json
+printf '%s' {shlex.quote(command)} > '{record}'/run.cmd
+setsid bash -c 'bash "$0/run.cmd" > "$0/out.log" 2>&1; echo $? > "$0/exit"' '{record}' </dev/null >/dev/null 2>&1 &
+echo $! > '{record}'/pid
+cat '{record}'/pid"""
+  return line, f"mkdir -p '{record}'"
+
+
+def test_steer_serve_enforces_start_process_title(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  procs = tmp_path / "procs"
+  good_dir = procs / "clankers-steering-1234"
+  bad_dir = procs / "website-1234"
+  good_dir.mkdir(parents=True)
+  bad_dir.mkdir(parents=True)
+  checkout = pre.repo_root()
+  expected_title = f"{checkout.name} - Steering"
+  (good_dir / "meta.json").write_text(
+    json.dumps(
+      {
+        "processId": "clankers-steering-1234",
+        "name": expected_title,
+        "command": "steer serve",
+        "cwd": str(checkout),
+        "startedAt": 1000,
+      }
+    ),
+    encoding="utf-8",
+  )
+  (bad_dir / "meta.json").write_text(
+    json.dumps(
+      {
+        "processId": "website-1234",
+        "name": "Website",
+        "command": "steer serve",
+        "cwd": str(checkout),
+        "startedAt": 1000,
+      }
+    ),
+    encoding="utf-8",
+  )
+  monkeypatch.setattr(cli, "ARENA_PROCS_DIR", procs, raising=False)
+
+  seen: list[tuple[str, int]] = []
+
+  class FakeServer:
+    server_address = ("0.0.0.0", 8000)
+
+    def serve_forever(self) -> None:
+      pass
+
+    def server_close(self) -> None:
+      pass
+
+  monkeypatch.setattr(
+    cli,
+    "create_http_server",
+    lambda _app, *, host, port: seen.append((host, port)) or FakeServer(),
+  )
+
+  err = io.StringIO()
+  with (bad_dir / "out.log").open("w", encoding="utf-8") as bad_out:
+    code = cli_main(["serve"], out=bad_out, err=err)
+  assert code == 1 and expected_title in err.getvalue()
+  assert seen == []
+
+  outside_err = io.StringIO()
+  with (tmp_path / "plain.log").open("w", encoding="utf-8") as plain_out:
+    code = cli_main(["serve"], out=plain_out, err=outside_err)
+  assert code == 1 and expected_title in outside_err.getvalue()
+  assert seen == []
+
+  ok_err = io.StringIO()
+  with (good_dir / "out.log").open("w", encoding="utf-8") as good_out:
+    code = cli_main(["serve"], out=good_out, err=ok_err)
+  assert (code, ok_err.getvalue()) == (0, "")
+  assert seen == [("0.0.0.0", 8000)]
+
+
+def test_pre_enforces_steering_start_process_title(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  checkout = pre.repo_root()
+  expected_title = f"{checkout.name} - Steering"
+
+  bad_line, bad_cmd = _start_process_wrapper(
+    "preview-1234", "Preview", "steer serve", str(checkout)
+  )
+  code, output = _run("pre", "-l", bad_line, "-c", bad_cmd, "-s", "bash")
+  assert code == pre.BLOCK and expected_title in output
+
+  good_line, good_cmd = _start_process_wrapper(
+    "clankers-steering-1234", expected_title, "steer serve", str(checkout)
+  )
+  code, output = _run("pre", "-l", good_line, "-c", good_cmd, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
