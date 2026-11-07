@@ -174,7 +174,6 @@ def test_required_file_set_is_exact():
     "codeql.yml",
     "dependency-review.yml",
     "workflow-security.yml",
-    "pr-check.yml",
   )
 
 
@@ -336,10 +335,8 @@ def test_ci_triggers_main_push_and_all_branch_pull_requests():
   triggers = gate_workflows.triggers_of(load_workflow("ci.yml"))
   assert triggers["push"]["branches"] == ["main"]
   assert triggers["pull_request"]["branches"] == ["**"]
-  ignored = triggers["pull_request"]["paths-ignore"]
-  assert "docs/CHANGELOG.md" in ignored
-  assert "docs/**/CHANGELOG.md" in ignored
-  assert "CHANGELOG.md" not in ignored
+  assert "paths-ignore" not in triggers["pull_request"]
+  assert "edited" in triggers["pull_request"]["types"]
 
 
 def test_artifacts_triggers_keep_both_path_families():
