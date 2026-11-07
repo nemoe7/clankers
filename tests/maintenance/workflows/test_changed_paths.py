@@ -321,3 +321,104 @@ def test_node_test_ownership_is_complete_and_unique():
 def test_root_nemoizer_config_selects_validation_tests():
   selected = changed_paths.module_matrix(["nemoizer.toml"])
   assert {row["name"] for row in selected} == {"Repository Prose and Validation"}
+
+
+def test_surface_digest_tracks_selected_inputs_and_shared_lockfile(tmp_path):
+  repo = init_repo(tmp_path)
+  write(repo, {"requirements.txt": "ruff==1\n", "unrelated.txt": "one\n"})
+  git(repo, "add", "-A")
+  patterns = ("skills/arena-steering/*",)
+  shared = ("requirements.txt",)
+  initial = changed_paths.surface_digest(str(repo), patterns, shared)
+  write(repo, {"unrelated.txt": "two\n"})
+  git(repo, "add", "-A")
+  assert changed_paths.surface_digest(str(repo), patterns, shared) == initial
+  write(repo, {"requirements.txt": "ruff==2\n"})
+  git(repo, "add", "-A")
+  assert changed_paths.surface_digest(str(repo), patterns, shared) != initial
+  write(repo, {"skills/arena-steering/scripts/runtime.py": "changed\n"})
+  git(repo, "add", "-A")
+  assert changed_paths.surface_digest(str(repo), patterns, shared) != initial
+
+
+def test_surface_digest_ignores_commit_history(tmp_path):
+  repo = init_repo(tmp_path)
+  initial = changed_paths.surface_digest(str(repo), ("skills/*",), ())
+  git(repo, "commit", "--allow-empty", "-q", "-m", "chore: new history")
+  assert changed_paths.surface_digest(str(repo), ("skills/*",), ()) == initial
+
+
+def test_pass_ledger_records_only_success_and_removes_failures(tmp_path):
+  ledger = tmp_path / "cache" / "ci-ledger.json"
+  changed_paths.record_surface(ledger, "ruff", "a" * 64, "commit-a", True)
+  changed_paths.record_surface(ledger, "markdownlint", "b" * 64, "commit-a", True)
+  changed_paths.record_surface(ledger, "ruff", "c" * 64, "commit-b", False)
+  records = changed_paths.load_ledger(ledger)
+  assert "ruff" not in records
+  assert records["markdownlint"] == {"digest": "b" * 64, "commit": "commit-a"}
+  assert not changed_paths.ledger_hit(records, "ruff", "c" * 64)
+  assert changed_paths.ledger_hit(records, "markdownlint", "b" * 64)
+
+
+def test_corrupt_ledger_is_a_miss(tmp_path):
+  ledger = tmp_path / "ci-ledger.json"
+  ledger.write_text("not json", encoding="utf-8")
+  assert changed_paths.load_ledger(ledger) == {}
+  changed_paths.record_surface(ledger, "ruff", "a" * 64, "commit", True)
+  assert changed_paths.ledger_hit(changed_paths.load_ledger(ledger), "ruff", "a" * 64)
+
+
+def test_collect_and_record_distinct_surfaces(tmp_path):
+  repo = init_repo(tmp_path)
+  ledger = tmp_path / "ci-ledger.json"
+  output = tmp_path / "outputs"
+  env = {"CI_LEDGER": str(ledger), "GITHUB_SHA": "abc"}
+  assert changed_paths.step_collect(env, output, str(repo)) == 0
+  values = dict(line.split("=", 1) for line in outputs(output).splitlines())
+  assert values["run_ruff"] == "true"
+  assert values["run_module_preview"] == "true"
+  assert values["npm_needed"] == "true"
+  env |= {
+    "CI_SURFACE": "ruff",
+    "CI_RESULT": "success",
+    "CI_DIGEST": values["digest_ruff"],
+  }
+  assert changed_paths.step_record(env, output, str(repo)) == 0
+  output.unlink()
+  assert changed_paths.step_collect(env, output, str(repo)) == 0
+  values = dict(line.split("=", 1) for line in outputs(output).splitlines())
+  assert values["run_ruff"] == "false"
+  assert values["run_module_preview"] == "true"
+  output.unlink()
+  assert (
+    changed_paths.step_collect(
+      env | {"CI_ENVIRONMENT": "new runner"}, output, str(repo)
+    )
+    == 0
+  )
+  values = dict(line.split("=", 1) for line in outputs(output).splitlines())
+  assert values["run_ruff"] == "true"
+  assert (
+    changed_paths.step_record(env | {"CI_RESULT": "failure"}, output, str(repo)) == 0
+  )
+  assert not changed_paths.load_ledger(ledger)
+
+
+def test_repo_check_digest_covers_userscripts_and_steering_assets(tmp_path):
+  repo = init_repo(tmp_path)
+  patterns = changed_paths.ci_surfaces()["repo_check"]
+  before = changed_paths.surface_digest(
+    str(repo), patterns, changed_paths.CI_SHARED_PATHS
+  )
+  write(repo, {"userscripts/arena.user.js": "changed\n"})
+  git(repo, "add", "-A")
+  after = changed_paths.surface_digest(
+    str(repo), patterns, changed_paths.CI_SHARED_PATHS
+  )
+  assert after != before
+  write(repo, {"skills/arena-steering/assets/app.js": "changed\n"})
+  git(repo, "add", "-A")
+  assert (
+    changed_paths.surface_digest(str(repo), patterns, changed_paths.CI_SHARED_PATHS)
+    != after
+  )

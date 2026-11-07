@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Refresh Ponytail and its audit skill from upstream `96608e0`, keeping only those two skills.
+- Add pass-ledger collection and recording primitives for CI surfaces (`maintenance/workflows/changed_paths.py`).
 - Run workflow lint, security audit, and contract checks in one job (`.github/workflows/workflow-security.yml`).
 - Ignore seven reviewed historical test-fixture findings in Gitleaks (`.gitleaksignore`).
 - Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
