@@ -72,6 +72,7 @@ steer report rm <id|--stale>
 - Publish agent handoffs and cross-session specifications as unfielded Steering reports.
 - Every report field requires a statement `label` before its options (`- ( )`, `- (x)`, `- [ ]`, `- [x]`) or after `label: ___`.
 - Use the full question as each report field label, and give each option a specific, self-identifying label.
+- Write report option text as an imperative action, not a first-person statement or permission request.
 - Field IDs default to kebab-case of `label` with trailing `-` stripped, or come from an optional `<!-- field-id -->` comment above the field.
 - Radio (`choice`) and checkbox (`checkbox`) fields automatically render a built-in `"Something else..."` free-form input in the web UI.
 - After the first answer, a report body change requires `steer report rm <id>` before republishing the same ID. Removal keeps old answers in the inbox, detaches task links, and preserves task details.

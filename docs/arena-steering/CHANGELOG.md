@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Require imperative wording for report options.
+
 - Align the app shell with a panned mobile visual viewport while the keyboard is open.
 
 - Show native file preparation as Edit activity.
