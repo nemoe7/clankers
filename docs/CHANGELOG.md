@@ -30,6 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Archive the retired minification workflow check and its tests under `docs/archive/arena-skill/`.
 - Exclude minified, archived, and vendored material from the root Nemoizer scan.
 - Filter CodeQL language scans conservatively and restrict dependency reviews to dependency and workflow changes.
 - Group plugin release and rules publication into separate credential-isolated jobs.
