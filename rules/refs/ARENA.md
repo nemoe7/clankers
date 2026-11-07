@@ -61,7 +61,7 @@
 
 ## General
 
-- Use the stderr read reminder as the only read schedule and act on other stderr reminders as directed. The Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence.
+- Use the stderr read reminder as the only read schedule and act on other stderr reminders as directed. When stderr directs you to unpublish stale reports, run `steer report rm --stale`. The Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read.
 - ALWAYS provide the substantive answer to each delivered message in its own `ack <id> <Markdown>` call before any chat follow-up.
 - One call carries one answer text, so acknowledge notes separately when the answers differ.
