@@ -2195,7 +2195,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   )
   assert result.returncode == 0, result.stderr
   assert str(home / ".local" / "bin" / "steer") in result.stdout
-  assert "steer 2.2.2" in result.stdout
+  assert "steer 2.2.3" in result.stdout
 
   shell = subprocess.run(
     [

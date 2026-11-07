@@ -49,7 +49,7 @@ flowchart TB
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,388 `tok` |
 | [`system-prompts/NEMOGPT.md`](system-prompts/NEMOGPT.md) | `o200k_base` | 3,602 `tok` |
 | [`system-prompts/wenyan/NEMOGPT.md`](system-prompts/wenyan/NEMOGPT.md) | `o200k_base` | 3,401 `tok` |
-| [`userscripts/arena-prompt-fill.txt`](userscripts/arena-prompt-fill.txt) | `o200k_base` | 932 `tok` |
+| [`userscripts/arena-prompt-fill.txt`](userscripts/arena-prompt-fill.txt) | `o200k_base` | 872 `tok` |
 
 ## Compression
 
