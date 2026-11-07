@@ -20,11 +20,8 @@ The report shape is one object per width:
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import re
-import sys
-import tomllib
 from pathlib import Path
 
 DEFAULT_SHEET = Path(__file__).resolve().parent.parent / "references" / "style.css"
@@ -892,124 +889,35 @@ def point(text: str) -> tuple[float, float]:
   return x, y
 
 
-def check_severities(project: Path) -> dict[str, str]:
-  from annotate import find_nuu_config
+def check_severities(
+  project: Path | None = None,
+  config_path: Path | None = None,
+) -> dict[str, str]:
+  from nuu import check_severities as nuu_check_severities
 
-  config_path = find_nuu_config(project)
-  config = tomllib.loads(config_path.read_text(encoding="utf-8")) if config_path else {}
-  checks = config.get("checks", {})
-  if not isinstance(checks, dict):
-    raise TypeError("checks must be a table")
-  settings = checks.get("severity", {})
-  if not isinstance(settings, dict):
-    raise TypeError("checks.severity must be a table")
-  defaults = {"TYP101": "review", "TYP201": "review"}
-  for rule, severity in settings.items():
-    if rule not in defaults or severity not in ("review", "error"):
-      raise ValueError(f"invalid checks.severity setting: {rule} = {severity!r}")
-    defaults[rule] = severity
-  return defaults
+  return nuu_check_severities(project, config_path)
 
 
-def main(argv: list[str] | None = None) -> int:
-  for stream in (sys.stdout, sys.stderr):
-    if hasattr(stream, "reconfigure"):
-      stream.reconfigure(encoding="utf-8", errors="replace")
-  parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-  parser.add_argument("-s", "--sheet", type=Path, default=DEFAULT_SHEET)
-  parser.add_argument("-k", "--scale", type=float, default=DEFAULT_SCALE)
-  commands = parser.add_subparsers(dest="command", required=True)
+def run_measure_cli(args) -> int:
+  from nuu import load_nuu_config
 
-  check_command = commands.add_parser(
-    "check", help="Check a JSON report against the sheet"
+  cfg_info = load_nuu_config(None, args.config)
+  scale_val = int(
+    args.scale
+    if args.scale is not None
+    else cfg_info["config"]["measure"].get("scale", DEFAULT_SCALE)
   )
-  check_command.add_argument("report", type=Path)
-  check_command.add_argument("-s", "--sheet", dest="sub_sheet", type=Path, default=None)
-  check_command.add_argument(
-    "-k", "--scale", dest="sub_scale", type=float, default=None
-  )
-  check_command.add_argument(
-    "-d", "--density", action="store_true", help="Include whitespace and density checks"
-  )
-  check_command.add_argument(
-    "-C", "--clipping", action="store_true", help="Include container clipping checks"
-  )
-  check_command.add_argument(
-    "-O", "--overlaps", action="store_true", help="Include sibling overlap checks"
-  )
-
-  density_command = commands.add_parser(
-    "density",
-    help="Check row/card ink ratio, sibling gaps, and form inputs that leave row space unused",
-  )
-  density_command.add_argument("report", type=Path)
-  density_command.add_argument(
-    "-C", "--clipping", action="store_true", help="Include container clipping checks"
-  )
-  density_command.add_argument(
-    "-O", "--overlaps", action="store_true", help="Include sibling overlap checks"
-  )
-
-  ruler_command = commands.add_parser(
-    "ruler", help="Measure the gap between two guides"
-  )
-  ruler_command.add_argument("-f", "--from", dest="start", type=point, required=True)
-  ruler_command.add_argument("-t", "--to", dest="end", type=point, required=True)
-  ruler_command.add_argument("-s", "--sheet", dest="sub_sheet", type=Path, default=None)
-  ruler_command.add_argument(
-    "-k", "--scale", dest="sub_scale", type=float, default=None
-  )
-
-  arguments = parser.parse_args(argv)
-  if arguments.command == "density":
-    report = json.loads(arguments.report.read_text(encoding="utf-8"))
-    density_rows = check_density(report)
-    for row in density_rows:
-      print(f"{report.get('width')} px {row['rule']} {row['evidence']}")
-    if density_rows:
-      return 1
-    print(f"{report.get('width')} px: density checks passed")
-    return 0
-
-  sheet_path = arguments.sub_sheet or arguments.sheet
-  scale_val = (
-    arguments.sub_scale if arguments.sub_scale is not None else arguments.scale
-  )
-  tokens = parse_sheet(sheet_path.read_text(encoding="utf-8"))
-
-  if arguments.command == "ruler":
-    gap = ruler(arguments.start, arguments.end, scale_val)
-    print(f"gap {gap['dx']:g} x {gap['dy']:g} px, distance {gap['distance']:g} px")
-    for axis, fits in gap["axes"].items():
-      print(f"{axis}: {'on' if fits else 'off'} the {scale_val:g} px scale")
-    return 0 if gap["on_scale"] else 1
-
-  try:
-    severities = check_severities(Path.cwd())
-  except (OSError, ValueError, TypeError) as error:
-    print(f"configuration error: {error}", file=sys.stderr)
-    return 2
-  report = json.loads(arguments.report.read_text(encoding="utf-8"))
-  findings = check(report, tokens, scale_val)
-  if (
-    getattr(arguments, "density", False)
-    or getattr(arguments, "clipping", False)
-    or getattr(arguments, "overlaps", False)
-  ):
-    findings.extend(f"{row['rule']} {row['evidence']}" for row in check_density(report))
-  for finding in findings:
-    rule = finding.split()[0]
-    severity = severities.get(rule, "error")
-    prefix = f"[{severity}] " if rule in severities else ""
-    print(f"{report.get('width')} px {prefix}{finding}")
-  if any(
-    severities.get(finding.split()[0], "error") == "error" for finding in findings
-  ):
-    return 1
-  if not findings:
-    print(f"{report.get('width')} px: every value sits on the sheet")
-  return 0
-
-
-if __name__ == "__main__":
-  sys.exit(main())
+  if args.from_point and args.to_target and not (args.url or args.input):
+    gap = ruler(point(args.from_point), point(args.to_target), scale_val)
+    status = "pass" if gap["on_scale"] else "findings"
+    code = 0 if gap["on_scale"] else 1
+    print(
+      f"# Measurement\n\n"
+      f"- Status: `{status}` (exit {code})\n"
+      f"- Span: `{gap['dx']:g} x {gap['dy']:g} px` (distance `{gap['distance']:g} px`)\n"
+      f"- X on `{scale_val}px` scale: `{gap['axes']['x']}`\n"
+      f"- Y on `{scale_val}px` scale: `{gap['axes']['y']}`\n",
+      end="",
+    )
+    return code
+  raise RuntimeError("Live/PNG visual redline measurement requires measure engine")
