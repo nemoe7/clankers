@@ -309,21 +309,10 @@ def test_pull_requests_write_stays_allowed_for_review_comments():
   assert findings(document) == []
 
 
-def test_minify_test_entrypoint_without_pytest_fails():
+def test_retired_minify_workflow_step_is_not_gated():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
     {"name": "Minify", "run": "python tests/maintenance/minify/test_minify.py"}
-  ]
-  assert any("must use pytest" in finding for finding in findings(document))
-
-
-def test_minify_test_entrypoint_with_pytest_passes():
-  document = copy.deepcopy(BASE)
-  document["jobs"]["work"]["steps"] = [
-    {
-      "name": "Minify",
-      "run": "python -m pytest tests/maintenance/minify/test_minify.py",
-    },
   ]
   assert findings(document) == []
 

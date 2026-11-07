@@ -220,6 +220,7 @@ def test_browser_test_runs_with_preview_module(path):
     "docs/archive/arena-skill/tests/arena-egress-proxy/test_arena_proxy.py",
     "docs/archive/arena-skill/tests/arena-preview-proxy/test_preview_proxy.py",
     "docs/archive/arena-skill/tests/test_minify.py",
+    "docs/archive/arena-skill/tests/test_minify_workflow.py",
     "docs/archive/arena-skill/tests/client.test.cjs",
   ],
 )
