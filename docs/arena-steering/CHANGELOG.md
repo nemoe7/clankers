@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Update the Messages unseen-reply indicator optimistically while receipts are pending, restore it on failure, and preserve newer acknowledgement revisions.
+
 - Match Mermaid diagram appearance across thumbnails and the modal viewer, using the code-block surface in the modal.
 
 - Enforce `{repo} - Steering` as the `start_process` name for `steer serve`.
