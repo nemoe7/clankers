@@ -31,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Exclude minified, archived, and vendored material from the root Nemoizer scan.
+- Filter CodeQL language scans conservatively and restrict dependency reviews to dependency and workflow changes.
 - Group plugin release and rules publication into separate credential-isolated jobs.
 - Validate and sync distribution targets in one job, preserving remote reconciliation.
 - Group read-only CI checks into one job, including PR plugin validation, and reuse successful input digests.

@@ -741,3 +741,37 @@ def test_workflow_security_runs_all_checks_in_one_job():
   assert "zizmor --config .github/zizmor.yml" in commands
   assert "python maintenance/workflows/gate_workflows.py" in commands
   assert "schedule" in gate_workflows.triggers_of(workflow)
+
+
+def test_codeql_filter_keeps_scheduled_scans_and_unknown_inputs_safe():
+  document = load_workflow("codeql.yml")
+  assert "schedule" in gate_workflows.triggers_of(document)
+  assert "workflow_dispatch" in gate_workflows.triggers_of(document)
+  steps = document["jobs"]["analyze"]["steps"]
+  select = next(step for step in steps if step.get("id") == "select")
+  assert (
+    'git show "$PR_BASE_SHA:maintenance/workflows/codeql_filter.py"' in select["run"]
+  )
+  assert "echo 'run=true'" in select["run"]
+  checkout = next(
+    step for step in steps if step.get("uses", "").startswith("actions/checkout@")
+  )
+  assert checkout["with"]["persist-credentials"] is False
+  for step in steps:
+    if step.get("uses", "").startswith("github/codeql-action/"):
+      assert step["if"] == "steps.select.outputs.run == 'true'"
+
+
+def test_dependency_review_filters_all_current_manifest_families_and_actions():
+  paths = gate_workflows.triggers_of(load_workflow("dependency-review.yml"))[
+    "pull_request"
+  ]["paths"]
+  for pattern in (
+    "**/requirements*.txt",
+    "**/pyproject.toml",
+    "**/uv.lock",
+    "**/package*.json",
+    "**/Dockerfile*",
+    ".github/**",
+  ):
+    assert pattern in paths

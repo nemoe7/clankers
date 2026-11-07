@@ -216,6 +216,7 @@ MODULE_TESTS = {
   "Workflow and Distribution": (
     "tests/maintenance/workflows/test_changed_paths.py",
     "tests/maintenance/workflows/test_check_artifacts.py",
+    "tests/maintenance/workflows/test_codeql_filter.py",
     "tests/maintenance/workflows/test_gate_workflows.py",
     "tests/github/actions/test_distribute_sync.py",
   ),
@@ -257,6 +258,7 @@ MODULE_PATHS = {
     ".github/workflows/*",
     ".github/actions/distribute-sync/*",
     "maintenance/workflows/check_artifacts.py",
+    "maintenance/workflows/codeql_filter.py",
     "maintenance/workflows/gate_workflows.py",
     "tests/maintenance/workflows/*",
     "tests/maintenance/workflows/test_check_artifacts.py",
