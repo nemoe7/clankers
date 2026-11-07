@@ -13,7 +13,53 @@ from pathlib import Path
 from typing import Any
 
 SPEC_PATH = Path(__file__).resolve().parents[2] / "references" / "survey.json"
-SPEC: dict[str, Any] = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+QUESTIONS_PATH = (
+  Path(__file__).resolve().parents[2] / "references" / "survey-questions.txt"
+)
+
+
+def parse_questions_text(text: str) -> list[tuple[str, str]]:
+  """Parse ID-prefixed survey question lines from the shared plain-text source."""
+  pairs: list[tuple[str, str]] = []
+  seen: set[str] = set()
+  for raw_line in text.splitlines():
+    line = raw_line.strip()
+    if not line:
+      continue
+    qid, sep, prompt = line.partition(":")
+    qid = qid.strip()
+    prompt = prompt.strip()
+    if not sep or not qid or not prompt:
+      raise ValueError(f"Invalid survey question line: {raw_line!r}")
+    if qid in seen:
+      raise ValueError(f"Duplicate survey question ID in text source: {qid}")
+    seen.add(qid)
+    pairs.append((qid, prompt))
+  return pairs
+
+
+def load_spec(
+  spec_path: Path = SPEC_PATH,
+  questions_path: Path = QUESTIONS_PATH,
+) -> dict[str, Any]:
+  """Load the survey schema and attach question text from the shared text file."""
+  spec: dict[str, Any] = json.loads(spec_path.read_text(encoding="utf-8"))
+  pairs = parse_questions_text(questions_path.read_text(encoding="utf-8"))
+  expected_ids = [question["id"] for question in spec["questions"]]
+  found_ids = [qid for qid, _ in pairs]
+  if found_ids != expected_ids:
+    raise ValueError(
+      f"Survey question ID mismatch between {spec_path.name} ({expected_ids}) "
+      f"and {questions_path.name} ({found_ids})"
+    )
+  by_id = dict(pairs)
+  spec["questions"] = [
+    {**question, "question": by_id[question["id"]]} for question in spec["questions"]
+  ]
+  return spec
+
+
+SPEC: dict[str, Any] = load_spec()
 
 HASHES = {
   "A2P6R": "30b4cb39218679f94c996a87c68e9bab23c0cd663e4edb8e7579ee9c022b727d",

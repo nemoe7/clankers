@@ -4465,15 +4465,21 @@ function checkPromptFill(api) {
   var rotationWaitMs = api.rotationWaitMs;
   var KEY43 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
   var PROMPT_FILL_URL = api.PROMPT_FILL_URL;
+  var SURVEY_QUESTIONS_URL = api.SURVEY_QUESTIONS_URL;
   assert.equal(PROMPT_FILL_URL,
     "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt");
+  assert.equal(SURVEY_QUESTIONS_URL,
+    "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/skills/arena-steering/references/survey-questions.txt");
   var promptFillText = fs.readFileSync(
     path.join(__dirname, "../../userscripts/arena-prompt-fill.txt"), "utf8").trimEnd();
+  var surveyQuestionsText = fs.readFileSync(
+    path.join(__dirname, "../../skills/arena-steering/references/survey-questions.txt"), "utf8").trimEnd();
   var promptSource = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
   assert.equal(promptSource.includes("TEMPLATE_TAIL"), false);
   assert.equal(promptForSlug("clankers", ""), null);
-  var prompt = promptForSlug("clankers", promptFillText);
-  var promptWithRules = promptForSlug("clankers", promptFillText, "# Rules\n");
+  assert.equal(promptForSlug("clankers", promptFillText), null);
+  var prompt = promptForSlug("clankers", promptFillText, null, surveyQuestionsText);
+  var promptWithRules = promptForSlug("clankers", promptFillText, "# Rules\n", surveyQuestionsText);
 
   function frames(rows) {
     return {
@@ -4510,7 +4516,7 @@ function checkPromptFill(api) {
     // Repo name leads fetched template. Rules file follows when available.
     [prompt.split("\n")[0],
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
-    [prompt.includes(promptFillText), true],
+    [prompt.includes("{{SURVEY_QUESTION:"), false],
     [prompt.indexOf("here is ARENA.md"), -1],
     [prompt.indexOf("Pareto"), -1],
     [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
@@ -4523,7 +4529,7 @@ function checkPromptFill(api) {
     [shouldWrite("draft", "clankers", null, null), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers", null), true],
     [shouldWrite("draft", "clankers", "clankers", null), false],
-    [shouldWrite(promptForSlug("other", promptFillText), "clankers", "other", "other"), true],
+    [shouldWrite(promptForSlug("other", promptFillText, null, surveyQuestionsText), "clankers", "other", "other"), true],
     // One fill per repo per page: the observer sees no second write. This holds even when the
     // editor hands the text back with different whitespace or the send clears it.
     [shouldWrite(prompt, "clankers", "clankers", "clankers"), false],
@@ -6859,20 +6865,50 @@ require("node:test").test("multi-session board enforces proxy-only cache, Main S
     path.join(__dirname, "../../userscripts/arena-prompt-fill.txt"),
     "utf8",
   );
+  const surveyQuestionsTxt = fs.readFileSync(
+    path.join(__dirname, "../../skills/arena-steering/references/survey-questions.txt"),
+    "utf8",
+  );
   const surveySpec = JSON.parse(
     fs.readFileSync(
-      path.join(__dirname, "../../docs/archive/arena-skill/references/survey.json"),
+      path.join(__dirname, "../../skills/arena-steering/references/survey.json"),
       "utf8",
     ),
   );
+  const txtRows = surveyQuestionsTxt
+    .trim()
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => {
+      const idx = line.indexOf(":");
+      return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
+    });
   const promptSurveyIds = Array.from(
-    promptFill.matchAll(/^\d+\.\s+\*\*([A-Z0-9]+):\*\*/gm),
-    m => m[1],
+    promptFill.matchAll(/^\d+\.\s+\*\*([A-Z0-9]+):\*\*\s+\{\{SURVEY_QUESTION:([A-Z0-9]+)\}\}/gm),
+    (m) => {
+      assert.equal(m[1], m[2]);
+      return m[1];
+    },
   );
   assert.deepEqual(
     promptSurveyIds,
-    surveySpec.questions.map(q => q.id),
+    surveySpec.questions.map((q) => q.id),
   );
-  assert.match(promptFill, /arena-preview survey -i/);
+  assert.deepEqual(
+    txtRows.map((r) => r[0]),
+    surveySpec.questions.map((q) => q.id),
+  );
+  const renderedPrompt = loaded.checks.promptFill.promptForSlug(
+    "clankers",
+    promptFill,
+    null,
+    surveyQuestionsTxt,
+  );
+  for (const [qid, qtext] of txtRows) {
+    const expectedLine = "**" + qid + ":** " + qtext;
+    assert.equal(renderedPrompt.includes(expectedLine), true);
+  }
+  assert.equal(promptFill.includes("survey -i"), false);
+  assert.match(promptFill, /steer survey/);
   assert.match(promptFill, /"unknown"/);
 });

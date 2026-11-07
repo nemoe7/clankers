@@ -4,9 +4,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
-## [2.2.2]
+## [2.2.3]
 
 ### Changed
+
+- Load survey question text from `skills/arena-steering/references/survey-questions.txt` for shared consumption with Arena prompt fill.
 
 - Move `README.md` to `docs/arena-steering/README.md` and rewrite it for human readers.
 
@@ -25,6 +27,10 @@ This log has no Unreleased section.
 - Enlarge and inset the mobile Reports submit button, keeping it above the keyboard.
 
 - Share ID chip styling and remove the composer Parents label.
+
+## [2.2.2]
+
+### Changed
 
 - Require an atomic detail change when linking a new message to an existing task.
 

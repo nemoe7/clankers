@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.13
+// @name         Arena.ai | NemoUtils | v1.13.14
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.13
+// @version      1.13.14
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -26,7 +26,7 @@
 (function () {
   "use strict";
 
-  var USERSCRIPT_VERSION = "1.13.13";
+  var USERSCRIPT_VERSION = "1.13.14";
   var USERSCRIPT_VERSION_HEADER = "X-Clankers-Userscript-Version";
   var proxyBoardEgressVersion = "";
   var USERSCRIPT_BOOT_VERSION = (function () {
@@ -1204,10 +1204,51 @@
         });
     }
 
-    function promptForSlug(slug, promptFill, arenaMd) {
+    var SURVEY_QUESTION_PLACEHOLDER_RE = /\{\{SURVEY_QUESTION:([A-Z0-9]+)\}\}/g;
+
+    function parseSurveyQuestions(raw) {
+      var map = new Map();
+      if (!raw) return map;
+      var lines = String(raw).split(/\r?\n/);
+      for (var i = 0; i < lines.length; i += 1) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var sep = line.indexOf(":");
+        if (sep <= 0) return new Map();
+        var id = line.slice(0, sep).trim();
+        var text = line.slice(sep + 1).trim();
+        if (!id || !text || map.has(id)) return new Map();
+        map.set(id, text);
+      }
+      return map;
+    }
+
+    function applySurveyQuestions(template, surveyQuestions) {
+      if (!SURVEY_QUESTION_PLACEHOLDER_RE.test(template)) {
+        SURVEY_QUESTION_PLACEHOLDER_RE.lastIndex = 0;
+        return template;
+      }
+      SURVEY_QUESTION_PLACEHOLDER_RE.lastIndex = 0;
+      var questions = parseSurveyQuestions(surveyQuestions);
+      if (!questions.size) return null;
+      var missing = false;
+      var resolved = template.replace(SURVEY_QUESTION_PLACEHOLDER_RE, function (_, id) {
+        var text = questions.get(id);
+        if (!text) {
+          missing = true;
+          return "";
+        }
+        return text;
+      });
+      return missing ? null : resolved;
+    }
+
+    function promptForSlug(slug, promptFill, arenaMd, surveyQuestions) {
       if (typeof promptFill !== "string" || !promptFill.trim()) return null;
+      var resolvedFill = applySurveyQuestions(promptFill.trim(), surveyQuestions);
+      if (!resolvedFill) return null;
       var base = slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." +
-        "\n\n" + promptFill.trim();
+        "\n\n" + resolvedFill;
       if (arenaMd) {
         return base + "\n\nhere is ARENA.md:\n" + arenaMd;
       }
@@ -1241,15 +1282,19 @@
 
     var PROMPT_FILL_URL =
       "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt";
+    var SURVEY_QUESTIONS_URL =
+      "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/skills/arena-steering/references/survey-questions.txt";
     var ARENA_MD_URL =
       "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md";
 
     if (exposeChecks("promptFill", {
       isComposerUrl: isComposerUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
+      parseSurveyQuestions: parseSurveyQuestions,
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
       PROMPT_FILL_URL: PROMPT_FILL_URL,
+      SURVEY_QUESTIONS_URL: SURVEY_QUESTIONS_URL,
       ARENA_MD_URL: ARENA_MD_URL,
       PROXY_HOST_KEY: PROXY_HOST_KEY,
       PREVIEW_PROXY_HOST_KEY: PREVIEW_PROXY_HOST_KEY,
@@ -1282,6 +1327,7 @@
     }
 
     var promptFillCache = null;
+    var surveyQuestionsCache = null;
     var arenaMdCache = null;
     var heldKey = null;
     var promptResourcesTried = false;
@@ -1300,14 +1346,18 @@
 
     function ensureFetch() {
       if (promptResourcesTried || pendingFetch) return;
-      pendingFetch = Promise.all([fetchText(PROMPT_FILL_URL), fetchText(ARENA_MD_URL)])
-        .then(function (contents) {
-          promptFillCache = contents[0];
-          arenaMdCache = contents[1];
-          promptResourcesTried = true;
-          pendingFetch = null;
-          sync();
-        });
+      pendingFetch = Promise.all([
+        fetchText(PROMPT_FILL_URL),
+        fetchText(ARENA_MD_URL),
+        fetchText(SURVEY_QUESTIONS_URL),
+      ]).then(function (contents) {
+        promptFillCache = contents[0];
+        arenaMdCache = contents[1];
+        surveyQuestionsCache = contents[2];
+        promptResourcesTried = true;
+        pendingFetch = null;
+        sync();
+      });
     }
 
     function postAgentKey(key, host) {
@@ -1680,7 +1730,7 @@
         ensureAgentKey();
         return;
       }
-      var prompt = promptForSlug(slug, promptFillCache, arenaMdCache);
+      var prompt = promptForSlug(slug, promptFillCache, arenaMdCache, surveyQuestionsCache);
       if (!prompt) {
         logEvent("fill", "no-template", null, "warn");
         lastSlug = slug;

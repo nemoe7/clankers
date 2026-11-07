@@ -236,3 +236,52 @@ def test_cli_survey_does_not_offer_interrupt_flag(
   with pytest.raises(SystemExit) as rejected:
     _run_cli(state_dir, "survey", "--interrupt")
   assert rejected.value.code == 2
+
+
+def test_survey_questions_shared_txt_source_and_prompt_fill_parity(
+  tmp_path: Path,
+) -> None:
+  repo_root = Path(__file__).resolve().parents[3]
+  txt_path = repo_root / "skills/arena-steering/references/survey-questions.txt"
+  json_path = repo_root / "skills/arena-steering/references/survey.json"
+  prompt_fill_path = repo_root / "userscripts/arena-prompt-fill.txt"
+
+  assert txt_path.is_file()
+  assert survey.QUESTIONS_PATH == txt_path
+
+  raw_json = json.loads(json_path.read_text(encoding="utf-8"))
+  for entry in raw_json["questions"]:
+    assert "question" not in entry
+
+  parsed_pairs = survey.parse_questions_text(txt_path.read_text(encoding="utf-8"))
+  assert [qid for qid, _ in parsed_pairs] == [q["id"] for q in survey.SPEC["questions"]]
+  assert [text for _, text in parsed_pairs] == [
+    q["question"] for q in survey.SPEC["questions"]
+  ]
+
+  bad_txt = tmp_path / "bad-questions.txt"
+  bad_txt.write_text("R3S0N: Only one question?\n", encoding="utf-8")
+  with pytest.raises(ValueError, match="mismatch"):
+    survey.load_spec(json_path, bad_txt)
+
+  prompt_fill = prompt_fill_path.read_text(encoding="utf-8")
+  placeholders = [
+    line.split("{{SURVEY_QUESTION:", 1)[1].split("}}", 1)[0]
+    for line in prompt_fill.splitlines()
+    if "{{SURVEY_QUESTION:" in line
+  ]
+  assert placeholders == [q["id"] for q in survey.SPEC["questions"]]
+  for _, qtext in parsed_pairs:
+    assert qtext not in prompt_fill
+
+  assert set(survey.HASHES) == {"A2P6R", "M2A6Y"}
+  for digest in survey.HASHES.values():
+    assert len(digest) == 64
+  assert set(survey.S2E5P_SUBSTRING_HASHES) == {"first", "last", "org", "role"}
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  submitted = app.messages.submit_survey(json.dumps(survey.template()))
+  assert app.messages.get_survey()["answers"] == submitted["answers"]
+  assert app.messages.get_survey()["results"] == submitted["results"]
+  store.close()
