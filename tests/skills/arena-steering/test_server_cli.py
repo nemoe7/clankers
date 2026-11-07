@@ -3754,6 +3754,58 @@ def test_annotated_report_rejects_bad_metadata_and_preserves_code_fences(
   store.close()
 
 
+def test_cli_report_publish_preserves_staged_browser_upload(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  # Model a browser upload after its file is staged but before its receipt commits.
+  path = app._uploads_dir() / ("request-" + "a" * 64 + "-0-pending.txt")
+  path.write_bytes(b"pending")
+  source = tmp_path / "report.md"
+  source.write_text("# Report\n", encoding="utf-8")
+  code, output, error = _run_cli(
+    state_dir, "report", "pub", str(source), "-i", "safe-report", "-t", "Report"
+  )
+  assert code == 0, error
+  assert "Verified" in output
+  assert path.read_bytes() == b"pending"
+  store.close()
+
+
+def test_cli_report_publish_checks_rendered_blocks(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  from arena_steering import services
+
+  original = services.serialize_report_blocks
+  calls = 0
+
+  def changing_render(body: str) -> list[dict]:
+    nonlocal calls
+    calls += 1
+    result = original(body)
+    if calls == 2:
+      result[0]["html"] = "different"
+    return result
+
+  monkeypatch.setattr(services, "serialize_report_blocks", changing_render)
+  source = tmp_path / "report.md"
+  source.write_text("# Report\n", encoding="utf-8")
+  code, output, error = _run_cli(
+    tmp_path / "arena-state",
+    "report",
+    "pub",
+    str(source),
+    "-i",
+    "changed-report",
+    "-t",
+    "Report",
+  )
+  assert code != 0
+  assert "verification failed" in error
+  assert "Verified" not in output
+
+
 def test_report_marker_override_and_verification_failure(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
