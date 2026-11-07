@@ -4,4 +4,4 @@
 
 The candidate keeps English examples and technical identifiers. The root README records its complete-file `o200k_base` token count.
 
-Exact-text and structure checks do not prove equal model behavior. No live-model behavior or deployment test ran for this change.
+Exact-text and structure checks do not prove equal model behavior, and live-model behavior remains unverified.

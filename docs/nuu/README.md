@@ -6,19 +6,19 @@ Build, refine, and review web interfaces. Tools cover briefs, local catalogs, de
 
 ## Setup
 
-Load [SKILL.md](../../skills/nuu/SKILL.md) in an agent that supports skills. See [Skills](../../skills/README.md) for installation layout. Local tools need Python 3.11+ and its standard library. Browser tools also need Node, the floating `playwright` package, and an available browser.
+Copy `skills/nuu` into a supported skill directory, and see [Skills](../../skills/README.md) for discovery paths. [SKILL.md](../../skills/nuu/SKILL.md) is the agent entry point. Local tools need Python 3.11+ and its standard library, while browser tools also need Node, `playwright`, and a browser binary.
 
-The project supplies its page, running application, and browser. Tools capture pages but install no package or browser.
+The project supplies its page, running application, and browser. Tools capture pages without installing packages or browsers.
 
 ## Working flow
 
-1. Read the project's design record, or start from [the template](../../skills/nuu/references/design-document.md).
-2. Preserve the product system, or select the house [sheet](../../skills/nuu/references/style.css) and [examples](../../skills/nuu/references/examples.md).
-3. Change the page and inspect rendered states at `68em` (`1088`), `60em` (`960`), `30em` (`480`), and `24em` (`384`) breakpoints.
-4. Collect computed values with [the browser snippet](../../skills/nuu/references/measure.md), check them, and retain the reports and screenshots.
-5. Update the project design record with settled decisions and evidence.
+1. Project context starts from an existing design record or [the template](../../skills/nuu/references/design-document.md).
+2. Styling follows the product's existing system, or falls back to the house [sheet](../../skills/nuu/references/style.css) and [examples](../../skills/nuu/references/examples.md).
+3. Rendered checks inspect viewports across the `68em` (`1088`), `60em` (`960`), `30em` (`480`), and `24em` (`384`) breakpoints.
+4. [The browser snippet](../../skills/nuu/references/measure.md) and CLI tools collect computed values, findings, and screenshots.
+5. Settled design decisions and rendered evidence stay recorded in the consuming project's design document.
 
-The skill holds the complete house constraints. The record and screenshots describe the consuming project, not this skill's source files.
+The skill holds the complete house constraints. Design records and screenshots belong to the consuming project rather than this repo.
 
 ## Available tools
 

@@ -11,7 +11,6 @@ extend-exclude = [
   "system-prompts/**/*.md",
   "!system-prompts/**/README.md",
   "gpt-plugins/**/*.md",
-  "!gpt-plugins/**/README.md",
   "userscripts/arena-prompt-fill.txt",
   "userscripts/refs/arena-prompt-fill.txt",
   "*.min.*",
