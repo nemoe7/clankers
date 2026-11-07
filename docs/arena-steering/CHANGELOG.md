@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Remove default boxes on contained Steering buttons, gating interactive hover fills to fine pointers while keeping press fills.
+
 - Load survey question text from `skills/arena-steering/references/survey-questions.txt` for shared consumption with Arena prompt fill.
 
 - Move `README.md` to `docs/arena-steering/README.md` and rewrite it for human readers.
