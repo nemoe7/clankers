@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [1.10.32]
+
+### Fixed
+
+- Align bundled nemoizer rotation guidance with the current implementation.
+
 ## [1.10.31]
 
 ### Added
