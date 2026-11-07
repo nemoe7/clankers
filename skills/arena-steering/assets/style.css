@@ -2844,7 +2844,8 @@ article#report.report img,
 #report h6 { font-size: 11px; }
 
 #report :not(pre) > code:not(.msg-id),
-#report .mermaid-svg { font-size: 14px; }
+#report .mermaid-svg,
+#image-modal .mermaid-svg { font-size: 14px; }
 #report h1 > code:not(.msg-id) { font-size: 28px; }
 #report h2 > code:not(.msg-id) { font-size: 22px; }
 #report h3 > code:not(.msg-id) { font-size: 16px; }
@@ -3446,6 +3447,15 @@ article#report.report img,
   cursor: grabbing;
 }
 
+.mermaid-svg [data-look="neo"] rect,
+.mermaid-svg [data-look="neo"] polygon,
+.mermaid-svg [data-look="neo"] circle,
+.mermaid-svg [data-look="neo"] .outer-path,
+.mermaid-svg [data-look="neo"] .icon,
+.mermaid-svg [data-look="neo"] .icon-neo path {
+  filter: none !important;
+}
+
 .image-modal-stage > img,
 .image-modal-stage > svg {
   max-width: 90%;
@@ -3453,6 +3463,17 @@ article#report.report img,
   object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.image-modal-stage > svg {
+  box-sizing: content-box;
+  height: auto;
+  max-width: calc(90% - 32px);
+  max-height: calc(90% - 32px);
+  padding: var(--space-4);
+  border: 1px solid hsl(var(--border-faint));
+  border-radius: var(--radius);
+  background-color: hsl(var(--surface-secondary));
 }
 
 @media (hover: hover) and (pointer: fine) {

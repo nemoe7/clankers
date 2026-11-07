@@ -336,6 +336,7 @@ export function initializeMermaid() {
         noteBkgColor: "#292624",
         noteTextColor: "#f4f0eb",
         noteBorderColor: "#e5bb8b",
+        dropShadow: "none",
       },
       flowchart: { htmlLabels: false },
     });

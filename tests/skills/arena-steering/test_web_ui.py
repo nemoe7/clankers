@@ -1480,6 +1480,7 @@ def test_mermaid_and_demo_media_use_warm_arena_tokens() -> None:
     assert colour in theme
   for colour in SLATE_MERMAID_COLORS:
     assert colour not in theme
+  assert 'dropShadow: "none"' in theme
 
   demo_py = DEMO_PATH.read_text(encoding="utf-8")
   for colour in (
@@ -1938,6 +1939,47 @@ assert.equal(svgClone.class, 'mermaid-svg');
 assert.equal(svgClone.style.width, '866px');
 assert.equal(svgClone.id, 'mermaid-x-viewer-1');
 assert.equal(styleNode.textContent, '#mermaid-x-viewer-1 .node{fill:red}');
+const markerAttr = { name: 'id', value: 'm-end' };
+const markerNode = { localName: 'marker', id: 'm-end', attributes: [markerAttr],
+  getAttribute(name) { return name === 'id' ? this.id : null; },
+  setAttribute(name, value) { if (name === 'id') { this.id = value; markerAttr.value = value; } } };
+const edgeAttr = { name: 'marker-end', value: 'url(#m-end)' };
+const edgeNode = { localName: 'path', attributes: [edgeAttr],
+  getAttribute() { return null; },
+  setAttribute(name, value) { if (name === 'marker-end') edgeAttr.value = value; } };
+const flowStyle = { localName: 'style', attributes: [], textContent: '#mermaid-y .node{filter:url(#m-end)}',
+  getAttribute() { return null; }, setAttribute() {} };
+const flowAttrs = [
+  { name: 'id', value: 'mermaid-y' },
+  { name: 'class', value: 'mermaid-svg flowchart' },
+  { name: 'viewBox', value: '4 4 520 180' },
+];
+const flowClone = {
+  localName: 'svg', id: 'mermaid-y', attributes: flowAttrs,
+  style: { maxWidth: '520px', removeProperty(prop) { if (prop === 'max-width') delete this.maxWidth; } },
+  removeAttribute(name) { if (name === 'id') this.id = ''; },
+  setAttribute(name, value) {
+    this[name] = value;
+    const found = flowAttrs.find(a => a.name === name);
+    if (found) found.value = value; else flowAttrs.push({ name, value });
+  },
+  getAttribute(name) { return flowAttrs.find(a => a.name === name)?.value ?? null; },
+  querySelector(selector) { return selector === 'style' ? flowStyle : null; },
+  querySelectorAll(selector) { return selector === '[id]' ? [markerNode] : [markerNode, edgeNode, flowStyle]; },
+};
+const flowMedia = {
+  tagName: 'svg', getBoundingClientRect() { return { width: 320 }; }, cloneNode() { return flowClone; },
+};
+const flowTarget = { closest(selector) { return selector.startsWith('#') ? {} : flowMedia; } };
+doc.handlers.click({ target: flowTarget, preventDefault() {} });
+assert.equal(flowClone.class, 'mermaid-svg flowchart');
+assert.equal(flowClone.style.width, '520px');
+assert.equal(flowClone.style.maxWidth, undefined);
+assert.equal(flowClone.id, 'mermaid-y-viewer-2');
+assert.NotEqual?.(markerNode.id, 'm-end');
+assert.equal(markerNode.id, 'mermaid-y-viewer-2-m-end');
+assert.equal(edgeAttr.value, 'url(#mermaid-y-viewer-2-m-end)');
+assert.equal(flowStyle.textContent, '#mermaid-y-viewer-2 .node{filter:url(#mermaid-y-viewer-2-m-end)}');
 close.handlers.click();
 stage.handlers.pointerdown({ button: 0, pointerId: 3, clientX: 300, clientY: 300 });
 stage.handlers.pointerup({ pointerId: 3 });
@@ -5495,6 +5537,39 @@ def test_mermaid_thumbnail_preserves_code_footprint(tmp_path: Path, width: int) 
       assert page.locator("#image-modal").evaluate("element => element.open")
       modal = page.locator("#image-modal-stage svg").bounding_box()
       assert thumbnail and modal and modal["height"] > thumbnail["height"]
+      parity = page.evaluate("""() => {
+        const thumbDiag = document.querySelector('#report .mermaid-diagram');
+        const thumbSvg = document.querySelector('#report .mermaid-svg');
+        const modalSvg = document.querySelector('#image-modal-stage > svg');
+        const thumbText = thumbSvg.querySelector('tspan, text');
+        const modalText = modalSvg.querySelector('tspan, text');
+        const thumbRect = thumbSvg.querySelector('.node rect');
+        const modalRect = modalSvg.querySelector('.node rect');
+        const allIds = [...document.querySelectorAll('[id]')].map(el => el.id);
+        return {
+          codeBg: getComputedStyle(thumbDiag).backgroundColor,
+          modalBg: getComputedStyle(modalSvg).backgroundColor,
+          thumbFontSize: getComputedStyle(thumbText).fontSize,
+          modalFontSize: getComputedStyle(modalText).fontSize,
+          thumbFill: getComputedStyle(thumbRect).fill,
+          modalFill: getComputedStyle(modalRect).fill,
+          thumbStroke: getComputedStyle(thumbRect).stroke,
+          modalStroke: getComputedStyle(modalRect).stroke,
+          thumbFilter: getComputedStyle(thumbRect).filter,
+          modalFilter: getComputedStyle(modalRect).filter,
+          hasFlowchartClass: modalSvg.classList.contains('flowchart'),
+          duplicateIdCount: allIds.length - new Set(allIds).size,
+        };
+      }""")
+      assert parity["modalBg"] == parity["codeBg"]
+      assert parity["modalBg"] != "rgba(0, 0, 0, 0)"
+      assert parity["modalFontSize"] == parity["thumbFontSize"]
+      assert parity["modalFill"] == parity["thumbFill"]
+      assert parity["modalStroke"] == parity["thumbStroke"]
+      assert parity["thumbFilter"] == "none"
+      assert parity["modalFilter"] == "none"
+      assert parity["hasFlowchartClass"] is True
+      assert parity["duplicateIdCount"] == 0
       page.screenshot(path=str(tmp_path / f"diagram-modal-{width}.png"))
       initial_key = page.evaluate(
         "Object.keys(localStorage).find(key => key.startsWith('steer:mermaid:v2:')).split(':').pop()"
