@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Retry failed browser write actions automatically three times with the same request ID, removing manual retry controls.
+
 - Name unnamed and pasted composer uploads with epoch milliseconds and prepend `{messageID}-` on disk after send.
 
 - Relocate task-linked files under `uploads/{taskID}/` and mark missing files `(lost)` dynamically.

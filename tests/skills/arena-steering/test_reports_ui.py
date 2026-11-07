@@ -418,12 +418,14 @@ def test_failed_answer_retains_draft_and_retry_is_idempotent(
       page.evaluate(
         """committed => {
         const original = window.fetch.bind(window);
-        let fail = true;
+        window.answerRequestIds = [];
+        let attempts = 0;
         window.fetch = async (...args) => {
           if (String(args[0]) === '/reports/decision/answers' && args[1]?.method === 'POST') {
-            if (fail) {
-              fail = false;
-              if (committed) await original(...args);
+            attempts += 1;
+            window.answerRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+            if (attempts <= 3) {
+              if (attempts === 1 && committed) await original(...args);
               throw new Error('Connection lost');
             }
             await new Promise(resolve => { window.releaseRetry = resolve; });
@@ -434,16 +436,15 @@ def test_failed_answer_retains_draft_and_retry_is_idempotent(
         committed,
       )
       page.locator("#report-submit-float").click()
-      page.get_by_role("alert").get_by_text("Connection lost").wait_for()
-      assert page.locator('#field-choice input[value="B"]').is_checked()
+      page.wait_for_function("typeof window.releaseRetry === 'function'")
+      assert page.locator("#modal-shell[open]").count() == 0
+      assert page.evaluate(
+        "window.answerRequestIds.length === 4 && new Set(window.answerRequestIds).size === 1"
+      )
       if committed:
         page.locator("#report-ack-history").get_by_text(
           "Choice?: B", exact=False
         ).wait_for(timeout=8000)
-      page.locator("#report-submit-float").click()
-      page.get_by_role("button", name="Retry same action").click()
-      page.wait_for_function("typeof window.releaseRetry === 'function'")
-      if committed:
         assert (
           page.locator("#report-ack-history")
           .get_by_text("Choice?: B", exact=False)

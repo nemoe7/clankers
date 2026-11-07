@@ -336,10 +336,16 @@ def test_failed_upload_does_not_send_or_discard_the_draft() -> None:
     page.wait_for_function(
       "document.querySelector('.composer-attachment-chip')?.dataset.uploadStatus === 'failed'"
     )
+    assert page.locator("[data-retry-composer-attachment]").count() == 0
+    assert page.evaluate(
+      "window.uploadIds.length === 4 && new Set(window.uploadIds.slice(0, 4)).size === 1"
+    )
     page.locator("#send").click()
-    page.wait_for_function("window.uploadIds.length >= 2")
+    page.wait_for_function("window.uploadIds.length === 8")
     page.get_by_role("status").filter(has_text="A file did not upload").wait_for()
-    assert page.evaluate("window.uploadIds[0] === window.uploadIds[1]")
+    assert page.evaluate(
+      "new Set(window.uploadIds.slice(4, 8)).size === 1 && window.uploadIds[0] !== window.uploadIds[4]"
+    )
     assert page.locator("#msg").input_value() == "Do not lose this draft"
     assert page.locator(".composer-attachment-chip").count() == 1
     assert page.locator("#history .message").count() == 0
@@ -374,33 +380,35 @@ def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
     )
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
-      window.firstSend = true;
+      window.sendRequestIds = [];
+      window.sendAttempts = 0;
       window.fetch = async (...args) => {
-        const result = await original(...args);
-        if (window.firstSend && String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
-          window.firstSend = false;
-          return new Response(JSON.stringify({error: 'response lost'}), {
-            status: 503, headers: {'content-type': 'application/json'}
-          });
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          window.sendAttempts += 1;
+          window.sendRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+          const result = window.sendAttempts === 1 || window.sendAttempts === 4
+            ? await original(...args)
+            : null;
+          if (window.sendAttempts <= 3) {
+            return new Response(JSON.stringify({error: 'response lost'}), {
+              status: 503, headers: {'content-type': 'application/json'}
+            });
+          }
+          return result;
         }
-        return result;
+        return original(...args);
       };
     }""")
     page.locator("#msg").fill("Reply once despite a lost response")
     page.locator("#send").click()
-    page.locator("#retry-send").wait_for(timeout=6000)
-    assert (
-      page.locator(
-        '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa01"]'
-      ).count()
-      == 1
-    )
-    assert page.locator("#msg").input_value() == "Reply once despite a lost response"
-    page.locator("#retry-send").click()
-    page.wait_for_function("!document.querySelector('#retry-send')")
     page.wait_for_function(
-      "Array.from(document.querySelectorAll('#history .message'))"
+      "Array.from(document.querySelectorAll('#history .message:not([data-msg-id^=\"pending-\"])'))"
       ".some(e => e.textContent.includes('Reply once despite a lost response'))"
+    )
+    assert page.locator("#retry-send").count() == 0
+    assert page.locator("#discard-send").count() == 0
+    assert page.evaluate(
+      "window.sendRequestIds.length === 4 && new Set(window.sendRequestIds).size === 1"
     )
     matching = page.locator("#history .message").filter(
       has_text="Reply once despite a lost response"
@@ -604,9 +612,15 @@ def test_optimistic_send_failure_preserves_new_draft() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
+      window.sendRequestIds = [];
+      let held = false;
       window.fetch = async (...args) => {
         if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
-          await new Promise(resolve => { window.failSend = resolve; });
+          window.sendRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+          if (!held) {
+            held = true;
+            await new Promise(resolve => { window.failSend = resolve; });
+          }
           return new Response(JSON.stringify({error: 'offline'}), {
             status: 503, headers: {'content-type': 'application/json'}
           });
@@ -620,9 +634,14 @@ def test_optimistic_send_failure_preserves_new_draft() -> None:
     assert page.locator("#msg").input_value() == ""
     page.locator("#msg").fill("A newer draft")
     page.evaluate("window.failSend()")
-    page.locator("#retry-send").wait_for()
+    page.locator(".composer-send-status").filter(has_text="offline").wait_for()
+    assert page.evaluate(
+      "window.sendRequestIds.length === 4 && new Set(window.sendRequestIds).size === 1"
+    )
     assert page.locator("#msg").input_value() == "A newer draft"
-    assert page.locator("#retry-send").is_visible()
+    assert page.locator("#retry-send").count() == 0
+    assert page.locator("#discard-send").count() == 0
+    assert page.evaluate("sessionStorage.getItem('steer:pendingSend')") is None
 
 
 @pytest.mark.skipif(
@@ -641,12 +660,21 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
     parent.click()
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
+      window.sendRequestIds = [];
+      window.allowSend = false;
+      let held = false;
       window.fetch = async (...args) => {
         if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
-          await new Promise(resolve => { window.failSend = resolve; });
-          return new Response(JSON.stringify({error: 'offline'}), {
-            status: 503, headers: {'content-type': 'application/json'}
-          });
+          window.sendRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+          if (!window.allowSend) {
+            if (!held) {
+              held = true;
+              await new Promise(resolve => { window.failSend = resolve; });
+            }
+            return new Response(JSON.stringify({error: 'offline'}), {
+              status: 503, headers: {'content-type': 'application/json'}
+            });
+          }
         }
         return original(...args);
       };
@@ -664,7 +692,11 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
       page.locator("#history .message").filter(has_text="Reply waiting").is_visible()
     )
     page.evaluate("window.failSend()")
-    page.locator("#retry-send").wait_for()
+    page.locator(".composer-send-status").filter(has_text="offline").wait_for()
+    assert page.evaluate(
+      "window.sendRequestIds.length === 4 && new Set(window.sendRequestIds).size === 1"
+    )
+    assert page.locator("#retry-send").count() == 0
     assert (
       page.locator(
         '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa02"]'
@@ -672,6 +704,13 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
       == 1
     )
     assert page.locator("#msg").input_value() == "Reply waiting"
+    page.evaluate("window.allowSend = true")
+    page.locator("#send").click()
+    page.wait_for_function(
+      "Array.from(document.querySelectorAll('#history .message:not([data-msg-id^=\"pending-\"])'))"
+      ".some(e => e.textContent.includes('Reply waiting'))"
+    )
+    assert page.evaluate("window.sendRequestIds[4] !== window.sendRequestIds[0]")
 
 
 @pytest.mark.skipif(
