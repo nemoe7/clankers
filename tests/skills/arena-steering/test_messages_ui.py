@@ -2540,3 +2540,144 @@ def test_reply_seen_indicator_optimistic_rollback_and_revision_guard(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+EXPECTED_LINK_RGB = "rgb(41, 155, 255)"
+EXPECTED_PORTRAIT_ORIENTATION = "portrait"
+EXPECTED_LIST_MARKERS = ("disc", "circle", "square")
+REMOVED_LANDSCAPE_VIEWPORT = "855x325"
+REMOVED_LANDSCAPE_WIDTH = 855
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN to run the browser regression",
+)
+def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
+  tmp_path: Path,
+) -> None:
+  import json
+  import tomllib
+  import urllib.request
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  nuu_cfg = tomllib.loads(
+    (Path(__file__).resolve().parents[3] / "skills/arena-steering/nuu.toml").read_text(
+      encoding="utf-8"
+    )
+  )
+  assert REMOVED_LANDSCAPE_VIEWPORT not in nuu_cfg["audit"]["viewports"]
+  assert REMOVED_LANDSCAPE_WIDTH not in nuu_cfg["audit"]["widths"]
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for index in range(14):
+    app.messages.send_message(
+      f"Message {index}: [link](https://example.com/{index})\n\n"
+      "- Top item\n"
+      "  - Second item\n"
+      "    - Third item\n\n"
+      "- [x] Task item",
+      msg_id=f"dd{index:04x}",
+      blocking=False,
+    )
+
+  resolved_manifest = app.resolve_asset("/static/assets/manifest.webmanifest")
+  assert resolved_manifest is not None
+  manifest_json = json.loads(resolved_manifest[0].decode("utf-8"))
+  assert manifest_json["orientation"] == EXPECTED_PORTRAIT_ORIENTATION
+
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with urllib.request.urlopen(
+      f"http://127.0.0.1:{server.server_port}/static/assets/manifest.webmanifest",
+      timeout=5,
+    ) as resp:
+      assert "application/manifest+json" in resp.headers.get("Content-Type", "")
+      assert json.loads(resp.read().decode("utf-8"))["orientation"] == (
+        EXPECTED_PORTRAIT_ORIENTATION
+      )
+
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      desktop = browser.new_page(viewport={"width": 1372, "height": 883})
+      desktop.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      desktop.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      desktop.wait_for_function(
+        "() => document.querySelector('#history').scrollTop === 0"
+      )
+      app.dispatch("POST", "/messages/dd000d/ack", {"markdown": "Unseen reply."})
+      desktop.locator("#log-edited").wait_for(state="visible")
+      desktop.locator("#log-newest").wait_for(state="visible")
+      desktop_metrics = desktop.evaluate("""() => {
+        const msg = document.querySelector('.message[data-msg-id="dd0000"] .message-text');
+        const uls = [...msg.querySelectorAll('ul')];
+        const edited = document.querySelector('#log-edited');
+        const newest = document.querySelector('#log-newest').getBoundingClientRect();
+        return {
+          manifestHref: document.querySelector('link[rel="manifest"]')?.getAttribute('href'),
+          linkColor: getComputedStyle(msg.querySelector('a')).color,
+          markers: uls.slice(0, 3).map(ul => getComputedStyle(ul).listStyleType),
+          taskItemMarker: getComputedStyle(msg.querySelector('.task-list-item')).listStyleType,
+          editedTopCss: parseFloat(getComputedStyle(edited).top),
+          newestWidth: newest.width,
+          newestHeight: newest.height,
+        };
+      }""")
+      assert desktop_metrics["manifestHref"] == "/static/assets/manifest.webmanifest"
+      assert desktop_metrics["linkColor"] == EXPECTED_LINK_RGB
+      assert tuple(desktop_metrics["markers"]) == EXPECTED_LIST_MARKERS
+      assert desktop_metrics["taskItemMarker"] == "none"
+      assert desktop_metrics["newestWidth"] > desktop_metrics["newestHeight"]
+
+      mobile = browser.new_page(
+        viewport={"width": 411, "height": 799},
+        is_mobile=True,
+        has_touch=True,
+      )
+      mobile.add_init_script("""(() => {
+        window.__lockedOrientations = [];
+        try {
+          Object.defineProperty(window.screen, 'orientation', {
+            configurable: true,
+            value: {
+              lock(mode) {
+                window.__lockedOrientations.push(mode);
+                return Promise.resolve();
+              },
+            },
+          });
+        } catch {}
+      })();""")
+      mobile.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      mobile.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      mobile.wait_for_function(
+        "() => document.querySelector('#history').scrollTop === 0"
+      )
+      app.dispatch("POST", "/messages/dd000c/ack", {"markdown": "Second unseen reply."})
+      mobile.locator("#log-edited").wait_for(state="visible")
+      mobile_metrics = mobile.evaluate("""() => {
+        const edited = document.querySelector('#log-edited');
+        const toolbar = document.querySelector('.log-toolbar');
+        return {
+          locked: window.__lockedOrientations || [],
+          editedTopCss: parseFloat(getComputedStyle(edited).top),
+          editedTopRect: edited.getBoundingClientRect().top,
+          toolbarBottomRect: toolbar.getBoundingClientRect().bottom,
+        };
+      }""")
+      assert EXPECTED_PORTRAIT_ORIENTATION in mobile_metrics["locked"]
+      assert mobile_metrics["editedTopCss"] > desktop_metrics["editedTopCss"]
+      assert mobile_metrics["editedTopRect"] > mobile_metrics["toolbarBottomRect"]
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

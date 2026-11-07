@@ -287,6 +287,14 @@ function hydrateReportsWithCache(summaries) {
   return merged;
 }
 
+function syncReportRailTop() {
+  const panel = document.getElementById("view-reports");
+  if (!panel || panel.hidden) return;
+  document.documentElement.style?.setProperty?.(
+    "--reports-rail-top", `${Math.max(0, panel.getBoundingClientRect().top)}px`
+  );
+}
+
 function syncViewportHeight() {
   const vv = window.visualViewport;
   const vvScale = vv?.scale > 0 ? vv.scale : 1;
@@ -313,11 +321,16 @@ function syncViewportHeight() {
     Math.max(innerHeight, docHeight) - vvHeight >= MOBILE_KEYBOARD_MIN_SHRINK
   );
   document.documentElement.toggleAttribute("data-mobile-keyboard-open", keyboardOpen);
+  document.documentElement.style?.setProperty?.(
+    "--reports-keyboard-inset",
+    `${keyboardOpen ? Math.max(0, innerHeight - ((vv?.offsetTop || 0) + vvHeight)) : 0}px`
+  );
   // A panned visual viewport starts below the layout viewport. Keep the shell
   // within that visible region rather than leaving an offset-sized bottom gap.
   document.documentElement.style?.setProperty?.(
     "--app-offset-top", `${keyboardOpen ? Math.max(0, vv?.offsetTop || 0) : 0}px`
   );
+  syncReportRailTop();
   if (
     ((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) &&
     typeof window.scrollTo === "function"
@@ -375,6 +388,33 @@ let historyCache = null;
 let hiddenMessageCache = null;
 let loadedMessageRevision = null;
 let searchBase = null;
+const confirmedSeenRevisions = new Map();
+
+function preserveConfirmedRepliesSeen(messages) {
+  return (messages || []).map((item) => {
+    const confirmedRev = confirmedSeenRevisions.get(item.id);
+    if (!confirmedRev) return item;
+    if (item.replies_revision !== confirmedRev) {
+      confirmedSeenRevisions.delete(item.id);
+      return item;
+    }
+    return item.replies_seen ? item : { ...item, replies_seen: true };
+  });
+}
+
+function markMessageRevisionSeenInList(list, id, revision, modifiedAt) {
+  let changed = false;
+  const next = (list || []).map((item) => {
+    if (item.id !== id || item.replies_revision !== revision || item.replies_seen) return item;
+    changed = true;
+    return {
+      ...item,
+      replies_seen: true,
+      ...(modifiedAt && modifiedAt > (item.modified_at || "") ? { modified_at: modifiedAt } : {}),
+    };
+  });
+  return changed ? next : list;
+}
 
 export function messageMatchesQuery(message, query) {
   const needle = String(query || "").trim().toLowerCase();
@@ -418,9 +458,9 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
       }
     }
     const ids = new Set(fresh.map((item) => item.id));
-    const merged = before
+    const merged = preserveConfirmedRepliesSeen(before
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
-      : fresh;
+      : fresh);
     const current = store.getState();
     if (!before) loadedMessageRevision = result.revision;
     if (result.pending_message_id && current.optimisticMessage?.requestId === options.requestId) {
@@ -689,11 +729,44 @@ const handlers = {
   },
   async onMarkRepliesSeen(id, revision) {
     try {
-      await api.markRepliesSeen(id, revision);
+      const response = await api.markRepliesSeen(id, revision);
+      const confirmedMsg = response?.message;
+      if (!confirmedMsg || confirmedMsg.replies_revision === revision) {
+        confirmedSeenRevisions.set(id, revision);
+        const modifiedAt = confirmedMsg?.replies_revision === revision ? confirmedMsg.modified_at : "";
+        if (historyCache) {
+          historyCache = {
+            ...historyCache,
+            messages: markMessageRevisionSeenInList(historyCache.messages, id, revision, modifiedAt),
+          };
+        }
+        if (hiddenMessageCache) {
+          hiddenMessageCache = {
+            ...hiddenMessageCache,
+            messages: markMessageRevisionSeenInList(hiddenMessageCache.messages, id, revision, modifiedAt),
+          };
+        }
+        if (searchBase) {
+          searchBase = {
+            ...searchBase,
+            messages: markMessageRevisionSeenInList(searchBase.messages, id, revision, modifiedAt),
+          };
+        }
+        const current = store.getState().messages || [];
+        const nextMessages = markMessageRevisionSeenInList(current, id, revision, modifiedAt);
+        if (nextMessages !== current) {
+          lastDataSignature = "";
+          store.setState({ messages: nextMessages });
+        }
+      }
     } catch (error) {
-      if (!String(error.message).includes("(409)")) console.error(error);
+      if (String(error.message).includes("(409)")) {
+        await fetchMessagePage().catch(() => {});
+      } else {
+        console.error(error);
+      }
+      throw error;
     }
-    await refreshAll(true);
   },
   onStageComposerFiles(files) {
     return composerUploads.stage(files);
@@ -1061,6 +1134,7 @@ function renderApp(state) {
   if (messagesEl) messagesEl.hidden = state.activeTab !== "messages";
   if (tasksEl) tasksEl.hidden = state.activeTab !== "tasks";
   if (reportsEl) reportsEl.hidden = state.activeTab !== "reports";
+  if (state.activeTab === "reports") syncReportRailTop();
   markVisibleReport(state);
 
   if (state.activeTab !== "reports") lastReportRenderSignature = null;
@@ -1192,14 +1266,49 @@ function initImageModal() {
     clone.setAttribute("draggable", "false");
     if (media.tagName.toLowerCase() === "svg") {
       const sourceBox = media.getBoundingClientRect();
-      clone.setAttribute("class", "mermaid-svg");
-      if (sourceBox.width) clone.style.width = `${Math.round(sourceBox.width)}px`;
-      // Mermaid scopes its embedded styles to the diagram ID, so the copy keeps a unique one.
+      const existingClass = clone.getAttribute("class") || "";
+      clone.setAttribute(
+        "class",
+        existingClass.split(/\s+/).includes("mermaid-svg")
+          ? existingClass
+          : `mermaid-svg ${existingClass}`.trim(),
+      );
+      const viewBox = (clone.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+      const naturalWidth = viewBox.length === 4 && viewBox[2] > 0 ? viewBox[2] : sourceBox.width;
+      if (viewBox.length === 4 && viewBox[2] > 0) {
+        if (clone.style.removeProperty) clone.style.removeProperty("max-width");
+        else delete clone.style.maxWidth;
+      }
+      if (naturalWidth) clone.style.width = `${Math.round(naturalWidth)}px`;
+      // Mermaid scopes styles and marker references to diagram IDs, so each viewer copy rewrites its IDs.
       if (sourceId) {
         const viewerId = `${sourceId}-viewer-${++viewerSeq}`;
+        const ids = new Map([[sourceId, viewerId]]);
+        const inner = clone.querySelectorAll ? [...clone.querySelectorAll("[id]")] : [];
+        for (const element of inner) {
+          const id = element.getAttribute?.("id") || element.id;
+          if (id) ids.set(id, `${viewerId}-${id}`);
+        }
+        const rewriteRefs = (value) =>
+          String(value).replace(/#([\w-]+)/g, (match, id) => (ids.has(id) ? `#${ids.get(id)}` : match));
         clone.setAttribute("id", viewerId);
-        const style = clone.querySelector("style");
-        if (style) style.textContent = style.textContent.split(`#${sourceId}`).join(`#${viewerId}`);
+        if (clone.querySelectorAll) {
+          for (const element of [clone, ...clone.querySelectorAll("*")]) {
+            for (const attribute of [...(element.attributes || [])]) {
+              if (attribute.name === "id" && ids.has(attribute.value)) {
+                element.setAttribute("id", ids.get(attribute.value));
+              } else {
+                element.setAttribute(attribute.name, rewriteRefs(attribute.value));
+              }
+            }
+            if (element.localName === "style") {
+              element.textContent = rewriteRefs(element.textContent || "");
+            }
+          }
+        } else {
+          const style = clone.querySelector("style");
+          if (style) style.textContent = rewriteRefs(style.textContent || "");
+        }
       }
     }
     stage.replaceChildren(clone);
@@ -1366,7 +1475,22 @@ function openViolationForm(health, trigger, draft = null, failure = null) {
   });
 }
 
+function lockMobilePortrait() {
+  if (!window.matchMedia?.("(pointer: coarse), (max-width: 48em)")?.matches) return;
+  const requestLock = () => {
+    try {
+      const result = window.screen?.orientation?.lock?.("portrait");
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } catch {
+      // Browsers outside installed or fullscreen mobile contexts reject orientation locks.
+    }
+  };
+  requestLock();
+  window.addEventListener("pointerdown", requestLock, { once: true, passive: true });
+}
+
 function initEvents() {
+  lockMobilePortrait();
   initImageModal();
   syncViewportHeight();
   window.addEventListener("resize", syncViewportHeight);
@@ -1515,16 +1639,46 @@ function initEvents() {
 }
 
 let activeTooltip = null;
+let pendingTooltip = null;
+let lastTooltipClosedAt = -Infinity;
+const tooltipCloseTimers = new WeakMap();
+const TOOLTIP_DELAY = 500;
+const TOOLTIP_ANIMATION = 150;
+
+function cancelPendingTooltip() {
+  if (!pendingTooltip) return;
+  clearTimeout(pendingTooltip.timer);
+  pendingTooltip = null;
+}
 
 function hideTitleTooltip() {
+  cancelPendingTooltip();
   if (!activeTooltip) return;
-  const { target, title, describedBy, addedLabel, tip } = activeTooltip;
-  if (!target.hasAttribute("title")) target.setAttribute("title", title);
-  if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
-  if (describedBy === null) target.removeAttribute("aria-describedby");
-  else target.setAttribute("aria-describedby", describedBy);
-  tip.remove();
+  const { target, title, describedBy, addedLabel, tip, kind } = activeTooltip;
   activeTooltip = null;
+  lastTooltipClosedAt = performance.now();
+  if (kind === "title") {
+    if (!target.hasAttribute("title")) target.setAttribute("title", title);
+    if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
+    if (describedBy === null) target.removeAttribute("aria-describedby");
+    else target.setAttribute("aria-describedby", describedBy);
+    tip.removeAttribute("id");
+    tip.removeAttribute("role");
+    tip.setAttribute("aria-hidden", "true");
+  } else {
+    tip.classList.remove("tooltip-active");
+  }
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (kind === "title") tip.remove();
+    return;
+  }
+  tip.classList.add("tooltip-closing");
+  const timer = setTimeout(() => {
+    tip.classList.remove("tooltip-closing");
+    if (kind === "title") tip.remove();
+    tooltipCloseTimers.delete(tip);
+  }, TOOLTIP_ANIMATION);
+  tooltipCloseTimers.set(tip, timer);
 }
 
 function positionTitleTooltip(target, tip) {
@@ -1560,7 +1714,7 @@ function showTitleTooltip(target) {
   target.setAttribute("aria-describedby", [describedBy, tip.id].filter(Boolean).join(" "));
   (target.closest("dialog[open]") || document.body).append(tip);
   positionTitleTooltip(target, tip);
-  activeTooltip = { target, title, describedBy, addedLabel, tip };
+  activeTooltip = { target, title, describedBy, addedLabel, tip, kind: "title" };
 }
 
 function positionSurveyTooltip(trigger) {
@@ -1574,35 +1728,77 @@ function positionSurveyTooltip(trigger) {
   if (box.top < body.getBoundingClientRect().top || coversHeading) tip.classList.remove("above");
 }
 
+function showSurveyTooltip(target) {
+  const tip = target?.querySelector(".survey-answer-tooltip");
+  if (!tip) return;
+  const timer = tooltipCloseTimers.get(tip);
+  if (timer) clearTimeout(timer);
+  tooltipCloseTimers.delete(tip);
+  tip.classList.remove("tooltip-closing");
+  tip.classList.add("tooltip-active");
+  positionSurveyTooltip(target);
+  activeTooltip = { target, tip, kind: "survey" };
+}
+
+function requestTooltip(target, kind, immediate = false) {
+  if (!target) return;
+  if (activeTooltip?.target === target) {
+    cancelPendingTooltip();
+    return;
+  }
+  if (pendingTooltip?.target === target && !immediate) return;
+  const showNow = immediate || Boolean(activeTooltip) || performance.now() - lastTooltipClosedAt <= TOOLTIP_DELAY;
+  hideTitleTooltip();
+  const show = () => {
+    pendingTooltip = null;
+    if (!target.isConnected) return;
+    if (kind === "survey") showSurveyTooltip(target);
+    else showTitleTooltip(target);
+  };
+  if (showNow) show();
+  else pendingTooltip = { target, timer: setTimeout(show, TOOLTIP_DELAY) };
+}
+
+function tooltipTarget(node) {
+  const survey = node?.closest?.(".survey-id-wrap, .survey-cap-pill");
+  if (survey?.querySelector(".survey-answer-tooltip")) return { target: survey, kind: "survey" };
+  const title = node?.closest?.("[title]");
+  if (title && !title.dataset.tooltip) return { target: title, kind: "title" };
+  if (activeTooltip?.target.contains(node)) return { target: activeTooltip.target, kind: activeTooltip.kind };
+  return null;
+}
+
 document.addEventListener("mouseover", (event) => {
-  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
-  const target = event.target.closest?.("[title]");
-  if (target) showTitleTooltip(target);
+  const match = tooltipTarget(event.target);
+  if (match) requestTooltip(match.target, match.kind);
   else if (activeTooltip && !activeTooltip.target.contains(event.target)) hideTitleTooltip();
 });
 document.addEventListener("mouseout", (event) => {
-  if (activeTooltip && !(event.relatedTarget instanceof Node && activeTooltip.target.contains(event.relatedTarget)) && document.activeElement !== activeTooltip.target) hideTitleTooltip();
+  const target = pendingTooltip?.target || activeTooltip?.target;
+  if (!target) return;
+  if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return;
+  if (target.contains(document.activeElement)) return;
+  hideTitleTooltip();
 });
 document.addEventListener("focusin", (event) => {
-  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
-  if (event.target.matches?.(":focus-visible")) showTitleTooltip(event.target.closest?.("[title]"));
+  if (!event.target.matches?.(":focus-visible")) return;
+  const match = tooltipTarget(event.target);
+  if (match) requestTooltip(match.target, match.kind, true);
 });
 document.addEventListener("focusout", () => hideTitleTooltip());
 document.addEventListener("click", () => hideTitleTooltip(), true);
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideTitleTooltip(); });
 window.addEventListener("resize", hideTitleTooltip);
-document.addEventListener("scroll", () => {
-  hideTitleTooltip();
-  positionSurveyTooltip(document.querySelector(".survey-id-wrap:hover, .survey-cap-pill:hover, .survey-id-wrap:focus-within, .survey-cap-pill:focus-within"));
-}, true);
+document.addEventListener("scroll", hideTitleTooltip, true);
 new MutationObserver(() => {
+  if (pendingTooltip && !pendingTooltip.target.isConnected) cancelPendingTooltip();
   if (!activeTooltip) return;
-  const { target, tip, addedLabel } = activeTooltip;
+  const { target, tip, addedLabel, kind } = activeTooltip;
   if (!target.isConnected) {
     hideTitleTooltip();
     return;
   }
-  if (!target.hasAttribute("title")) return;
+  if (kind !== "title" || !target.hasAttribute("title")) return;
   const title = target.getAttribute("title").trim();
   if (!title) {
     hideTitleTooltip();
