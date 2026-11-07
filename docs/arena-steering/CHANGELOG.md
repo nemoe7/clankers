@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep consecutive optimistic message lines in one paragraph.
+
 - Require imperative wording for report options.
 
 - Align the app shell with a panned mobile visual viewport while the keyboard is open.

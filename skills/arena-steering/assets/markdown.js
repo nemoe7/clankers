@@ -516,6 +516,13 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
   let inList = false;
   let tableRows = [];
   let listItems = [];
+  let paragraphLines = [];
+
+  const closeParagraph = () => {
+    if (!paragraphLines.length) return;
+    html.push(`<p>${renderInlineMarkdown(paragraphLines.join("\n"))}</p>`);
+    paragraphLines = [];
+  };
 
   const renderList = () => {
     if (!listItems.length) return "";
@@ -578,6 +585,7 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
   for (const line of lines) {
     const fenceMatch = line.trim().match(/^```([\w+-]*)\s*$/);
     if (fenceMatch || (inCode && line.trim().startsWith("```"))) {
+      closeParagraph();
       closeList();
       closeTable();
       if (inCode) {
@@ -597,11 +605,13 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
     }
     const trimmed = line.trim();
     if (!trimmed) {
+      closeParagraph();
       closeList();
       closeTable();
       continue;
     }
     if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      closeParagraph();
       closeList();
       const cells = trimmed.slice(1, -1).split("|");
       tableRows.push(cells);
@@ -610,6 +620,7 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
     closeTable();
     const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
     if (heading) {
+      closeParagraph();
       closeList();
       const level = heading[1].length;
       const rawTitle = heading[2].trim();
@@ -624,6 +635,7 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
     }
     const quote = trimmed.match(/^>\s?(.*)$/);
     if (quote) {
+      closeParagraph();
       closeList();
       html.push(
         `<blockquote><p>${renderInlineMarkdown(quote[1])}</p></blockquote>`
@@ -632,6 +644,7 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
     }
     const bullet = trimmed.match(/^[-*]\s+(.+)$/);
     if (bullet) {
+      closeParagraph();
       inList = true;
       const indent = line.length - line.trimStart().length;
       const taskMatch = bullet[1].match(/^\[([ xX])\]\s+(.+)$/);
@@ -654,14 +667,16 @@ export function renderMarkdownBlock(markdown, { headings = null } = {}) {
       continue;
     }
     if (/^ {0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+      closeParagraph();
       closeList();
       closeTable();
       html.push("<hr>");
       continue;
     }
     closeList();
-    html.push(`<p>${renderInlineMarkdown(trimmed)}</p>`);
+    paragraphLines.push(trimmed);
   }
+  closeParagraph();
   closeList();
   closeTable();
   if (inCode) {

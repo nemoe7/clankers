@@ -2145,3 +2145,42 @@ def test_message_edge_fades_in_both_motion_preferences() -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_multiline_optimistic_paragraph_matches_confirmed_render(
+  tmp_path: Path,
+) -> None:
+  with composer_page(390) as page:
+    boundary_html = page.evaluate("""async () => {
+      const { renderMarkdownBlock } = await import('/static/assets/markdown.js');
+      return renderMarkdownBlock('one\\ntwo\\n\\nthree\\n# Heading\\n- item\\nlast');
+    }""")
+    assert boundary_html.startswith("<p>one\ntwo</p>\n<p>three</p>")
+    assert boundary_html.index("<h1") < boundary_html.index("<ul>")
+    assert boundary_html.endswith("<p>last</p>")
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          await new Promise(resolve => { window.releaseSend = resolve; });
+        }
+        return original(...args);
+      };
+    }""")
+    page.locator("#msg").fill("first line\nsecond **line**\nthird line")
+    page.locator("#send").click()
+    page.wait_for_function("typeof window.releaseSend === 'function'")
+    text = page.locator("#history .message:last-child .message-text")
+    pending_html = text.inner_html()
+    pending_height = text.bounding_box()["height"]
+    assert text.locator("p").count() == 1
+    page.screenshot(path=str(tmp_path / "multiline-pending.png"))
+    page.evaluate("window.releaseSend()")
+    page.locator("#history .message:last-child button.receipt-id").wait_for()
+    assert text.inner_html() == pending_html
+    assert abs(text.bounding_box()["height"] - pending_height) < 1
+    page.screenshot(path=str(tmp_path / "multiline-confirmed.png"))
