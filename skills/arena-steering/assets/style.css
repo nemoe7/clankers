@@ -2594,7 +2594,7 @@ article#report.report img,
 @media (min-width: 75em) {
   .report-toc {
     position: fixed;
-    top: 76px;
+    top: var(--reports-rail-top, 63px);
     right: calc(50vw + 466px);
     width: min(216px, calc(50vw - 478px));
     z-index: 2;
@@ -2610,7 +2610,7 @@ article#report.report img,
 
   .report-rail {
     position: fixed;
-    top: 76px;
+    top: var(--reports-rail-top, 63px);
     bottom: 0;
     left: calc(50vw + 466px);
     width: min(216px, calc(50vw - 478px));
