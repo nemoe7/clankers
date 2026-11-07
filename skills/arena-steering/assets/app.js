@@ -752,11 +752,10 @@ const handlers = {
     if (!wasSearching && searching) {
       historyCache = { messages: [...(state.messages || [])], hasMore: state.messagesHasMore };
     }
-    store.setState({ searchQuery: query });
     if (wasSearching && !searching && historyCache) {
       searchBase = null;
-      loadedMessageKey = messageQueryKey(store.getState());
-      store.setState({ messages: historyCache.messages, messagesHasMore: historyCache.hasMore, messagesError: "" });
+      loadedMessageKey = messageQueryKey({ ...state, searchQuery: query });
+      store.setState({ searchQuery: query, messages: historyCache.messages, messagesHasMore: historyCache.hasMore, messagesError: "" });
       historyCache = null;
       fetchMessagePage();
       return;
@@ -764,8 +763,9 @@ const handlers = {
     const needle = query.trim().toLowerCase();
     if (searchBase && needle.startsWith(searchBase.query)) {
       messageEpoch += 1;
-      loadedMessageKey = messageQueryKey(store.getState());
+      loadedMessageKey = messageQueryKey({ ...state, searchQuery: query });
       store.setState({
+        searchQuery: query,
         messages: searchBase.messages.filter((item) => messageMatchesQuery(item, needle)),
         messagesHasMore: searchBase.hasMore,
         messagesError: "",
@@ -774,6 +774,7 @@ const handlers = {
       return;
     }
     searchBase = null;
+    store.setState({ searchQuery: query, messages: [], messagesHasMore: false, messagesError: "", messagesLoading: true });
     fetchMessagePage({ reset: true });
   },
   async onLoadOlderMessages() {

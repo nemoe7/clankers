@@ -3746,9 +3746,13 @@ def test_message_search_can_page_while_an_old_query_is_loading() -> None:
         page.set_default_timeout(6000)
         page.add_init_script("""(() => {
           const originalFetch = window.fetch.bind(window);
+          window.searchPagingRequests = [];
           window.fetch = async (...args) => {
-            const response = await originalFetch(...args);
             const url = String(args[0]);
+            if (url.includes('/messages?') && url.includes('q=Searchable')) {
+              window.searchPagingRequests.push(url);
+            }
+            const response = await originalFetch(...args);
             if (url.includes('/messages?') && url.includes('before=') && !window.heldOldPage) {
               window.heldOldPage = true;
               await new Promise(resolve => { window.releaseOldPage = resolve; });
@@ -3781,6 +3785,12 @@ def test_message_search_can_page_while_an_old_query_is_loading() -> None:
         page.wait_for_function("window.oldPageConsumed")
         assert page.locator("#log-search").input_value() == "Searchable"
         assert page.locator("#history .message").count() == 40
+        requests = page.evaluate("window.searchPagingRequests")
+        assert requests and "before=" not in requests[0], requests
+        ids = page.locator("#history .message").evaluate_all(
+          "elements => elements.map(element => element.dataset.msgId)"
+        )
+        assert ids == [f"{index:06x}" for index in range(5, 45)]
       finally:
         browser.close()
   finally:

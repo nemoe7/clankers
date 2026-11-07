@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Keep message paging consistent when search changes during an older request.
+
 - Keep consecutive optimistic message lines in one paragraph.
 
 - Require imperative wording for report options.
