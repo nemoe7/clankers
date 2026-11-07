@@ -2446,31 +2446,7 @@ code.msg-id {
 .report-picker[data-scrolled-start],
 .report-picker[data-scrolled-end],
 #report-ack-history[data-scrolled-start],
-#report-ack-history[data-scrolled-end] {
-  -webkit-mask-image:
-    linear-gradient(
-      to bottom,
-      transparent 0,
-      black var(--rail-fade-start),
-      black calc(100% - var(--rail-fade-end)),
-      transparent 100%
-    ),
-    linear-gradient(to left, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
-  mask-image:
-    linear-gradient(
-      to bottom,
-      transparent 0,
-      black var(--rail-fade-start),
-      black calc(100% - var(--rail-fade-end)),
-      transparent 100%
-    ),
-    linear-gradient(to left, black var(--scrollbar-carve), transparent var(--scrollbar-carve));
-  -webkit-mask-composite: source-over;
-  mask-composite: add;
-}
-
-.report-picker[data-scrolled-start],
-.report-picker[data-scrolled-end],
+#report-ack-history[data-scrolled-end],
 .report-toc[data-scrolled-start],
 .report-toc[data-scrolled-end] {
   -webkit-mask-image: linear-gradient(

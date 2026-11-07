@@ -4304,6 +4304,37 @@ def test_long_report_acknowledgements_do_not_hide_the_report_picker(
             ackMask: getComputedStyle(ack).maskImage,
           };
         }""")
+        if report_count > 3:
+          page.evaluate("""() => {
+            document.querySelector('#report-picker').scrollTop = 0;
+            document.querySelector('#report-ack-history').scrollTop = 0;
+          }""")
+          page.wait_for_function("""() => {
+            const picker = document.querySelector('#report-picker');
+            const answers = document.querySelector('#report-ack-history');
+            return picker.hasAttribute('data-scrolled-end') && !picker.hasAttribute('data-scrolled-start') &&
+              answers.hasAttribute('data-scrolled-end') && !answers.hasAttribute('data-scrolled-start');
+          }""")
+          masks = page.evaluate("""() => [
+            getComputedStyle(document.querySelector('#report-picker')).maskImage,
+            getComputedStyle(document.querySelector('#report-ack-history')).maskImage,
+          ]""")
+          assert masks[0] == masks[1], masks
+          page.evaluate("""() => {
+            for (const selector of ['#report-picker', '#report-ack-history']) {
+              const element = document.querySelector(selector);
+              element.scrollTop = (element.scrollHeight - element.clientHeight) / 2;
+            }
+          }""")
+          page.wait_for_function("""() => ['#report-picker', '#report-ack-history'].every(selector => {
+            const element = document.querySelector(selector);
+            return element.hasAttribute('data-scrolled-start') && element.hasAttribute('data-scrolled-end');
+          })""")
+          masks = page.evaluate("""() => [
+            getComputedStyle(document.querySelector('#report-picker')).maskImage,
+            getComputedStyle(document.querySelector('#report-ack-history')).maskImage,
+          ]""")
+          assert masks[0] == masks[1], masks
         page.screenshot(path=str(tmp_path / f"report-switch-long-ack-{width}.png"))
         assert geometry["rowHeight"] > 0, geometry
         assert geometry["height"] >= geometry["rowHeight"], geometry

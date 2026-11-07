@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Match report answer scroll fades to the report picker.
+
 - Keep message paging consistent when search changes during an older request.
 
 - Keep consecutive optimistic message lines in one paragraph.
