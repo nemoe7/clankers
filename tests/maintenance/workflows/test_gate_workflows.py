@@ -130,26 +130,45 @@ def test_distribution_one_run_removal_is_scoped_and_validated(monkeypatch):
     assert not calls
 
 
+def test_distribution_validates_each_domain_before_push(monkeypatch):
+  from pathlib import Path
+  from types import SimpleNamespace
+
+  planner = distribution_planner()
+  plan = planner.build_plan()
+  calls = []
+
+  def run(arguments, *, env, check):
+    calls.append(env)
+    return SimpleNamespace(returncode=1 if env["SKILLS"] == "nuu" else 0)
+
+  monkeypatch.setattr(planner.subprocess, "run", run)
+  assert (
+    planner.validate_domains(
+      plan["domains"], Path(planner.__file__).with_name("sync.sh"), {}
+    )
+    == 1
+  )
+  assert len(calls) == len(plan["domains"])
+  assert all(env["VALIDATE_ONLY"] == "true" for env in calls)
+  assert [env["REPOS"] for env in calls] == [row["repos"] for row in plan["domains"]]
+
+
 def test_distribution_has_domain_rows_and_one_push_job():
   from pathlib import Path
 
   path = Path(__file__).resolve().parents[3] / ".github/workflows/distribute.yml"
   document = yaml.safe_load(path.read_text())
   jobs = document["jobs"]
-  assert jobs["domains"]["strategy"]["fail-fast"] is False
-  assert "needs.plan.outputs.matrix" in jobs["domains"]["strategy"]["matrix"]
-  assert jobs["domains"]["needs"] == "plan"
-  assert set(jobs["push"]["needs"]) == {"plan", "domains"}
+  assert set(jobs) == {"sync"}
   assert document["concurrency"]["cancel-in-progress"] is False
-  checks = [
-    step
-    for step in jobs["domains"]["steps"]
-    if step.get("uses") == "./.github/actions/distribute-sync"
-  ]
-  assert checks and checks[0]["with"]["validate-only"] is True
-  pushes = [step for step in jobs["push"]["steps"] if "--push" in step.get("run", "")]
-  assert len(pushes) == len(checks)
-  assert "TARGETS_JSON" in pushes[0]["env"]
+  steps = jobs["sync"]["steps"]
+  check = next(i for i, step in enumerate(steps) if "--validate" in step.get("run", ""))
+  push = next(i for i, step in enumerate(steps) if "--push" in step.get("run", ""))
+  assert check < push
+  assert steps[push]["env"]["TARGETS_JSON"] == "${{ steps.plan.outputs.targets }}"
+  assert "if" not in steps[push]
+  assert "CLANKERS_DIST_PAT" not in steps[check].get("env", {})
 
 
 def test_base_document_passes():
@@ -455,8 +474,7 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists(monkeypatch):
     "nemoizer": "nemoizer_repos",
   }
   steps = [step for job in jobs.values() for step in job["steps"]]
-  plan_step = next(step for step in steps if step.get("id") == "plan")
-  assert plan_step["env"] == {
+  assert jobs["sync"]["env"] == {
     planner.INPUTS[domain]: "${{ inputs." + name + " }}"
     for domain, name in manual.items()
   }
