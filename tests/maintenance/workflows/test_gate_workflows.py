@@ -370,24 +370,25 @@ def test_artifacts_triggers_keep_both_path_families():
 
 def test_artifacts_job_gating_preserves_the_original_semantics():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  package = jobs["package-gpt-plugins"]["if"]
-  publish = jobs["publish-clankers-rules"]["if"]
-  assert "validate-gpt-plugins" not in jobs
-  assert "github.ref == 'refs/heads/main'" in package
-  assert "github.event_name != 'pull_request'" in package
-  assert "needs.changes.outputs.package == 'true'" in package
+  release = jobs["release-gpt-plugins"]
+  publisher = jobs["publish-clankers-rules"]
+  publish = publisher["if"]
+  assert set(jobs) == {"release-gpt-plugins", "publish-clankers-rules"}
+  assert "github.ref == 'refs/heads/main'" in release["if"]
+  assert "github.event_name != 'pull_request'" in release["if"]
+  assert "steps.detect.outputs.package == 'true'" in release["steps"][-1]["if"]
   assert "github.event_name == 'push'" in publish
   assert "github.ref == 'refs/heads/main'" in publish
-  assert "needs.changes.outputs.rules == 'true'" in publish
+  assert "steps.detect.outputs.rules == 'true'" in publisher["steps"][-1]["if"]
   # The publisher never runs from a manual dispatch.
   assert "workflow_dispatch" not in publish
 
 
 def test_artifacts_job_concurrency_moves_to_job_level():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  assert jobs["package-gpt-plugins"]["concurrency"] == {
-    "group": "Package-GPT-Plugins-${{ github.ref }}",
-    "cancel-in-progress": True,
+  assert jobs["release-gpt-plugins"]["concurrency"] == {
+    "group": "Release-GPT-Plugins-${{ github.repository }}",
+    "cancel-in-progress": False,
   }
   assert jobs["publish-clankers-rules"]["concurrency"] == {
     "group": "publish-clankers-rules-${{ github.repository }}",
@@ -663,18 +664,17 @@ def test_artifacts_excludes_retired_proxy_publishing():
 
 
 def test_changes_job_reports_the_artifact_groups():
-  job = load_workflow("artifacts.yml")["jobs"]["changes"]
-  assert set(job["outputs"]) == {"package", "rules"}
-  script = "\n".join(step.get("run", "") for step in job["steps"])
-  # The path rules moved to one script, so the job carries no path case block.
-  assert "maintenance/workflows/changed_paths.py --step artifacts" in script
-  assert "case " not in script
+  jobs = load_workflow("artifacts.yml")["jobs"]
+  for job in jobs.values():
+    script = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "maintenance/workflows/changed_paths.py --step artifacts" in script
+    assert "case " not in script
 
 
 def test_artifacts_release_job_keeps_the_release_semantics():
   job = load_workflow("artifacts.yml")["jobs"]["release-gpt-plugins"]
   assert job["permissions"] == {"contents": "write"}
-  assert "needs.changes.outputs.package == 'true'" in job["if"]
+  assert "steps.detect.outputs.package == 'true'" in job["steps"][-1]["if"]
   assert "github.event_name != 'pull_request'" in job["if"]
   assert job["concurrency"] == {
     "group": "Release-GPT-Plugins-${{ github.repository }}",
