@@ -4,8 +4,8 @@ description: >
   Find AI-flavored synonyms and replace them with the plain word, using one
   rotation table and a bundled linter that reads every text file, comments and
   prose included. Use when naming a variable, field, parameter, key, or prose
-  term, when a draft sounds machine-written, or when asked to run or extend the
-  rotation table.
+  term, when a draft sounds machine-written, or when asked to run the rotation
+  table.
 compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 ---
 
@@ -78,12 +78,6 @@ python3 skills/nemoizer/scripts/nemoize.py --audit .
 ```
 
 Delete a marker when the line no longer needs it.
-
-## Adding a row
-
-1. Add the row to the table above.
-2. Add each inflection and its plain word to `ROTATION_FORMS` and add its rule and pattern to `ROTATIONS` in `scripts/nemoize.py`.
-3. Run `python3 -m pytest skills/nemoizer/scripts/test_nemoize.py`.
 
 ## Prose review
 

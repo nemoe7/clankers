@@ -12,6 +12,10 @@ This log has no Unreleased section.
 
 - Align rotation guidance with explicit forms and current mappings.
 
+### Removed
+
+- Remove self-maintenance instructions from the usage skill.
+
 ## [0.1.15]
 
 ### Added
