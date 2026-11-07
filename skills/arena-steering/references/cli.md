@@ -36,9 +36,9 @@ An attached message adds each file path as a home-relative task detail without a
 | `steer task [-d]` | First runnable task or `No current task.` | 0 on inspection, 1 on error |
 | `steer task ID` | Status, phase, scope, links, priority, size, and details | 0 on inspection, 1 on error |
 | `steer task new ID TITLE -z SIZE [-p PRIORITY] [-T TYPE]... [-S SCOPE] [-d DETAIL]... [-m MSG] [-r REPORT] [-k TASK] [-g GATE]` | New task record | 0 on creation, 1 on invalid input or cycle |
-| `steer task mod ID deets TEXT` | Updated task record | 0 on update, 1 on error |
-| `steer task mod ID deets rm NUMBER` | Updated task without that detail | 0 on update, 1 on error |
-| `steer task mod ID links TYPE LINK [-A DETAIL] [--delete NUMBER]` | Updated links and details | 0 on update, 1 on error |
+| `steer task mod ID deets TEXT -z SIZE` | Updated task record | 0 on update, 1 on error |
+| `steer task mod ID deets rm NUMBER -z SIZE` | Updated task without that detail | 0 on update, 1 on error |
+| `steer task mod ID links TYPE LINK [-A DETAIL] [--delete NUMBER] [-z SIZE]` | Updated links and details | 0 on update, 1 on error |
 | `steer task mod ID links rm TYPE LINK` | Updated task without that link | 0 on update, 1 on error |
 | `steer task mod ID FIELD VALUE` | Updated priority, size, status, title, type, or scope | 0 on update, 1 on error |
 | `steer task mod ID types TYPE ...` | Updated ordered phases | 0 on update, 1 on error |

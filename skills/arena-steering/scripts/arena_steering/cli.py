@@ -537,7 +537,10 @@ def _run_ack(
   for item in acked:
     if isinstance(item, Message):
       print("If msg asks for work or details, add to task", file=out)
-      print(f"steer task mod <task-id> links msg {item.id} -A '<detail>'", file=out)
+      print(
+        f"steer task mod <task-id> links msg {item.id} -A '<detail>' -z <size>",
+        file=out,
+      )
     if isinstance(item, ReportAnswer):
       for task_id, details in item.task_details_added.items():
         print(f"Added to task {task_id}:", file=out)
@@ -678,6 +681,44 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
   raise ValueError(f"Unrecognized task arguments: {args}")
 
 
+def _parse_task_size_value(raw: str) -> int:
+  try:
+    size = int(raw)
+  except ValueError as exc:
+    raise ValueError(f"Task size must be one of {TASK_SIZES}, got {raw!r}") from exc
+  if size not in TASK_SIZES:
+    raise ValueError(f"Task size must be one of {TASK_SIZES}, got {size}")
+  return size
+
+
+def _extract_size_flag(tokens: list[str]) -> tuple[int | None, list[str]]:
+  size: int | None = None
+  remaining: list[str] = []
+  idx = 0
+  while idx < len(tokens):
+    token = tokens[idx]
+    if token == "--":
+      remaining.extend(tokens[idx + 1 :])
+      break
+    if token in {"-z", "--size"}:
+      if idx + 1 >= len(tokens):
+        raise ValueError("Option -z/--size requires a value")
+      size = _parse_task_size_value(tokens[idx + 1])
+      idx += 2
+      continue
+    if token.startswith("--size="):
+      size = _parse_task_size_value(token.split("=", 1)[1])
+      idx += 1
+      continue
+    if token.startswith("-z") and len(token) > 2:
+      size = _parse_task_size_value(token[2:])
+      idx += 1
+      continue
+    remaining.append(token)
+    idx += 1
+  return size, remaining
+
+
 def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   if len(args) < 3:
     raise ValueError("Usage: steer task mod <id> <field> [rm] <value>")
@@ -685,12 +726,15 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   rest = args[2:]
 
   if field == "deets":
-    if rest[0] == "rm":
-      if len(rest) != 2:
-        raise ValueError("Usage: steer task mod <id> deets rm <number>")
-      updated = tasks.mod_deets_rm(task_id, int(rest[1]))
+    size, detail_args = _extract_size_flag(rest)
+    if not detail_args:
+      raise ValueError("Usage: steer task mod <id> deets <text> -z <size>")
+    if detail_args[0] == "rm":
+      if len(detail_args) != 2:
+        raise ValueError("Usage: steer task mod <id> deets rm <number> -z <size>")
+      updated = tasks.mod_deets_rm(task_id, int(detail_args[1]), size=size)
     else:
-      updated = tasks.mod_deets(task_id, " ".join(rest))
+      updated = tasks.mod_deets(task_id, " ".join(detail_args), size=size)
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
@@ -703,7 +747,8 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
       link_parser.add_argument("link", nargs="+")
       link_parser.add_argument("-A", "--append", dest="append_detail")
       link_parser.add_argument("--delete", dest="remove_detail", type=int)
-      parsed = link_parser.parse_args(rest)
+      link_parser.add_argument("-z", "--size", type=int, choices=TASK_SIZES)
+      parsed = link_parser.parse_intermixed_args(rest)
       if len(parsed.link) == 2 and parsed.link[0].lower() in {
         "msg",
         "report",
@@ -716,7 +761,8 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         link_type, link_id = None, parsed.link[0]
       else:
         raise ValueError(
-          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> [-A detail] [--delete number]"
+          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> "
+          "[-A detail] [--delete number] [-z size]"
         )
       updated = tasks.mod_links_add(
         task_id,
@@ -724,6 +770,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         link_type=link_type,
         append_detail=parsed.append_detail,
         remove_detail=parsed.remove_detail,
+        size=parsed.size,
       )
   elif field == "deps":
     if rest[0] == "rm":

@@ -1026,23 +1026,31 @@ class TaskService:
     return updated
 
   @_transactional_task_write
-  def mod_deets(self, task_id: str, detail: str) -> Task:
+  def mod_deets(self, task_id: str, detail: str, *, size: int | None = None) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     self._validate_input_details([detail])
-    updated = self._copy_task(target, details=[*target.details, detail])
+    if size is None:
+      raise ValueError(
+        "Adding or removing task details requires an explicit size (-z/--size)"
+      )
+    updated = self._copy_task(target, details=[*target.details, detail], size=size)
     self._replace_in_queue(queue, updated)
     return updated
 
   @_transactional_task_write
-  def mod_deets_rm(self, task_id: str, number: int) -> Task:
+  def mod_deets_rm(self, task_id: str, number: int, *, size: int | None = None) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     idx = number - 1 if number >= 1 else number
     if idx < 0 or idx >= len(target.details):
       raise IndexError(
         f"Detail number {number} out of range (1..{len(target.details)})"
       )
+    if size is None:
+      raise ValueError(
+        "Adding or removing task details requires an explicit size (-z/--size)"
+      )
     new_details = [item for i, item in enumerate(target.details) if i != idx]
-    updated = self._copy_task(target, details=new_details)
+    updated = self._copy_task(target, details=new_details, size=size)
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -1055,6 +1063,7 @@ class TaskService:
     link_type: str | None = None,
     append_detail: str | None = None,
     remove_detail: int | None = None,
+    size: int | None = None,
   ) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned = link_id.strip()
@@ -1103,6 +1112,7 @@ class TaskService:
     updated = self._copy_task(
       target,
       details=details,
+      size=target.size if size is None else size,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -1113,6 +1123,12 @@ class TaskService:
     added_msg_ids = [msg_id for msg_id in msg_ids if msg_id not in target.msg_ids]
     updated = self._with_message_attachments(updated, added_msg_ids)
     self._validate_message_link_details(target, updated, added_msg_ids)
+    self._validate_detail_change_size(
+      target,
+      updated,
+      size,
+      explicit_detail_change=(append_detail is not None or remove_detail is not None),
+    )
     if remove_detail is not None or added_msg_ids:
       self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
@@ -1282,6 +1298,7 @@ class TaskService:
     ]
     updated = self._with_message_attachments(updated, added_msg_ids)
     self._validate_message_link_details(target, updated, added_msg_ids)
+    self._validate_detail_change_size(target, updated, changes.get("size"))
     self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     if finishing:
@@ -1333,6 +1350,20 @@ class TaskService:
   ) -> None:
     if added_msg_ids and Counter(previous.details) == Counter(updated.details):
       raise ValueError("Adding a message link requires an added or deleted task detail")
+
+  @staticmethod
+  def _validate_detail_change_size(
+    previous: Task,
+    updated: Task,
+    size: Any,
+    *,
+    explicit_detail_change: bool = False,
+  ) -> None:
+    details_changed = Counter(previous.details) != Counter(updated.details)
+    if (details_changed or explicit_detail_change) and size is None:
+      raise ValueError(
+        "Adding or removing task details requires an explicit size (-z/--size)"
+      )
 
   @staticmethod
   def _validate_details(task: Task) -> None:
