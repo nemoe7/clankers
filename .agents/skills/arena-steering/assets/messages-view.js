@@ -59,7 +59,15 @@ export function paintConnection(container, connection) {
   if (!dot || !text) return;
   const current = connectionPresentation(connection);
   dot.dataset.state = current.state;
-  dot.setAttribute("aria-label", current.label);
+  if (current.label === current.text) {
+    dot.setAttribute("aria-hidden", "true");
+    dot.removeAttribute("role");
+    dot.removeAttribute("aria-label");
+  } else {
+    dot.removeAttribute("aria-hidden");
+    dot.setAttribute("role", "img");
+    dot.setAttribute("aria-label", current.label);
+  }
   text.textContent = current.text;
 }
 
@@ -92,6 +100,13 @@ let historyScrollTarget = null;
 let historyScrollHandler = null;
 const renderedMessageSignatures = new WeakMap();
 const pendingReplyReceipts = new Set();
+const optimisticReplyRevisions = new Map();
+let latestTrackedMessages = [];
+
+function isReplySeen(msg) {
+  return Boolean(msg.replies_seen) ||
+    (Boolean(msg.replies_revision) && optimisticReplyRevisions.get(msg.id) === msg.replies_revision);
+}
 
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !replyObserver) return;
@@ -139,8 +154,20 @@ export function messageQueryKey(state) {
 }
 
 export function trackMessageAcks(messages) {
-  const unseen = (messages || []).filter((msg) => (msg.acks || []).length && !msg.replies_seen);
+  latestTrackedMessages = Array.isArray(messages) ? messages : [];
+  for (const msg of latestTrackedMessages) {
+    if (msg.replies_seen && optimisticReplyRevisions.get(msg.id) === msg.replies_revision) {
+      optimisticReplyRevisions.delete(msg.id);
+    }
+  }
+  const unseen = latestTrackedMessages.filter((msg) => (msg.acks || []).length && !isReplySeen(msg));
   unreadEditedMsgId = unseen.at(-1)?.id || null;
+}
+
+function syncUnreadEditedButton(root = typeof document !== "undefined" ? document : null) {
+  trackMessageAcks(latestTrackedMessages);
+  const button = root?.querySelector?.("#log-edited");
+  if (button) button.hidden = !unreadEditedMsgId;
 }
 
 function highlightSearchMatches(root, rawQuery) {
@@ -299,6 +326,7 @@ export function renderMessagesView(container, state, handlers) {
 
   const optimistic = state.optimisticMessage;
   const messages = state.messages || [];
+  trackMessageAcks(messages.filter((msg) => showHidden || !msg.hidden));
   const optimisticMatches = optimistic && (!query || [optimistic.body, ...(optimistic.parent_ids || []), ...(optimistic.parent_refs || []).map(ref => ref.id)].some(value => String(value || "").toLowerCase().includes(query)));
   const alreadyVisible = optimistic?.serverId && messages.some(message => message.id === optimistic.serverId);
   const visibleMessages = optimisticMatches && !alreadyVisible ? [...messages, optimistic] : messages;
@@ -413,7 +441,7 @@ export function renderMessagesView(container, state, handlers) {
           <div class="stack">
             <p id="connection" role="status">
               <button id="survey-open" class="quiet-btn" type="button" aria-label="Open survey results" title="Open survey results">
-                <span id="connection-dot" class="dot" data-state="connecting" role="img" aria-label="Connecting"></span>
+                <span id="connection-dot" class="dot" data-state="connecting" aria-hidden="true"></span>
               </button>
               <span id="connection-text">Connecting…</span>
             </p>
@@ -472,11 +500,10 @@ export function renderMessagesView(container, state, handlers) {
             aria-label="Selected parents"
             ${selectedParentRefs.length ? "" : "hidden"}
           >
-            <span class="composer-reply-label">Parents</span>
             ${selectedParentRefs
               .map(
                 (ref) =>
-                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent">${escapeHtml(ref.id)}</button>`
+                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent"><code>${escapeHtml(ref.id)}</code></button>`
               )
               .join("")}
           </div>
@@ -668,6 +695,7 @@ export function renderMessagesView(container, state, handlers) {
   if (historyEl && typeof IntersectionObserver === "function") {
     replyObserver = new IntersectionObserver((entries) => {
       if (document.visibilityState !== "visible" || container.hidden) return;
+      let changed = false;
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         const id = entry.target.dataset.replyId;
@@ -675,9 +703,24 @@ export function renderMessagesView(container, state, handlers) {
         const key = `${id}:${revision}`;
         if (!id || !revision || pendingReplyReceipts.has(key)) continue;
         pendingReplyReceipts.add(key);
+        optimisticReplyRevisions.set(id, revision);
+        changed = true;
         Promise.resolve(handlers.onMarkRepliesSeen?.(id, revision))
+          .then(() => {
+            if (handlers.onMarkRepliesSeen && optimisticReplyRevisions.get(id) === revision) {
+              optimisticReplyRevisions.delete(id);
+            }
+            syncUnreadEditedButton(container.isConnected ? container : document);
+          })
+          .catch(() => {
+            if (optimisticReplyRevisions.get(id) === revision) {
+              optimisticReplyRevisions.delete(id);
+            }
+            syncUnreadEditedButton(container.isConnected ? container : document);
+          })
           .finally(() => pendingReplyReceipts.delete(key));
       }
+      if (changed) syncUnreadEditedButton(container);
     }, { root: historyEl });
     historyEl.querySelectorAll(".reply-seen-sentinel").forEach((el) => replyObserver.observe(el));
   }
@@ -702,8 +745,18 @@ export function renderMessagesView(container, state, handlers) {
     logNewestBtn.hidden = true;
   });
 
-  listen(logEditedBtn, "click", () => {
-    if (unreadEditedMsgId) handlers.onNavigateReference?.("message", unreadEditedMsgId);
+  listen(logEditedBtn, "click", async () => {
+    const targetId = unreadEditedMsgId;
+    if (!targetId) return;
+    await handlers.onNavigateReference?.("message", targetId);
+    const root = container.isConnected ? container : document;
+    const sentinel = root?.querySelector?.(
+      `.message[data-msg-id="${CSS.escape(targetId)}"] .reply-seen-sentinel`
+    );
+    if (sentinel && replyObserver) {
+      replyObserver.unobserve(sentinel);
+      replyObserver.observe(sentinel);
+    }
   });
 
   for (const chip of container.querySelectorAll(

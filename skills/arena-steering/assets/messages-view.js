@@ -59,7 +59,15 @@ export function paintConnection(container, connection) {
   if (!dot || !text) return;
   const current = connectionPresentation(connection);
   dot.dataset.state = current.state;
-  dot.setAttribute("aria-label", current.label);
+  if (current.label === current.text) {
+    dot.setAttribute("aria-hidden", "true");
+    dot.removeAttribute("role");
+    dot.removeAttribute("aria-label");
+  } else {
+    dot.removeAttribute("aria-hidden");
+    dot.setAttribute("role", "img");
+    dot.setAttribute("aria-label", current.label);
+  }
   text.textContent = current.text;
 }
 
@@ -433,7 +441,7 @@ export function renderMessagesView(container, state, handlers) {
           <div class="stack">
             <p id="connection" role="status">
               <button id="survey-open" class="quiet-btn" type="button" aria-label="Open survey results" title="Open survey results">
-                <span id="connection-dot" class="dot" data-state="connecting" role="img" aria-label="Connecting"></span>
+                <span id="connection-dot" class="dot" data-state="connecting" aria-hidden="true"></span>
               </button>
               <span id="connection-text">Connecting…</span>
             </p>

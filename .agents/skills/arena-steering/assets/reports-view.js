@@ -270,7 +270,7 @@ export function renderReportsView(container, state, handlers) {
         data-toc-target="${escapeHtml(h.id)}"
         data-level="${h.level}"
         aria-current="${idx === 0 ? "true" : "false"}"
-      >${escapeHtml(h.text)}</a>
+      >${renderInlineCode(h.text)}</a>
     `
     )
     .join("");

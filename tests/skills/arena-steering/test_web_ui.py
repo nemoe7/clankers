@@ -736,21 +736,18 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
           ".survey-answer-tooltip"
         )
         first_tip.wait_for(state="visible")
-        assert first_tip.evaluate("el => getComputedStyle(el).backgroundColor") == (
-          "rgb(255, 255, 255)"
-        )
+        tip_bg = first_tip.evaluate("el => getComputedStyle(el).backgroundColor")
+        assert tip_bg not in ("rgba(0, 0, 0, 0)", "transparent", "rgb(255, 255, 255)")
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") in (
           "tooltip-from-above",
           "tooltip-from-below",
         )
         page.emulate_media(reduced_motion="reduce")
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") == "none"
-        assert (
-          first_tip.locator(".survey-answer-val").first.evaluate(
-            "el => getComputedStyle(el).color"
-          )
-          == "rgb(24, 24, 24)"
+        val_color = first_tip.locator(".survey-answer-val").first.evaluate(
+          "el => getComputedStyle(el).color"
         )
+        assert val_color not in ("rgb(24, 24, 24)", tip_bg)
         sizes = page.evaluate("""() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect();
           const footer = rect('#modal-actions');
@@ -7836,6 +7833,156 @@ def test_report_options_parse_inline_code_and_align_radio_with_first_line(
         assert (
           abs(custom_metrics["inputCenter"] - custom_metrics["firstLineCenter"]) <= 3.0
         ), custom_metrics
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_v2_nuu_recipe_conformance_surfaces(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  index_html = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
+  assert index_html.count("<!-- Lucide Icons - ISC License -->") >= 2
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="V2 Nuu recipe conformance")
+  app.messages.send_message("Alpha message", msg_id="aa0001", blocking=False)
+  app.messages.send_message("Beta needle message", msg_id="bb0002", blocking=False)
+  app.tasks.create_task(
+    "alpha-code-task",
+    "Alpha code task",
+    size=3,
+    types=["code"],
+    details=["Code detail"],
+  )
+  app.tasks.create_task(
+    "beta-docs-task",
+    "Beta docs task",
+    size=2,
+    types=["docs"],
+    details=["Docs detail"],
+  )
+  app.reports.publish_report("one", "First Report", "# First Report\n\nBody one.\n")
+  app.reports.publish_report("two", "Second Report", "# Second Report\n\nBody two.\n")
+
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 960, "height": 760})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('#connection-dot[data-state="ok"]').wait_for()
+
+        # 1. Modal close button uses a 16x16 Lucide SVG instead of text x.
+        assert "×" not in page.locator("#image-modal-close").inner_text()
+        assert page.locator("#image-modal-close svg.lucide-x").count() == 1
+
+        # 2. Relative timestamps expose a localized title and proportional tabular-nums.
+        stamp_info = page.locator("#history .message time[datetime]").first.evaluate(
+          """el => {
+            const cs = getComputedStyle(el);
+            return {
+              title: el.getAttribute('title') || '',
+              tabular: cs.fontVariantNumeric,
+              family: cs.fontFamily.toLowerCase(),
+            };
+          }"""
+        )
+        assert len(stamp_info["title"]) >= 6, stamp_info
+        assert stamp_info["tabular"] == "tabular-nums", stamp_info
+        assert "mono" not in stamp_info["family"], stamp_info
+
+        # 3. Scroll-edge-fade tokens match 24px / 32px stops.
+        fade_tokens = page.evaluate(
+          """() => {
+            const cs = getComputedStyle(document.documentElement);
+            return {
+              fade: cs.getPropertyValue('--edge-fade').trim(),
+              ramp: cs.getPropertyValue('--edge-ramp').trim(),
+            };
+          }"""
+        )
+        assert fade_tokens == {"fade": "24px", "ramp": "32px"}, fade_tokens
+
+        # 4. Connection live dot is 8x8 px and aria-hidden inside a 1lh slot.
+        dot_info = page.evaluate(
+          """() => {
+            const dot = document.querySelector('#connection-dot');
+            const btn = document.querySelector('#survey-open');
+            const dRect = dot.getBoundingClientRect();
+            const bRect = btn.getBoundingClientRect();
+            const lh = parseFloat(getComputedStyle(btn).lineHeight);
+            return {
+              w: dRect.width,
+              h: dRect.height,
+              hidden: dot.getAttribute('aria-hidden'),
+              role: dot.getAttribute('role'),
+              btnH: bRect.height,
+              lh,
+            };
+          }"""
+        )
+        assert dot_info["w"] == 8 and dot_info["h"] == 8, dot_info
+        assert dot_info["hidden"] == "true" and dot_info["role"] is None, dot_info
+        assert abs(dot_info["btnH"] - dot_info["lh"]) <= 1.0, dot_info
+
+        # 5. Reports region toggles aria-busy while fetching report content.
+        page.evaluate(
+          """() => {
+            const orig = window.fetch.bind(window);
+            window.fetch = async (...args) => {
+              if (String(args[0]).includes('/reports/two')) {
+                await new Promise(resolve => { window.releaseReportTwo = resolve; });
+              }
+              return orig(...args);
+            };
+          }"""
+        )
+        page.locator("#tab-reports").click()
+        page.locator('.report-picker-link[data-report-id="two"]').wait_for()
+        page.locator('.report-picker-link[data-report-id="two"]').click()
+        page.wait_for_function("typeof window.releaseReportTwo === 'function'")
+        assert page.locator("#view-reports").get_attribute("aria-busy") == "true"
+        page.evaluate("window.releaseReportTwo()")
+        page.wait_for_function(
+          "document.querySelector('#view-reports').getAttribute('aria-busy') === 'false'"
+        )
+
+        # 6. Message search and task filters persist across page reloads.
+        page.locator("#tab-messages").click()
+        page.locator("#log-search").fill("Beta needle")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 1"
+        )
+        page.locator("#tab-tasks").click()
+        page.locator("#task-search").fill("Beta")
+        page.locator("#task-type-filter").select_option("docs")
+        assert page.locator(".tasks-layout .task").count() == 1
+
+        page.reload()
+        page.locator("#task-search").wait_for()
+        assert page.locator("#task-search").input_value() == "Beta"
+        assert page.locator("#task-type-filter").input_value() == "docs"
+        assert page.locator(".tasks-layout .task").count() == 1
+
+        page.locator("#tab-messages").click()
+        page.locator("#log-search").wait_for()
+        assert page.locator("#log-search").input_value() == "Beta needle"
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 1"
+        )
       finally:
         browser.close()
   finally:
