@@ -8,6 +8,14 @@ This log has no Unreleased section.
 
 ## [1.10.32]
 
+### Removed
+
+- Remove unshipped imperative `README.md` stubs under `gpt-plugins/skills/gpt-*/`.
+
+### Changed
+
+- Rewrite `docs/gpt-plugins/README.md` in human-facing prose and drop the stale turn receipt.
+
 ### Fixed
 
 - Align bundled nemoizer rotation guidance with the current implementation.

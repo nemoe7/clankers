@@ -53,4 +53,4 @@ flowchart TB
 
 ## Compression
 
-Use the [`squash` skill](skills/squash/SKILL.md) for compression. See [maintenance/README.md](maintenance/README.md) for repository-specific budget and synchronization procedures.
+Live rule and skill files use [`squash`](skills/squash/SKILL.md) compression, and [maintenance/README.md](maintenance/README.md) covers budget and sync checks.

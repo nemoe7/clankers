@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Move `README.md` to `docs/arena-steering/README.md` and rewrite it for human readers.
+
 - Update the Messages unseen-reply indicator optimistically while receipts are pending, restore it on failure, and preserve newer acknowledgement revisions.
 
 - Match Mermaid diagram appearance across thumbnails and the modal viewer, using the code-block surface in the modal.

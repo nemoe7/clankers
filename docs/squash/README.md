@@ -4,7 +4,7 @@ Compress existing text to a token, word, character, or byte budget without losin
 
 ## Setup
 
-Load [SKILL.md](../../skills/squash/SKILL.md) in an agent that supports skills. See [Skills](../../skills/README.md) for installation layout. This skill needs no runtime script or package install.
+Copy `skills/squash` into a supported skill directory, and see [Skills](../../skills/README.md) for discovery paths. [SKILL.md](../../skills/squash/SKILL.md) is the agent entry point, and the skill needs no runtime script or package install.
 
 ## Quick start
 

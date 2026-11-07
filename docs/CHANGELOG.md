@@ -25,11 +25,17 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Rewrite `rules/README.md` and `rules/wenyan/README.md` for human readers.
 - Specify the stale-report reminder command (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 - Remove the code-scanning requirement (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 
+#### system-prompts
+
+- Rewrite `system-prompts/README.md` and `system-prompts/wenyan/README.md` in human-facing prose.
+
 #### maintenance
 
+- Rewrite `maintenance/README.md` for human maintainers and replace retired `arena-preview` hook tables with `steer pre`.
 - Archive the retired minification workflow check and its tests under `docs/archive/arena-skill/`.
 - Exclude minified, archived, and vendored material from the root Nemoizer scan.
 - Filter CodeQL language scans conservatively and restrict dependency reviews to dependency and workflow changes.
