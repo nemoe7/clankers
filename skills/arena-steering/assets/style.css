@@ -1797,12 +1797,6 @@ code.msg-id {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .message-bubble {
-    transition: none;
-  }
-}
-
 .card.compose {
   position: relative;
   z-index: 3;
@@ -3159,6 +3153,7 @@ article#report.report img,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .message-bubble { transition: none; }
   .composer-shell #send[aria-busy="true"] svg { animation: none; }
 
   .task-title[data-gate-running="true"] {
