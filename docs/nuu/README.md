@@ -2,93 +2,56 @@
 
 The abbreviation is **nuu** (say **new**).
 
-Build, refine, and review web interfaces. Tools cover briefs, local catalogs, design records, assets, source checks, rendered evidence, and task flows. Existing product systems take precedence over the optional house profile.
+Build, refine, and review web interfaces. Tools cover catalogs, design records, asset checks, static lint, live measurements, annotations, design boards, and browser walks. Existing product systems take precedence over the optional house profile.
 
 ## Setup
 
-Copy `skills/nuu` into a supported skill directory, and see [Skills](../../skills/README.md) for discovery paths. [SKILL.md](../../skills/nuu/SKILL.md) is the agent entry point. Local tools need Python 3.11+ and its standard library, while browser tools also need Node, `playwright`, and a browser binary.
+Copy `skills/nuu` into a supported skill directory, and see [Skills](../../skills/README.md) for discovery paths. [SKILL.md](../../skills/nuu/SKILL.md) is the agent entry point. Runtime tools need Python 3.11+ and `playwright>=1.49`, plus a local Chromium binary (`$CHROMIUM_BIN` or `PATH`) for live browser commands.
 
-The project supplies its page, running application, and browser. Tools capture pages without installing packages or browsers.
+The project supplies its page, running server, and browser binary. Tools never download packages or Playwright-managed browsers automatically.
 
 ## Working flow
 
-1. Project context starts from an existing design record or [the template](../../skills/nuu/references/design-document.md).
-2. Styling follows the product's existing system, or falls back to the house [sheet](../../skills/nuu/references/style.css) and [examples](../../skills/nuu/references/examples.md).
-3. Rendered checks inspect viewports across the `68em` (`1088`), `60em` (`960`), `30em` (`480`), and `24em` (`384`) breakpoints.
-4. [The browser snippet](../../skills/nuu/references/measure.md) and CLI tools collect computed values, findings, and screenshots.
-5. Settled design decisions and rendered evidence stay recorded in the consuming project's design document.
+1. Project context starts from `[paths].doc` in `nuu.toml` (`docs/design.md` default) or [the v2 template](../../skills/nuu/references/design-document.md).
+2. Styling follows `[paths].stylesheet`, or falls back to the house [sheet](../../skills/nuu/references/style.css) and [examples](../../skills/nuu/references/examples.md).
+3. Live checks inspect the five house viewports (`1920x957`, `1080x2437`, `958x958`, `855x325`, and `411x799`) across `68em`, `60em`, `30em`, and `24em`.
+4. [Measurement tools](../../skills/nuu/references/measure.md), [walks](../../skills/nuu/references/walk.md), and [boards](../../skills/nuu/references/annotate.md) produce Markdown tables and dark-mode PNG evidence.
+5. Settled design decisions, approved deviations, and board links stay recorded in the project's `docs/design.md`.
 
-The skill holds the complete house constraints. Design records and screenshots belong to the consuming project rather than this repo.
-
-## Available tools
-
-From the repository root in Windows cmd:
-
-```cmd
-python skills\nuu\scripts\measure.py check report.json
-python skills\nuu\scripts\measure.py ruler --from 120,340 --to 264,340
-```
-
-`check` reads one JSON report of computed CSS values. `ruler` measures horizontal, vertical, and straight-line distances between two page coordinates.
-
-`check` uses sheet rules. `ruler` uses only the scale. Exit status is 0 for a pass and 1 for findings.
-
-Defaults: the bundled sheet and a 4-pixel scale.
-
-Global options precede the command:
-
-```cmd
-python skills\nuu\scripts\measure.py --scale 4 --sheet path\to\style.css check report.json
-```
-
-A report has this shape:
-
-```json
-{
-  "width": 1280,
-  "elements": [
-    {"selector": ".row", "values": {"height": "40px", "gap": "16px"}}
-  ]
-}
-```
-
-## Full workflow tools
+## Nine CLI commands
 
 From the repository root in Windows cmd:
 
 ```cmd
 set UI=skills\nuu\scripts\nuu.py
-python %UI% doctor
-python %UI% search "dashboard accessibility" --dataset ux-guidelines
-python %UI% lint --project path\to\product
-python %UI% extract --url https://example.com --artifacts evidence
-python %UI% annotate -i evidence\1920-dark-no-preference.png -s findings.json -o annotated.png
-python %UI% board -p "Desktop=annotated.png" -o board.png
-python %UI% inspect --url https://example.com --artifacts evidence --output inspect.json
-python %UI% flow --url https://example.com --flow flow.json
-python %UI% a11y --url https://example.com --output a11y.json
-python %UI% audit --project path\to\product --url https://example.com
+python %UI% doctor -c path\to\nuu.toml
+python %UI% search "dashboard accessibility" -d ux-guidelines
+python %UI% lint -c path\to\nuu.toml
+python %UI% collect -c path\to\nuu.toml
+python %UI% measure -c path\to\nuu.toml -u http://127.0.0.1:8000 -s ".card" --to ".button" -o nuu-artifacts\measure.png
+python %UI% annotate -c path\to\nuu.toml -u http://127.0.0.1:8000 -b ".button,amber" -C ".dialog,16" -o nuu-artifacts\annotated.png
+python %UI% walk -c path\to\nuu.toml path\to\walk.py -o nuu-artifacts -g nuu-artifacts\flow.gif
+python %UI% board -c path\to\nuu.toml -s path\to\boards.toml -o docs\design-visuals
+python %UI% audit -c path\to\nuu.toml -u http://127.0.0.1:8000 -o nuu-artifacts\audit.md
 ```
 
 ```mermaid
 flowchart TB
-  B[Brief and authority] --> S[Search and proposal]
-  S --> C[Source checks]
-  C --> R[Rendered states and flows]
-  R --> D[Review and design record]
+  B[Design doc and nuu.toml] --> S[Search and static lint]
+  S --> W[Browser walk and redline measure]
+  W --> A[Live 5-viewport audit]
+  A --> D[Boards and design record]
 ```
 
-[Tool contracts](../../skills/nuu/references/nuu.md) describe assets, live edits, eight review modes, inputs, exit codes, and missing coverage. Review modes supply evidence and task-specific checks. Visual judgment and repairs remain agent work. Search uses licensed local CSV data with source hashes, not external page content.
+[CLI reference](../../skills/nuu/references/nuu.md) documents all nine subcommands, composite flags, exit codes (`0`..`3`), and `49` conformance rules. Every command reads TOML configuration and emits Markdown or PNG/GIF/WebM outputs (`0` JSON inputs or outputs). Search reads licensed local CSV catalogs with SHA-256 verification.
 
-Read-only tools keep product files unchanged. Record creation, asset fetches, and transient live edits need their explicit command flags. Existing output files and design records are not overwritten.
+Read-only checks leave product files untouched. Asset downloads need `-f <url> -o <dest> -A`. Existing `--input` screenshots are never overwritten.
 
 ## Limits
 
-`measure.py` checks supplied pixel values. `nuu.py` adds local tools and optional browser evidence. Source checks cover selected HTML and CSS patterns. Script markup remains unverified until rendered.
+Static checks inspect HTML, CSS, SVG, and source markers, while script-rendered DOM states need `nuu audit -u` or `nuu walk`. Passing automated rules does not replace human or agent visual judgment on Clauses 20 to 32.
 
-Missing elements and non-pixel values do not become complete coverage checks. A passing report does not prove accessibility, usability, behavior, or visual quality. Those need rendered and interaction review.
-
-This README is human documentation and is not part of the installed skill payload. The source credits follow.
+This README is human documentation and stays outside the installed skill payload. The source credits follow.
 
 ## Sources
 
