@@ -75,7 +75,8 @@ def open_services(
 ) -> tuple[SqliteStore, MessageService, TaskService, ReportService]:
   """Open SqliteStore and domain services for a state directory."""
   store = SqliteStore(state_dir / "state.sqlite3")
-  messages = MessageService(store, store, store, store)
+  uploads_dir = state_dir / "uploads"
+  messages = MessageService(store, store, store, store, uploads_dir=uploads_dir)
   tree_check = completion_tree_check(state_dir)
   tasks = TaskService(
     store,
@@ -84,6 +85,7 @@ def open_services(
     gates=FileGateStatus(state_dir),
     clean_tree_verifier=tree_check,
     on_dirty_finish=messages.flag_dirty_finish if tree_check is not None else None,
+    uploads_dir=uploads_dir,
   )
   reports = ReportService(
     store,
@@ -1837,6 +1839,8 @@ def _print_delivered(
 
 
 def _print_message(msg: Message, out: TextIO) -> None:
+  from .services import is_attachment_present
+
   print(f"`{msg.id}`", file=out)
   if msg.parent_refs:
     parents = (
@@ -1848,7 +1852,11 @@ def _print_message(msg: Message, out: TextIO) -> None:
   if msg.body:
     print(msg.body, file=out)
   for att in msg.attachments:
-    print(f"attachment: {att.name} -> {att.path} ({att.size_bytes} B)", file=out)
+    lost_suffix = "" if is_attachment_present(att) else " (lost)"
+    print(
+      f"attachment: {att.name} -> {att.path} ({att.size_bytes} B){lost_suffix}",
+      file=out,
+    )
   for ack_text in msg.acks:
     print(f"ack: {ack_text}", file=out)
 
@@ -1869,8 +1877,15 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
 
 
 def _print_single_task(
-  task: Task, blocked: bool, out: TextIO, *, include_details: bool = True
+  task: Task,
+  blocked: bool,
+  out: TextIO,
+  *,
+  include_details: bool = True,
+  tasks: TaskService | None = None,
 ) -> None:
+  from .services import format_task_detail_status
+
   state_str = f"{task.status}, blocked" if blocked else task.status
   print(f"task {task.id}, status {state_str}, type {_task_type_label(task)}", file=out)
   print(task.title, file=out)
@@ -1887,7 +1902,15 @@ def _print_single_task(
   if include_details:
     print(f"- Priority: {task.effective_priority}", file=out)
     print(f"- Size: {task.size}", file=out)
-    for idx, line in enumerate(task.details, 1):
+    rendered_details = (
+      tasks.format_task_details(task)
+      if tasks is not None
+      else [
+        format_task_detail_status(line, uploads_dir=resolve_state_dir() / "uploads")
+        for line in task.details
+      ]
+    )
+    for idx, line in enumerate(rendered_details, 1):
       print(f"- [{idx}] {line}", file=out)
 
 

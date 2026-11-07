@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import threading
 import time
 from collections import Counter
@@ -165,6 +166,82 @@ def _transactional_report_write(method: Any) -> Any:
   return wrapped
 
 
+STAGED_UPLOAD_RE = re.compile(
+  r"^(?:request-[0-9a-f]{64}-[0-9]+|[0-9a-f]{6}-[0-9]{9,})-"
+)
+LOST_DETAIL_SUFFIX = " (lost)"
+
+
+def sanitize_upload_filename(name: Any) -> str:
+  """Normalize an upload filename, returning an empty string when unnamed."""
+  raw_name = Path(str(name or "")).name.strip()
+  if not raw_name:
+    return ""
+  dot = raw_name.rfind(".")
+  if dot > 0 and dot < len(raw_name) - 1:
+    stem_raw = raw_name[:dot]
+    ext_raw = raw_name[dot:]
+  elif dot == 0:
+    return ""
+  else:
+    stem_raw = raw_name
+    ext_raw = ""
+  safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "-", stem_raw).strip(".-")
+  if not safe_stem:
+    return ""
+  safe_ext = re.sub(r"[^A-Za-z0-9.]+", "", ext_raw)[:20]
+  if safe_ext in {"", "."}:
+    safe_ext = ""
+  return f"{safe_stem}{safe_ext}"
+
+
+def unique_upload_target(
+  directory: Path,
+  filename: str,
+  *,
+  reserved: set[Path] | None = None,
+) -> Path:
+  """Choose a non-colliding file path inside `directory`."""
+  directory.mkdir(parents=True, exist_ok=True)
+  taken = reserved if reserved is not None else set()
+  candidate = directory / filename
+  if not candidate.exists() and candidate not in taken:
+    return candidate
+  suffix = Path(filename).suffix
+  stem = filename[: -len(suffix)] if suffix else filename
+  counter = 2
+  while True:
+    candidate = directory / f"{stem}-{counter}{suffix}"
+    if not candidate.exists() and candidate not in taken:
+      return candidate
+    counter += 1
+
+
+def is_attachment_present(attachment: Attachment) -> bool:
+  """Check dynamically whether an attachment exists on disk."""
+  if not attachment.present or not attachment.path:
+    return False
+  return Path(attachment.path).expanduser().is_file()
+
+
+def format_task_detail_status(
+  line: str,
+  *,
+  uploads_dir: Path | None = None,
+  attachment_paths: set[str] | None = None,
+) -> str:
+  """Append `(lost)` dynamically when a task-linked upload file is missing."""
+  raw = line.removesuffix(LOST_DETAIL_SUFFIX)
+  tracked = attachment_paths is not None and raw in attachment_paths
+  if not tracked and uploads_dir is not None and raw.startswith(("~/", "/")):
+    candidate = Path(raw).expanduser().resolve(strict=False)
+    root = uploads_dir.resolve(strict=False)
+    tracked = candidate != root and candidate.is_relative_to(root)
+  if not tracked:
+    return line
+  return raw if Path(raw).expanduser().is_file() else f"{raw}{LOST_DETAIL_SUFFIX}"
+
+
 class MessageService:
   """Manage steering messages, status transitions, acknowledgements, and polling."""
 
@@ -176,6 +253,7 @@ class MessageService:
     tasks: TaskRepository,
     clock: Clock | None = None,
     id_gen: IdGenerator | None = None,
+    uploads_dir: str | Path | None = None,
   ) -> None:
     self._messages = messages
     self._reports = reports
@@ -183,12 +261,69 @@ class MessageService:
     self._tasks = tasks
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
+    db_path = str(getattr(messages, "db_path", "") or "")
+    if uploads_dir is not None:
+      self._uploads_dir: Path | None = Path(uploads_dir)
+    elif db_path and db_path != ":memory:":
+      self._uploads_dir = Path(db_path).resolve().parent / "uploads"
+    else:
+      self._uploads_dir = None
     self._cond = threading.Condition()
     # Survey answers, results, and the check stamp live in memory only, so a restart clears them.
     self._survey_answers: dict[str, str] = {}
     self._survey_results: list[dict[str, Any]] = []
     self._survey_checked_at = ""
     self._survey_pending = False
+
+  def _finalize_message_attachments(
+    self, msg_id: str, attachments: list[Attachment]
+  ) -> list[Attachment]:
+    if self._uploads_dir is None or not attachments:
+      return attachments
+    uploads_root = self._uploads_dir.resolve(strict=False)
+    reserved: set[Path] = set()
+    moved_by_source: dict[Path, Path] = {}
+    finalized: list[Attachment] = []
+    for att in attachments:
+      if not att.present or not att.path:
+        finalized.append(att)
+        continue
+      src = Path(att.path).expanduser()
+      src_resolved = src.resolve(strict=False)
+      if src_resolved.parent != uploads_root or not STAGED_UPLOAD_RE.match(
+        src_resolved.name
+      ):
+        finalized.append(att)
+        continue
+      if src_resolved in moved_by_source:
+        dest = moved_by_source[src_resolved]
+      elif src_resolved.is_file():
+        staged_tail = STAGED_UPLOAD_RE.sub("", src_resolved.name, count=1)
+        base_name = (
+          sanitize_upload_filename(att.name)
+          or sanitize_upload_filename(staged_tail)
+          or f"{int(time.time() * 1000)}.bin"
+        )
+        prefix = f"{msg_id}-"
+        target_name = (
+          base_name if base_name.startswith(prefix) else f"{prefix}{base_name}"
+        )
+        dest = unique_upload_target(uploads_root, target_name, reserved=reserved)
+        reserved.add(dest)
+        src_resolved.replace(dest)
+        moved_by_source[src_resolved] = dest
+      else:
+        finalized.append(att)
+        continue
+      finalized.append(
+        Attachment(
+          name=att.name,
+          path=str(dest),
+          size_bytes=att.size_bytes,
+          present=att.present,
+        )
+      )
+    return finalized
 
   def send_message(
     self,
@@ -237,13 +372,25 @@ class MessageService:
         raise KeyError(f"Unknown parent {ref['type']} ID: {ref['id']}")
     with self._cond:
       if request_id is not None:
-        message = self._messages.save_message_once(message, request_id, fingerprint)
+        saved = self._messages.save_message_once(message, request_id, fingerprint)
+        if saved is message and message.attachments:
+          finalized = self._finalize_message_attachments(
+            message.id, message.attachments
+          )
+          if finalized != message.attachments:
+            message.attachments = finalized
+            self._messages.save_message(message)
+        message = saved
       else:
         with self._reports.transaction():
           if self._messages.get_message(message.id) is not None:
             if msg_id is not None:
               raise ValueError(f"Message ID {message.id!r} already exists")
             message.id = self._unique_hex_id()
+          if message.attachments:
+            message.attachments = self._finalize_message_attachments(
+              message.id, message.attachments
+            )
           self._messages.save_message(message)
       self._cond.notify_all()
     return message
@@ -711,6 +858,7 @@ class TaskService:
     clean_tree_verifier: Callable[[], None] | None = None,
     on_dirty_finish: Callable[[], None] | None = None,
     messages: MessageRepository | None = None,
+    uploads_dir: str | Path | None = None,
   ) -> None:
     self._tasks = tasks
     self._reports = reports
@@ -719,9 +867,36 @@ class TaskService:
     self._gates = gates
     self._clean_tree_verifier = clean_tree_verifier
     self._on_dirty_finish = on_dirty_finish
+    db_path = str(getattr(tasks, "db_path", "") or "")
+    if uploads_dir is not None:
+      self._uploads_dir: Path | None = Path(uploads_dir)
+    elif db_path and db_path != ":memory:":
+      self._uploads_dir = Path(db_path).resolve().parent / "uploads"
+    else:
+      self._uploads_dir = None
     self._commit_verifier = commit_verifier or (
       lambda commit: verify_completion_commit(pre_mod.repo_root(), commit)
     )
+
+  def format_task_details(self, task: Task) -> list[str]:
+    """Return task details with dynamic `(lost)` markers for missing task files."""
+    attachment_paths: set[str] = set()
+    if self._messages is not None:
+      for msg_id in task.msg_ids:
+        message = self._messages.get_message(msg_id)
+        if message is None or message.type != "message":
+          continue
+        for att in message.attachments:
+          if att.path:
+            attachment_paths.add(home_relative(Path(att.path).expanduser()))
+    return [
+      format_task_detail_status(
+        line,
+        uploads_dir=self._uploads_dir,
+        attachment_paths=attachment_paths,
+      )
+      for line in task.details
+    ]
 
   def has_running_gate(self, task: Task) -> bool:
     """Distinguish an active linked run from other task blockers."""
@@ -842,12 +1017,14 @@ class TaskService:
     )
     if priority is None and all(phase == "report" for phase in task.types):
       task.priority = "P3"
-    task = self._with_message_attachments(task, task.msg_ids)
+    task, commit_ops = self._plan_message_attachments(task, task.msg_ids)
     self._validate_details(task)
     queue = self._tasks.list_tasks()
     self._validate_deps_exist(task, queue)
     self._validate_dependency_priorities(queue, [*queue, task])
     ordered = self._enforce_dependency_order([*queue, task])
+    for op in commit_ops:
+      op()
     self._tasks.save_task_queue(ordered)
     return task
 
@@ -857,25 +1034,113 @@ class TaskService:
     data["modified_at"] = self._clock.now_iso()
     return Task.from_dict(data)
 
-  def _with_message_attachments(self, task: Task, msg_ids: list[str]) -> Task:
+  def _plan_message_attachments(
+    self, task: Task, msg_ids: list[str]
+  ) -> tuple[Task, list[Callable[[], None]]]:
     if self._messages is None:
-      return task
+      return task, []
     details = list(task.details)
     attached = False
+    commit_ops: list[Callable[[], None]] = []
+    uploads_root = (
+      self._uploads_dir.resolve(strict=False) if self._uploads_dir is not None else None
+    )
+    reserved: set[Path] = set()
+
     for msg_id in msg_ids:
       message = self._messages.get_message(msg_id)
       if message is None or message.type != "message":
         continue
+      new_attachments: list[Attachment] = []
+      msg_changed = False
       for attachment in message.attachments:
         attached = True
-        path = home_relative(Path(attachment.path).expanduser())
-        if path not in details:
-          details.append(path)
+        src = Path(attachment.path).expanduser() if attachment.path else None
+        dest: Path | None = src
+        if uploads_root is not None and src is not None:
+          src_resolved = src.resolve(strict=False)
+          in_uploads = src_resolved != uploads_root and src_resolved.is_relative_to(
+            uploads_root
+          )
+          if in_uploads:
+            task_folder = uploads_root / task.id
+            if src_resolved.parent == task_folder:
+              dest = src_resolved
+            elif src_resolved.parent == uploads_root:
+              target = self._reserve_task_file(task_folder, src_resolved.name, reserved)
+              dest = target
+              msg_changed = True
+              new_attachments.append(
+                Attachment(
+                  name=attachment.name,
+                  path=str(target),
+                  size_bytes=attachment.size_bytes,
+                  present=attachment.present,
+                )
+              )
+
+              def _move_op(s: Path = src_resolved, d: Path = target) -> None:
+                if s.is_file():
+                  d.parent.mkdir(parents=True, exist_ok=True)
+                  s.replace(d)
+
+              commit_ops.append(_move_op)
+              path_line = home_relative(dest)
+              if path_line not in details:
+                details.append(path_line)
+              continue
+            elif (
+              src_resolved.parent.parent == uploads_root
+              and src_resolved.parent.name != task.id
+            ):
+              target = self._reserve_task_file(task_folder, src_resolved.name, reserved)
+              dest = target
+
+              def _copy_op(s: Path = src_resolved, d: Path = target) -> None:
+                if s.is_file():
+                  d.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(s, d)
+
+              commit_ops.append(_copy_op)
+        new_attachments.append(attachment)
+        if dest is not None:
+          path_line = home_relative(dest)
+          if path_line not in details:
+            details.append(path_line)
+      if msg_changed:
+        updated_msg = Message.from_dict(
+          {
+            **message.to_dict(),
+            "attachments": [item.to_dict() for item in new_attachments],
+          }
+        )
+
+        def _save_msg_op(msg_obj: Message = updated_msg) -> None:
+          if self._messages is not None:
+            self._messages.save_message(msg_obj)
+
+        commit_ops.append(_save_msg_op)
     if not attached:
-      return task
+      return task, commit_ops
     if details == task.details:
-      return task
-    return self._copy_task(task, details=details)
+      return task, commit_ops
+    return self._copy_task(task, details=details), commit_ops
+
+  @staticmethod
+  def _reserve_task_file(task_folder: Path, filename: str, reserved: set[Path]) -> Path:
+    candidate = task_folder / filename
+    if not candidate.exists() and candidate not in reserved:
+      reserved.add(candidate)
+      return candidate
+    suffix = Path(filename).suffix
+    stem = filename[: -len(suffix)] if suffix else filename
+    counter = 2
+    while True:
+      candidate = task_folder / f"{stem}-{counter}{suffix}"
+      if not candidate.exists() and candidate not in reserved:
+        reserved.add(candidate)
+        return candidate
+      counter += 1
 
   def _complete_phase(
     self, task: Task, queue: list[Task], commit_hash: str | None = None
@@ -1121,7 +1386,7 @@ class TaskService:
       },
     )
     added_msg_ids = [msg_id for msg_id in msg_ids if msg_id not in target.msg_ids]
-    updated = self._with_message_attachments(updated, added_msg_ids)
+    updated, commit_ops = self._plan_message_attachments(updated, added_msg_ids)
     self._validate_message_link_details(target, updated, added_msg_ids)
     self._validate_detail_change_size(
       target,
@@ -1132,7 +1397,13 @@ class TaskService:
     if remove_detail is not None or added_msg_ids:
       self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
-    self._replace_in_queue(queue, updated)
+    self._validate_details(updated)
+    replaced = [updated if item.id == updated.id else item for item in queue]
+    self._validate_dependency_priorities(queue, replaced)
+    ordered = self._enforce_dependency_order(replaced)
+    for op in commit_ops:
+      op()
+    self._tasks.save_task_queue(ordered)
     return updated
 
   @_transactional_task_write
@@ -1296,7 +1567,7 @@ class TaskService:
     added_msg_ids = [
       msg_id for msg_id in updated.msg_ids if msg_id not in target.msg_ids
     ]
-    updated = self._with_message_attachments(updated, added_msg_ids)
+    updated, commit_ops = self._plan_message_attachments(updated, added_msg_ids)
     self._validate_message_link_details(target, updated, added_msg_ids)
     self._validate_detail_change_size(target, updated, changes.get("size"))
     self._validate_details(updated)
@@ -1306,6 +1577,8 @@ class TaskService:
     new_queue = [updated if item.id == task_id else item for item in queue]
     self._validate_dependency_priorities(queue, new_queue)
     ordered = self._enforce_dependency_order(new_queue)
+    for op in commit_ops:
+      op()
     self._tasks.save_task_queue(ordered)
     return updated
 

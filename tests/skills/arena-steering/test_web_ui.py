@@ -1667,7 +1667,7 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert 'window.matchMedia?.("(pointer: coarse)")?.matches' in messages_js
   assert "PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500" in messages_js
   assert "PASTE_ATTACHMENT_LINE_THRESHOLD = 15" in messages_js
-  assert "pasted-text.txt" in messages_js
+  assert "-pasted-lines-" in messages_js
   assert 'listen(msgEl, "paste"' in messages_js
   assert 'addEventListener("drop"' in messages_js
   assert 'addEventListener("dragover"' in messages_js
@@ -2088,7 +2088,7 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         )
         assert card.locator(".receipt-filename").all_text_contents() == [
           "notes.txt",
-          "gone.png (missing)",
+          "gone.png (lost)",
         ]
         assert card.locator('img[src$=".txt"]').count() == 0
         assert thumb.locator(".attachment-name-tail").inner_text() == "ay>.png"
@@ -2117,7 +2117,8 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         viewer = page.locator("#image-modal")
         viewer.wait_for(state="visible")
         assert (
-          page.locator("#image-modal-stage > img").get_attribute("src") == image["url"]
+          page.locator("#image-modal-stage > img").get_attribute("src")
+          == created["message"]["attachments"][0]["url"]
         )
         page.keyboard.press("Escape")
         viewer.wait_for(state="hidden")
