@@ -1,7 +1,7 @@
 // Reports tab view with left TOC rail, center report column, and right report selector rail.
 
 import { reconcileView, renderParentChip } from "./dom.js";
-import { escapeHtml } from "./markdown.js";
+import { escapeHtml, renderInlineCode } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
 import { copyText } from "./copy.js";
@@ -80,10 +80,12 @@ let reportRenderEvents = null;
 
 function renderFieldBlock(field, headings, stored) {
   const fieldId = escapeHtml(field.id);
-  const label = escapeHtml(field.question || field.label);
+  const rawLabel = field.question || field.label;
+  const label = escapeHtml(rawLabel);
+  const labelHtml = renderInlineCode(rawLabel);
   const anchorId = `field-${field.id}`;
   if (Array.isArray(headings)) {
-    headings.push({ id: anchorId, level: 3, text: field.question || field.label });
+    headings.push({ id: anchorId, level: 3, text: rawLabel });
   }
   const recommended = new Set(field.recommended || []);
   const options = field.options || [];
@@ -103,8 +105,8 @@ function renderFieldBlock(field, headings, stored) {
     return `
       <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="text">
         <div class="field-header">
-          <span class="field-label">${label}</span>
-          <code class="field-id-chip msg-id">${fieldId}</code>
+          <span class="field-label">${labelHtml}</span>
+          <span class="field-id-chip"><code>${fieldId}</code></span>
         </div>
         <textarea class="input field-text-input" name="field-${fieldId}" rows="1" placeholder="Something else..." aria-label="${label}">${escapeHtml(textValue)}</textarea>
       </div>
@@ -126,7 +128,7 @@ function renderFieldBlock(field, headings, stored) {
       return `
         <label class="option-row${recommended.has(opt) ? " is-recommended" : ""}">
           <input type="${inputType}" name="field-${fieldId}" value="${escapeHtml(opt)}" ${checked}>
-          <span>${star}${escapeHtml(opt)}</span>
+          <span>${star}${renderInlineCode(opt)}</span>
         </label>
       `;
     })
@@ -135,8 +137,8 @@ function renderFieldBlock(field, headings, stored) {
   return `
     <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}" data-suggested-default="${suggestedDefault}">
       <div class="field-header">
-        <span class="field-label">${label}</span>
-        <code class="field-id-chip msg-id">${fieldId}</code>
+        <span class="field-label">${labelHtml}</span>
+        <span class="field-id-chip"><code>${fieldId}</code></span>
       </div>
       <div class="options">
         ${optionsHtml}

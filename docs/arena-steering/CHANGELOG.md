@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Parse inline code spans in report field questions and options, and align option inputs with line one.
+
 - Retry failed browser write actions automatically three times with the same request ID, removing manual retry controls.
 
 - Name unnamed and pasted composer uploads with epoch milliseconds and prepend `{messageID}-` on disk after send.

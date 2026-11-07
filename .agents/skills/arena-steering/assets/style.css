@@ -2733,15 +2733,24 @@ article#report.report img,
 
 .option-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 2px 0;
   font-size: 14px;
   cursor: pointer;
 }
 
-.option-custom {
-  align-items: center;
+.option-row > input {
+  flex: none;
+  font: inherit;
+  line-height: inherit;
+  width: 16px;
+  height: 16px;
+  margin: calc((1lh - 16px) / 2) 0 0;
+}
+
+.option-custom > .custom-toggle {
+  margin-top: 8px;
 }
 
 .field-text-input,
