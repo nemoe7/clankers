@@ -118,11 +118,6 @@ export function mountRelativeTimers(root = document) {
       }
       const stateLabel = node.getAttribute("data-state-label");
       if (stateLabel) node.setAttribute("aria-label", `${stateLabel}, ${nextText}`);
-      const nextTitle = stamp.toLocaleString();
-      if (node.dataset?.stampTitle !== nextTitle) {
-        if (node.dataset) node.dataset.stampTitle = nextTitle;
-        node.title = nextTitle;
-      }
       const delay = nextRelativeDelay(stampMs, { includeSeconds, now });
       if (delay < minDelay) {
         minDelay = delay;

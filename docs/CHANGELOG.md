@@ -51,6 +51,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
 - Expand Markdownlint coverage and remove the fixed scope guard (`.markdownlint-cli2.jsonc`, `maintenance/check.py`).
 
+### Fixed
+
+#### maintenance
+
+- Update the seeded `S2E5P` survey payload in `maintenance/demo-arena-steer.py` to use `first_name` and `last_name`.
+
 ## 2026-11-06
 
 ### Changed

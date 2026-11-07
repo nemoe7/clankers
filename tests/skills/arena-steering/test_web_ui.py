@@ -7889,18 +7889,18 @@ def test_v2_nuu_recipe_conformance_surfaces(tmp_path: Path) -> None:
         assert "×" not in page.locator("#image-modal-close").inner_text()
         assert page.locator("#image-modal-close svg.lucide-x").count() == 1
 
-        # 2. Relative timestamps expose a localized title and proportional tabular-nums.
+        # 2. Relative timestamps render proportional tabular-nums without tooltips (8781cc5f).
         stamp_info = page.locator("#history .message time[datetime]").first.evaluate(
           """el => {
             const cs = getComputedStyle(el);
             return {
-              title: el.getAttribute('title') || '',
+              title: el.getAttribute('title'),
               tabular: cs.fontVariantNumeric,
               family: cs.fontFamily.toLowerCase(),
             };
           }"""
         )
-        assert len(stamp_info["title"]) >= 6, stamp_info
+        assert stamp_info["title"] is None, stamp_info
         assert stamp_info["tabular"] == "tabular-nums", stamp_info
         assert "mono" not in stamp_info["family"], stamp_info
 
