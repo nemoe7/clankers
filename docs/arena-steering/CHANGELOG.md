@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Decode child-process text pipes as strict UTF-8 and reconfigure CLI streams to UTF-8 on Windows.
+
 - Align Steering modals, timestamps, edge fades, live dot, busy state, dark tooltips, and filter persistence with Nuu recipes.
 
 - Grade survey fields with salted SHA-256 substrings, split `S2E5P` names, and simplify the survey modal.

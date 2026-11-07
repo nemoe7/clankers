@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import PurePosixPath
 
 LANGUAGES = {"python", "javascript", "actions"}
@@ -29,6 +30,9 @@ def languages_for(paths: list[str]) -> set[str]:
 
 
 def main() -> None:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   event = os.environ.get("EVENT_NAME", "")
   base = (
     os.environ.get("PR_BASE_SHA", "")

@@ -1938,10 +1938,11 @@ assert.ok(row.indexOf('Code') < row.indexOf('Docs'));
     cwd=repo,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
-  style = (repo / "skills/arena-steering/assets/style.css").read_text()
+  style = (repo / "skills/arena-steering/assets/style.css").read_text(encoding="utf-8")
   assert '.task-type[data-phase-state="finished"]' in style
   assert "text-decoration: line-through" in style
   assert "opacity:" in style
@@ -2018,9 +2019,11 @@ def test_browser_shimmers_only_for_active_task_gates(tmp_path: Path) -> None:
   runs.mkdir()
   for name, exit_code in (("active", None), ("failed", "7"), ("passed", "0")):
     marker = runs / f"{name}.exit"
-    (runs / f"{name}.json").write_text(json.dumps({"exit_path": str(marker)}))
+    (runs / f"{name}.json").write_text(
+      json.dumps({"exit_path": str(marker)}), encoding="utf-8"
+    )
     if exit_code is not None:
-      marker.write_text(exit_code)
+      marker.write_text(exit_code, encoding="utf-8")
     app.tasks.create_task(
       name, name.title(), size=3, details=["Verify."], gate_names=[name]
     )
@@ -2074,14 +2077,19 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
 
   def git(*args: str) -> str:
     result = subprocess.run(
-      ["git", *args], cwd=checkout, capture_output=True, text=True, check=True
+      ["git", *args],
+      cwd=checkout,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=True,
     )
     return result.stdout.strip()
 
   git("init", "-b", "test")
   git("config", "user.name", "Test")
   git("config", "user.email", "test@example.com")
-  (checkout / ".gitignore").write_text("arena-state/\n")
+  (checkout / ".gitignore").write_text("arena-state/\n", encoding="utf-8")
   git("add", ".gitignore")
   git("commit", "-m", "test: ignore installed state")
 
@@ -2095,7 +2103,7 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
       phase_type, phase_type, size=3, type=phase_type, details=["Review."]
     )
   assert not git("status", "--porcelain=v1", "--untracked-files=all")
-  (checkout / "unfinished.txt").write_text("dirty")
+  (checkout / "unfinished.txt").write_text("dirty", encoding="utf-8")
   for task_id in ("review", "ops", "report", "code", "docs"):
     with pytest.raises(DirtyTreeError, match="clean Git tree"):
       tasks.finish_phase(task_id, commit_hash=FIRST_COMMIT)
@@ -2136,7 +2144,9 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
   (checkout / "unfinished.txt").unlink()
   assert not git("status", "--porcelain=v1", "--untracked-files=all")
   messages.ack(cli_flag.id, "Read and corrected.")
-  (checkout / ".gitignore").write_text("arena-state/\n# tracked change\n")
+  (checkout / ".gitignore").write_text(
+    "arena-state/\n# tracked change\n", encoding="utf-8"
+  )
   with pytest.raises(DirtyTreeError, match="clean Git tree"):
     tasks.finish_phase("review")
   tracked_flag = messages.pending_violation()
@@ -2152,7 +2162,12 @@ def test_git_completion_checks_clean_tree_and_remote(tmp_path: Path) -> None:
 
   def git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
-      ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+      ["git", *args],
+      cwd=cwd,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=True,
     )
     return result.stdout.strip()
 
@@ -2162,18 +2177,18 @@ def test_git_completion_checks_clean_tree_and_remote(tmp_path: Path) -> None:
   git(tmp_path, "init", "-b", "task-check", str(checkout))
   git(checkout, "config", "user.name", "Test")
   git(checkout, "config", "user.email", "test@example.com")
-  (checkout / "work.txt").write_text("first")
+  (checkout / "work.txt").write_text("first", encoding="utf-8")
   git(checkout, "add", "work.txt")
   git(checkout, "commit", "-m", "test: first")
   first = git(checkout, "rev-parse", "HEAD")
   git(checkout, "remote", "add", "origin", str(remote))
   git(checkout, "push", "-u", "origin", "HEAD")
   assert verify_completion_commit(checkout, first) == first
-  (checkout / "work.txt").write_text("dirty")
+  (checkout / "work.txt").write_text("dirty", encoding="utf-8")
   with pytest.raises(GitCheckError, match="clean|dirty"):
     verify_completion_commit(checkout, first)
-  (checkout / "work.txt").write_text("first")
-  (checkout / "work.txt").write_text("second")
+  (checkout / "work.txt").write_text("first", encoding="utf-8")
+  (checkout / "work.txt").write_text("second", encoding="utf-8")
   git(checkout, "add", "work.txt")
   git(checkout, "commit", "-m", "test: second")
   second = git(checkout, "rev-parse", "HEAD")
@@ -2567,6 +2582,7 @@ assert.match(markup, /Work &lt;now&gt;/);
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode == 0, result.stderr
 

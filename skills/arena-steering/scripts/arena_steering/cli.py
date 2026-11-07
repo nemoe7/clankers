@@ -145,6 +145,9 @@ def main(
   err: TextIO | None = None,
 ) -> int:
   """Run a `steer` CLI command and return its exit code."""
+  for stream, custom in ((sys.stdout, out), (sys.stderr, err)):
+    if custom is None and hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   stdout = out if out is not None else sys.stdout
   stderr = err if err is not None else sys.stderr
   args_list = list(sys.argv[1:] if argv is None else argv)
@@ -874,6 +877,7 @@ def _run_gh(args: list[str], *, input_text: str | None = None) -> str:
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   if result.returncode != 0:
     detail = (result.stderr or result.stdout or "").strip()
@@ -930,7 +934,9 @@ def _run_pr_update(parsed: argparse.Namespace, store: SqliteStore, out: TextIO) 
 def _gh_url(args: list[str]) -> tuple[str, str]:
   """Return a log URL and the reason it is missing, when it is."""
   try:
-    result = subprocess.run(args, check=False, capture_output=True, text=True)
+    result = subprocess.run(
+      args, check=False, capture_output=True, text=True, encoding="utf-8"
+    )
   except OSError as exc:
     return "", f"gh could not start: {exc}"
   if result.returncode != 0:
@@ -1039,6 +1045,7 @@ def _run_git(args: list[str]) -> str:
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   if result.returncode != 0:
     detail = (result.stderr or result.stdout or "").strip()
@@ -1225,7 +1232,12 @@ def _run_pre_route(
       else:
         env = {**os.environ, "ARENA_STEER_ROUTE": "1"}
         result = subprocess.run(
-          ["bash", "-c", script], env=env, capture_output=True, text=True, check=False
+          ["bash", "-c", script],
+          env=env,
+          capture_output=True,
+          text=True,
+          encoding="utf-8",
+          check=False,
         )
         print("_steer_route_output=1", file=out)
         if result.stdout:
@@ -1619,6 +1631,7 @@ def _unpushed_commit_count(root: Path) -> int:
       cwd=root,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
       timeout=5,
     )
@@ -1630,6 +1643,7 @@ def _unpushed_commit_count(root: Path) -> int:
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=5,
       )

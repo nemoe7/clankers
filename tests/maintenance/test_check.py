@@ -113,6 +113,7 @@ def test_core_source_installs_to_agents(tmp_path):
     env={**os.environ, "APPLY_RULES_BASE": str(base)},
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stdout + result.stderr
@@ -169,6 +170,7 @@ def test_ste_linter_keeps_the_tool_standalone(tmp_path):
     [sys.executable, str(standalone / source.name), "--selftest"],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     cwd=tmp_path,
   )
@@ -319,7 +321,12 @@ def test_markdownlint_scope_includes_readmes_except_agents(tmp_path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("Not a heading\n", encoding="utf-8")
   result = subprocess.run(
-    [str(cli)], cwd=tmp_path, capture_output=True, text=True, check=False
+    [str(cli)],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
   )
   output = result.stdout + result.stderr
   assert result.returncode == 1, output
@@ -328,3 +335,7 @@ def test_markdownlint_scope_includes_readmes_except_agents(tmp_path):
     assert any(line.startswith(f"{name}:1 ") for line in errors), output
   for name in excluded:
     assert not any(line.startswith(f"{name}:1 ") for line in errors), output
+
+
+def test_child_env_preserves_pythonutf8_flag() -> None:
+  assert check.CHILD_ENV.get("PYTHONUTF8") == "1"

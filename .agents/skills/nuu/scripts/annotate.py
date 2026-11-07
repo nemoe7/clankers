@@ -866,6 +866,7 @@ const payload = JSON.parse(fs.readFileSync(0, "utf8"));
       }
     ),
     text=True,
+    encoding="utf-8",
     capture_output=True,
     env=env,
     timeout=30,
@@ -2109,6 +2110,9 @@ def build_design_boards(
 
 
 def main(argv: list[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
   parser.add_argument("-i", "--input", type=Path, required=True)
   parser.add_argument("-o", "--output", type=Path, required=True)

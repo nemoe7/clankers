@@ -158,7 +158,7 @@ def test_distribution_has_domain_rows_and_one_push_job():
   from pathlib import Path
 
   path = Path(__file__).resolve().parents[3] / ".github/workflows/distribute.yml"
-  document = yaml.safe_load(path.read_text())
+  document = yaml.safe_load(path.read_text(encoding="utf-8"))
   jobs = document["jobs"]
   assert set(jobs) == {"sync"}
   assert document["concurrency"]["cancel-in-progress"] is False
@@ -496,7 +496,7 @@ def test_distribute_keeps_the_owner_run_packages_home(tmp_path):
   for name in runtime | excluded:
     path = tmp_path / "skills/example" / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("fixture\n")
+    path.write_text("fixture\n", encoding="utf-8")
   subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
   subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
   env = os.environ | {"GITHUB_WORKSPACE": str(tmp_path), "SKILL_ROOT": "skills"}
@@ -506,13 +506,23 @@ def test_distribute_keeps_the_owner_run_packages_home(tmp_path):
     + "\nfiles=$(skill_files example)\nprintf '%s\\n' \"$files\"\n"
   )
   result = subprocess.run(
-    ["bash", "-c", command], env=env, capture_output=True, text=True, check=False
+    ["bash", "-c", command],
+    env=env,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
   )
   assert result.returncode == 0, result.stderr
   assert set(result.stdout.splitlines()) == runtime
   env["GITHUB_WORKSPACE"] = str(tmp_path / "missing")
   failed = subprocess.run(
-    ["bash", "-c", command], env=env, capture_output=True, text=True, check=False
+    ["bash", "-c", command],
+    env=env,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
   )
   assert failed.returncode != 0
   assert not failed.stdout
@@ -684,7 +694,9 @@ def test_artifacts_has_no_proxy_image_job():
 
 def test_shared_runner_uses_uv_cache_before_workflow_installs():
   prepare = yaml.safe_load(
-    (gate_workflows.ROOT / ".github/actions/prepare/action.yml").read_text()
+    (gate_workflows.ROOT / ".github/actions/prepare/action.yml").read_text(
+      encoding="utf-8"
+    )
   )
   steps = prepare["runs"]["steps"]
   uv_steps = [
@@ -699,7 +711,9 @@ def test_shared_runner_uses_uv_cache_before_workflow_installs():
   assert cache["cache-suffix"] == "${{ inputs." + cache_input + " }}"
   installs = []
   for path in (gate_workflows.ROOT / ".github/workflows").glob("*.yml"):
-    for job in yaml.safe_load(path.read_text()).get("jobs", {}).values():
+    for job in (
+      yaml.safe_load(path.read_text(encoding="utf-8")).get("jobs", {}).values()
+    ):
       prepared = False
       for step in job.get("steps", []):
         prepared |= step.get("uses") == "./.github/actions/prepare"
@@ -713,7 +727,9 @@ def test_shared_runner_uses_uv_cache_before_workflow_installs():
 
 def test_push_workflows_ignore_synced_agents_directory():
   for name in ("ci.yml", "codeql.yml"):
-    document = yaml.safe_load((gate_workflows.WORKFLOW_DIR / name).read_text())
+    document = yaml.safe_load(
+      (gate_workflows.WORKFLOW_DIR / name).read_text(encoding="utf-8")
+    )
     triggers = gate_workflows.triggers_of(document)
     push = triggers.get("push") or {}
     ignored = push.get("paths-ignore") or []

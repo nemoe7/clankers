@@ -2276,6 +2276,7 @@ assert.equal(history.removed, 1, 'rerender replaces the old scroll listener');
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr

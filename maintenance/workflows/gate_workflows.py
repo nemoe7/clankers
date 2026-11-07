@@ -9,6 +9,7 @@ credentials stay inside their job.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -199,6 +200,9 @@ def audit_paths(directory: Path = WORKFLOW_DIR) -> list[str]:
 
 
 def main() -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   findings = audit_paths()
   for finding in findings:
     print(f"::error::{finding}")

@@ -1295,6 +1295,7 @@ def browser(args):
     input=json.dumps(request),
     capture_output=True,
     text=True,
+    encoding="utf-8",
     timeout=args.timeout * max(len(request["widths"]), 1) * 8 + 10,
     check=False,
   )
@@ -1374,6 +1375,7 @@ def doctor(root, manifest=None, config=None):
       input=json.dumps({"command": "doctor"}),
       capture_output=True,
       text=True,
+      encoding="utf-8",
       timeout=10,
       check=False,
     )
@@ -1424,6 +1426,9 @@ def doctor(root, manifest=None, config=None):
 
 
 def main(argv=None):
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   raw_args = list(sys.argv[1:] if argv is None else argv)
   if raw_args and raw_args[0] in {"check", "ruler", "density"}:
     return measure_main(raw_args)

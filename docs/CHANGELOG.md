@@ -55,6 +55,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Decode child-process text pipes as strict UTF-8, reconfigure CLI streams for Windows consoles, and pass explicit `encoding="utf-8"` across test suites.
 - Update the seeded `S2E5P` survey payload in `maintenance/demo-arena-steer.py` to use `first_name` and `last_name`.
 
 ## 2026-11-06

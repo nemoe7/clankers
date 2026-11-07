@@ -18,7 +18,7 @@ SPEC.loader.exec_module(gate)
 def test_package_collection_and_each_complete_skill(tmp_path):
   archives = gate.package_archives(tmp_path)
   assert set(archives) == {gate.PLUGIN_NAME, *gate.EXPECTED_SKILLS}
-  shared = json.loads(gate.MANIFEST.read_text())
+  shared = json.loads(gate.MANIFEST.read_text(encoding="utf-8"))
   names = set()
   for name, path in archives.items():
     with zipfile.ZipFile(path) as opened:
@@ -96,9 +96,9 @@ def test_release_builds_verifies_and_publishes_every_package():
 
   import yaml
 
-  jobs = yaml.safe_load((gate.ROOT / ".github/workflows/artifacts.yml").read_text())[
-    "jobs"
-  ]
+  jobs = yaml.safe_load(
+    (gate.ROOT / ".github/workflows/artifacts.yml").read_text(encoding="utf-8")
+  )["jobs"]
   steps = jobs["release-gpt-plugins"]["steps"]
   scripts = [step.get("run", "") for step in steps]
   build = next(i for i, script in enumerate(scripts) if "--package-dir ." in script)
