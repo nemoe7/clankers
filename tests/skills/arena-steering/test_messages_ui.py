@@ -1787,6 +1787,25 @@ def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
           )
           assert geometry["parentDelta"] <= 1, geometry
           assert geometry["taskDelta"] <= 1, geometry
+          page.locator('.message[data-msg-id="cc0001"] button.receipt-id').click()
+          composer = page.locator("#composer-reply-bar .composer-reply-chip")
+          parent = page.locator('.message[data-msg-id="cc0002"] .reply-parent-chip')
+          assert page.locator("#composer-reply-bar").inner_text() == "cc0001"
+          for chip in (composer, parent):
+            chip.hover()
+            chip.evaluate(
+              "el => Promise.all(el.getAnimations().map(animation => animation.finished))"
+            )
+            style = chip.evaluate("""element => {
+              const css = getComputedStyle(element);
+              const text = getComputedStyle(element.querySelector('code'));
+              const box = element.getBoundingClientRect();
+              return [css.borderRadius, css.backgroundColor, css.borderColor, text.fontSize, box.width, box.height];
+            }""")
+            if chip == composer:
+              composer_style = style
+            else:
+              assert style == composer_style, (composer_style, style)
           page.screenshot(path=str(tmp_path / f"chip-row-{width}.png"))
           page.close()
       finally:

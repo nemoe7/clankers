@@ -471,11 +471,10 @@ export function renderMessagesView(container, state, handlers) {
             aria-label="Selected parents"
             ${selectedParentRefs.length ? "" : "hidden"}
           >
-            <span class="composer-reply-label">Parents</span>
             ${selectedParentRefs
               .map(
                 (ref) =>
-                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent">${escapeHtml(ref.id)}</button>`
+                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent"><code>${escapeHtml(ref.id)}</code></button>`
               )
               .join("")}
           </div>

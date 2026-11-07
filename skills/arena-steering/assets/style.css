@@ -1742,7 +1742,8 @@ code.msg-id {
 }
 
 .reply-parent-chip,
-.composer-reply-chip {
+.composer-reply-chip,
+.field-id-chip {
   display: inline-flex;
   align-items: center;
   min-height: 0;
@@ -1762,7 +1763,9 @@ code.msg-id {
 }
 
 .reply-parent-chip > code:not(.msg-id),
-#report .reply-parent-chip > code:not(.msg-id) {
+.composer-reply-chip > code:not(.msg-id),
+#report .reply-parent-chip > code:not(.msg-id),
+#report .field-id-chip > code:not(.msg-id) {
   font-size: 11px;
 }
 
@@ -1782,12 +1785,6 @@ code.msg-id {
 
 .composer-reply-bar[hidden] {
   display: none;
-}
-
-.composer-reply-label {
-  color: hsl(var(--text-tertiary));
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .message[data-highlight="true"] .message-bubble {
@@ -2774,11 +2771,7 @@ article#report.report img,
 .field-id-chip {
   flex: none;
   white-space: nowrap;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background-color: var(--code-bg) !important;
-  color: hsl(var(--text-tertiary));
-  font-size: 12px;
+  cursor: default;
 }
 
 .options {
@@ -3429,7 +3422,7 @@ article#report.report img,
 @media (hover: hover) and (pointer: fine) {
   :is(.tab-btn, .icon-button, .btn-secondary, .preview-code-mermaid, .preview-code-md,
     .copy-code, .survey-id-trigger, .survey-cap-pill,
-    .message-attachment-preview, .composer-reply-chip,
+    .message-attachment-preview, .composer-reply-chip, .reply-parent-chip,
     .composer-attachment-chip button, .parent-id-button, .task-title,
     .report-toc-link, .report-picker-toggle, .report-picker-link):hover:not(:disabled) {
     background-color: hsl(var(--surface-tertiary));

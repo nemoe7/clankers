@@ -102,7 +102,7 @@ function renderFieldBlock(field, headings, stored) {
       <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="text">
         <div class="field-header">
           <span class="field-label">${label}</span>
-          <code class="field-id-chip msg-id">${fieldId}</code>
+          <span class="field-id-chip"><code>${fieldId}</code></span>
         </div>
         <textarea class="input field-text-input" name="field-${fieldId}" rows="1" placeholder="Something else..." aria-label="${label}">${escapeHtml(textValue)}</textarea>
       </div>
@@ -134,7 +134,7 @@ function renderFieldBlock(field, headings, stored) {
     <div class="field-card question" id="${escapeHtml(anchorId)}" data-field-id="${fieldId}" data-field-type="${escapeHtml(field.type)}" data-suggested-default="${suggestedDefault}">
       <div class="field-header">
         <span class="field-label">${label}</span>
-        <code class="field-id-chip msg-id">${fieldId}</code>
+        <span class="field-id-chip"><code>${fieldId}</code></span>
       </div>
       <div class="options">
         ${optionsHtml}
