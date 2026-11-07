@@ -50,32 +50,20 @@ jobs:
         run: actionlint -color .github/workflows/*.yml
 
       - name: Prep Runner
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/prepare
         with:
           pip-cache-key: workflow-security-lint
 
       - name: Install zizmor
+        if: ${{ !cancelled() }}
         run: uv pip install --system -r requirements.txt
 
       - name: Audit Workflows
+        if: ${{ !cancelled() }}
         # Medium and above fail the run. The pinned policy accepts major-version action tags.
         run: zizmor --config .github/zizmor.yml --min-severity=medium --format github .github/workflows
 
-  audit:
-    name: Check Workflow Contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-
-      - name: Prep Runner
-        uses: ./.github/actions/prepare
-        with:
-          pip-cache-key: workflow-security-audit
-
-      - name: Install Parser
-        run: uv pip install --system -r requirements.txt
-
       - name: Check Workflow Set
+        if: ${{ !cancelled() }}
         run: python maintenance/workflows/gate_workflows.py

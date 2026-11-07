@@ -723,3 +723,15 @@ def test_push_workflows_ignore_synced_agents_directory():
     push = triggers.get("push") or {}
     ignored = push.get("paths-ignore") or []
     assert ".agents/**" in ignored, name
+
+
+def test_workflow_security_runs_all_checks_in_one_job():
+  path = gate_workflows.WORKFLOW_DIR / "workflow-security.yml"
+  workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+  assert set(gate_workflows.jobs_of(workflow)) == {"lint"}
+  steps = workflow["jobs"]["lint"]["steps"]
+  commands = "\n".join(step.get("run", "") for step in steps)
+  assert "actionlint -color .github/workflows/*.yml" in commands
+  assert "zizmor --config .github/zizmor.yml" in commands
+  assert "python maintenance/workflows/gate_workflows.py" in commands
+  assert "schedule" in gate_workflows.triggers_of(workflow)
