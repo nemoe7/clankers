@@ -70,19 +70,20 @@ Docs and code phases need a clean tree and a unique full Git commit hash. Operat
 | `steer report rm --stale` | `Dismissed reports: ...` | 0 on removal, 1 on error |
 
 The source is an ignored workspace file, not a commit artifact. Fielded questions use `<!-- question {"id":"...","label":"..."} -->` and labelled options. Mark at least one option in each radio or checkbox field with `(x)` or `[x]`.
+Use the final decision on every question and option label, and NEVER use question strings or generic words like Decision or Answer. See [report-labels.md](report-labels.md) for worked examples.
 
 For example:
 
 ```markdown
-<!-- question {"id":"reuse","label":"How should the validation logic be reused?"} -->
+<!-- question {"id":"reuse","label":"Validation logic reuse method"} -->
 How should the validation logic be reused?
-- (x) Extract a shared validation helper. <!-- option {"label":"Extract a shared validation helper"} -->
-- ( ) Duplicate the validation logic. <!-- option {"label":"Duplicate the validation logic"} -->
+- (x) Extract a shared validation helper. <!-- option {"label":"Extract a shared validation helper."} -->
+- ( ) Duplicate the validation logic. <!-- option {"label":"Duplicate the validation logic."} -->
 
-<!-- question {"id":"clause","label":"Should the rule forbid direct pushes?"} -->
+<!-- question {"id":"clause","label":"Direct-push rule on protected branches"} -->
 Should the rule forbid direct pushes?
-- (x) Approve forbidding direct pushes. <!-- option {"label":"Approve forbidding direct pushes"} -->
-- ( ) Reject forbidding direct pushes. <!-- option {"label":"Reject forbidding direct pushes"} -->
+- (x) Approve forbidding direct pushes. <!-- option {"label":"Forbid direct pushes to protected branches."} -->
+- ( ) Reject forbidding direct pushes. <!-- option {"label":"Keep direct pushes allowed on protected branches."} -->
 ```
 
 `(x)` marks a default, not an answer. After the first answer, `steer report pub` rejects body edits under the same ID. Removal detaches task links but retains task details and answer history.
