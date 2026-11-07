@@ -23,6 +23,8 @@ run the linter before you hand work over.
 | `kind` | type |
 | `name` | specify |
 | `repository` | repo |
+| `pull request` | PR |
+| `the nemoizer` | nemoizer |
 
 Read references/rules.md for lint IDs and their meanings. `name` rotates only as a verb.
 
@@ -80,9 +82,7 @@ Delete a marker when the line no longer needs it.
 ## Adding a row
 
 1. Add the row to the table above.
-2. Add one pattern, its name, and its plain word to `ROTATIONS` in
-   `scripts/nemoize.py`; add a stem word that takes its own plain word to
-   `EXCEPTIONS`.
+2. Add each inflection and its plain word to `ROTATION_FORMS` and add its rule and pattern to `ROTATIONS` in `scripts/nemoize.py`.
 3. Run `python3 -m pytest skills/nemoizer/scripts/test_nemoize.py`.
 
 ## Prose review
