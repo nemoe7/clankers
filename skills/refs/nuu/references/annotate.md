@@ -38,7 +38,7 @@ Named `<color>` tokens: `red` (`#e11d48`, default), `blue` (`#2563eb`), `green` 
 | `0` / `10` | `panels` | Multi-panel `Before` vs `After` (`Pass` vs `Fail`) comparison grid (`-p [Label=]src[@x,y,w,h]`, `-C`, `-n`) |
 | `canvas` | `custom` | Multi-artboard `x,y` canvas (`<= 16384 x 16384 px`) combining `1..0` frames, tables, and cross-frame arrows |
 
-Set `$NUU_RENDERER=bitmap` to force pure-Python PNG rendering in `annotate -i` and `board -T panels` when Chromium is unavailable.
+Set `$NUU_RENDERER=bitmap` to force pure-Python PNG rendering in `annotate -i` and `board -T panels` when Chromium is unavailable. Board specs use TOML; `[icons].file` and `table` select an HTML or JavaScript icon table. JSON icon tables are not accepted.
 
 ## `nuu.toml` v2 Configuration
 

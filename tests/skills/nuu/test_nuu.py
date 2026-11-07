@@ -8,6 +8,7 @@ from pathlib import Path
 import annotate
 import measure
 import nuu
+import pytest
 
 SCRIPT = Path(nuu.__file__).resolve()
 
@@ -45,7 +46,7 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   assert doc_res["catalog"]["files"] > 0
   assert not doc_res["catalog"]["mismatches"]
   doc_cli = run("doctor")
-  assert "# Nuu Doctor (`v0.2.0`)" in doc_cli.stdout
+  assert "# Nuu Doctor (`v0.2.1`)" in doc_cli.stdout
 
   exact = nuu.search("healthcare dashboard", dataset="products", limit=5)
   assert exact["results"] and not exact["fallback"]
@@ -1262,7 +1263,7 @@ html = "components/buttons.html"
   assert views_png.is_file() and comp_png.is_file()
   vw, vh, _ = annotate.decode_png(views_png.read_bytes())
   cw, ch, _ = annotate.decode_png(comp_png.read_bytes())
-  assert vw == 2816 and vh > 200
+  assert vw == 2856 and vh > 200
   assert 200 < cw <= 1536 and ch > 80
 
   only_dir = tmp_path / "only-out"
@@ -1673,6 +1674,266 @@ html = "components/buttons.html"
     ["-x", "/custom/chromium", "http://127.0.0.1:8000"]
   )
   assert walk_parsed.executable == "/custom/chromium"
+
+
+def test_board_presets_use_stylesheet_tokens_and_routed_arrows(tmp_path, monkeypatch):
+  stylesheet = tmp_path / "tokens.css"
+  stylesheet.write_text(
+    ":root { --bg: #ffffff; --surface: #f2f2f2; --surface-2: #e8e8e8; "
+    "--line: #cccccc; --text: #111111; --muted: #555555; --accent: #3355dd; "
+    "--accent-fill: #3355dd; --on-accent: #ffffff; --danger: #aa2211; "
+    "--warn: #885500; --ok: #117733; --focus: #3355dd; --radius-sm: 4px; "
+    "--radius-md: 6px; --radius-lg: 10px; --radius-pill: 9999px; "
+    "--space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; "
+    "--size-11: 11px; --size-12: 12px; --size-14: 14px; --size-16: 16px; "
+    "--size-18: 18px; --size-22: 22px; --size-24: 24px; --size-28: 28px; "
+    "--size-32: 32px; --font-sans: Arial, sans-serif; --font-mono: monospace; }\n"
+    ':root[data-theme="dark"] { --bg: #101114; --surface: #191a20; }\n',
+    encoding="utf-8",
+  )
+  (tmp_path / "nuu.toml").write_text(
+    '[paths]\nstylesheet = "tokens.css"\n', encoding="utf-8"
+  )
+  dark_tokens = annotate._resolve_board_tokens(tmp_path, theme="dark")
+  assert dark_tokens["--bg"] == "#101114"
+  assert dark_tokens["--surface"] == "#191a20"
+  assert dark_tokens["--line"] == "#cccccc"
+
+  start, end = annotate._nearest_box_edges((0, 0, 20, 20), (100, 0, 20, 20))
+  assert (start, end) == ((20, 10), (100, 10))
+  route = annotate._route_svg_path(
+    (20, 10), (100, 50), "orthogonal", obstacles=[(40, 0, 30, 40)]
+  )
+  assert route.startswith("M ") and "Q " in route
+  assert "C " in annotate._route_svg_path((0, 0), (20, 20), "scurve")
+  assert "L " in annotate._route_svg_path((0, 0), (20, 20), "straight")
+  assert (
+    annotate._canonical_board_type("0")
+    == annotate._canonical_board_type("10")
+    == "panels"
+  )
+  token_sets = annotate._resolve_board_token_sets(tmp_path, stylesheet)
+  board_config = nuu.load_nuu_config(tmp_path)["config"]
+  sheet_css = stylesheet.read_text(encoding="utf-8")
+  html_contracts = {
+    "1": ("flow-grid", "flow-arrow", "marker-end"),
+    "2": ("Primary action", "Open request", "Cancel"),
+    "3": ("Default", "Empty", "Error", "Populated"),
+    "4": ("state-hover", "focus-ring", "state-active", "aria-busy", "disabled"),
+    "5": ("theme-light", "Dark · holistic", "In current use", "Workspace name"),
+    "6": ("token-chip", "type-row", "icon-grid", "Role colors"),
+    "7": ("callout-pin", "redline-ink", "Slots and tokens", '<table class="sheet">'),
+    "8": ("responsive-strip", "68em,60em,30em,24em", "855x325"),
+    "9": ("focus-flow", "focus-ring", 'tabindex="0"', "44×44 px"),
+  }
+  for preset, fragments in html_contracts.items():
+    markup, _ = annotate._preset_board_markup(
+      annotate._canonical_board_type(preset),
+      token_sets["dark"],
+      token_sets["light"],
+      sheet_css,
+      board_config["audit"]["viewports"],
+      board_config["audit"]["breakpoints"],
+      board_config["measure"]["redline"],
+    )
+    assert all(fragment in markup for fragment in fragments), preset
+    if preset == "6":
+      assert markup.count('class="type-row"') == 9
+
+  output_digests = set()
+  for preset in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
+    result = annotate.build_design_boards(
+      tmp_path / f"preset-{preset}",
+      spec_obj={
+        "stylesheet": "tokens.css",
+        "shots": {},
+        "boards": [
+          {"name": "sample", "type": preset, "title": "Preset sample", "frames": []}
+        ],
+      },
+      project=tmp_path,
+      renderer="bitmap",
+    )
+    assert result["status"] == "composed"
+    image = Path(result["writes"][0]).read_bytes()
+    assert len(image) > 1000
+    output_digests.add(image)
+  assert len(output_digests) == 9
+  token_check = annotate.build_design_boards(
+    tmp_path / "preset-token-check",
+    spec_obj={
+      "stylesheet": "tokens.css",
+      "shots": {},
+      "boards": [{"name": "sample", "type": "1", "title": "Preset sample"}],
+    },
+    project=tmp_path,
+    renderer="bitmap",
+  )
+  first_image = annotate.decode_png(Path(token_check["writes"][0]).read_bytes())
+  assert first_image[2][
+    (5 * first_image[0] + 5) * 4 : (5 * first_image[0] + 5) * 4 + 4
+  ] == bytes((16, 17, 20, 255))
+
+
+def test_toml_annotations_canvas_arrows_and_icon_extraction(tmp_path, monkeypatch):
+  stylesheet = tmp_path / "tokens.css"
+  stylesheet.write_text(
+    ":root { --bg: #ffffff; --surface: #f2f2f2; --surface-2: #e8e8e8; "
+    "--line: #cccccc; --text: #111111; --muted: #555555; --accent: #3355dd; "
+    "--accent-fill: #3355dd; --on-accent: #ffffff; --danger: #aa2211; "
+    "--warn: #885500; --ok: #117733; --focus: #3355dd; --radius-sm: 4px; "
+    "--radius-md: 6px; --radius-lg: 10px; --radius-pill: 9999px; "
+    "--font-sans: Arial, sans-serif; --font-mono: monospace; }\n"
+    ':root[data-theme="dark"] { --bg: #101114; --surface: #191a20; }\n',
+    encoding="utf-8",
+  )
+  (tmp_path / "nuu.toml").write_text(
+    '[paths]\nstylesheet = "tokens.css"\n', encoding="utf-8"
+  )
+  png = tmp_path / "source.png"
+  png.write_bytes(annotate.encode_png(80, 60, bytearray([10, 20, 30, 255] * 4800)))
+  spec = tmp_path / "annotate.toml"
+  spec.write_text(
+    '[annotate]\ncrop = "pad"\nboxes = [{ x = 10, y = 10, width = 20, height = 20, color = "red" }]\n',
+    encoding="utf-8",
+  )
+  annotation = annotate.annotate_image(
+    png,
+    tmp_path / "annotated.png",
+    spec_path=spec,
+    project=tmp_path,
+    renderer="bitmap",
+  )
+  assert annotation["status"] == "annotated"
+  assert annotation["width"] == annotation["height"] == 46
+  json_spec = tmp_path / "annotate.json"
+  json_spec.write_text('{"boxes": []}', encoding="utf-8")
+  with pytest.raises(ValueError, match="TOML"):
+    annotate.annotate_image(
+      png,
+      tmp_path / "json-annotation.png",
+      spec_path=json_spec,
+      project=tmp_path,
+      renderer="bitmap",
+    )
+  resized = annotate.resize_rgba(2, 2, bytearray([1, 2, 3, 255] * 4), 1, 1)
+  assert resized == bytearray([1, 2, 3, 255])
+
+  shot = tmp_path / "shot.png"
+  shot.write_bytes(annotate.encode_png(8, 6, bytearray([90, 100, 110, 255] * 48)))
+  panel_result = annotate.build_board(
+    tmp_path / "panels.png",
+    panels=[str(shot)],
+    project=tmp_path,
+    renderer="bitmap",
+  )
+  panel_w, _, panel_rgba = annotate.decode_png(
+    Path(panel_result["output"]).read_bytes()
+  )
+  panel_offset = (5 * panel_w + 5) * 4
+  assert panel_rgba[panel_offset : panel_offset + 4] == bytearray([16, 17, 20, 255])
+
+  icons = tmp_path / "icons.js"
+  icons.write_text(
+    'const svg = value => value;\nconst ICON_TABLE = {\n  check: svg("<svg></svg>"),\n};\n',
+    encoding="utf-8",
+  )
+  board_spec = tmp_path / "boards.toml"
+  board_spec.write_text(
+    '[board]\nstylesheet = "tokens.css"\n'
+    '[board.shots]\npreview = "shot.png"\n'
+    '[board.icons]\nfile = "icons.js"\ntable = "ICON_TABLE"\n'
+    '[[board.boards]]\nname = "flow"\ntype = "canvas"\ntitle = "Flow"\n'
+    "canvas = { width = 300, height = 140 }\n"
+    "frames = [\n"
+    '  { id = "start", x = 0, y = 40, width = 80, height = 60, label = "Start", shot = "preview" },\n'
+    '  { id = "blocker", x = 120, y = 35, width = 60, height = 70, label = "Blocker" },\n'
+    '  { id = "end", x = 220, y = 40, width = 80, height = 60, label = "End" },\n'
+    "]\n"
+    'arrows = [{ from = "start", to = "end", route = "orthogonal", label = "Continue" }]\n'
+    '[[board.boards]]\nname = "linked"\ntype = "lay-of-the-land"\ntitle = "Linked frames"\n'
+    "frames = [\n"
+    '  { id = "left", shot = "preview", label = "Left", width = 80 },\n'
+    '  { id = "right", shot = "preview", label = "Right", width = 80 },\n'
+    "]\n"
+    'arrows = [{ from = "left", to = "right", route = "scurve", label = "Next" }]\n'
+    '[[board.boards]]\nname = "responsive"\ntype = "responsive"\nurl = "https://example.test"\n',
+    encoding="utf-8",
+  )
+  html_docs = []
+  capture_specs = []
+
+  def capture_url(_url, viewport, is_mobile, has_touch, **_kwargs):
+    capture_specs.append((viewport["width"], viewport["height"], is_mobile, has_touch))
+    shot_width = max(1, round(viewport["width"] / 100))
+    shot_height = max(1, round(viewport["height"] / 100))
+    rgba = bytearray([90, 100, 110, 255] * shot_width * shot_height)
+    return annotate.encode_png(shot_width, shot_height, rgba)
+
+  def render_html(html_doc, width, height, output_path, **_kwargs):
+    html_docs.append(html_doc)
+    output_path.write_bytes(annotate.encode_png(1, 1, bytearray([0, 0, 0, 255])))
+    return True
+
+  monkeypatch.setattr(annotate, "_chromium_render_png", render_html)
+  monkeypatch.setattr(annotate, "_capture_url_png", capture_url)
+  chromium_result = annotate.build_design_boards(
+    tmp_path / "chromium-out",
+    spec_path=board_spec,
+    project=tmp_path,
+    renderer="chromium",
+  )
+  assert chromium_result["renderer"] == "chromium"
+  assert "--bg: #101114" in html_docs[0]
+  assert 'id="artboard-start"' in html_docs[0]
+  assert 'marker-end="url(#board-arrow-1)"' in html_docs[0] and "Q " in html_docs[0]
+  assert 'data-board-frame="left"' in html_docs[1]
+  assert 'data-from="left"' in html_docs[1]
+  assert "orthogonalPath" in html_docs[1] and "scurve" in html_docs[1]
+  assert "const ICON_TABLE" in html_docs[0]
+  assert "(ICON_TABLE)[slot.dataset.icon]" in html_docs[0]
+  assert html_docs[2].count('class="responsive-shot"') == 5
+  assert 'data-breakpoints="68em,60em,30em,24em"' in html_docs[2]
+  assert capture_specs == [
+    (1920, 957, False, False),
+    (1080, 2437, False, False),
+    (958, 958, False, False),
+    (855, 325, True, True),
+    (411, 799, True, True),
+  ]
+
+  canvas_out = annotate.build_design_boards(
+    tmp_path / "canvas-bitmap-out",
+    spec_path=board_spec,
+    project=tmp_path,
+    renderer="bitmap",
+  )
+  assert canvas_out["status"] == "composed"
+  assert (canvas_out["width"], canvas_out["height"]) == (364, 252)
+  canvas_w, _, canvas_rgba = annotate.decode_png(
+    Path(canvas_out["writes"][0]).read_bytes()
+  )
+  image_offset = (193 * canvas_w + 46) * 4
+  assert canvas_rgba[image_offset : image_offset + 4] == bytearray([90, 100, 110, 255])
+  responsive_w, responsive_h, responsive_rgba = annotate.decode_png(
+    Path(canvas_out["writes"][2]).read_bytes()
+  )
+  responsive_offset = (174 * responsive_w + 50) * 4
+  assert responsive_h > 700
+  assert responsive_rgba[responsive_offset : responsive_offset + 4] == bytearray(
+    [90, 100, 110, 255]
+  )
+  assert len(capture_specs) == 10
+
+  json_board = tmp_path / "boards.json"
+  json_board.write_text('{"boards": []}', encoding="utf-8")
+  with pytest.raises(ValueError, match="TOML"):
+    annotate.build_design_boards(
+      tmp_path / "json-board.png",
+      spec_path=json_board,
+      project=tmp_path,
+      renderer="bitmap",
+    )
 
 
 def test_nuu_list_indent_and_overlap_rules(tmp_path):
