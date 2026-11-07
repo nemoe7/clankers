@@ -306,12 +306,15 @@ function syncViewportHeight() {
     "input:not([type='hidden']):not([readonly]), textarea:not([readonly]), [contenteditable='true']"
   );
   const mobile = window.matchMedia?.("(max-width: 60em)")?.matches;
-  document.documentElement.toggleAttribute(
-    "data-mobile-keyboard-open",
-    Boolean(
-      mobile && editing && vvScale <= 1.01 &&
-      Math.max(innerHeight, docHeight) - vvHeight >= MOBILE_KEYBOARD_MIN_SHRINK
-    )
+  const keyboardOpen = Boolean(
+    mobile && editing && vvScale <= 1.01 &&
+    Math.max(innerHeight, docHeight) - vvHeight >= MOBILE_KEYBOARD_MIN_SHRINK
+  );
+  document.documentElement.toggleAttribute("data-mobile-keyboard-open", keyboardOpen);
+  // A panned visual viewport starts below the layout viewport. Keep the shell
+  // within that visible region rather than leaving an offset-sized bottom gap.
+  document.documentElement.style?.setProperty?.(
+    "--app-offset-top", `${keyboardOpen ? Math.max(0, vv?.offsetTop || 0) : 0}px`
   );
   if (
     ((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) &&

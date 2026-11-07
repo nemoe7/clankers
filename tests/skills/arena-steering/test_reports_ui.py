@@ -1632,3 +1632,65 @@ def test_each_option_field_needs_a_default_without_changing_saved_answers(
   app.reports.publish_report("text-only", "Text", TEXT)
   app.reports.publish_report("unfielded", "Unfielded", "# No fields")
   store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN for browser tests"
+)
+def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "keyboard",
+    "Keyboard",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(
+          viewport={"width": 411, "height": 799}, is_mobile=True, has_touch=True
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        page.locator(".field-text-input").focus()
+        page.evaluate("""() => {
+          const viewport = window.visualViewport;
+          Object.defineProperty(viewport, 'height', {configurable: true, value: 559});
+          Object.defineProperty(viewport, 'offsetTop', {configurable: true, value: 80});
+          viewport.dispatchEvent(new Event('resize'));
+        }""")
+        geometry = page.evaluate("""() => ({
+          shellBottom: document.querySelector('.app-shell').getBoundingClientRect().bottom,
+          visibleBottom: visualViewport.offsetTop + visualViewport.height,
+          keyboard: document.documentElement.hasAttribute('data-mobile-keyboard-open'),
+        })""")
+        assert geometry["keyboard"], geometry
+        assert abs(geometry["shellBottom"] - geometry["visibleBottom"]) < 1, geometry
+        page.screenshot(path=str(tmp_path / "keyboard-offset.png"))
+        page.evaluate("""() => {
+          delete visualViewport.height;
+          delete visualViewport.offsetTop;
+          visualViewport.dispatchEvent(new Event('resize'));
+        }""")
+        assert page.locator(".app-shell").evaluate(
+          "el => Math.abs(el.getBoundingClientRect().top) < 1"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
