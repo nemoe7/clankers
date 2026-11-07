@@ -8,6 +8,10 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Set link color to `#299bff`, restore solid disc message markers, and lower the mobile `New reply` pill.
+
+- Remove `855x325` from Nuu audit viewports and lock mobile orientation to portrait.
+
 - Share parent-chip rendering, Lucide SVG icons, scroll-jump pills, and borderless button classes across Steering views.
 
 - Remove default boxes on contained Steering buttons, gating interactive hover fills to fine pointers while keeping press fills.

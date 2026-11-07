@@ -111,7 +111,7 @@
   --line: hsl(var(--border-medium));
   --focus: hsl(var(--border-strong));
   --accent: #e5bb8b;
-  --link: #6ea3d6;
+  --link: #299bff;
   --dot-seen: #7fa7d1;
   --scrollbar-thumb: hsl(var(--surface-raised-alt) / 0.4);
   --space-1: 4px;
@@ -197,6 +197,18 @@ ol {
   --indent: 2ch;
   list-style-position: outside;
   padding-inline-start: 2ch;
+}
+
+.message-text ul {
+  list-style-type: disc;
+}
+
+.message-text :is(ul, ol) ul {
+  list-style-type: circle;
+}
+
+.message-text :is(ul, ol) :is(ul, ol) ul {
+  list-style-type: square;
 }
 
 code,
@@ -2644,6 +2656,10 @@ article#report.report img,
     --edge-stop-start: 78px;
     --edge-fade-start: 106px;
     padding-top: 78px;
+  }
+
+  .log-edited {
+    top: 88px;
   }
 }
 

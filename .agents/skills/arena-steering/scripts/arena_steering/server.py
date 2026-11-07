@@ -101,6 +101,7 @@ MIME_OVERRIDES = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
 }
@@ -1585,7 +1586,9 @@ def assets_signature(
   if not base.is_dir():
     return ()
   targets = sorted(
-    p for p in base.iterdir() if p.suffix.lower() in {".html", ".css", ".js", ".mjs"}
+    p
+    for p in base.iterdir()
+    if p.suffix.lower() in {".html", ".css", ".js", ".mjs", ".webmanifest"}
   )
   return file_signature(targets)
 

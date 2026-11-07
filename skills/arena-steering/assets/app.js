@@ -1475,7 +1475,22 @@ function openViolationForm(health, trigger, draft = null, failure = null) {
   });
 }
 
+function lockMobilePortrait() {
+  if (!window.matchMedia?.("(pointer: coarse), (max-width: 48em)")?.matches) return;
+  const requestLock = () => {
+    try {
+      const result = window.screen?.orientation?.lock?.("portrait");
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } catch {
+      // Browsers outside installed or fullscreen mobile contexts reject orientation locks.
+    }
+  };
+  requestLock();
+  window.addEventListener("pointerdown", requestLock, { once: true, passive: true });
+}
+
 function initEvents() {
+  lockMobilePortrait();
   initImageModal();
   syncViewportHeight();
   window.addEventListener("resize", syncViewportHeight);
