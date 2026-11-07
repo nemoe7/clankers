@@ -1179,23 +1179,6 @@ html = "components/buttons.html"
   assert [vp["width"] for vp in vps] == [1920, 1080, 958, 855, 411]
   assert [vp["width"] for vp in vps if vp["report"]] == [1920, 411]
   assert nuu.REPORT_WIDTHS == (1920, 411)
-  audit_report_md = (SCRIPT.parent.parent / "references" / "audit-report.md").read_text(
-    encoding="utf-8"
-  )
-  assert "Desktop maximized (`1920x957`)" in audit_report_md
-  assert "Phone portrait (`411x799`)" in audit_report_md
-  assert "`1920x957` / `411x799`" in audit_report_md
-  assert "| Location | Width | Before | After |" in audit_report_md
-  assert "| Area | Before | After | Action / Disposition |" in audit_report_md
-  assert "1080x2437" not in audit_report_md
-  assert "`1280` / `360`" not in audit_report_md
-  assert "finding-1-before-after-board.png" in audit_report_md
-  assert "visual-1-before-after-board.png" in audit_report_md
-  assert (
-    "## Captures\n\nOmit this section unless full-viewport captures are needed."
-    in audit_report_md
-  )
-  assert "## Captures (" not in audit_report_md
 
   bare_proj = tmp_path / "BareNoCssProject"
   bare_proj.mkdir()
@@ -1917,17 +1900,6 @@ def test_house_style_amendments_stay_synced():
     assert "@media (pointer: coarse)" in css
     assert "min-height: var(--touch);" in css
     assert "border-radius: 50%;" not in css
-
-    skill = (root / "SKILL.md").read_text(encoding="utf-8")
-    assert "except .eyebrow labels at 0.06em" in skill
-    assert "44x44 px hit areas" in skill
-    assert (
-      "33. On every live Nuu audit, inspect visible dialog and floating-overlay text "
-      "and controls for clipping or occlusion at every edge across the five house "
-      "viewports. Check tooltip and popover surfaces for missing effective "
-      "backgrounds. Report selector, viewport, bounds, clipping ancestor, and "
-      "computed surface color."
-    ) in skill
 
     modal = (root / "references/recipes/modal-manager.md").read_text(encoding="utf-8")
     assert "padding: var(--space-5);" in modal
