@@ -1564,6 +1564,10 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
 def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+  monkeypatch.setenv("HOME", str(tmp_path))
+  fixture_dir = tmp_path / "steer-fixture"
+  fixture_dir.mkdir(parents=True, exist_ok=True)
+  (fixture_dir / "first.txt").write_text("four", encoding="utf-8")
   monkeypatch.setattr(cli, "resolve_state_dir", lambda: tmp_path)
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)
@@ -1611,7 +1615,7 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   assert payload["task"]["priority"] == "P4"
   assert payload["task"]["details"] == [
     "~/steer-fixture/first.txt",
-    "~/steer-fixture/missing.png",
+    "~/steer-fixture/missing.png (lost)",
   ]
   status, payload = app.dispatch(
     "POST",
