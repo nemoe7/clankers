@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.74]
+
+### Changed
+
+- **Stylesheet alignment (`references/style.css`)**: Raise dark `--scrollbar-thumb` to `#767686`, pad `.button` at `8px 16px`, and add `.button--danger` plus token aliases. Set `.pill` to `var(--space-5)` (`24px`) and scope reduced-motion rules.
+- **Recipe alignment (`references/recipes/*.md`)**: Match text-paired `.ico-slot`, `.btn-spinner`, and `.ico-svg` to `1lh` (`ICN102`), snap `.dot` variants onto the `4px` scale, and link recipe example PNGs. Align `table-to-cards` (`60em`), `scroll-edge-fade` (`24px`/`32px`/`15px`), opaque tooltips, tabular timestamps, and `ACC207`.
+
 ## [0.1.73]
 
 ### Added
