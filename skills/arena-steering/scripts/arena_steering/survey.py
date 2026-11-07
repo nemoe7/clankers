@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import os
+import re
 import struct
 import tempfile
 import zlib
@@ -61,16 +63,65 @@ def load_spec(
 
 SPEC: dict[str, Any] = load_spec()
 
-HASHES = {
-  "A2P6R": "30b4cb39218679f94c996a87c68e9bab23c0cd663e4edb8e7579ee9c022b727d",
-  "M2A6Y": "ec73ad585772530cbd4f68147276e562d01a147e86721338eae51ac56dd7e8c7",
+SUBSTRING_HASHES: dict[str, dict[str, tuple[int, str]]] = {
+  "S2E5P": {
+    "first_name": (
+      8,
+      "01138dd6e45cfa7b3f641faabe8f5871f5a954fdc0f5a69e2ce90088b12e73b6",
+    ),
+    "last_name": (
+      8,
+      "1490cb8487063a4603535301a97d149cd9398bfdf1094778d0a73795018b2699",
+    ),
+    "organization": (
+      6,
+      "3fcdf687a16e44890da4f8debac0d8296ec64dd977a001c1dff474dc8623c900",
+    ),
+    "role": (
+      5,
+      "44cbbafc032d2221daaee9bc8717990ebd2e4748394b3d8452d21e1010e9ce4f",
+    ),
+  },
+  "A2P6R": {
+    "command_name": (
+      6,
+      "2b9b60b448c7ebb523cacbcd2b5577433944dd1a21c94969e3d83994bf4636c2",
+    ),
+    "concurrency_option": (
+      12,
+      "e21864bfe015399cf07e25bd8b2cc79faee75338f72c63911f7ec25ff3535ca2",
+    ),
+  },
+  "M2A6Y": {
+    "data_center": (
+      8,
+      "22231c86a43dccfc0ea60210097e44412bd320ed1b9ef50f57bbbfd800f5773c",
+    ),
+  },
 }
 
-S2E5P_SUBSTRING_HASHES = {
-  "first": (8, "5ef0bd520fc8ba5fc57c2ec93dd245d31b532f37cb764a0179bc8d36f797e005"),
-  "last": (8, "6c52e900202e3a42ab6e2d6e57b42b87bc095b126778a883f26cb27ff666b30a"),
-  "org": (6, "93fddcb2646b90fe0ef33a771693e605056a27b2081769bf27cb683203cb4f0b"),
-  "role": (5, "e88d7c6d39d7b6401500b583553537d3d914ca32b3b719cc8b0e202c3d8a3f90"),
+FORBIDDEN_TOKEN_HASHES: dict[str, dict[str, frozenset[str]]] = {
+  "M2A6Y": {
+    "data_center": frozenset(
+      {
+        "b004327ee707b987a2eabe35c024a1c9009a012e8823c14e85e809674b7988f4",
+        "5ff19d4e9f2e36c29f948221fc7ea570f4c02c42cf6577f56f1deb0f51a973fc",
+        "d540eafa7bb5937e5da7dfdbeebc37936acb3cb466c8fe7a2ee5d6ae0107535c",
+        "b777ecab812571092cbcb83407a2f63d73c183de263ad0a6adf0f3fac60523e9",
+      }
+    ),
+  },
+}
+
+QUANTITY_VALUE_HASHES: dict[str, dict[str, str]] = {
+  "M2A6Y": {
+    "power_capacity_mw": (
+      "000f1386200bc1999d5080dc0190ec3bc69554c8bfd0b27f3d0fb8e98ca07d82"
+    ),
+    "nvidia_gpu_count": (
+      "fef763af2d6dc4f7cb8acd48aa7fc55167e438f957a58bef885700cd3c3ef89a"
+    ),
+  },
 }
 
 DETERMINISTIC_IDS = frozenset({"R3S0N", "V1S0N", "S0R7D"})
@@ -337,11 +388,13 @@ def loads(text: str) -> list[dict[str, Any]]:
   return normalized
 
 
-def _has_hashed_substring(text: str, salt: str, length: int, digest: str) -> bool:
+def _has_hashed_substring(
+  text: str, qid: str, field: str, length: int, digest: str
+) -> bool:
   folded = text.casefold()
   if len(folded) < length:
     return False
-  prefix = f"S2E5P:{salt}:".encode()
+  prefix = f"{qid}:{field}:".encode()
   for start in range(len(folded) - length + 1):
     candidate = hashlib.sha256(
       prefix + folded[start : start + length].encode()
@@ -351,20 +404,42 @@ def _has_hashed_substring(text: str, salt: str, length: int, digest: str) -> boo
   return False
 
 
-def _grade_s2e5p(answer: dict[str, Any]) -> bool:
-  full_name = str(answer.get("full_name") or "")
-  organization = str(answer.get("organization") or "")
-  role = str(answer.get("role") or "")
-  first_len, first_hash = S2E5P_SUBSTRING_HASHES["first"]
-  last_len, last_hash = S2E5P_SUBSTRING_HASHES["last"]
-  org_len, org_hash = S2E5P_SUBSTRING_HASHES["org"]
-  role_len, role_hash = S2E5P_SUBSTRING_HASHES["role"]
-  return (
-    _has_hashed_substring(full_name, "first", first_len, first_hash)
-    and _has_hashed_substring(full_name, "last", last_len, last_hash)
-    and _has_hashed_substring(organization, "org", org_len, org_hash)
-    and _has_hashed_substring(role, "role", role_len, role_hash)
+def _has_forbidden_token(
+  text: str, qid: str, field: str, digests: frozenset[str]
+) -> bool:
+  tokens = re.findall(r"[a-z0-9]+", text.casefold())
+  candidates = list(tokens) + [f"{a} {b}" for a, b in itertools.pairwise(tokens)]
+  prefix = f"{qid}:{field}:forbid:".encode()
+  return any(
+    hashlib.sha256(prefix + item.encode()).hexdigest() in digests for item in candidates
   )
+
+
+def _matches_quantity_value(
+  q_val: dict[str, Any], qid: str, field: str, digest: str
+) -> bool:
+  if q_val.get("operator") == "unknown":
+    return False
+  prefix = f"{qid}:{field}:".encode()
+  raw = str(q_val.get("value")).encode()
+  return hashlib.sha256(prefix + raw).hexdigest() == digest
+
+
+def _grade_hashed_question(qid: str, answer: dict[str, Any]) -> bool:
+  for field, (length, digest) in SUBSTRING_HASHES.get(qid, {}).items():
+    text = str(answer.get(field) or "")
+    if not _has_hashed_substring(text, qid, field, length, digest):
+      return False
+    forbid = FORBIDDEN_TOKEN_HASHES.get(qid, {}).get(field)
+    if forbid and _has_forbidden_token(text, qid, field, forbid):
+      return False
+  for field, digest in QUANTITY_VALUE_HASHES.get(qid, {}).items():
+    q_val = answer.get(field)
+    if not isinstance(q_val, dict) or not _matches_quantity_value(
+      q_val, qid, field, digest
+    ):
+      return False
+  return bool(qid in SUBSTRING_HASHES or qid in QUANTITY_VALUE_HASHES)
 
 
 def grade(text: str) -> list[dict[str, Any]]:
@@ -389,15 +464,7 @@ def grade(text: str) -> list[dict[str, Any]]:
       result["correct"] = all(val is True for val in answer.values())
       results.append(result)
       continue
-    if qid == "S2E5P":
-      result["correct"] = _grade_s2e5p(answer)
-      results.append(result)
-      continue
-    canonical = json.dumps(
-      answer, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
-    digest = hashlib.sha256((canonical + "\0").encode()).hexdigest()
-    result["correct"] = digest == HASHES.get(qid)
+    result["correct"] = _grade_hashed_question(qid, answer)
     results.append(result)
   ordered = submission_order(text)
   results.append(

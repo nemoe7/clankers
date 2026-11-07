@@ -759,7 +759,6 @@ mark.search-hit {
   border-radius: 6px;
   border: 1px solid hsl(var(--border-faint));
   background: hsl(var(--surface-primary));
-  cursor: pointer;
 }
 
 .survey-cap-pill.ok {
@@ -902,16 +901,6 @@ mark.search-hit {
   border-top-color: #fff;
 }
 
-.survey-cap-pill:last-child .survey-answer-tooltip {
-  right: 0;
-  left: auto;
-}
-
-.survey-cap-pill:last-child .survey-answer-tooltip::before {
-  right: 12px;
-  left: auto;
-}
-
 .survey-answer-tooltip.tooltip-active,
 .survey-answer-tooltip.tooltip-closing {
   display: block;
@@ -935,18 +924,6 @@ mark.search-hit {
   font-family: var(--font-basel-grotesk-mono);
   text-align: right;
   word-break: break-word;
-}
-
-.survey-field-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background: hsl(var(--surface-primary));
-  border: 1px solid hsl(var(--border-faint));
-  font-size: 11px;
-  font-family: var(--font-basel-grotesk-mono);
-  color: hsl(var(--text-secondary));
 }
 
 .survey-confidence {
@@ -3418,14 +3395,14 @@ article#report.report img,
 }
 
 @media (hover: hover) and (pointer: fine) {
-  :is(.quiet-btn, .tab-btn, .btn-secondary, .survey-cap-pill,
+  :is(.quiet-btn, .tab-btn, .btn-secondary,
     .message-attachment-preview, .composer-reply-chip, .reply-parent-chip,
     .composer-attachment-chip button, .parent-id-button,
     .task-title):hover:not(:disabled) {
     background-color: hsl(var(--surface-tertiary));
   }
 
-  :is(.tab-btn, .survey-cap-pill, .composer-attachment-chip button,
+  :is(.tab-btn, .composer-attachment-chip button,
     .parent-id-button, .task-title):hover:not(:disabled) {
     border-radius: 6px;
   }

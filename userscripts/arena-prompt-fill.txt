@@ -27,7 +27,7 @@ For quantities, use `operator` followed by `value`. Use `gt`, `eq`, or `lt` with
    - Answer fields: `vision`.
    - `vision` is a boolean.
 3. **S2E5P:** {{SURVEY_QUESTION:S2E5P}}
-   - Answer fields: `full_name`, `organization`, `role`.
+   - Answer fields: `first_name`, `last_name`, `organization`, `role`.
    - Each field is a string or `"unknown"`.
 4. **A2P6R:** {{SURVEY_QUESTION:A2P6R}}
    - Answer fields: `command_name`, `concurrency_option`.
