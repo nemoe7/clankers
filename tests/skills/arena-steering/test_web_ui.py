@@ -72,6 +72,7 @@ EXPECTED_JS_MODULES = (
   "api.js",
   "app.js",
   "dom.js",
+  "icons.js",
   "messages-view.js",
   "markdown.js",
   "modal.js",
@@ -80,6 +81,10 @@ EXPECTED_JS_MODULES = (
   "tasks-view.js",
   "timestamps.js",
 )
+
+SHARED_SCROLL_JUMP_CLASS = "scroll-jump-btn"
+SHARED_QUIET_BTN_CLASS = "quiet-btn"
+SHARED_PARENT_CHIP_FN = "renderParentChip"
 
 
 PRELOAD_ATTR = 'rel="preload"'
@@ -386,6 +391,7 @@ def test_reports_copy_uses_only_confirmed_selection_method() -> None:
     capture_output=True,
     check=True,
     text=True,
+    encoding="utf-8",
   )
 
 
@@ -453,8 +459,10 @@ def test_assets_do_not_use_browser_owned_prompts() -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-@pytest.mark.parametrize("decision", ["retry", "new", "cancel"])
-def test_unconfirmed_write_uses_html_dialog(tmp_path: Path, decision: str) -> None:
+@pytest.mark.parametrize("failures_before_ok", [3, 4])
+def test_unconfirmed_write_uses_html_dialog(
+  tmp_path: Path, failures_before_ok: int
+) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)
@@ -470,42 +478,45 @@ def test_unconfirmed_write_uses_html_dialog(tmp_path: Path, decision: str) -> No
       )
       try:
         page = browser.new_page(viewport={"width": 411, "height": 799})
-        page.add_init_script("""(() => {
-          const key = JSON.stringify(['POST', '/poll/skip', {}]);
-          sessionStorage.setItem('steer:pendingWrites', JSON.stringify([
-            {key, id: '550e8400-e29b-41d4-a716-446655440000'}
-          ]));
-        })();""")
-        writes = []
-        page.route(
-          "**/poll/skip",
-          lambda route: (
-            writes.append(route.request.post_data_json),
+        writes: list[dict[str, object]] = []
+
+        def handle_skip(route: object) -> None:
+          writes.append(route.request.post_data_json)
+          if len(writes) <= failures_before_ok:
             route.fulfill(
-              status=200, content_type="application/json", body='{"skip_poll":true}'
-            ),
-          ),
-        )
+              status=503,
+              content_type="application/json",
+              body='{"error":"offline"}',
+            )
+          else:
+            route.fulfill(
+              status=200,
+              content_type="application/json",
+              body='{"skip_poll":true}',
+            )
+
+        page.route("**/poll/skip", handle_skip)
         native = []
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on("dialog", lambda dialog: (native.append(dialog.type), dialog.dismiss()))
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#skip-poll").click()
-        dialog = page.locator("#modal-shell[open]")
-        dialog.wait_for()
-        button = dialog.locator(f'#modal-actions button[value="{decision}"]')
-        if decision == "cancel":
-          button.click()
-          page.wait_for_timeout(200)
-          assert not writes
-          assert page.locator("#skip-poll").get_attribute("data-state") != "good"
-        else:
+        expected_state = "good" if failures_before_ok == 3 else "bad"
+        page.wait_for_function(
+          "expected => { const btn = document.querySelector('#skip-poll'); "
+          "return btn && !btn.disabled && btn.getAttribute('data-state') === expected; }",
+          arg=expected_state,
+        )
+        assert len(writes) == 4
+        assert len({item["_request_id"] for item in writes}) == 1
+        assert page.locator("#modal-shell[open]").count() == 0
+        if failures_before_ok == 4:
           with page.expect_response("**/poll/skip"):
-            button.click()
-          assert len(writes) == 1
-          reused = writes[0]["_request_id"] == "550e8400-e29b-41d4-a716-446655440000"
-          assert reused == (decision == "retry")
+            page.locator("#skip-poll").click()
+          assert len(writes) == 5
+          assert writes[4]["_request_id"] != writes[0]["_request_id"]
+          assert page.locator("#modal-shell[open]").count() == 0
         assert not native
         assert not errors
       finally:
@@ -712,63 +723,51 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
         page = browser.new_page(viewport={"width": width, "height": height})
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#survey-open").click()
-        page.locator(".survey-cap-pill").first.hover()
-        first = page.evaluate("""() => {
-          const rect = selector => document.querySelector(selector).getBoundingClientRect();
-          const tip = document.querySelector('.survey-cap-pill:first-child .survey-answer-tooltip');
-          const tooltip = tip.getBoundingClientRect();
-          const pill = rect('.survey-cap-pill:first-child');
-          const heading = rect('.survey-section-label');
-          return {
-            background: getComputedStyle(tip).backgroundColor,
-            tooltipTop: tooltip.top, tooltipBottom: tooltip.bottom,
-            pillTop: pill.top, headingTop: heading.top, headingBottom: heading.bottom
-          };
-        }""")
-        assert first["background"] == "rgb(255, 255, 255)"
-        first_tip = page.locator(".survey-cap-pill:first-child .survey-answer-tooltip")
+        page.locator(".survey-cap-pill").first.wait_for()
+        assert page.locator(".survey-cap-pill .survey-answer-tooltip").count() == 0
+        assert page.locator(".survey-cap-pill").first.get_attribute("tabindex") is None
+        assert page.locator("table.survey-results th").all_inner_texts() == [
+          "ID",
+          "Confidence",
+        ]
+        assert page.locator(".survey-field-chip").count() == 0
+        page.locator(".survey-id-trigger").first.scroll_into_view_if_needed()
+        page.locator(".survey-id-trigger").first.hover()
+        first_tip = page.locator(".survey-id-wrap").first.locator(
+          ".survey-answer-tooltip"
+        )
+        first_tip.wait_for(state="visible")
+        tip_bg = first_tip.evaluate("el => getComputedStyle(el).backgroundColor")
+        assert tip_bg not in ("rgba(0, 0, 0, 0)", "transparent", "rgb(255, 255, 255)")
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") in (
           "tooltip-from-above",
           "tooltip-from-below",
         )
         page.emulate_media(reduced_motion="reduce")
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") == "none"
-        assert (
-          page.locator(
-            ".survey-cap-pill:first-child .survey-answer-val"
-          ).first.evaluate("el => getComputedStyle(el).color")
-          == "rgb(24, 24, 24)"
+        val_color = first_tip.locator(".survey-answer-val").first.evaluate(
+          "el => getComputedStyle(el).color"
         )
-        assert first["tooltipTop"] >= first["pillTop"] - 1
-        assert (
-          first["tooltipTop"] >= first["headingBottom"] - 1
-          or first["tooltipBottom"] <= first["headingTop"] + 1
-        )
-        page.locator(".survey-cap-pill").last.hover()
+        assert val_color not in ("rgb(24, 24, 24)", tip_bg)
         sizes = page.evaluate("""() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect();
-          const shell = rect('#modal-shell');
-          const tooltip = rect('.survey-cap-pill:last-child .survey-answer-tooltip');
           const footer = rect('#modal-actions');
           const body = document.querySelector('#modal-body');
           return {
-            shellLeft: shell.left, shellRight: shell.right,
-            tooltipLeft: tooltip.left, tooltipRight: tooltip.right,
             footerTop: footer.top, footerBottom: footer.bottom,
             bodyHeight: body.clientHeight, contentHeight: body.scrollHeight
           };
         }""")
-        assert sizes["tooltipLeft"] >= sizes["shellLeft"] - 1
-        assert sizes["tooltipRight"] <= sizes["shellRight"] + 1
-        last_tip = page.locator(".survey-cap-pill:last-child .survey-answer-tooltip")
-        assert last_tip.evaluate(
-          "el => el.getBoundingClientRect().bottom <= innerHeight"
-        )
         assert sizes["footerTop"] >= 0
         assert sizes["footerBottom"] <= height
         if height < 400:
           assert sizes["contentHeight"] > sizes["bodyHeight"]
+        page.locator(".survey-id-trigger").last.scroll_into_view_if_needed()
+        page.mouse.move(0, 0)
         page.locator(".survey-id-trigger").last.hover()
+        page.locator(".survey-id-wrap:hover .survey-answer-tooltip").wait_for(
+          state="visible"
+        )
         bounds = page.locator(".survey-id-wrap:hover .survey-answer-tooltip").evaluate(
           """el => {
             const tip = el.getBoundingClientRect();
@@ -1235,6 +1234,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
       ["node", "--check", str(js_path)],
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert proc.returncode == 0, proc.stderr
@@ -1284,18 +1284,25 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MANUAL_BLOCKING_INPUT not in messages_js
   assert MANUAL_HIDDEN_INPUT not in messages_js
 
+  icons_js = (ASSETS_DIR / "icons.js").read_text(encoding="utf-8")
+  assert "lucide lucide-${name}" in icons_js
+  assert LUCIDE_CHEVRON_DOWN_ICON.removeprefix("lucide-") in icons_js
+  assert SELECT_CHEVRON_CLASS in icons_js
+  assert LUCIDE_COPY_ICON.removeprefix("lucide-") in icons_js
+  assert LUCIDE_CLOSE_ICON.removeprefix("lucide-") in icons_js
+  assert LUCIDE_SEND_ICON.removeprefix("lucide-") in icons_js
+
   tasks_js = (ASSETS_DIR / "tasks-view.js").read_text(encoding="utf-8")
   assert LUCIDE_LOCK_ICON not in tasks_js
   assert "Report: " in tasks_js
   assert "Needs: " in tasks_js
-  assert LUCIDE_CHEVRON_DOWN_ICON in tasks_js
-  assert SELECT_CHEVRON_CLASS in tasks_js
+  assert "CHEVRON_SELECT_SVG" in tasks_js
 
   reports_js = (ASSETS_DIR / "reports-view.js").read_text(encoding="utf-8")
   assert CUSTOM_OPTION_MARKER in reports_js
-  assert LUCIDE_COPY_ICON in reports_js
-  assert LUCIDE_CLOSE_ICON in reports_js
-  assert LUCIDE_SEND_ICON in reports_js
+  assert "COPY_SVG" in reports_js
+  assert "DISMISS_SVG" in reports_js
+  assert "SEND_PLANE_SVG" in reports_js
   assert REPORT_TOC_ID in reports_js
   assert REPORT_PICKER_ID in reports_js
   assert REPORT_RAIL_ID in reports_js
@@ -1469,6 +1476,7 @@ def test_mermaid_and_demo_media_use_warm_arena_tokens() -> None:
     assert colour in theme
   for colour in SLATE_MERMAID_COLORS:
     assert colour not in theme
+  assert 'dropShadow: "none"' in theme
 
   demo_py = DEMO_PATH.read_text(encoding="utf-8")
   for colour in (
@@ -1525,14 +1533,17 @@ def test_report_floating_submit_assets() -> None:
 
 
 def test_multi_message_reply_assets() -> None:
+  dom_js = (ASSETS_DIR / "dom.js").read_text(encoding="utf-8")
+  assert REPLY_PARENT_CHIP_CLASS in dom_js
+  assert "data-reference-type" in dom_js
+
   messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
   assert RECEIPT_ID_CLASS in messages_js
-  assert REPLY_PARENT_CHIP_CLASS in messages_js
+  assert SHARED_PARENT_CHIP_FN in messages_js
   assert COMPOSER_REPLY_BAR_ID in messages_js
   assert COMPOSER_REPLY_CHIP_CLASS in messages_js
   assert PARENT_IDS_FIELD in messages_js
   assert PARENT_REFS_FIELD in messages_js
-  assert "data-reference-type" in messages_js
 
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
   assert REPLY_PARENT_REFS_STATE in app_js
@@ -1640,7 +1651,7 @@ def test_composer_upload_drop_expand_assets() -> None:
   assert 'window.matchMedia?.("(pointer: coarse)")?.matches' in messages_js
   assert "PASTE_ATTACHMENT_CHAR_THRESHOLD = 1500" in messages_js
   assert "PASTE_ATTACHMENT_LINE_THRESHOLD = 15" in messages_js
-  assert "pasted-text.txt" in messages_js
+  assert "-pasted-lines-" in messages_js
   assert 'listen(msgEl, "paste"' in messages_js
   assert 'addEventListener("drop"' in messages_js
   assert 'addEventListener("dragover"' in messages_js
@@ -1737,6 +1748,7 @@ assert.match(container.innerHTML, /linked-task/);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1787,6 +1799,7 @@ assert.doesNotMatch(html, /Live steering active/);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1848,6 +1861,7 @@ for (const item of [hidden, seen, sent, acked]) {
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -1927,6 +1941,47 @@ assert.equal(svgClone.class, 'mermaid-svg');
 assert.equal(svgClone.style.width, '866px');
 assert.equal(svgClone.id, 'mermaid-x-viewer-1');
 assert.equal(styleNode.textContent, '#mermaid-x-viewer-1 .node{fill:red}');
+const markerAttr = { name: 'id', value: 'm-end' };
+const markerNode = { localName: 'marker', id: 'm-end', attributes: [markerAttr],
+  getAttribute(name) { return name === 'id' ? this.id : null; },
+  setAttribute(name, value) { if (name === 'id') { this.id = value; markerAttr.value = value; } } };
+const edgeAttr = { name: 'marker-end', value: 'url(#m-end)' };
+const edgeNode = { localName: 'path', attributes: [edgeAttr],
+  getAttribute() { return null; },
+  setAttribute(name, value) { if (name === 'marker-end') edgeAttr.value = value; } };
+const flowStyle = { localName: 'style', attributes: [], textContent: '#mermaid-y .node{filter:url(#m-end)}',
+  getAttribute() { return null; }, setAttribute() {} };
+const flowAttrs = [
+  { name: 'id', value: 'mermaid-y' },
+  { name: 'class', value: 'mermaid-svg flowchart' },
+  { name: 'viewBox', value: '4 4 520 180' },
+];
+const flowClone = {
+  localName: 'svg', id: 'mermaid-y', attributes: flowAttrs,
+  style: { maxWidth: '520px', removeProperty(prop) { if (prop === 'max-width') delete this.maxWidth; } },
+  removeAttribute(name) { if (name === 'id') this.id = ''; },
+  setAttribute(name, value) {
+    this[name] = value;
+    const found = flowAttrs.find(a => a.name === name);
+    if (found) found.value = value; else flowAttrs.push({ name, value });
+  },
+  getAttribute(name) { return flowAttrs.find(a => a.name === name)?.value ?? null; },
+  querySelector(selector) { return selector === 'style' ? flowStyle : null; },
+  querySelectorAll(selector) { return selector === '[id]' ? [markerNode] : [markerNode, edgeNode, flowStyle]; },
+};
+const flowMedia = {
+  tagName: 'svg', getBoundingClientRect() { return { width: 320 }; }, cloneNode() { return flowClone; },
+};
+const flowTarget = { closest(selector) { return selector.startsWith('#') ? {} : flowMedia; } };
+doc.handlers.click({ target: flowTarget, preventDefault() {} });
+assert.equal(flowClone.class, 'mermaid-svg flowchart');
+assert.equal(flowClone.style.width, '520px');
+assert.equal(flowClone.style.maxWidth, undefined);
+assert.equal(flowClone.id, 'mermaid-y-viewer-2');
+assert.NotEqual?.(markerNode.id, 'm-end');
+assert.equal(markerNode.id, 'mermaid-y-viewer-2-m-end');
+assert.equal(edgeAttr.value, 'url(#mermaid-y-viewer-2-m-end)');
+assert.equal(flowStyle.textContent, '#mermaid-y-viewer-2 .node{filter:url(#mermaid-y-viewer-2-m-end)}');
 close.handlers.click();
 stage.handlers.pointerdown({ button: 0, pointerId: 3, clientX: 300, clientY: 300 });
 stage.handlers.pointerup({ pointerId: 3 });
@@ -1942,6 +1997,7 @@ assert.equal(stage.firstElementChild, null);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2020,7 +2076,7 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         )
         assert card.locator(".receipt-filename").all_text_contents() == [
           "notes.txt",
-          "gone.png (missing)",
+          "gone.png (lost)",
         ]
         assert card.locator('img[src$=".txt"]').count() == 0
         assert thumb.locator(".attachment-name-tail").inner_text() == "ay>.png"
@@ -2049,7 +2105,8 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         viewer = page.locator("#image-modal")
         viewer.wait_for(state="visible")
         assert (
-          page.locator("#image-modal-stage > img").get_attribute("src") == image["url"]
+          page.locator("#image-modal-stage > img").get_attribute("src")
+          == created["message"]["attachments"][0]["url"]
         )
         page.keyboard.press("Escape")
         viewer.wait_for(state="hidden")
@@ -2277,7 +2334,8 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
           "#report .code-block-header": 14,
           "#report pre > code": 14,
           "#report .field-label": 16,
-          "#report .field-id-chip": 16,
+          "#report .field-id-chip": 12,
+          "#report .field-id-chip > code": 11,
           "#report .option-row": 16,
           "#report .field-text-input": 16,
           "#report .custom-text-input": 16,
@@ -2459,7 +2517,8 @@ assert.deepEqual(state.composerAttachments.map(x => x.status), ['uploading', 're
 rejectFirst(new Error('offline'));
 await first;
 assert.equal(state.composerAttachments[0].status, 'failed');
-await uploads.retry(firstId);
+assert.equal('retry' in uploads, false);
+await uploads.readyForSend([firstId]);
 assert.deepEqual(state.composerAttachments.map(x => x.status), ['ready', 'ready']);
 uploads.clearSent([firstId]);
 assert.deepEqual(state.composerAttachments.map(x => x.name), ['second']);
@@ -2475,6 +2534,7 @@ assert.equal(state.composerAttachments.length, 0);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2513,6 +2573,7 @@ assert.equal(context.messageMatchesQuery(message, 'zzz'), false);
     cwd=SKILL_DIR.parents[1],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2781,7 +2842,7 @@ def test_task_search_highlights_matches_and_clear_collapses_details() -> None:
 
 
 def test_task_gate_shimmer_uses_two_blue_shades() -> None:
-  css = (ASSETS_DIR / "style.css").read_text()
+  css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
   rule = css.split('.task-title[data-gate-running="true"] {', 1)[1].split("}", 1)[0]
   assert "#90caf9" in rule
   assert "#42a5f5" in rule
@@ -5483,6 +5544,39 @@ def test_mermaid_thumbnail_preserves_code_footprint(tmp_path: Path, width: int) 
       assert page.locator("#image-modal").evaluate("element => element.open")
       modal = page.locator("#image-modal-stage svg").bounding_box()
       assert thumbnail and modal and modal["height"] > thumbnail["height"]
+      parity = page.evaluate("""() => {
+        const thumbDiag = document.querySelector('#report .mermaid-diagram');
+        const thumbSvg = document.querySelector('#report .mermaid-svg');
+        const modalSvg = document.querySelector('#image-modal-stage > svg');
+        const thumbText = thumbSvg.querySelector('tspan, text');
+        const modalText = modalSvg.querySelector('tspan, text');
+        const thumbRect = thumbSvg.querySelector('.node rect');
+        const modalRect = modalSvg.querySelector('.node rect');
+        const allIds = [...document.querySelectorAll('[id]')].map(el => el.id);
+        return {
+          codeBg: getComputedStyle(thumbDiag).backgroundColor,
+          modalBg: getComputedStyle(modalSvg).backgroundColor,
+          thumbFontSize: getComputedStyle(thumbText).fontSize,
+          modalFontSize: getComputedStyle(modalText).fontSize,
+          thumbFill: getComputedStyle(thumbRect).fill,
+          modalFill: getComputedStyle(modalRect).fill,
+          thumbStroke: getComputedStyle(thumbRect).stroke,
+          modalStroke: getComputedStyle(modalRect).stroke,
+          thumbFilter: getComputedStyle(thumbRect).filter,
+          modalFilter: getComputedStyle(modalRect).filter,
+          hasFlowchartClass: modalSvg.classList.contains('flowchart'),
+          duplicateIdCount: allIds.length - new Set(allIds).size,
+        };
+      }""")
+      assert parity["modalBg"] == parity["codeBg"]
+      assert parity["modalBg"] != "rgba(0, 0, 0, 0)"
+      assert parity["modalFontSize"] == parity["thumbFontSize"]
+      assert parity["modalFill"] == parity["thumbFill"]
+      assert parity["modalStroke"] == parity["thumbStroke"]
+      assert parity["thumbFilter"] == "none"
+      assert parity["modalFilter"] == "none"
+      assert parity["hasFlowchartClass"] is True
+      assert parity["duplicateIdCount"] == 0
       page.screenshot(path=str(tmp_path / f"diagram-modal-{width}.png"))
       initial_key = page.evaluate(
         "Object.keys(localStorage).find(key => key.startsWith('steer:mermaid:v2:')).split(':').pop()"
@@ -5625,10 +5719,10 @@ def test_survey_refresh_preserves_focus_when_results_are_unchanged(
         };
       }""")
       page.locator("#survey-open").click()
-      page.locator(".survey-cap-pill").first.wait_for()
+      page.locator(".survey-id-trigger").first.wait_for()
       page.wait_for_function("typeof window.releaseSurvey === 'function'")
-      page.locator(".survey-cap-pill").first.focus()
-      focused = page.locator(".survey-cap-pill").first.element_handle()
+      page.locator(".survey-id-trigger").first.focus()
+      focused = page.locator(".survey-id-trigger").first.element_handle()
       page.evaluate("window.releaseSurvey()")
       page.wait_for_function("window.surveyReturned === true")
       assert focused.evaluate("el => el.isConnected && document.activeElement === el")
@@ -5889,6 +5983,7 @@ for (const stamp of ['2026-11-06T19:16:41Z', '2026-11-06T00:03:04Z']) {
     env={**os.environ, "TZ": "UTC", "LANG": "en_US.UTF-8"},
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -5991,6 +6086,7 @@ assert.equal(values.has('steer:composerState'), false);
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -6429,7 +6525,7 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         dot_color = dot.evaluate("el => getComputedStyle(el).backgroundColor")
         button.hover()
         tip = page.get_by_role("tooltip").filter(has_text="Open survey results")
-        assert tip.is_visible()
+        tip.wait_for(state="visible")
         page.screenshot(path=str(tmp_path / "animated-tooltip.png"))
         styles = tip.evaluate("""el => ({
           bg: getComputedStyle(el).backgroundColor,
@@ -6463,6 +6559,7 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         page.get_by_role("heading", name="Survey Verification").wait_for()
         page.get_by_role("button", name="Close dialog").click()
         page.keyboard.press("Tab")
+        button.evaluate("el => el.blur()")
         button.focus()
         assert tip.is_visible()
         page.keyboard.press("Escape")
@@ -6926,50 +7023,46 @@ def test_violation_form_and_cancel_in_browser(
         assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
         page.screenshot(path=str(tmp_path / f"violation-form-{width}.png"))
 
-        page.route(
-          "**/agent-interrupt",
-          lambda route: route.fulfill(
+        interrupt_ids: list[str] = []
+
+        def fail_interrupt(route: object) -> None:
+          interrupt_ids.append(route.request.post_data_json["_request_id"])
+          route.fulfill(
             status=503, body='{"error":"Try again"}', content_type="application/json"
-          ),
-          times=1,
-        )
+          )
+
+        page.route("**/agent-interrupt", fail_interrupt, times=4)
         with page.expect_request("**/agent-interrupt") as sent:
           page.locator("#violation-submit").click()
         assert sent.value.post_data_json["msg"] == cited_reason
         assert "note" not in sent.value.post_data_json
         page.locator("#violation-error").wait_for(state="visible", timeout=5000)
+        assert len(interrupt_ids) == 4 and len(set(interrupt_ids)) == 1
         assert form.is_visible()
         assert button.get_attribute("aria-pressed") == "false"
-        page.locator("#violation-submit").click()
-        page.get_by_role("button", name="Cancel", exact=True).click()
-        page.locator("#violation-form").wait_for(state="visible", timeout=5000)
         assert page.locator("#violation-msg").input_value() == cited_reason
-        page.locator("#violation-submit").click()
+
+        page.route("**/agent-interrupt", fail_interrupt, times=3)
         with page.expect_response("**/agent-interrupt"):
-          page.get_by_role("button", name="Retry same action").click()
+          page.locator("#violation-submit").click()
         page.locator("#modal-shell").wait_for(state="hidden")
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
         )
+        assert len(interrupt_ids) == 7 and len(set(interrupt_ids[4:])) == 1
+        assert interrupt_ids[4] != interrupt_ids[0]
         violation = app.messages.pending_violation()
         assert violation is not None and violation.violation_clause_file == "ARENA.md"
         assert cited_reason in violation.body
         page.screenshot(path=str(tmp_path / f"violation-pending-{width}.png"))
 
-        page.route(
-          "**/agent-interrupt",
-          lambda route: route.fulfill(
-            status=503, body='{"error":"Try again"}', content_type="application/json"
-          ),
-          times=1,
-        )
+        page.route("**/agent-interrupt", fail_interrupt, times=4)
         button.click()
         page.locator("#violation-status").wait_for(state="visible", timeout=5000)
         assert button.get_attribute("aria-pressed") == "true"
         assert app.messages.pending_violation() is not None
-        button.click()
         with page.expect_response("**/agent-interrupt"):
-          page.get_by_role("button", name="Retry same action").click()
+          button.click()
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'false'"
         )
@@ -7056,9 +7149,15 @@ def test_violation_flag_updates_before_write_and_restores_on_failure(
       page.evaluate(
         """fail => {
         const original = window.fetch.bind(window);
+        window.interruptIds = [];
+        let held = false;
         window.fetch = async (...args) => {
           if (String(args[0]) === '/agent-interrupt' && args[1]?.method === 'POST') {
-            await new Promise(resolve => { window.releaseFlag = resolve; });
+            window.interruptIds.push(JSON.parse(args[1].body || '{}')._request_id);
+            if (!held) {
+              held = true;
+              await new Promise(resolve => { window.releaseFlag = resolve; });
+            }
             if (fail) return new Response(JSON.stringify({error:'offline'}), {
               status:503, headers:{'content-type':'application/json'}
             });
@@ -7078,6 +7177,9 @@ def test_violation_flag_updates_before_write_and_restores_on_failure(
       if fail:
         page.locator("#violation-error" if armed else "#violation-status").wait_for(
           state="visible"
+        )
+        assert page.evaluate(
+          "window.interruptIds.length === 4 && new Set(window.interruptIds).size === 1"
         )
         assert button.get_attribute("aria-pressed") == str(not armed).lower()
         if armed:
@@ -7374,6 +7476,523 @@ def test_hidden_toggle_loads_visible_history_when_page_is_all_hidden() -> None:
         page.locator('.message[data-msg-id="bb0027"]').wait_for()
         toggle.click()
         page.locator('.message[data-msg-id="aa0001"]').wait_for()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_touch_tap_overlay_is_disabled_without_hiding_keyboard_focus(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  server = create_http_server(SteeringApp(store), host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799}, has_touch=True)
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          const box = document.createElement('div');
+          box.innerHTML = '<button id="tap-probe">Button</button><a href="#">Link</a><input>';
+          document.body.append(box);
+        }""")
+        colors = page.evaluate("""() => [...document.querySelectorAll('#tap-probe, #tap-probe ~ a, #tap-probe ~ input')]
+          .map(el => getComputedStyle(el).webkitTapHighlightColor)""")
+        assert colors == ["rgba(0, 0, 0, 0)"] * 3
+        page.keyboard.press("Tab")
+        page.locator("#tap-probe").focus()
+        assert page.locator("#tap-probe").evaluate(
+          "el => el.matches(':focus-visible') && parseFloat(getComputedStyle(el).outlineWidth) > 0"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.submit_survey(json.dumps(survey.template()))
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.evaluate("""() => {
+          for (const [id, left] of [['first', 100], ['second', 250]]) {
+            const button = document.createElement('button');
+            button.id = id; button.title = id;
+            button.textContent = id;
+            button.style.cssText = `position:fixed;top:200px;left:${left}px;z-index:1000`;
+            document.body.append(button);
+          }
+        }""")
+        first = page.locator("#first")
+        first.hover()
+        page.wait_for_timeout(200)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.mouse.move(600, 700)
+        page.wait_for_timeout(450)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        first.hover()
+        page.wait_for_timeout(200)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.locator("#arena-title-tooltip").wait_for(timeout=1000)
+        page.locator("#second").hover()
+        assert (
+          page.locator("#arena-title-tooltip").text_content(timeout=200) == "second"
+        )
+        first.hover()
+        assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
+        page.wait_for_timeout(200)
+        page.mouse.move(600, 700)
+        closing = page.locator(".arena-tooltip.tooltip-closing")
+        assert closing.count() == 1
+        assert (
+          closing.evaluate("el => getComputedStyle(el).animationDirection") == "reverse"
+        )
+        assert closing.evaluate(
+          "el => el.getAnimations().some(animation => animation.playState === 'running')"
+        )
+        page.locator("#second").hover()
+        assert (
+          page.locator("#arena-title-tooltip").text_content(timeout=200) == "second"
+        )
+        page.mouse.move(600, 700)
+        page.wait_for_timeout(650)
+        first.hover()
+        page.wait_for_timeout(200)
+        assert page.locator("#arena-title-tooltip").count() == 0
+        page.mouse.move(600, 700)
+        page.keyboard.press("Tab")
+        first.focus()
+        assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
+        page.keyboard.press("Escape")
+        page.locator("#survey-open").click()
+        trigger = page.locator(".survey-id-trigger").first
+        page.mouse.move(600, 700)
+        page.wait_for_timeout(650)
+        trigger.hover()
+        tip = page.locator(".survey-id-wrap").first.locator(".survey-answer-tooltip")
+        page.wait_for_timeout(200)
+        assert tip.is_hidden()
+        tip.wait_for(state="visible", timeout=1000)
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_shared_ui_helpers_icons_and_classes(tmp_path: Path) -> None:
+  icons_js = (ASSETS_DIR / "icons.js").read_text(encoding="utf-8")
+  assert "lucideSvg" in icons_js
+  for js_name in (
+    "app.js",
+    "markdown.js",
+    "messages-view.js",
+    "reports-view.js",
+    "tasks-view.js",
+  ):
+    src = (ASSETS_DIR / js_name).read_text(encoding="utf-8")
+    assert "./icons.js" in src
+    assert '<svg class="lucide' not in src
+
+  dom_js = (ASSETS_DIR / "dom.js").read_text(encoding="utf-8")
+  assert f"export function {SHARED_PARENT_CHIP_FN}" in dom_js
+  for js_name in ("messages-view.js", "reports-view.js"):
+    src = (ASSETS_DIR / js_name).read_text(encoding="utf-8")
+    assert SHARED_PARENT_CHIP_FN in src
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  first = app.messages.send_message("Initial parent message")
+  second = app.messages.send_message(
+    "Follow-up with\n\n```js\nconsole.log(1);\n```",
+    parent_refs=[{"type": "message", "id": first.id}],
+  )
+  app.messages.ack(second.id, "Acked reply")
+  report_md = (
+    "# Shared UI Check\n\n"
+    "## Section One\n\n"
+    '<!-- question {"id":"pick-one","label":"Pick one"} -->\n\n'
+    "Which option should apply?\n"
+    '- (x) Use shared classes <!-- option {"label":"Shared"} -->\n'
+    '- ( ) Keep separate classes <!-- option {"label":"Separate"} -->\n'
+  )
+  app.reports.publish_report("shared-ui-check", "Shared UI Check", report_md)
+  app.tasks.create_task(
+    "linked-ui-task",
+    "Linked UI task",
+    size=3,
+    details=["Verify shared parent chip"],
+    links={"msg_ids": [second.id], "report_ids": ["shared-ui-check"]},
+  )
+
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator(f'.message[data-msg-id="{second.id}"]').wait_for()
+
+        # Message parent chip renders left of message ID via shared helper.
+        positions = page.locator(
+          f'.message[data-msg-id="{second.id}"] .message-heading'
+        ).evaluate(
+          """heading => {
+            const parent = heading.querySelector('.reply-parent-chip').getBoundingClientRect();
+            const idBtn = heading.querySelector('.parent-id-button').getBoundingClientRect();
+            return {parentRight: parent.right, idLeft: idBtn.left};
+          }"""
+        )
+        assert positions["parentRight"] <= positions["idLeft"] + 1
+
+        for selector in ("#log-edited", "#log-newest"):
+          assert page.locator(selector).evaluate(
+            f"el => el.classList.contains('{SHARED_SCROLL_JUMP_CLASS}')"
+          )
+
+        for selector in (
+          "#blocked-bash-open",
+          "#agent-interrupt",
+          "#survey-open",
+          "#skip-poll",
+          "#quiet-msgs",
+          "#attach-file",
+          "#preview-msg",
+          "#send",
+          ".copy-code",
+        ):
+          assert page.locator(selector).first.evaluate(
+            f"el => el.classList.contains('{SHARED_QUIET_BTN_CLASS}')"
+          )
+
+        page.locator("#tab-reports").click()
+        page.locator("#report-scroll-top").wait_for(state="attached")
+        assert page.locator("#report-scroll-top").evaluate(
+          f"el => el.classList.contains('{SHARED_SCROLL_JUMP_CLASS}')"
+        )
+        assert (
+          page.locator(".report-task-links .reply-parent-chip").get_attribute(
+            "data-reference-id"
+          )
+          == "linked-ui-task"
+        )
+        for selector in (
+          "#report-picker-toggle",
+          "#copy-report-btn",
+          "#dismiss-report-btn",
+          ".report-toc-link",
+          ".report-picker-link",
+        ):
+          assert page.locator(selector).first.evaluate(
+            f"el => el.classList.contains('{SHARED_QUIET_BTN_CLASS}')"
+          )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_report_options_parse_inline_code_and_align_radio_with_first_line(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Report option code and radio alignment")
+  raw_long_option = (
+    'Accept `"codex"` or `"product"` (`Codex Lead` and `Head of Core Products`)'
+  )
+  report_md = (
+    "# Matcher Contract\n\n"
+    '<!-- question {"id":"survey-s2e5p-role","label":"S2E5P role"} -->\n\n'
+    "Which hashed substring(s) should pass `S2E5P.role`?\n"
+    f'- (x) {raw_long_option} <!-- option {{"label":"codex or product"}} -->\n'
+    '- ( ) Require `"codex"` only <!-- option {"label":"codex only"} -->\n'
+  )
+  app.reports.publish_report("matcher-contract", "Matcher Contract", report_md)
+
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 440, "height": 760})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        page.locator("#field-survey-s2e5p-role").wait_for()
+
+        label_codes = page.locator(
+          "#field-survey-s2e5p-role .field-label code"
+        ).all_inner_texts()
+        assert label_codes == ["S2E5P.role"]
+        assert (
+          "`" not in page.locator("#field-survey-s2e5p-role .field-label").inner_text()
+        )
+
+        first_row = page.locator("#field-survey-s2e5p-role .option-row").first
+        option_codes = first_row.locator("span code").all_inner_texts()
+        assert option_codes == [
+          '"codex"',
+          '"product"',
+          "Codex Lead",
+          "Head of Core Products",
+        ]
+        assert "`" not in first_row.locator("span").last.inner_text()
+        assert first_row.locator("input").get_attribute("value") == raw_long_option
+
+        # Wrapped option text spans at least 2 lines, and the radio centers on line 1.
+        metrics = first_row.evaluate(
+          """row => {
+            const input = row.querySelector('input').getBoundingClientRect();
+            const span = row.querySelector('span:last-child');
+            const spanRect = span.getBoundingClientRect();
+            const range = document.createRange();
+            range.selectNodeContents(span);
+            const rects = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
+            const topY = Math.min(...rects.map(r => r.top));
+            const firstLine = rects.filter(r => Math.abs(r.top - topY) < 6);
+            const line1Top = Math.min(...firstLine.map(r => r.top));
+            const line1Bottom = Math.max(...firstLine.map(r => r.bottom));
+            return {
+              inputCenter: (input.top + input.bottom) / 2,
+              line1Center: (line1Top + line1Bottom) / 2,
+              spanCenter: (spanRect.top + spanRect.bottom) / 2,
+              spanHeight: spanRect.height,
+            };
+          }"""
+        )
+        assert metrics["spanHeight"] >= 36, metrics
+        assert abs(metrics["inputCenter"] - metrics["line1Center"]) <= 3.0, metrics
+        assert metrics["spanCenter"] - metrics["inputCenter"] >= 6.0, metrics
+
+        # Multi-line custom textarea also keeps its radio aligned with line 1.
+        custom_row = page.locator("#field-survey-s2e5p-role .option-custom")
+        custom_row.locator("textarea").fill(
+          "First line of custom notes\nSecond line of custom notes\nThird line of custom notes"
+        )
+        custom_row.locator("textarea").evaluate(
+          "el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }"
+        )
+        custom_metrics = custom_row.evaluate(
+          """row => {
+            const input = row.querySelector('input').getBoundingClientRect();
+            const ta = row.querySelector('textarea').getBoundingClientRect();
+            return {
+              inputCenter: (input.top + input.bottom) / 2,
+              firstLineCenter: ta.top + 16,
+              taHeight: ta.height,
+            };
+          }"""
+        )
+        assert custom_metrics["taHeight"] >= 50, custom_metrics
+        assert (
+          abs(custom_metrics["inputCenter"] - custom_metrics["firstLineCenter"]) <= 3.0
+        ), custom_metrics
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_v2_nuu_recipe_conformance_surfaces(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  index_html = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
+  assert index_html.count("<!-- Lucide Icons - ISC License -->") >= 2
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="V2 Nuu recipe conformance")
+  app.messages.send_message("Alpha message", msg_id="aa0001", blocking=False)
+  app.messages.send_message("Beta needle message", msg_id="bb0002", blocking=False)
+  app.tasks.create_task(
+    "alpha-code-task",
+    "Alpha code task",
+    size=3,
+    types=["code"],
+    details=["Code detail"],
+  )
+  app.tasks.create_task(
+    "beta-docs-task",
+    "Beta docs task",
+    size=2,
+    types=["docs"],
+    details=["Docs detail"],
+  )
+  app.reports.publish_report("one", "First Report", "# First Report\n\nBody one.\n")
+  app.reports.publish_report("two", "Second Report", "# Second Report\n\nBody two.\n")
+
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 960, "height": 760})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('#connection-dot[data-state="ok"]').wait_for()
+
+        # 1. Modal close button uses a 16x16 Lucide SVG instead of text x.
+        assert "×" not in page.locator("#image-modal-close").inner_text()
+        assert page.locator("#image-modal-close svg.lucide-x").count() == 1
+
+        # 2. Relative timestamps render proportional tabular-nums without tooltips (8781cc5f).
+        stamp_info = page.locator("#history .message time[datetime]").first.evaluate(
+          """el => {
+            const cs = getComputedStyle(el);
+            return {
+              title: el.getAttribute('title'),
+              tabular: cs.fontVariantNumeric,
+              family: cs.fontFamily.toLowerCase(),
+            };
+          }"""
+        )
+        assert stamp_info["title"] is None, stamp_info
+        assert stamp_info["tabular"] == "tabular-nums", stamp_info
+        assert "mono" not in stamp_info["family"], stamp_info
+
+        # 3. Scroll-edge-fade tokens match 24px / 32px stops.
+        fade_tokens = page.evaluate(
+          """() => {
+            const cs = getComputedStyle(document.documentElement);
+            return {
+              fade: cs.getPropertyValue('--edge-fade').trim(),
+              ramp: cs.getPropertyValue('--edge-ramp').trim(),
+            };
+          }"""
+        )
+        assert fade_tokens == {"fade": "24px", "ramp": "32px"}, fade_tokens
+
+        # 4. Connection live dot is 8x8 px and aria-hidden inside a 1lh slot.
+        dot_info = page.evaluate(
+          """() => {
+            const dot = document.querySelector('#connection-dot');
+            const btn = document.querySelector('#survey-open');
+            const dRect = dot.getBoundingClientRect();
+            const bRect = btn.getBoundingClientRect();
+            const lh = parseFloat(getComputedStyle(btn).lineHeight);
+            return {
+              w: dRect.width,
+              h: dRect.height,
+              hidden: dot.getAttribute('aria-hidden'),
+              role: dot.getAttribute('role'),
+              btnH: bRect.height,
+              lh,
+            };
+          }"""
+        )
+        assert dot_info["w"] == 8 and dot_info["h"] == 8, dot_info
+        assert dot_info["hidden"] == "true" and dot_info["role"] is None, dot_info
+        assert abs(dot_info["btnH"] - dot_info["lh"]) <= 1.0, dot_info
+
+        # 5. Reports region toggles aria-busy while fetching report content.
+        page.evaluate(
+          """() => {
+            const orig = window.fetch.bind(window);
+            window.fetch = async (...args) => {
+              if (String(args[0]).includes('/reports/two')) {
+                await new Promise(resolve => { window.releaseReportTwo = resolve; });
+              }
+              return orig(...args);
+            };
+          }"""
+        )
+        page.locator("#tab-reports").click()
+        page.locator('.report-picker-link[data-report-id="two"]').wait_for()
+        page.locator('.report-picker-link[data-report-id="two"]').click()
+        page.wait_for_function("typeof window.releaseReportTwo === 'function'")
+        assert page.locator("#view-reports").get_attribute("aria-busy") == "true"
+        page.evaluate("window.releaseReportTwo()")
+        page.wait_for_function(
+          "document.querySelector('#view-reports').getAttribute('aria-busy') === 'false'"
+        )
+
+        # 6. Message search and task filters persist across page reloads.
+        page.locator("#tab-messages").click()
+        page.locator("#log-search").fill("Beta needle")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 1"
+        )
+        page.locator("#tab-tasks").click()
+        page.locator("#task-search").fill("Beta")
+        page.locator("#task-type-filter").select_option("docs")
+        assert page.locator(".tasks-layout .task").count() == 1
+
+        page.reload()
+        page.locator("#task-search").wait_for()
+        assert page.locator("#task-search").input_value() == "Beta"
+        assert page.locator("#task-type-filter").input_value() == "docs"
+        assert page.locator(".tasks-layout .task").count() == 1
+
+        page.locator("#tab-messages").click()
+        page.locator("#log-search").wait_for()
+        assert page.locator("#log-search").input_value() == "Beta needle"
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 1"
+        )
       finally:
         browser.close()
   finally:

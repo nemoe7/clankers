@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.16]
+
+### Fixed
+
+- Reconfigure `markers.py` CLI output streams to UTF-8 on Windows consoles.
+- Align rotation guidance with explicit forms and current mappings.
+
+### Removed
+
+- Remove self-maintenance instructions from the usage skill.
+
 ## [0.1.15]
 
 ### Added

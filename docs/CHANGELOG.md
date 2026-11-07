@@ -8,11 +8,55 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-07
 
-### Changed
+### Removed
 
 #### maintenance
 
+- Remove the Gitleaks workflow and configuration.
+
+### Changed
+
+#### arena-steering
+
+- Preserve typed message metadata on retry-token saves.
+- Mark dead detached runs as failed so their task gates can recover.
+- Preserve staged uploads when verifying published reports.
+- Delay initial hover tooltips, with immediate keyboard focus and a brief rapid-switch window.
+
+#### rules
+
+- Rewrite `rules/README.md` and `rules/wenyan/README.md` for human readers.
+- Specify the stale-report reminder command (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Remove the code-scanning requirement (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
+#### system-prompts
+
+- Rewrite `system-prompts/README.md` and `system-prompts/wenyan/README.md` in human-facing prose.
+
+#### maintenance
+
+- Parse README budgets without `markdown-it-py`, drop retired group budgets and `maintenance/javascript-comments.cjs`, and refresh `maintenance/README.md`.
+- Rewrite `maintenance/README.md` for human maintainers and replace retired `arena-preview` hook tables with `steer pre`.
+- Archive the retired minification workflow check and its tests under `docs/archive/arena-skill/`.
+- Exclude minified, archived, and vendored material from the root Nemoizer scan.
+- Filter CodeQL language scans conservatively and restrict dependency reviews to dependency and workflow changes.
+- Group plugin release and rules publication into separate credential-isolated jobs.
+- Validate and sync distribution targets in one job, preserving remote reconciliation.
+- Group read-only CI checks into one job, including PR plugin validation, and reuse successful input digests.
+- Guard the archived Arena proxy tests against returning to the active test matrix.
+- Refresh Ponytail and its audit skill from upstream `96608e0`, keeping only those two skills.
+- Add pass-ledger collection and recording primitives for CI surfaces (`maintenance/workflows/changed_paths.py`).
+- Run workflow lint, security audit, and contract checks in one job (`.github/workflows/workflow-security.yml`).
+- Ignore seven reviewed historical test-fixture findings in Gitleaks (`.gitleaksignore`).
+- Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
 - Expand Markdownlint coverage and remove the fixed scope guard (`.markdownlint-cli2.jsonc`, `maintenance/check.py`).
+
+### Fixed
+
+#### maintenance
+
+- Decode child-process text pipes as strict UTF-8, reconfigure CLI streams for Windows consoles, and pass explicit `encoding="utf-8"` across test suites.
+- Update the seeded `S2E5P` survey payload in `maintenance/demo-arena-steer.py` to use `first_name` and `last_name`.
 
 ## 2026-11-06
 

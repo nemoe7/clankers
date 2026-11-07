@@ -10,29 +10,29 @@ Work can continue indefinitely without a fixed turn limit. Each final poll waits
 
 After required reads, preview setup, and inbox acknowledgements, complete the survey before queued work.
 
-At initial activation, use the questions below and run `arena-preview survey -i` to read the image path it prints before submitting fresh answers with `arena-preview survey '<json>'`.
+At initial activation, use the questions below, run `steer survey` to read `{path}` for `V1S0N`, and submit fresh answers with `steer survey '<json>'`.
 
-After compaction, summary, or context replacement, run `arena-preview survey` and `arena-preview survey -i`, read the image path, and submit fresh answers.
+After compaction, summary, or context replacement, run `steer survey`, read the image path it prints, and submit fresh answers.
 
-Use existing knowledge only: do not research, open other files (except the `arena-preview survey -i` image), run code, ask other systems, reuse earlier responses, or inspect the answer key. Supply your best complete answer with a lower confidence from 0 to 1 when uncertain, or set every field of a question to `"unknown"` with confidence 0 when wholly unknown.
+Use existing knowledge only: do not research, open other files (except the `steer survey` image), run code, ask other systems, reuse earlier responses, or inspect the answer key. Supply your best complete answer with a lower confidence from 0 to 1 when uncertain, or set every field of a question to `"unknown"` with confidence 0 when wholly unknown.
 
-Submit a JSON array in question order. Each object must have keys in this order: `id`, `answer`, `confidence`; keep answer fields in the order shown below. Boolean questions require `true` or `false` with confidence greater than 0.
+Submit a JSON array in question order. Non-boolean objects use keys `id`, `answer`, `confidence` in that order, and boolean objects use `id`, `answer`; keep answer fields in the order shown below. Boolean questions require `true` or `false`.
 
-For quantities, use `operator` followed by `value`. Use `gt`, `eq`, or `lt` with the exact known bound, or `unknown` with `null`.
+For quantities, use `operator` followed by `value`. Use `gt`, `eq`, or `lt` with the exact known bound, or `"unknown"` for both.
 
-1. **R3S0N:** Did you reason before answering this survey?
+1. **R3S0N:** {{SURVEY_QUESTION:R3S0N}}
    - Answer fields: `reasoning`.
    - `reasoning` is a boolean.
-2. **V1S0N:** Read the smallest repo image from `arena-preview survey -i`, or the temporary 1x1 PNG it creates when none exists. Is image input enabled?
+2. **V1S0N:** {{SURVEY_QUESTION:V1S0N}}
    - Answer fields: `vision`.
    - `vision` is a boolean.
-3. **S2E5P:** In the context of Codex usage-limit reset announcements, who is Tibo? Identify the person and their relevant Codex responsibility.
-   - Answer fields: `full_name`, `organization`, `role`.
+3. **S2E5P:** {{SURVEY_QUESTION:S2E5P}}
+   - Answer fields: `first_name`, `last_name`, `organization`, `role`.
    - Each field is a string or `"unknown"`.
-4. **A2P6R:** Which new PostgreSQL 19 command and option rebuild tables while allowing concurrent use?
+4. **A2P6R:** {{SURVEY_QUESTION:A2P6R}}
    - Answer fields: `command_name`, `concurrency_option`.
    - Each field is a string or `"unknown"`.
-5. **M2A6Y:** Under Anthropic's May 2026 compute deal with SpaceX, which data center's capacity did Anthropic acquire, and what power and GPU scales were stated?
+5. **M2A6Y:** {{SURVEY_QUESTION:M2A6Y}}
    - Answer fields: `data_center`, `power_capacity_mw`, `nvidia_gpu_count`.
    - `data_center` is a string or `"unknown"`; the other fields are quantities.
 

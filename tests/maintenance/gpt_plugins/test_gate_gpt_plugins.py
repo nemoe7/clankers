@@ -18,7 +18,7 @@ SPEC.loader.exec_module(gate)
 def test_package_collection_and_each_complete_skill(tmp_path):
   archives = gate.package_archives(tmp_path)
   assert set(archives) == {gate.PLUGIN_NAME, *gate.EXPECTED_SKILLS}
-  shared = json.loads(gate.MANIFEST.read_text())
+  shared = json.loads(gate.MANIFEST.read_text(encoding="utf-8"))
   names = set()
   for name, path in archives.items():
     with zipfile.ZipFile(path) as opened:
@@ -91,34 +91,21 @@ def test_single_skill_archive_rejects_incomplete_or_changed_files(tmp_path, muta
   assert errors
 
 
-def test_release_downloads_every_direct_package_artifact():
+def test_release_builds_verifies_and_publishes_every_package():
   import fnmatch
 
   import yaml
 
-  jobs = yaml.safe_load((gate.ROOT / ".github/workflows/artifacts.yml").read_text())[
-    "jobs"
-  ]
-  uploads = [
-    step["with"]
-    for step in jobs["package-gpt-plugins"]["steps"]
-    if str(step.get("uses", "")).startswith("actions/upload-artifact@")
-  ]
-  expected = {f"{name}.zip" for name in (gate.PLUGIN_NAME, *gate.EXPECTED_SKILLS)}
-  assert {Path(step["path"]).name for step in uploads} == expected
-  assert all(step.get("archive") is False for step in uploads)
-  downloads = [
-    step["with"]
-    for step in jobs["release-gpt-plugins"]["steps"]
-    if str(step.get("uses", "")).startswith("actions/download-artifact@")
-  ]
-  for filename in expected:
-    matching = [
-      step
-      for step in downloads
-      if step.get("name") == filename
-      or fnmatch.fnmatchcase(filename, step.get("pattern", ""))
-    ]
-    assert matching
-    assert all(step.get("skip-decompress") is True for step in matching)
-    assert all("run-id" not in step for step in matching)
+  jobs = yaml.safe_load(
+    (gate.ROOT / ".github/workflows/artifacts.yml").read_text(encoding="utf-8")
+  )["jobs"]
+  steps = jobs["release-gpt-plugins"]["steps"]
+  scripts = [step.get("run", "") for step in steps]
+  build = next(i for i, script in enumerate(scripts) if "--package-dir ." in script)
+  verify = next(i for i, script in enumerate(scripts) if "--archives-dir ." in script)
+  publish = next(i for i, script in enumerate(scripts) if "gh release upload" in script)
+  assert build < verify < publish
+  assert "gh release create" in scripts[publish]
+  assert "gpt-*.zip nemoizer.zip" in scripts[publish]
+  for filename in (f"{name}.zip" for name in (gate.PLUGIN_NAME, *gate.EXPECTED_SKILLS)):
+    assert fnmatch.fnmatchcase(filename, "gpt-*.zip") or filename == "nemoizer.zip"

@@ -72,7 +72,7 @@ def test_null_values_are_strictly_rejected() -> None:
     survey.loads(json.dumps(tpl))
 
   tpl2 = survey.template()
-  tpl2[2]["answer"]["full_name"] = None
+  tpl2[2]["answer"]["first_name"] = None
   with pytest.raises(ValueError, match="null"):
     survey.loads(json.dumps(tpl2))
 
@@ -236,3 +236,206 @@ def test_cli_survey_does_not_offer_interrupt_flag(
   with pytest.raises(SystemExit) as rejected:
     _run_cli(state_dir, "survey", "--interrupt")
   assert rejected.value.code == 2
+
+
+def test_survey_questions_shared_txt_source_and_prompt_fill_parity(
+  tmp_path: Path,
+) -> None:
+  repo_root = Path(__file__).resolve().parents[3]
+  txt_path = repo_root / "skills/arena-steering/references/survey-questions.txt"
+  json_path = repo_root / "skills/arena-steering/references/survey.json"
+  prompt_fill_path = repo_root / "userscripts/arena-prompt-fill.txt"
+
+  assert txt_path.is_file()
+  assert survey.QUESTIONS_PATH == txt_path
+
+  raw_json = json.loads(json_path.read_text(encoding="utf-8"))
+  for entry in raw_json["questions"]:
+    assert "question" not in entry
+
+  parsed_pairs = survey.parse_questions_text(txt_path.read_text(encoding="utf-8"))
+  assert [qid for qid, _ in parsed_pairs] == [q["id"] for q in survey.SPEC["questions"]]
+  assert [text for _, text in parsed_pairs] == [
+    q["question"] for q in survey.SPEC["questions"]
+  ]
+
+  bad_txt = tmp_path / "bad-questions.txt"
+  bad_txt.write_text("R3S0N: Only one question?\n", encoding="utf-8")
+  with pytest.raises(ValueError, match="mismatch"):
+    survey.load_spec(json_path, bad_txt)
+
+  prompt_fill = prompt_fill_path.read_text(encoding="utf-8")
+  placeholders = [
+    line.split("{{SURVEY_QUESTION:", 1)[1].split("}}", 1)[0]
+    for line in prompt_fill.splitlines()
+    if "{{SURVEY_QUESTION:" in line
+  ]
+  assert placeholders == [q["id"] for q in survey.SPEC["questions"]]
+  for _, qtext in parsed_pairs:
+    assert qtext not in prompt_fill
+
+  assert "`first_name`, `last_name`, `organization`, `role`" in prompt_fill
+  assert "full_name" not in prompt_fill
+
+  assert set(survey.SUBSTRING_HASHES) == {"S2E5P", "A2P6R", "M2A6Y"}
+  assert set(survey.SUBSTRING_HASHES["S2E5P"]) == {
+    "first_name",
+    "last_name",
+    "organization",
+    "role",
+  }
+  assert set(survey.SUBSTRING_HASHES["A2P6R"]) == {
+    "command_name",
+    "concurrency_option",
+  }
+  assert set(survey.SUBSTRING_HASHES["M2A6Y"]) == {"data_center"}
+  assert set(survey.FORBIDDEN_TOKEN_HASHES) == {"M2A6Y"}
+  assert len(survey.FORBIDDEN_TOKEN_HASHES["M2A6Y"]["data_center"]) == 4
+  assert set(survey.QUANTITY_VALUE_HASHES) == {"M2A6Y"}
+  assert set(survey.QUANTITY_VALUE_HASHES["M2A6Y"]) == {
+    "power_capacity_mw",
+    "nvidia_gpu_count",
+  }
+  for fields in survey.SUBSTRING_HASHES.values():
+    for length, digest in fields.values():
+      assert length > 0 and len(digest) == 64
+  for fields in survey.FORBIDDEN_TOKEN_HASHES.values():
+    for digests in fields.values():
+      assert all(len(digest) == 64 for digest in digests)
+  for fields in survey.QUANTITY_VALUE_HASHES.values():
+    assert all(len(digest) == 64 for digest in fields.values())
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  submitted = app.messages.submit_survey(json.dumps(survey.template()))
+  assert app.messages.get_survey()["answers"] == submitted["answers"]
+  assert app.messages.get_survey()["results"] == submitted["results"]
+  store.close()
+
+
+def test_field_by_field_hashed_matching_with_sequel_and_quantity_rules(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  import hashlib
+
+  def digest(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+  monkeypatch.setattr(
+    survey,
+    "SUBSTRING_HASHES",
+    {
+      "S2E5P": {
+        "first_name": (5, digest("S2E5P:first_name:alpha")),
+        "last_name": (4, digest("S2E5P:last_name:beta")),
+        "organization": (5, digest("S2E5P:organization:gamma")),
+        "role": (5, digest("S2E5P:role:delta")),
+      },
+      "A2P6R": {
+        "command_name": (5, digest("A2P6R:command_name:reorg")),
+        "concurrency_option": (6, digest("A2P6R:concurrency_option:online")),
+      },
+      "M2A6Y": {
+        "data_center": (5, digest("M2A6Y:data_center:titan")),
+      },
+    },
+  )
+  monkeypatch.setattr(
+    survey,
+    "FORBIDDEN_TOKEN_HASHES",
+    {
+      "M2A6Y": {
+        "data_center": frozenset(
+          {
+            digest("M2A6Y:data_center:forbid:titan 2"),
+            digest("M2A6Y:data_center:forbid:titan2"),
+            digest("M2A6Y:data_center:forbid:titan ii"),
+            digest("M2A6Y:data_center:forbid:titanii"),
+          }
+        )
+      }
+    },
+  )
+  monkeypatch.setattr(
+    survey,
+    "QUANTITY_VALUE_HASHES",
+    {
+      "M2A6Y": {
+        "power_capacity_mw": digest("M2A6Y:power_capacity_mw:42"),
+        "nvidia_gpu_count": digest("M2A6Y:nvidia_gpu_count:9000"),
+      }
+    },
+  )
+
+  def grade_with(**overrides: dict[str, object]) -> dict[str, dict[str, object]]:
+    payload = [
+      {"id": "R3S0N", "answer": {"reasoning": True}},
+      {"id": "V1S0N", "answer": {"vision": True}},
+      {
+        "id": "S2E5P",
+        "answer": {
+          "first_name": "Dr. Alpha",
+          "last_name": "von Beta",
+          "organization": "Gamma Corp.",
+          "role": "Delta Engineering Lead",
+        },
+        "confidence": 0.9,
+      },
+      {
+        "id": "A2P6R",
+        "answer": {
+          "command_name": "REORG (ONLINE) tbl",
+          "concurrency_option": "(ONLINE)",
+        },
+        "confidence": 0.8,
+      },
+      {
+        "id": "M2A6Y",
+        "answer": {
+          "data_center": "Titan 1 (May 2026)",
+          "power_capacity_mw": {"operator": "gt", "value": 42},
+          "nvidia_gpu_count": {"operator": "eq", "value": 9000.0},
+        },
+        "confidence": 0.7,
+      },
+    ]
+    for row in payload:
+      if row["id"] in overrides:
+        row["answer"].update(overrides[row["id"]])  # type: ignore[union-attr]
+    return {row["id"]: row for row in survey.grade(json.dumps(payload))}
+
+  base = grade_with()
+  assert base["S2E5P"]["correct"] is True
+  assert base["A2P6R"]["correct"] is True
+  assert base["M2A6Y"]["correct"] is True
+
+  assert grade_with(S2E5P={"first_name": "Al"})["S2E5P"]["correct"] is False
+  assert grade_with(S2E5P={"role": "Executive"})["S2E5P"]["correct"] is False
+  assert grade_with(A2P6R={"command_name": "VACUUM FULL"})["A2P6R"]["correct"] is False
+
+  for accepted_dc in ("Titan", "Titan 1", "Titan I", "SpaceX Titan-1 (2026)"):
+    assert grade_with(M2A6Y={"data_center": accepted_dc})["M2A6Y"]["correct"] is True
+  for rejected_dc in (
+    "Titan 2",
+    "Titan-2",
+    "Titan #2",
+    "Titan2",
+    "Titan II",
+    "Titan-II",
+    "TitanII",
+  ):
+    assert grade_with(M2A6Y={"data_center": rejected_dc})["M2A6Y"]["correct"] is False
+
+  for op in ("gt", "eq", "lt"):
+    assert (
+      grade_with(M2A6Y={"power_capacity_mw": {"operator": op, "value": 42}})["M2A6Y"][
+        "correct"
+      ]
+      is True
+    )
+  assert (
+    grade_with(M2A6Y={"power_capacity_mw": {"operator": "eq", "value": 41}})["M2A6Y"][
+      "correct"
+    ]
+    is False
+  )

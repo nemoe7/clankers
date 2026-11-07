@@ -58,7 +58,7 @@
 
 ## General
 
-- Stderr read reminder = only read schedule; act on other stderr reminders as directed. Bash gate = repair, NEVER schedule. Mechanics: skill reference, Read cadence.
+- Stderr read reminder = only read schedule; act on other stderr reminders as directed. When told to unpublish stale reports, run `steer report rm --stale`. Bash gate = repair, NEVER schedule. Mechanics: skill reference, Read cadence.
 - Before the first start there is no inbox.
 - ALWAYS answer each delivered message substantively in its own `ack <id> <Markdown>` before chat; one answer/call; NEVER ack pending blindly.
 - Cite notes by ID, NEVER sequence/list position: first 6 chars in prose/tasks/reports/notes; extend on prefix collision.
@@ -146,7 +146,6 @@
 - Grep-verify each file edit landed before building on it.
 - Review each diff for requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, and debug artifacts; fix in-scope issues, recheck, ALWAYS criticize documentation and code in chat and reports, and check external or version-specific facts against authoritative sources.
 - Before finishing, run repo validation entrypoints; parse every touched generated config.
-- On the initial turn and when origin/main moves, MUST check if code scanning is enabled; if enabled, read open alerts and address each without blocking PR creation; if disabled, continue to the next task.
 
 ## Style
 

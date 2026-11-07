@@ -41,8 +41,31 @@ jobs:
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select Analysis
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # Use the base copy, not code supplied by a pull request.
+            if git show "$PR_BASE_SHA:maintenance/workflows/codeql_filter.py" > "$RUNNER_TEMP/codeql_filter.py"; then
+              python3 "$RUNNER_TEMP/codeql_filter.py"
+            else
+              echo 'run=true' >> "$GITHUB_OUTPUT"
+            fi
+          else
+            python3 maintenance/workflows/codeql_filter.py
+          fi
 
       - name: Initialize CodeQL
+        if: steps.select.outputs.run == 'true'
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
@@ -54,6 +77,7 @@ jobs:
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyze
+        if: steps.select.outputs.run == 'true'
         uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}

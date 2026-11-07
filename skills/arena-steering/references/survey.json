@@ -11,7 +11,6 @@
     {
       "id": "R3S0N",
       "deterministic": true,
-      "question": "Did you reason before answering the survey?",
       "answer_fields": {
         "reasoning": "boolean"
       }
@@ -19,7 +18,6 @@
     {
       "id": "V1S0N",
       "deterministic": true,
-      "question": "Read {path}. Can you view images?",
       "answer_fields": {
         "vision": "boolean"
       }
@@ -27,9 +25,9 @@
     {
       "id": "S2E5P",
       "deterministic": false,
-      "question": "Who is tibo the reset guy?",
       "answer_fields": {
-        "full_name": "string|unknown",
+        "first_name": "string|unknown",
+        "last_name": "string|unknown",
         "organization": "string|unknown",
         "role": "string|unknown"
       }
@@ -37,7 +35,6 @@
     {
       "id": "A2P6R",
       "deterministic": false,
-      "question": "Which new PostgreSQL 19 command and option rebuild tables while allowing concurrent use?",
       "answer_fields": {
         "command_name": "string|unknown",
         "concurrency_option": "string|unknown"
@@ -46,7 +43,6 @@
     {
       "id": "M2A6Y",
       "deterministic": false,
-      "question": "Under Anthropic's May 2026 compute deal, which data center's capacity was taken, and what megawatt/GPU scale was stated?",
       "answer_fields": {
         "data_center": "string|unknown",
         "power_capacity_mw": "quantity",

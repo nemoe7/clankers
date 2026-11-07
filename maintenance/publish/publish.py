@@ -281,7 +281,9 @@ def variable(repo: str, action: str, value: str | None = None) -> None:
   command = ["gh", "variable", action, "GIST_ID", "--repo", repo]
   if action == "set":
     command += ["--body", value or ""]
-  result = subprocess.run(command, capture_output=True, text=True, check=False)
+  result = subprocess.run(
+    command, capture_output=True, text=True, encoding="utf-8", check=False
+  )
   if result.returncode:
     raise RuntimeError(f"gh variable {action} GIST_ID failed: {result.stderr.strip()}")
 
@@ -399,6 +401,9 @@ def reconcile(
 
 
 def main() -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   if not os.environ.get("GH_TOKEN"):
     raise ValueError(
       "Configure the GIST_TOKEN Actions secret with Gists and Variables write access"

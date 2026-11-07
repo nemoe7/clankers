@@ -34,14 +34,14 @@ from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
 from .display_paths import home_relative
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
-from .markdown import render_markdown, render_report_markdown
-from .markdown_fields import parse_report_markdown
+from .markdown import render_markdown
 from .models import Attachment, Task
 from .services import (
   POLL_FRESH_SECONDS,
   MessageService,
   ReportService,
   TaskService,
+  serialize_report_blocks,
   with_bible_read,
 )
 from .store import STATE_TABLES, SqliteStore
@@ -101,6 +101,7 @@ MIME_OVERRIDES = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
 }
@@ -290,7 +291,8 @@ class SteeringApp:
     }
     self.repo_name = repo_name or _detect_repo_name(store)
     self._read_set = _read_set_files(_detect_repo_root(store))
-    self.messages = MessageService(store, store, store, store)
+    uploads_dir = self._uploads_dir()
+    self.messages = MessageService(store, store, store, store, uploads_dir=uploads_dir)
     state_dir = Path(store.db_path).parent if store.db_path != ":memory:" else None
     tree_check = completion_tree_check(state_dir) if state_dir is not None else None
     self.tasks = TaskService(
@@ -302,6 +304,7 @@ class SteeringApp:
       on_dirty_finish=self.messages.flag_dirty_finish
       if tree_check is not None
       else None,
+      uploads_dir=uploads_dir,
     )
     self.reports = ReportService(
       store,
@@ -474,14 +477,41 @@ class SteeringApp:
       return (int(HTTPStatus.INTERNAL_SERVER_ERROR), {"error": str(exc)})
 
   def data_version(self) -> tuple[int, int, int]:
-    """Return a version tuple covering SQLite, in-process writes, and finished runs."""
+    """Return a version tuple covering SQLite, in-process writes, runs, and uploads."""
     in_proc = int(getattr(self, "_state_version", 0))
-    runs_ver = self.run_stamp()
+    aux_ver = self.run_stamp() ^ self.uploads_stamp()
     try:
       external, local = self.store.data_version()
-      return (external, in_proc + local, runs_ver)
+      return (external, in_proc + local, aux_ver)
     except sqlite3.Error:
-      return (0, in_proc, runs_ver)
+      return (0, in_proc, aux_ver)
+
+  def uploads_stamp(self) -> int:
+    """Stamp committed upload files so missing-file status updates live."""
+    from .services import STAGED_UPLOAD_RE
+
+    db_path = str(getattr(self.store, "db_path", ""))
+    if not db_path or db_path == ":memory:":
+      uploads = getattr(self, "_memory_uploads_dir", None)
+      if uploads is None or not Path(uploads).is_dir():
+        return 0
+      uploads_dir = Path(uploads)
+    else:
+      uploads_dir = Path(db_path).parent / "uploads"
+      if not uploads_dir.is_dir():
+        return 0
+    try:
+      entries = sorted(
+        path.relative_to(uploads_dir).as_posix()
+        for path in uploads_dir.rglob("*")
+        if path.is_file() and not STAGED_UPLOAD_RE.match(path.name)
+      )
+    except OSError:
+      return 0
+    if not entries:
+      return 0
+    digest = hashlib.sha256("\n".join(entries).encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big")
 
   def run_stamp(self) -> int:
     """Stamp finished runs so a gate completion reaches clients without polling."""
@@ -644,10 +674,33 @@ class SteeringApp:
           file_path.unlink(missing_ok=True)
 
   @staticmethod
-  def _safe_upload_name(name: Any) -> str:
+  def _safe_upload_name(
+    name: Any, *, content_type: Any = None, epoch_ms: int | None = None
+  ) -> str:
+    from .services import sanitize_upload_filename
+
+    cleaned = sanitize_upload_filename(name)
+    if cleaned:
+      return cleaned
     raw_name = Path(str(name or "")).name.strip()
-    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", raw_name).strip(".-")
-    return safe_name or "upload.bin"
+    suffix = re.sub(r"[^A-Za-z0-9.]+", "", Path(raw_name).suffix)[:20].lower()
+    if suffix in {"", "."}:
+      mime = str(content_type or "").split(";", 1)[0].strip().lower()
+      suffix = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/svg+xml": ".svg",
+        "image/bmp": ".bmp",
+        "image/avif": ".avif",
+        "text/plain": ".txt",
+        "text/markdown": ".md",
+        "application/json": ".json",
+        "application/pdf": ".pdf",
+      }.get(mime, ".bin")
+    stamp = int(time.time() * 1000) if epoch_ms is None else epoch_ms
+    return f"{stamp}{suffix}"
 
   @staticmethod
   def _upload_bytes(file_body: dict[str, Any]) -> bytes:
@@ -668,7 +721,10 @@ class SteeringApp:
     if not isinstance(file_body, dict):
       raise TypeError("Upload file must be an object")
     safe_name = self._safe_upload_name(
-      file_body.get("name") or file_body.get("filename") or "upload.bin"
+      file_body.get("name") or file_body.get("filename"),
+      content_type=file_body.get("content_type")
+      or file_body.get("mime_type")
+      or file_body.get("type"),
     )
     data = self._upload_bytes(file_body)
     request_id = getattr(self._browser_write, "request_id", None)
@@ -692,12 +748,15 @@ class SteeringApp:
     )
 
   def _serialize_attachment(self, attachment: Attachment) -> dict[str, Any]:
+    from .services import is_attachment_present
+
     data = attachment.to_dict()
-    if not attachment.present:
+    exists = is_attachment_present(attachment)
+    data["present"] = exists
+    data["lost"] = not exists
+    if not exists or not attachment.path:
       return data
-    stored_path = Path(attachment.path)
-    if not stored_path.is_file():
-      return data
+    stored_path = Path(attachment.path).expanduser()
     try:
       relative = stored_path.resolve().relative_to(self._uploads_dir().resolve())
     except ValueError:
@@ -709,7 +768,7 @@ class SteeringApp:
   def _paste_needs_attachment(text: str) -> bool:
     return (
       len(text) > PASTE_ATTACHMENT_CHAR_THRESHOLD
-      or len(text.split("\n")) >= PASTE_ATTACHMENT_LINE_THRESHOLD
+      or len(re.split(r"\r\n|\r|\n", text)) >= PASTE_ATTACHMENT_LINE_THRESHOLD
     )
 
   def _message_attachments_from_body(
@@ -723,8 +782,15 @@ class SteeringApp:
     pasted_text = body.get("pasted_text", body.get("paste_text"))
     if isinstance(pasted_text, str) and pasted_text:
       if self._paste_needs_attachment(pasted_text):
+        line_count = len(re.split(r"\r\n|\r|\n", pasted_text))
+        epoch_ms = int(time.time() * 1000)
         attachments.append(
-          self._store_upload({"name": PASTE_ATTACHMENT_NAME, "text": pasted_text})
+          self._store_upload(
+            {
+              "name": f"{line_count}-pasted-lines-{epoch_ms}.txt",
+              "text": pasted_text,
+            }
+          )
         )
         if not message_body.strip():
           message_body = PASTE_ATTACHMENT_BODY
@@ -1503,6 +1569,7 @@ class SteeringApp:
 
   def _serialize_task(self, task: Task, blocked: bool) -> dict[str, Any]:
     payload = task.to_dict(blocked=blocked)
+    payload["details"] = self.tasks.format_task_details(task)
     payload["effective_priority"] = task.effective_priority
     payload["running_gate"] = self.tasks.has_running_gate(task)
     return payload
@@ -1534,22 +1601,7 @@ class SteeringApp:
     if cached is not None and cached[0] == report.body:
       payload["blocks"] = cached[1]
       return payload
-    blocks, _ = parse_report_markdown(report.body)
-    serialized_blocks: list[dict[str, Any]] = []
-    for btype, val in blocks:
-      if btype == "markdown":
-        block_headings: list[dict[str, Any]] = []
-        block_html = render_report_markdown(val, headings=block_headings)
-        serialized_blocks.append(
-          {
-            "type": "markdown",
-            "markdown": val,
-            "html": block_html,
-            "headings": block_headings,
-          }
-        )
-      else:
-        serialized_blocks.append({"type": "field", "field": val.to_dict()})
+    serialized_blocks = serialize_report_blocks(report.body)
     if getattr(report, "status", "") != "dismissed":
       _REPORT_RENDER_CACHE[report.id] = (report.body, serialized_blocks)
     payload["blocks"] = serialized_blocks
@@ -1585,7 +1637,9 @@ def assets_signature(
   if not base.is_dir():
     return ()
   targets = sorted(
-    p for p in base.iterdir() if p.suffix.lower() in {".html", ".css", ".js", ".mjs"}
+    p
+    for p in base.iterdir()
+    if p.suffix.lower() in {".html", ".css", ".js", ".mjs", ".webmanifest"}
   )
   return file_signature(targets)
 

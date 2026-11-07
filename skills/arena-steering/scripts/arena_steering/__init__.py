@@ -31,7 +31,7 @@ from .ports import (
 from .services import MessageService, ReportService, TaskService
 from .store import SqliteStore
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"
 
 __all__ = [
   "ENTITY_ID_RE",

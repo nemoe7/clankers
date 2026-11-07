@@ -1,6 +1,6 @@
 # Rules specification
 
-Reference for rule structure, constraints, and installation. See [maintenance/README.md](../maintenance/README.md) for repository maintenance procedures. Do not deploy this file into an agent's Rules folder.
+Human reference for rule structure, platform differences, and local installation. See [maintenance/README.md](../maintenance/README.md) for repo maintenance procedures. This document is human documentation, not a deployed rule file.
 
 Commands and code-span paths are repository-root-relative unless stated otherwise.
 
@@ -19,36 +19,36 @@ The installer uses only the Python standard library.
 | [rules/COMMIT-SPEC.txt](COMMIT-SPEC.txt) | Short commit-message reference |
 | [rules/refs/](refs/README.md) | Uncompressed rule originals and the AGENTS.md writing guidelines |
 
-Check the active files in your installed agent version: filenames alone do not enable loading. If the core stops loading, fix the installation or restore the core explicitly. NEVER lose it silently.
+Active rule loading depends on the installed agent host rather than filenames alone. Verify that CORE.md remains active in your host configuration after upgrades.
 
-These files are overlays: CORE.md reaches the agent context automatically, and each overlay adds its rules beside it.
+CORE.md provides the shared base rules, and platform overlays add host-specific rules beside it.
 
-- ARENA.md compresses the core for standalone deployment.
-- Cline and Kilo load the project AGENTS.md and their configured overlays into the agent context.
+- ARENA.md bundles a compressed standalone copy of the core rules for Arena sessions.
+- Cline and Kilo load the project AGENTS.md alongside their configured platform overlays.
 
-## Core rules
+## Core rules summary
 
-- MUST use ASD-STE100 for human-facing text.
-- Terse and unambiguous, NEVER cryptic or vague.
-- Ask if ambiguous.
-- YAGNI/KISS/DRY.
-- Always add tests. NEVER weaken one.
-- NEVER push unless asked. MUST branch from main.
+- Human-facing prose follows ASD-STE100 and plain-word rules.
+- Responses and docs stay terse and unambiguous.
+- Material ambiguity triggers clarifying questions before implementation.
+- Engineering choices follow YAGNI, KISS, and DRY.
+- Behavior changes include tests without weakening existing assertions.
+- Workstation agents branch from `main` and push only on request.
 
 ## Platform difference matrix
 
-Platform constraints made the three rule surfaces differ, so each row names one behavior per platform and nothing identical.
+Platform constraints shape three distinct rule surfaces, and each row summarizes where their rules diverge.
 
 <!-- markdownlint-disable MD033 -->
 
 | Domain | Agents | Arena | ChatGPT |
 | --- | --- | --- | --- |
-| Git/Hub | <ul><li>NEVER push unasked. </li><li>MUST branch from main. </li></ul> | <ul><li>ALWAYS push, PR open. </li><li>Rebase merge only. </li><li>NEVER merge even with authorization. </li><li>Planned list before commits. </li><li>GitHub reconnect after one retry. </li><li>CI reported at turn end. </li><li>Backoff polls for PR checks. </li></ul> | <ul><li>ALWAYS a PR. </li><li>ALWAYS rebase merge. </li><li>Poll all checks. </li><li>NEVER end before CI. </li><li>NEVER multiple commits. </li><li>Planned list first. </li></ul> |
-| Questions | The question tool. NEVER plain text. | Fielded report forms. NEVER plain text. | — |
-| Changelogs | Use Keep a Changelog unless the repository uses another format. | Use Keep a Changelog unless the repository uses another format. | — |
-| Mermaid Diagrams | Default where rendered. Phone-sized. | NEVER in chat. Docs only. | MUST for pipelines/flows unless target explicitly cannot render Mermaid. NEVER ASCII. |
-| Recommendation | Required on three or more options. | Required on three or more options. | — |
-| Platform Specific | <ul><li>Shell check first. </li></ul> | <ul><li>10-4 opens the first reply. </li><li>ALWAYS activate preview steering. </li><li>Negative rating on noncompliance. </li><li>Reports through the preview skill. </li><li>NEVER end with open tasks. </li><li>ALWAYS smallest task next. </li><li>Visibility question after first start. </li><li>Protected files, waiver only. </li><li>Suggest amendments only for a contributing rule gap. </li></ul> | <ul><li>ALWAYS think longer. </li></ul> |
+| Git/Hub | <ul><li>Pushes only when asked. </li><li>Branches from main. </li></ul> | <ul><li>Pushes commits and keeps a PR open. </li><li>Uses rebase merges without merging PRs itself. </li><li>Lists planned files before committing. </li><li>Requests GitHub reconnect after one auth retry. </li><li>Watches PR checks and reports CI before turn end. </li></ul> | <ul><li>Opens a PR and uses rebase merges. </li><li>Polls checks to completion before turn end. </li><li>Uses one atomic commit with a planned file list. </li></ul> |
+| Questions | Uses the host question tool instead of plain text. | Uses fielded Steering reports instead of plain text. | — |
+| Changelogs | Follows Keep a Changelog unless the repo defines another format. | Follows Keep a Changelog unless the repo defines another format. | — |
+| Mermaid Diagrams | Uses phone-sized Mermaid where rendered. | Restricts Mermaid to docs, omitting it in chat. | Uses Mermaid for pipelines and flows where rendered instead of ASCII. |
+| Recommendation | Marks a recommended choice when offering three or more options. | Marks a recommended choice when offering three or more options. | — |
+| Platform Specific | <ul><li>Checks the active shell first. </li></ul> | <ul><li>Opens the first reply with a 10-4 confirmation. </li><li>Runs the Steering preview server, task queue, and fielded reports. </li><li>Works smallest unblocked tasks first until the queue clears. </li><li>Protects rule and Steering files unless waived. </li></ul> | <ul><li>Uses extended thinking by default. </li></ul> |
 
 <!-- markdownlint-enable MD033 -->
 
@@ -99,7 +99,7 @@ $env:APPLY_RULES_BASE = "C:\path\to\profile"
 python .\rules\apply.py
 ```
 
-**The installer overwrites destination files.** Back up local changes first. Skills, ARENA.md and ChatGPT files need separate setup. NEVER install this specification as an agent rule.
+**The installer overwrites destination files.** Copy any local changes elsewhere first. Skills, ARENA.md, and ChatGPT files use separate setup steps, and agent rule folders omit this specification.
 
 ## Markdown lint scope
 

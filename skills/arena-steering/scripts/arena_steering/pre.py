@@ -247,25 +247,88 @@ def _platform_output_process(line: str, command: str) -> bool:
   )
 
 
-def _platform_launch_process(line: str, command: str) -> bool:
-  """Match the full launch wrapper and verify its literal metadata and command."""
+ARENA_PROCS_DIR = Path("/tmp/arena-workspace/procs")
+
+
+def expected_steering_process_name(
+  cwd: str | Path | None = None, *, checkout_root: Path | None = None
+) -> str:
+  """Return `{repo} - Steering` for the checkout directory."""
+  root = (checkout_root or repo_root()).resolve()
+  repo_name = root.name
+  if cwd:
+    try:
+      target = Path(cwd).resolve()
+      if target != root and not target.is_relative_to(root) and target.name:
+        repo_name = target.name
+    except (OSError, RuntimeError, ValueError):
+      pass
+  return f"{repo_name} - Steering"
+
+
+def _is_steer_serve_command(command: str) -> bool:
+  """Return True when a shell command starts `steer serve`."""
+  pieces = [words for words, _ in PreContext(line=shell_line(command)).pieces()]
+  pieces.extend(
+    inner for words in pieces[:] for inner, _ in embedded_pieces(command_words(words))
+  )
+  for raw_words in pieces:
+    words = command_words(raw_words)
+    if not words:
+      continue
+    head = Path(words[0]).name
+    rest: list[str] | None = None
+    if head == "steer" and len(words) >= 2 and words[1] == "serve":
+      rest = words[2:]
+    elif (
+      head.startswith("python")
+      and len(words) >= 3
+      and Path(words[1]).name == "steer"
+      and words[2] == "serve"
+    ):
+      rest = words[3:]
+    if rest is not None and not any(arg in {"-h", "--help"} for arg in rest):
+      return True
+  return False
+
+
+def _steering_launch_error(
+  meta: dict[str, object], *, checkout_root: Path | None = None
+) -> str | None:
+  command = meta.get("command")
+  if not isinstance(command, str) or not _is_steer_serve_command(command):
+    return None
+  cwd = meta.get("cwd")
+  expected = expected_steering_process_name(
+    cwd if isinstance(cwd, str) else None, checkout_root=checkout_root
+  )
+  if meta.get("name") != expected:
+    return (
+      f"VIOLATION: Name the Steering start_process {expected!r}, "
+      f"got {meta.get('name')!r}."
+    )
+  return None
+
+
+def _parse_platform_launch(line: str, command: str) -> dict[str, object] | None:
+  """Match the full launch wrapper and return its parsed metadata when valid."""
   current = _normalize_native_redirect(command).replace("< /dev/null", "</dev/null")
   if not current or (
     current != "source ~/.profile" and current not in shell_line(line)
   ):
-    return False
+    return None
   text = line.replace("\r\n", "\n").strip()
   try:
     head, setsid, echo, cat = text.rsplit("\n", 3)
     first_line, metadata_line, command_line = head.split("\n", 2)
   except ValueError:
-    return False
+    return None
   first = re.fullmatch(
     r"/bin/bash -l -c mkdir -p '(/tmp/arena-workspace/procs/([^/'\r\n`$\x00]+))'",
     first_line,
   )
   if first is None or first.group(2) in {".", ".."}:
-    return False
+    return None
   directory, process_id = first.groups()
   meta_match = re.fullmatch(
     r"printf '%s' (.+) > '" + re.escape(directory) + r"'/meta.json", metadata_line
@@ -276,12 +339,12 @@ def _platform_launch_process(line: str, command: str) -> bool:
     flags=re.DOTALL,
   )
   if meta_match is None or run_match is None:
-    return False
+    return None
   try:
     meta_words = shlex.split(meta_match.group(1))
     run_words = shlex.split(run_match.group(1))
     if len(meta_words) != 1 or len(run_words) != 1:
-      return False
+      return None
     metadata, run_command = meta_words[0], run_words[0]
 
     def quoted(value: str) -> tuple[str, str]:
@@ -290,10 +353,10 @@ def _platform_launch_process(line: str, command: str) -> bool:
     if meta_match.group(1) not in quoted(metadata) or run_match.group(1) not in quoted(
       run_command
     ):
-      return False
+      return None
     meta = json.loads(metadata)
   except (ValueError, TypeError):
-    return False
+    return None
   if (
     not isinstance(meta, dict)
     or set(meta) != {"processId", "name", "command", "cwd", "startedAt"}
@@ -302,15 +365,28 @@ def _platform_launch_process(line: str, command: str) -> bool:
     or not all(isinstance(meta[key], str) for key in ("name", "command", "cwd"))
     or type(meta["startedAt"]) not in (int, float)
   ):
-    return False
-  return [setsid, echo, cat] == [
+    return None
+  if [setsid, echo, cat] != [
     (
       'setsid bash -c \'bash "$0/run.cmd" > "$0/out.log" 2>&1; echo $? > "$0/exit"\' '
       f"'{directory}' </dev/null >/dev/null 2>&1 &"
     ),
     f"echo $! > '{directory}'/pid",
     f"cat '{directory}'/pid",
-  ]
+  ]:
+    return None
+  return meta
+
+
+def _platform_launch_process(
+  line: str, command: str, *, checkout_root: Path | None = None
+) -> bool:
+  """Match the full launch wrapper and verify its literal metadata and command."""
+  meta = _parse_platform_launch(line, command)
+  return (
+    meta is not None
+    and _steering_launch_error(meta, checkout_root=checkout_root) is None
+  )
 
 
 def _pinned_platform_shell(
@@ -368,7 +444,7 @@ def arena_maintenance_call(
   if (
     _platform_stop_process(line, command)
     or _platform_output_process(line, command)
-    or _platform_launch_process(line, command)
+    or _platform_launch_process(line, command, checkout_root=checkout_root)
   ):
     return True
   if _pinned_platform_shell(line, command):
@@ -1702,7 +1778,28 @@ class RouteGuard:
     return PreResult(verdict=END_CALL, route=route)
 
 
+class StartProcessTitleGuard:
+  """Block `start_process` launches of `steer serve` without `{repo} - Steering`."""
+
+  name = "start-title"
+
+  def applies(self, ctx: PreContext) -> bool:
+    meta = _parse_platform_launch(ctx.line, ctx.command)
+    return (
+      meta is not None
+      and _steering_launch_error(meta, checkout_root=ctx.checkout_root) is not None
+    )
+
+  def run(self, ctx: PreContext) -> PreResult:
+    meta = _parse_platform_launch(ctx.line, ctx.command)
+    if meta is None:
+      return PreResult()
+    error = _steering_launch_error(meta, checkout_root=ctx.checkout_root)
+    return PreResult([error], BLOCK) if error else PreResult()
+
+
 PIPELINE: tuple[PreStep, ...] = (
+  StartProcessTitleGuard(),
   SleepGuard(),
   InboxPipeGuard(),
   PollTimeoutGuard(),

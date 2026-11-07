@@ -722,28 +722,7 @@ class SqliteStore:
         "SELECT 1 FROM messages WHERE id = ?", (message.id,)
       ).fetchone():
         raise ValueError(f"Message ID {message.id!r} already exists")
-      message.modified_at = self._stamp_after_deletion(
-        "messages", message.id, message.modified_at
-      )
-      self._conn.execute(
-        """INSERT INTO messages
-          (id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
-           parent_refs_json, status, acks_json, modified_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-          message.id,
-          self._message_written_at(message.modified_at),
-          message.body,
-          int(message.hidden),
-          int(message.blocking),
-          json.dumps([item.to_dict() for item in message.attachments]),
-          json.dumps(message.parent_ids),
-          json.dumps(message.parent_refs),
-          message.status,
-          json.dumps(message.acks),
-          message.modified_at,
-        ),
-      )
+      self.save_message(message)
       self._conn.execute(
         "INSERT INTO message_requests (request_id, fingerprint, message_id) VALUES (?, ?, ?)",
         (request_id, fingerprint, message.id),

@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import os
+import re
 import runpy
 import sqlite3
 import subprocess
@@ -117,7 +118,9 @@ def test_cli_task_reminders_for_ack_and_nonempty_read(tmp_path: Path) -> None:
     assert "steer task mod <task-id> links msg <message-id>" not in out
     code, out, err = _run_cli(state_dir, "ack", MSG_ID_CLI, "Working on it")
     assert (code, err) == (0, "")
-    assert f"steer task mod <task-id> links msg {MSG_ID_CLI} -A '<detail>'" in out
+    assert (
+      f"steer task mod <task-id> links msg {MSG_ID_CLI} -A '<detail>' -z <size>" in out
+    )
     assert "If msg asks for work or details, add to task" in out  # nonemo: NMT100
     assert "add it to a task" not in _run_cli(state_dir, "read")[1]
   finally:
@@ -686,6 +689,7 @@ def test_cli_command_group_help_executable(tmp_path: Path, group: str) -> None:
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode == 0, result.stderr
   assert f"usage: steer {group}" in result.stdout
@@ -855,6 +859,7 @@ assert.match(upcoming, /data-task-id="legacy"/);
     cwd=Path(__file__).resolve().parents[3],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -925,6 +930,7 @@ def test_http_endpoints_for_messages_tasks_and_reports(tmp_path: Path) -> None:
       "status": "finished",
       "commit_hash": TEST_COMMIT_HASH,
       "details": ["Registered REST endpoints."],
+      "size": 3,
     },
   )
   assert status == int(HTTPStatus.OK)
@@ -1384,13 +1390,17 @@ def test_state_merge_removes_only_uploads_orphaned_by_deletions(tmp_path: Path) 
   _, uploaded = source_app.dispatch(
     "POST", "/uploads", {"name": "shared.txt", "text": "shared"}
   )
-  attachment = uploaded["attachment"]
-  for message_id in ("ab1001", "ab1002"):
-    source_app.dispatch(
-      "POST",
-      "/messages",
-      {"id": message_id, "body": "Shared.", "attachments": [attachment]},
-    )
+  _, first_msg = source_app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "ab1001", "body": "Shared.", "attachments": [uploaded["attachment"]]},
+  )
+  attachment = first_msg["message"]["attachments"][0]
+  source_app.dispatch(
+    "POST",
+    "/messages",
+    {"id": "ab1002", "body": "Shared.", "attachments": [attachment]},
+  )
   _, snapshot = source_app.dispatch("GET", "/state/snapshot")
   target_app.dispatch("POST", "/state/merge", snapshot)
   _, pushed = target_app.dispatch(
@@ -1420,7 +1430,7 @@ def test_state_merge_removes_only_uploads_orphaned_by_deletions(tmp_path: Path) 
     _, merged = target_app.dispatch("POST", "/state/merge", change)
     assert merged["deleted"] == [message_id]
     assert copy.exists() is keep_copy
-    assert staged_path.read_text() == "pending"
+    assert staged_path.read_text(encoding="utf-8") == "pending"
     assert prefix_path.read_bytes() == b"unattached prefix"
     cursor = change["state_version"]
   _, assets = target_app.dispatch("GET", "/state/assets")
@@ -1441,7 +1451,7 @@ def test_state_merge_stale_deletion_keeps_later_edit_and_upload(tmp_path: Path) 
     "POST", "/uploads", {"name": "keep.txt", "text": "content"}
   )
   attachment = uploaded["attachment"]
-  app.dispatch(
+  _, sent = app.dispatch(
     "POST",
     "/messages",
     {"id": "ab1003", "body": "Before", "attachments": [attachment]},
@@ -1461,7 +1471,7 @@ def test_state_merge_stale_deletion_keeps_later_edit_and_upload(tmp_path: Path) 
   assert merged["skipped"] == ["ab1003"]
   assert merged["assets_removed"] == []
   assert store.get_message("ab1003").body == "Later edit"
-  assert Path(attachment["path"]).is_file()
+  assert Path(sent["message"]["attachments"][0]["path"]).is_file()
   _, assets = app.dispatch("GET", "/state/assets")
   assert len(assets["assets"]) == 1
   store.close()
@@ -1969,12 +1979,14 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   ]
 
   code, out, _ = _run_cli(
-    state_dir, "task", "mod", TASK_ID_CLI, "deets", SECOND_DETAIL_TOKEN
+    state_dir, "task", "mod", TASK_ID_CLI, "deets", SECOND_DETAIL_TOKEN, "-z", "3"
   )
   assert code == 0
   assert SECOND_DETAIL_TOKEN in out
 
-  code, out, _ = _run_cli(state_dir, "task", "mod", TASK_ID_CLI, "deets", "rm", "2")
+  code, out, _ = _run_cli(
+    state_dir, "task", "mod", TASK_ID_CLI, "deets", "rm", "2", "-z", "3"
+  )
   assert code == 0
   assert SECOND_DETAIL_TOKEN not in out
 
@@ -2201,7 +2213,10 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert msg["body"] == "See attached paste."
   assert len(msg["attachments"]) == 1
   paste_attachment = msg["attachments"][0]
-  assert paste_attachment["name"] == "pasted-text.txt"
+  assert re.fullmatch(r"1-pasted-lines-[0-9]{10,}\.txt", paste_attachment["name"])
+  assert (
+    Path(paste_attachment["path"]).name == f"{msg['id']}-{paste_attachment['name']}"
+  )
   assert Path(paste_attachment["path"]).read_text(encoding="utf-8") == long_paste
 
   many_lines = "\n".join(
@@ -2215,6 +2230,12 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert status == int(HTTPStatus.CREATED)
   assert created["message"]["body"] == "Pasted text attached."
   assert len(created["message"]["attachments"]) == 1
+  many_att = created["message"]["attachments"][0]
+  assert re.fullmatch(
+    rf"{PASTE_ATTACHMENT_LINE_THRESHOLD}-pasted-lines-[0-9]{{10,}}\.txt",
+    many_att["name"],
+  )
+  assert Path(many_att["path"]).name == f"{created['message']['id']}-{many_att['name']}"
 
   status, created = app.dispatch(
     "POST",
@@ -2227,6 +2248,10 @@ def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> N
   assert status == int(HTTPStatus.CREATED)
   assert created["message"]["parent_ids"] == [msg["id"]]
   assert created["message"]["attachments"][0]["name"] == "spec.md"
+  assert (
+    Path(created["message"]["attachments"][0]["path"]).name
+    == f"{created['message']['id']}-spec.md"
+  )
   store.close()
 
 
@@ -2252,7 +2277,7 @@ def test_message_attachments_expose_only_present_served_upload_urls(
   )
   assert status == int(HTTPStatus.CREATED)
   returned = created["message"]["attachments"]
-  assert returned[0]["url"] == image["url"]
+  assert returned[0]["url"] == f"/static/uploads/{created['message']['id']}-sample.png"
   assert "url" not in returned[1]
   assert "url" not in returned[2]
 
@@ -2620,8 +2645,10 @@ def test_v2_handoff_template_matches_the_archive() -> None:
 
 def test_direct_job_log_recipe_uses_the_fetchable_url() -> None:
   root = Path(__file__).resolve().parents[3]
-  recipe = (root / "skills/arena-steering/references/recipes/job-logs.md").read_text()
-  skill = (root / "skills/arena-steering/SKILL.md").read_text()
+  recipe = (root / "skills/arena-steering/references/recipes/job-logs.md").read_text(
+    encoding="utf-8"
+  )
+  skill = (root / "skills/arena-steering/SKILL.md").read_text(encoding="utf-8")
   assert "references/recipes/job-logs.md" in skill
   assert "steer job-log -j" in recipe
   assert "functions.fetch_page" in recipe
@@ -2640,7 +2667,14 @@ def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> 
   state_dir.mkdir()
 
   def git(*args: str) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+      ["git", *args],
+      cwd=repo,
+      check=True,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+    )
 
   git("init", "-b", "main")
   git("config", "user.email", "steer@example.test")
@@ -2827,6 +2861,7 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2840,6 +2875,7 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert rejected.returncode != 0
@@ -3187,9 +3223,9 @@ def test_cli_ack_batches_messages_and_report_answers(tmp_path: Path) -> None:
   assert out == (
     "ok ab1001 ab1002 ab1003\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1001 -A '<detail>'\n"
+    "steer task mod <task-id> links msg ab1001 -A '<detail>' -z <size>\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1002 -A '<detail>'\n"
+    "steer task mod <task-id> links msg ab1002 -A '<detail>' -z <size>\n"
   )
   store, _, _, reports = cli.open_services(state_dir)
   assert store.get_message("ab1001").acks == ["One shared reply"]
@@ -3224,7 +3260,7 @@ def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> N
   assert code == 0, err
   assert out == (
     "ok ab1011\nIf msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1011 -A '<detail>'\n"
+    "steer task mod <task-id> links msg ab1011 -A '<detail>' -z <size>\n"
   )
   store, messages, _, _ = cli.open_services(state_dir)
   assert store.get_message("ab1011").acks == ["Received"]
@@ -3254,7 +3290,7 @@ def test_cli_ack_rejects_id_only_reply_and_keeps_message_pending() -> None:
     assert code == 0, err
     assert out == (
       "ok ab1014\nIf msg asks for work or details, add to task\n"
-      "steer task mod <task-id> links msg ab1014 -A '<detail>'\n"
+      "steer task mod <task-id> links msg ab1014 -A '<detail>' -z <size>\n"
     )
     assert store.get_message("ab1014").acks == ["Reviewed the change"]
   finally:
@@ -3403,7 +3439,9 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   runs = state_dir / "runs"
   runs.mkdir()
   marker = runs / "verify.exit"
-  (runs / "verify.json").write_text(json.dumps({"exit_path": str(marker)}))
+  (runs / "verify.json").write_text(
+    json.dumps({"exit_path": str(marker)}), encoding="utf-8"
+  )
   store = SqliteStore(state_dir / "state.sqlite3")
   app = SteeringApp(store)
   status, created = app.dispatch(
@@ -3428,7 +3466,7 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   code, output, _ = _run_cli(state_dir, "task", "gate-task")
   assert code == 0 and "Gates: verify" in output and "blocked" in output.lower()
   for result in ("1", "0"):
-    marker.write_text(result)
+    marker.write_text(result, encoding="utf-8")
     task = app.dispatch("GET", "/tasks/gate-task")[1]["task"]
     assert task["blocked"] is False
     assert task["running_gate"] is False
@@ -3447,6 +3485,71 @@ def test_gate_links_block_only_while_run_is_active() -> None:
   )
 
 
+def test_dead_detached_run_gets_failure_marker_and_can_be_reused(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  process = subprocess.Popen([sys.executable, "-c", "pass"])
+  process.wait(timeout=5)
+  exit_path = runs / "dead.exit"
+  log_path = runs / "dead.log"
+  (runs / "dead.json").write_text(
+    json.dumps(
+      {"pid": process.pid, "exit_path": str(exit_path), "log_path": str(log_path)}
+    ),
+    encoding="utf-8",
+  )
+  from arena_steering.gates import FileGateStatus
+
+  assert not FileGateStatus(state_dir).is_running("dead")
+  code, output, _ = _run_cli(state_dir, "run", "logs", "dead")
+  assert code == 0 and "exit 1" in output
+  assert exit_path.read_text(encoding="utf-8").strip() == "1"
+  code, _, error = _run_cli(
+    state_dir, "run", "start", "dead", "--", sys.executable, "-c", "pass"
+  )
+  assert code == 0, error
+
+
+def test_live_run_identity_and_existing_verdict_are_preserved(tmp_path: Path) -> None:
+  from arena_steering.gates import process_identity, run_is_running
+
+  exit_path = tmp_path / "live.exit"
+  identity = process_identity(os.getpid())
+  record = {
+    "pid": os.getpid(),
+    "exit_path": str(exit_path),
+    "process_identity": list(identity[1:]) if identity else None,
+  }
+  assert run_is_running(record)
+  assert not exit_path.exists()
+  if identity:
+    record["process_identity"] = ["wrong-start", identity[2]]
+    assert not run_is_running(record)
+    assert exit_path.read_text(encoding="utf-8").strip() == "1"
+  exit_path.write_text("0\n", encoding="utf-8")
+  assert not run_is_running(record)
+  assert exit_path.read_text(encoding="utf-8").strip() == "0"
+
+
+def test_zombie_run_is_marked_failed(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  from arena_steering import gates
+
+  exit_path = tmp_path / "zombie.exit"
+  monkeypatch.setattr(gates, "process_identity", lambda pid: ("Z", "123", "boot"))
+  record = {
+    "pid": os.getpid(),
+    "exit_path": str(exit_path),
+    "process_identity": ["123", "boot"],
+  }
+  assert not gates.run_is_running(record)
+  assert exit_path.read_text(encoding="utf-8").strip() == "1"
+
+
 def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> None:
   import sys
 
@@ -3459,13 +3562,13 @@ def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> Non
     out=io.StringIO(),
   )
   assert result == 0
-  record = json.loads((state_dir / "runs" / "checks.json").read_text())
+  record = json.loads((state_dir / "runs" / "checks.json").read_text(encoding="utf-8"))
   marker = Path(record["exit_path"])
   deadline = time.monotonic() + 2
   while not marker.exists() and time.monotonic() < deadline:
     time.sleep(0.02)
-  assert marker.read_text().strip() == "7"
-  assert "ancestry checked" in Path(record["log_path"]).read_text()
+  assert marker.read_text(encoding="utf-8").strip() == "7"
+  assert "ancestry checked" in Path(record["log_path"]).read_text(encoding="utf-8")
 
 
 def test_run_start_rolls_back_link_on_launch_failure(
@@ -3531,12 +3634,12 @@ def test_linked_run_blocks_until_verdict(tmp_path: Path, exit_code: int) -> None
     store.close()
   finally:
     release.touch()
-  record = json.loads((state_dir / "runs" / "verify.json").read_text())
+  record = json.loads((state_dir / "runs" / "verify.json").read_text(encoding="utf-8"))
   marker = Path(record["exit_path"])
   deadline = time.monotonic() + 10
   while not marker.exists() and time.monotonic() < deadline:
     time.sleep(0.02)
-  assert marker.read_text().strip() == str(exit_code)
+  assert marker.read_text(encoding="utf-8").strip() == str(exit_code)
   store, _, tasks, _ = cli.open_services(state_dir)
   assert not tasks.get_task("gate-task")[1]
   store.close()
@@ -3665,12 +3768,12 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
   first = app.dispatch("POST", "/uploads", request)
   assert first[0] == HTTPStatus.CREATED
   upload_path = Path(first[1]["attachment"]["path"])
-  assert upload_path.read_text() == "hello"
+  assert upload_path.read_text(encoding="utf-8") == "hello"
   assert app.dispatch("POST", "/uploads", request) == first
   assert len(list(upload_path.parent.iterdir())) == 1
   stale_id = hashlib.sha256(b"abandoned").hexdigest()
   orphan = upload_path.parent / f"request-{stale_id}-0-sample.txt"
-  orphan.write_text("incomplete")
+  orphan.write_text("incomplete", encoding="utf-8")
   store.close()
   store = SqliteStore(db_path)
   app = SteeringApp(store)
@@ -3687,7 +3790,9 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
     },
   )
   assert status == HTTPStatus.CREATED
-  assert Path(long_upload["attachment"]["path"]).read_text() == "long name"
+  assert (
+    Path(long_upload["attachment"]["path"]).read_text(encoding="utf-8") == "long name"
+  )
   store.close()
 
 
@@ -3752,6 +3857,58 @@ def test_annotated_report_rejects_bad_metadata_and_preserves_code_fences(
   )
   assert status == HTTPStatus.CREATED and result["report"]["fields"] == []
   store.close()
+
+
+def test_cli_report_publish_preserves_staged_browser_upload(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  # Model a browser upload after its file is staged but before its receipt commits.
+  path = app._uploads_dir() / ("request-" + "a" * 64 + "-0-pending.txt")
+  path.write_bytes(b"pending")
+  source = tmp_path / "report.md"
+  source.write_text("# Report\n", encoding="utf-8")
+  code, output, error = _run_cli(
+    state_dir, "report", "pub", str(source), "-i", "safe-report", "-t", "Report"
+  )
+  assert code == 0, error
+  assert "Verified" in output
+  assert path.read_bytes() == b"pending"
+  store.close()
+
+
+def test_cli_report_publish_checks_rendered_blocks(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  from arena_steering import services
+
+  original = services.serialize_report_blocks
+  calls = 0
+
+  def changing_render(body: str) -> list[dict]:
+    nonlocal calls
+    calls += 1
+    result = original(body)
+    if calls == 2:
+      result[0]["html"] = "different"
+    return result
+
+  monkeypatch.setattr(services, "serialize_report_blocks", changing_render)
+  source = tmp_path / "report.md"
+  source.write_text("# Report\n", encoding="utf-8")
+  code, output, error = _run_cli(
+    tmp_path / "arena-state",
+    "report",
+    "pub",
+    str(source),
+    "-i",
+    "changed-report",
+    "-t",
+    "Report",
+  )
+  assert code != 0
+  assert "verification failed" in error
+  assert "Verified" not in output
 
 
 def test_report_marker_override_and_verification_failure(
@@ -3845,7 +4002,9 @@ def test_cli_removes_answer_detail_without_unlinking_report(tmp_path: Path) -> N
   reports.ack_answer("decision", answer.id, "Read")
   store.close()
 
-  code, out, err = _run_cli(state_dir, "task", "mod", "work", "deets", "rm", "2")
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "deets", "rm", "2", "-z", "3"
+  )
   assert code == 0, err
   assert "Select?: Yes" not in out
 
@@ -3902,7 +4061,14 @@ def test_cli_worktree_collect_prints_the_patch(
     ["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-m", "init"],
   )
   for args in commits:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+      ["git", *args],
+      cwd=repo,
+      check=True,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+    )
   monkeypatch.chdir(repo)
 
   code, out, _ = _run_cli(cli.resolve_state_dir(), "worktree", "add", "probe")
@@ -3957,7 +4123,9 @@ def test_cli_pr_update_blocks_session_local_ids(
   reports.submit_answer("decision-report", {"select": "Yes"}, answer_id="cc22dd")
   store.close()
   body_file = tmp_path / "body.md"
-  body_file.write_text(f"Body cites {token}.\n" if location == "body" else "Body.\n")
+  body_file.write_text(
+    f"Body cites {token}.\n" if location == "body" else "Body.\n", encoding="utf-8"
+  )
   title = f"Title cites {token}" if location == "title" else "Safe title"
 
   def forbidden_run(*_args, **_kwargs):
@@ -3984,7 +4152,9 @@ def test_cli_pr_update_allows_unrelated_longer_hex_strings(
   messages.send_message("Hidden note", msg_id="aa11bb", hidden=True)
   store.close()
   body_file = tmp_path / "body.md"
-  body_file.write_text("A longer SHA aaa11bb9 is not the message ID.\n")
+  body_file.write_text(
+    "A longer SHA aaa11bb9 is not the message ID.\n", encoding="utf-8"
+  )
   calls = []
 
   def fake_run(args, **_kwargs):
@@ -3992,7 +4162,9 @@ def test_cli_pr_update_allows_unrelated_longer_hex_strings(
     return subprocess.CompletedProcess(
       args,
       0,
-      stdout=json.dumps({"title": "Safe title", "body": body_file.read_text()}),
+      stdout=json.dumps(
+        {"title": "Safe title", "body": body_file.read_text(encoding="utf-8")}
+      ),
       stderr="",
     )
 
@@ -4020,7 +4192,7 @@ def test_cli_pr_update_blocks_retained_answer_after_report_removal(
   reports.remove_report("gone-report")
   store.close()
   body_file = tmp_path / "body.md"
-  body_file.write_text("The response was dd33ee.\n")
+  body_file.write_text("The response was dd33ee.\n", encoding="utf-8")
 
   def forbidden_run(*_args, **_kwargs):
     raise AssertionError("An unsafe update must not call GitHub")
@@ -4041,7 +4213,7 @@ def test_cli_pr_update_reports_api_failures(
 
   state_dir = cli.resolve_state_dir()
   body_file = tmp_path / "body.md"
-  body_file.write_text("Body.\n")
+  body_file.write_text("Body.\n", encoding="utf-8")
   calls = []
 
   def fake_run(args, **_kwargs):
@@ -4196,7 +4368,7 @@ def test_cli_ack_reports_only_actual_task_detail_additions(tmp_path: Path) -> No
   assert code == 0, error
   assert "work" in first and "Note: Yes" in first
   store, _, tasks, _ = cli.open_services(state_dir)
-  tasks.mod_deets_rm("work", 2)
+  tasks.mod_deets_rm("work", 2, size=3)
   store.close()
   code, repeated, error = _run_cli(state_dir, "ack", answer.id, "Received again")
   assert code == 0, error
@@ -4667,13 +4839,18 @@ def test_installer_reports_runtime_paths_and_reuses_package(tmp_path: Path) -> N
   }
   for _ in range(2):
     result = subprocess.run(
-      [str(SCRIPT)], env=env, capture_output=True, text=True, check=True
+      [str(SCRIPT)],
+      env=env,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=True,
     )
     paths = dict(line.split("=", 1) for line in result.stdout.strip().splitlines())
     assert Path(paths["CHROMIUM_BIN"]).is_file()
     assert Path(paths["CHROMIUM_LIB"]).is_dir()
     assert Path(paths["CHROMIUM_FONTS"]).is_dir()
-  assert (cache / "npm-calls").read_text().splitlines() == ["invoked"]
+  assert (cache / "npm-calls").read_text(encoding="utf-8").splitlines() == ["invoked"]
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -4707,6 +4884,7 @@ def test_demo_reset_command_restores_samples_without_restarting(tmp_path: Path) 
       [sys.executable, str(DEMO_PATH), "--reset", "--port", str(server.server_port)],
       cwd=ROOT,
       text=True,
+      encoding="utf-8",
       capture_output=True,
       timeout=15,
       check=False,
@@ -4799,6 +4977,7 @@ def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
           ],
           cwd=ROOT,
           text=True,
+          encoding="utf-8",
           capture_output=True,
           timeout=15,
           check=False,
@@ -4924,11 +5103,31 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   code, _, err = _run_cli(state_dir, "task", "mod", "work", "links", "msg", "ab1234")
   assert code != 0 and "detail" in err
   code, _, err = _run_cli(
-    state_dir, "task", "mod", "work", "links", "msg", "ab1234", "-A", "Follow up"
+    state_dir,
+    "task",
+    "mod",
+    "work",
+    "links",
+    "msg",
+    "ab1234",
+    "-A",
+    "Follow up",
+    "-z",
+    "2",
   )
   assert (code, err) == (0, "")
   code, _, err = _run_cli(
-    state_dir, "task", "mod", "work", "links", "msg", "ab1235", "--delete", "2"
+    state_dir,
+    "task",
+    "mod",
+    "work",
+    "links",
+    "msg",
+    "ab1235",
+    "--delete",
+    "2",
+    "-z",
+    "2",
   )
   assert (code, err) == (0, "")
   store, _, tasks, _ = cli.open_services(state_dir)
@@ -4936,3 +5135,185 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   assert task.msg_ids == ["ab1234", "ab1235"]
   assert task.details == ["First", "Follow up"]
   store.close()
+
+
+def test_cli_task_detail_changes_require_size_flag(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, messages, tasks, reports = cli.open_services(state_dir)
+  messages.send_message("Follow up", msg_id="ab3001", blocking=False)
+  reports.publish_report("doc", "Doc", "# Plain\n")
+  tasks.create_task("work", "Work", size=3, details=["First", "Second"])
+  store.close()
+
+  for missing in (
+    ("task", "mod", "work", "deets", "Third"),
+    ("task", "mod", "work", "deets", "rm", "2"),
+    ("task", "mod", "work", "links", "msg", "ab3001", "-A", "Follow up"),
+    ("task", "mod", "work", "links", "report", "doc", "--delete", "2"),
+  ):
+    code, _, err = _run_cli(state_dir, *missing)
+    assert code == 1 and "size" in err.lower()
+
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "deets", "Preserve --update flag", "-z", "3"
+  )
+  assert (code, err) == (0, "")
+  assert "Size: 3" in out and "Preserve --update flag" in out
+
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "deets", "-z", "5", "rm", "2"
+  )
+  assert (code, err) == (0, "")
+  assert "Size: 5" in out
+
+  code, out, err = _run_cli(
+    state_dir,
+    "task",
+    "mod",
+    "work",
+    "links",
+    "msg",
+    "ab3001",
+    "-A",
+    "Linked",
+    "-z",
+    "8",
+  )
+  assert (code, err) == (0, "")
+  assert "Size: 8" in out and "Linked" in out
+
+
+LOST_MARKER = " (lost)"
+
+
+def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  png_b64 = base64.b64encode(b"\x89PNG\r\n\x1a\npng").decode("ascii")
+
+  # 1. Named staged file keeps original name in composer, gets {msgID}- on send.
+  _, staged_named = app.dispatch(
+    "POST",
+    "/uploads",
+    {"name": "diagram.png", "content_base64": png_b64, "_request_id": "req-up-1"},
+  )
+  assert staged_named["attachment"]["name"] == "diagram.png"
+
+  # 2. Unnamed file gets {epoch_ms}.{ext} in composer, {msgID}-{epoch_ms}.{ext} on send.
+  _, staged_unnamed = app.dispatch(
+    "POST",
+    "/uploads",
+    {
+      "name": "",
+      "content_type": "image/png",
+      "content_base64": png_b64,
+      "_request_id": "req-up-2",
+    },
+  )
+  unnamed_name = staged_unnamed["attachment"]["name"]
+  assert re.fullmatch(r"[0-9]{10,}\.png", unnamed_name)
+
+  # 3. Pasted lines get {N}-pasted-lines-{epoch_ms}.txt, then {msgID}- on send.
+  pasted_lines = "\n".join(f"row {idx}" for idx in range(20))
+  _, staged_paste = app.dispatch(
+    "POST",
+    "/uploads",
+    {
+      "name": "20-pasted-lines-1762507200123.txt",
+      "text": pasted_lines,
+      "_request_id": "req-up-3",
+    },
+  )
+  assert staged_paste["attachment"]["name"] == "20-pasted-lines-1762507200123.txt"
+
+  status, sent = app.dispatch(
+    "POST",
+    "/messages",
+    {
+      "id": "ca1001",
+      "body": "Three templates",
+      "attachments": [
+        staged_named["attachment"],
+        staged_unnamed["attachment"],
+        staged_paste["attachment"],
+      ],
+    },
+  )
+  assert status == int(HTTPStatus.CREATED)
+  atts = sent["message"]["attachments"]
+  assert [a["name"] for a in atts] == [
+    "diagram.png",
+    unnamed_name,
+    "20-pasted-lines-1762507200123.txt",
+  ]
+  assert [Path(a["path"]).name for a in atts] == [
+    "ca1001-diagram.png",
+    f"ca1001-{unnamed_name}",
+    "ca1001-20-pasted-lines-1762507200123.txt",
+  ]
+  for att in atts:
+    assert Path(att["path"]).parent == state_dir / "uploads"
+    assert Path(att["path"]).is_file()
+
+  # Validation failure on task mod must NOT move files on disk.
+  app.tasks.create_task("first-task", "First task", size=3, details=["Initial"])
+  with pytest.raises(ValueError, match="size"):
+    app.tasks.mod_links_add("first-task", "ca1001", link_type="msg")
+  assert (state_dir / "uploads" / "ca1001-diagram.png").is_file()
+  assert not (state_dir / "uploads" / "first-task").exists()
+
+  # Linking moves files into uploads/{taskID}/ and updates message paths + details.
+  updated_first = app.tasks.mod_links_add(
+    "first-task", "ca1001", link_type="msg", size=5
+  )
+  first_folder = state_dir / "uploads" / "first-task"
+  assert (first_folder / "ca1001-diagram.png").is_file()
+  assert not (state_dir / "uploads" / "ca1001-diagram.png").exists()
+  reloaded_msg = app.messages.get_message("ca1001")
+  assert Path(reloaded_msg.attachments[0].path) == first_folder / "ca1001-diagram.png"
+  assert any(
+    "uploads/first-task/ca1001-diagram.png" in d for d in updated_first.details
+  )
+
+  # Linking a second task copies into uploads/{secondTaskID}/ while preserving first.
+  second = app.tasks.create_task(
+    "second-task", "Second task", size=3, msg_ids=["ca1001"]
+  )
+  second_folder = state_dir / "uploads" / "second-task"
+  assert (first_folder / "ca1001-diagram.png").is_file()
+  assert (second_folder / "ca1001-diagram.png").is_file()
+  assert any("uploads/second-task/ca1001-diagram.png" in d for d in second.details)
+
+  # Dynamic (lost) detection when a task/message file disappears on disk.
+  version_before = app.data_version()
+  (first_folder / "ca1001-diagram.png").unlink()
+  assert app.data_version() != version_before
+
+  _, msg_payload = app.dispatch("GET", "/messages/ca1001")
+  first_att = msg_payload["message"]["attachments"][0]
+  assert first_att["present"] is False
+  assert first_att["lost"] is True
+  assert "url" not in first_att
+
+  _, tasks_payload = app.dispatch("GET", "/tasks")
+  first_serialized = next(
+    item for item in tasks_payload["tasks"] if item["id"] == "first-task"
+  )
+  second_serialized = next(
+    item for item in tasks_payload["tasks"] if item["id"] == "second-task"
+  )
+  assert any(
+    d.endswith(f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}")
+    for d in first_serialized["details"]
+  )
+  assert not any(d.endswith(LOST_MARKER) for d in second_serialized["details"])
+  store.close()
+
+  code, msg_out, err = _run_cli(state_dir, "msg", "ca1001")
+  assert (code, err) == (0, "")
+  assert f"ca1001-diagram.png (11 B){LOST_MARKER}" in msg_out
+
+  code, task_out, err = _run_cli(state_dir, "task", "first-task")
+  assert (code, err) == (0, "")
+  assert f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}" in task_out

@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.2.0]
+
+### Added
+
+- **Unified Python CLI (`scripts/nuu.py`)**: Consolidate `nuu` onto nine subcommands (`audit`, `walk`, `measure`, `annotate`, `board`, `lint`, `collect`, `search`, `doctor`). Use `playwright>=1.49`, Markdown output, and exit codes `0`..`3`.
+- **Configuration v2 (`nuu.toml`, `references/nuu.toml`)**: Add `[paths]`, `[fonts]`, `[annotate]`, `[measure]`, `[board]`, `[audit]`, `[checks.severity]`, and `[[assets]]` with `<path>:<line>:<col>` parse/schema errors and unknown-key warnings.
+- **Marker collector (`nuu collect`)**: Scan `nonuu:`, `nuu-deviation:`, and `nuurecipe:` comments across web and Python sources, flagging unknown recipe slugs (`RCP001`).
+- **Visual redline and drop-ray measurement (`scripts/measure.py`)**: Add live DevTools tints, Figma guides (`--to`), drop-rays (`-d`), and `3:1` redline contrast fallback (`#ff3366 -> #00e5ff -> #111827`).
+- **Design document v2 and reference sync (`SKILL.md`, `references/*.md`)**: Adopt the six-section `docs/design.md` v2 template, 49-rule CLI reference, 42-verb `walk` reference, and consolidated 12-recipe index.
+
+### Changed
+
+- **Clause rules (`SKILL.md`, `AGENTS.md`)**: Require icon line-height match (`ICN102`), slow-network writes (`ACC207`), `[paths].doc`, `nuurecipe:`, and zero `Lorem ipsum` (`HRC203`).
+- **Browser and renderer lookup (`scripts/*.py`)**: Replace `$CHROMIUM_PATH` and `$NUU_CONFIG` with `-x` -> `$CHROMIUM_BIN` -> `PATH`, `$CHROMIUM_LIB`, `$CHROMIUM_FONTS`, and `$NUU_RENDERER` (`auto`, `chromium`, `bitmap`).
+- **Severity model (`scripts/nuu.py`)**: Restrict rule severities to `"error"` and `"review"` so `[checks.severity]` overrides control `lint` and `audit` exit status.
+
+### Removed
+
+- **Legacy Node and JSON surfaces (`scripts/browser.cjs`, `scripts/uiux.py`)**: Remove `browser.cjs`, `uiux.py`, `nuu extract`, legacy `NU*` rule aliases, `-T design`, and JSON CLI inputs/outputs.
+
 ## [0.1.73]
 
 ### Added

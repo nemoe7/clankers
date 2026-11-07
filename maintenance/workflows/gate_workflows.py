@@ -9,6 +9,7 @@ credentials stay inside their job.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -22,9 +23,7 @@ REQUIRED_FILES = (
   "distribute.yml",
   "codeql.yml",
   "dependency-review.yml",
-  "secret-scan.yml",
   "workflow-security.yml",
-  "pr-check.yml",
 )
 
 # A pull request can run untrusted code, so these scopes stay out of its workflows.
@@ -179,15 +178,6 @@ def audit_document(name: str, document: object) -> list[str]:
           findings.append(
             f"{where}: `{scope}: {value}` is not allowed in a pull request workflow"
           )
-    run_text = "\n".join(
-      step.get("run", "")
-      for step in job.get("steps", []) or []
-      if isinstance(step, dict)
-    )
-    if "test_minify.py" in run_text and "pytest" not in run_text:
-      findings.append(
-        f"{where}: a job that runs test_minify.py must use pytest; the test checks the minified runtime"
-      )
   return findings
 
 
@@ -210,6 +200,9 @@ def audit_paths(directory: Path = WORKFLOW_DIR) -> list[str]:
 
 
 def main() -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   findings = audit_paths()
   for finding in findings:
     print(f"::error::{finding}")

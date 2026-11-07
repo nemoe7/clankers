@@ -4,8 +4,8 @@ description: >
   Find AI-flavored synonyms and replace them with the plain word, using one
   rotation table and a bundled linter that reads every text file, comments and
   prose included. Use when naming a variable, field, parameter, key, or prose
-  term, when a draft sounds machine-written, or when asked to run or extend the
-  rotation table.
+  term, when a draft sounds machine-written, or when asked to run the rotation
+  table.
 compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 ---
 
@@ -23,6 +23,8 @@ run the linter before you hand work over.
 | `kind` | type |
 | `name` | specify |
 | `repository` | repo |
+| `pull request` | PR |
+| `the nemoizer` | nemoizer |
 
 Read references/rules.md for lint IDs and their meanings. `name` rotates only as a verb.
 
@@ -76,14 +78,6 @@ python3 skills/nemoizer/scripts/nemoize.py --audit .
 ```
 
 Delete a marker when the line no longer needs it.
-
-## Adding a row
-
-1. Add the row to the table above.
-2. Add one pattern, its name, and its plain word to `ROTATIONS` in
-   `scripts/nemoize.py`; add a stem word that takes its own plain word to
-   `EXCEPTIONS`.
-3. Run `python3 -m pytest skills/nemoizer/scripts/test_nemoize.py`.
 
 ## Prose review
 

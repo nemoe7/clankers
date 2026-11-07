@@ -961,7 +961,8 @@ steer poll
         {
           "id": "S2E5P",
           "answer": {
-            "full_name": "unknown",
+            "first_name": "unknown",
+            "last_name": "unknown",
             "organization": "unknown",
             "role": "unknown",
           },
@@ -1050,6 +1051,9 @@ def seed_demo_store(store: SqliteStore) -> SteeringApp:
 
 
 def main(argv: list[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   default_port = int(os.environ.get("STEER_DEMO_PORT", "8100"))
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--host", default="0.0.0.0")

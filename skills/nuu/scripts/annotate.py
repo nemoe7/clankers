@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import base64
 import html
 import json
@@ -12,10 +11,17 @@ import re
 import shutil
 import struct
 import subprocess
-import sys
 import tomllib
 import zlib
 from pathlib import Path
+
+from nuu import (
+  chromium_launch_kwargs,
+  load_nuu_config,
+  parse_viewport_spec,
+  resolve_renderer,
+  settle_page,
+)
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 COLORS = {
@@ -88,44 +94,6 @@ def _iter_project_files(root: Path, suffixes: set[str]) -> list[Path]:
   return found
 
 
-def find_nuu_config(
-  project_root: Path | None = None, config_path: Path | None = None
-) -> Path | None:
-  env_cfg = os.environ.get("NUU_CONFIG")
-  if config_path is not None:
-    target = Path(config_path).resolve()
-    if not target.is_file():
-      raise ValueError(f"nuu config file does not exist: {config_path}")
-    return target
-  if env_cfg:
-    target = Path(env_cfg).resolve()
-    if target.is_file():
-      return target
-  cur = (Path(project_root) if project_root else Path.cwd()).resolve()
-  if cur.is_file():
-    cur = cur.parent
-  while True:
-    candidate = cur / "nuu.toml"
-    if candidate.is_file():
-      return candidate
-    if (cur / ".git").exists() or cur.parent == cur or cur == Path("/tmp"):
-      break
-    cur = cur.parent
-  return None
-
-
-def load_nuu_config(
-  project_root: Path | None = None, config_path: Path | None = None
-) -> dict:
-  found = find_nuu_config(project_root, config_path)
-  if found is None:
-    return {"path": None, "dir": None, "config": {}}
-  raw = tomllib.loads(found.read_text(encoding="utf-8"))
-  if not isinstance(raw, dict):
-    raise TypeError("nuu.toml must decode to a table")
-  return {"path": str(found), "dir": found.parent, "config": raw}
-
-
 def _first_str(mapping: dict, keys: tuple[str, ...]) -> str | None:
   for key in keys:
     val = mapping.get(key)
@@ -172,7 +140,17 @@ def resolve_project_typography(
     if (cfg_info["path"] and not prefer_project_css and cfg_dir.is_dir())
     else root
   )
-  style_files = _iter_project_files(scan_root, {".css", ".html"})
+  SKIP_SCAN = SKIP_DIRS | {"arena-state", "tests", "archive"}
+  style_files = [
+    p
+    for p in _iter_project_files(scan_root, {".css", ".html"})
+    if not any(part in SKIP_SCAN for part in p.parts)
+  ]
+  cfg_sheet = cfg_info.get("stylesheet_path")
+  if (
+    isinstance(cfg_sheet, Path) and cfg_sheet.is_file() and cfg_sheet not in style_files
+  ):
+    style_files.insert(0, cfg_sheet)
   font_Index: dict[str, Path] = {}
   for font_path in _iter_project_files(scan_root, set(FONT_MIMES)):
     font_Index.setdefault(font_path.name, font_path)
@@ -248,9 +226,7 @@ def resolve_project_typography(
   if isinstance(raw_files, (str, dict)):
     raw_files = [raw_files]
   if isinstance(raw_files, list):
-    default_fam = _extract_primary_family(
-      cfg_sans or DEFAULT_FONT_SANS, "Basel Grotesk"
-    )
+    default_fam = _extract_primary_family(cfg_sans or DEFAULT_FONT_SANS, "Inter")
     for item in raw_files:
       if isinstance(item, str):
         p = Path(item)
@@ -281,12 +257,27 @@ def resolve_project_typography(
         continue
       text = "\n".join(blocks)
     clean = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    css_vars: dict[str, str] = {}
+    for m in re.finditer(r"(--[a-zA-Z0-9-]+)\s*:\s*([^;{}]+)", clean):
+      css_vars.setdefault(m.group(1), m.group(2).strip())
+
+    def _deref_var(val: str | None, vars_map: dict[str, str] = css_vars) -> str | None:
+      cur_val = val
+      for _ in range(4):
+        if not cur_val:
+          return None
+        vm = re.fullmatch(r"var\(\s*(--[a-zA-Z0-9-]+)\s*\)", cur_val.strip())
+        if not vm:
+          return cur_val
+        cur_val = vars_map.get(vm.group(1))
+      return cur_val
+
     if font_sans is None:
-      m_sans = re.search(r"--font-sans\s*:\s*([^;{}]+)", clean) or re.search(
-        r"--sans\s*:\s*([^;{}]+)", clean
+      cand_sans = _deref_var(
+        css_vars.get("--font-sans") or css_vars.get("--sans") or css_vars.get("--font")
       )
-      if m_sans:
-        font_sans = m_sans.group(1).strip()
+      if cand_sans:
+        font_sans = cand_sans
         source_css = str(css_path)
       else:
         m_body = re.search(
@@ -296,11 +287,9 @@ def resolve_project_typography(
           font_sans = m_body.group(1).strip()
           source_css = str(css_path)
     if font_mono is None:
-      m_mono = re.search(r"--font-mono\s*:\s*([^;{}]+)", clean) or re.search(
-        r"--mono\s*:\s*([^;{}]+)", clean
-      )
-      if m_mono:
-        font_mono = m_mono.group(1).strip()
+      cand_mono = _deref_var(css_vars.get("--font-mono") or css_vars.get("--mono"))
+      if cand_mono:
+        font_mono = cand_mono
     for block_match in re.finditer(r"@font-face\s*\{([^}]*)\}", clean, flags=re.DOTALL):
       block = block_match.group(1)
       fam_m = re.search(r"font-family\s*:\s*['\"]?([^'\";]+)['\"]?", block)
@@ -323,11 +312,17 @@ def resolve_project_typography(
       _embed_font_file(candidate, family, weight, fstyle)
 
   resolved_sans = (
-    (font_sans or cfg_sans) if prefer_project_css else (cfg_sans or font_sans)
-  ) or DEFAULT_FONT_SANS
+    cfg_sans
+    or (font_sans if prefer_project_css else None)
+    or font_sans
+    or DEFAULT_FONT_SANS
+  )
   resolved_mono = (
-    (font_mono or cfg_mono) if prefer_project_css else (cfg_mono or font_mono)
-  ) or DEFAULT_FONT_MONO
+    cfg_mono
+    or (font_mono if prefer_project_css else None)
+    or font_mono
+    or DEFAULT_FONT_MONO
+  )
   if cfg_sans and (not prefer_project_css or not source_css):
     source_css = cfg_info["path"]
 
@@ -336,7 +331,7 @@ def resolve_project_typography(
     "font_mono": resolved_mono,
     "font_faces_css": "\n".join(font_face_rules),
     "source_css": source_css,
-    "config_path": cfg_info["path"],
+    "config_path": None if cfg_info.get("used_bundled") else cfg_info["path"],
     "embedded_fonts": len(font_face_rules),
   }
 
@@ -788,90 +783,63 @@ def _chromium_render_png(
   output_path: Path,
   selector: str = "#nuu-render-root",
   settle_ms: int = 0,
+  executable: str | Path | None = None,
 ) -> bool:
-  if os.environ.get("NUU_RENDERER") == "bitmap" or not shutil.which("node"):
+  mode = resolve_renderer()
+  if mode == "bitmap":
     return False
-  chromium_bin = os.environ.get("CHROMIUM_PATH") or ""
-  env = dict(os.environ)
-  cwd = Path.cwd().resolve()
-  node_paths = [
-    str(Path(__file__).resolve().parent),
-    str(cwd / "node_modules"),
-  ]
-  if env.get("NODE_PATH"):
-    node_paths.append(env["NODE_PATH"])
-  env["NODE_PATH"] = ":".join(dict.fromkeys(node_paths))
-  script = """
-const fs = require("node:fs");
-let pw = null;
-for (const mod of ["playwright-core", "playwright"]) {
-  try { pw = require(mod); break; } catch {}
-}
-if (!pw || !pw.chromium) process.exit(2);
-const payload = JSON.parse(fs.readFileSync(0, "utf8"));
-(async () => {
-  const pwExec = typeof pw.chromium.executablePath === "function" ? pw.chromium.executablePath() : "";
-  const execPath = payload.executable || pwExec;
-  if (!execPath || !fs.existsSync(execPath)) process.exit(3);
-  const browser = await pw.chromium.launch({
-    executablePath: execPath,
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--no-zygote", "--disable-gpu"]
-  });
-  try {
-    let vw = Math.max(1600, payload.width + 64);
-    let vh = Math.max(900, payload.height + 64);
-    const context = await browser.newContext({
-      viewport: { width: vw, height: vh },
-      deviceScaleFactor: 1,
-      colorScheme: "dark"
-    });
-    const page = await context.newPage();
-    await page.setContent(payload.html, { waitUntil: "load" });
-    await page.evaluate(() => document.fonts ? document.fonts.ready : Promise.resolve());
-    if (payload.settle_ms > 0) {
-      await page.waitForTimeout(payload.settle_ms);
-    }
-    const root = page.locator(payload.selector || "#nuu-render-root").first();
-    const rect = await root.evaluate(el => {
-      const r = el.getBoundingClientRect();
-      return {
-        width: Math.ceil(Math.max(r.width, el.scrollWidth, el.offsetWidth)),
-        height: Math.ceil(Math.max(r.height, el.scrollHeight, el.offsetHeight))
-      };
-    });
-    if (rect.width + 64 > vw || rect.height + 64 > vh) {
-      await page.setViewportSize({
-        width: Math.max(vw, rect.width + 64),
-        height: Math.max(vh, rect.height + 64)
-      });
-    }
-    await root.screenshot({ path: payload.output, omitBackground: true });
-  } finally {
-    await browser.close();
-  }
-})().catch(() => process.exit(4));
-"""
-  proc = subprocess.run(
-    ["node", "-e", script],
-    input=json.dumps(
-      {
-        "html": html_doc,
-        "width": max(1, width),
-        "height": max(1, height),
-        "output": str(output_path),
-        "executable": chromium_bin,
-        "selector": selector,
-        "settle_ms": max(0, int(settle_ms)),
-      }
-    ),
-    text=True,
-    capture_output=True,
-    env=env,
-    timeout=30,
-    check=False,
-  )
-  return proc.returncode == 0 and output_path.is_file()
+  try:
+    from playwright.sync_api import sync_playwright
+
+    launch_kwargs = chromium_launch_kwargs(executable)
+  except Exception:
+    if mode == "chromium":
+      raise
+    return False
+
+  vw = max(1600, max(1, int(width)) + 64)
+  vh = max(900, max(1, int(height)) + 64)
+  try:
+    with sync_playwright() as pw:
+      browser = pw.chromium.launch(**launch_kwargs)
+      try:
+        context = browser.new_context(
+          viewport={"width": vw, "height": vh},
+          device_scale_factor=1,
+          color_scheme="dark",
+        )
+        page = context.new_page()
+        page.set_content(html_doc, wait_until="load")
+        page.evaluate("() => document.fonts ? document.fonts.ready : Promise.resolve()")
+        if settle_ms > 0:
+          page.wait_for_timeout(max(0, int(settle_ms)))
+        root = page.locator(selector or "#nuu-render-root").first
+        rect = root.evaluate(
+          """el => {
+            const r = el.getBoundingClientRect();
+            return {
+              width: Math.ceil(Math.max(r.width, el.scrollWidth, el.offsetWidth)),
+              height: Math.ceil(Math.max(r.height, el.scrollHeight, el.offsetHeight)),
+            };
+          }"""
+        )
+        if rect["width"] + 64 > vw or rect["height"] + 64 > vh:
+          page.set_viewport_size(
+            {
+              "width": max(vw, int(rect["width"]) + 64),
+              "height": max(vh, int(rect["height"]) + 64),
+            }
+          )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        root.screenshot(path=str(output_path), omit_background=True)
+        context.close()
+      finally:
+        browser.close()
+  except Exception:
+    if mode == "chromium":
+      raise
+    return False
+  return output_path.is_file()
 
 
 def _overlay_svg_and_nodes(
@@ -1667,40 +1635,52 @@ def build_design_boards(
   wireframe: bool = False,
   only=(),
   settle_ms: int = 80,
+  spec_obj: dict | None = None,
 ) -> dict:
-  if spec_path is None:
-    return {
-      "status": "failed",
-      "output": str(output_path),
-      "boards": [],
-      "findings": [
-        {
-          "id": "RUN102",
-          "severity": "error",
-          "message": "design board requires --spec <boards.json>",
-        }
-      ],
-      "writes": [],
-    }
-  spec_file = Path(spec_path).resolve()
-  if not spec_file.is_file():
-    return {
-      "status": "failed",
-      "output": str(output_path),
-      "boards": [],
-      "findings": [
-        {
-          "id": "RUN102",
-          "severity": "error",
-          "message": f"missing board spec: {spec_path}",
-        }
-      ],
-      "writes": [],
-    }
-  loaded = json.loads(spec_file.read_text(encoding="utf-8"))
-  if not isinstance(loaded, dict):
-    raise TypeError("board spec must be a JSON object")
-  spec_dir = spec_file.parent
+  if spec_obj is not None:
+    if not isinstance(spec_obj, dict):
+      raise TypeError("board spec must be a table/dict")
+    loaded = dict(spec_obj)
+    spec_dir = Path(project).resolve() if project else Path.cwd().resolve()
+  else:
+    if spec_path is None:
+      return {
+        "status": "failed",
+        "output": str(output_path),
+        "boards": [],
+        "findings": [
+          {
+            "id": "RUN102",
+            "severity": "error",
+            "message": "board requires --spec <boards.toml> or [[board.boards]]",
+          }
+        ],
+        "writes": [],
+      }
+    spec_file = Path(spec_path).resolve()
+    if not spec_file.is_file():
+      return {
+        "status": "failed",
+        "output": str(output_path),
+        "boards": [],
+        "findings": [
+          {
+            "id": "RUN102",
+            "severity": "error",
+            "message": f"missing board spec: {spec_path}",
+          }
+        ],
+        "writes": [],
+      }
+    raw_text = spec_file.read_text(encoding="utf-8")
+    loaded = (
+      tomllib.loads(raw_text)
+      if spec_file.suffix.lower() == ".toml"
+      else json.loads(raw_text)
+    )
+    if not isinstance(loaded, dict):
+      raise TypeError("board spec must decode to a table")
+    spec_dir = spec_file.parent
   project_root = Path(project).resolve() if project else spec_dir
   cfg_info = load_nuu_config(project_root)
   cfg_dir = cfg_info["dir"]
@@ -2108,38 +2088,273 @@ def build_design_boards(
   }
 
 
-def main(argv: list[str] | None = None) -> int:
-  parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-  parser.add_argument("-i", "--input", type=Path, required=True)
-  parser.add_argument("-o", "--output", type=Path, required=True)
-  parser.add_argument("-b", "--box", action="append", default=[])
-  parser.add_argument("-l", "--label", action="append", default=[])
-  parser.add_argument("-a", "--arrow", action="append", default=[])
-  parser.add_argument("-c", "--callout", action="append", default=[])
-  parser.add_argument("-C", "--crop")
-  parser.add_argument("-s", "--spec", type=Path)
-  parser.add_argument("-S", "--scale", type=int)
-  parser.add_argument("-p", "--project", type=Path)
-  args = parser.parse_args(argv)
-  try:
-    result = annotate_image(
+def run_annotate_cli(args, cfg_info: dict) -> int:
+  project_dir = cfg_info["dir"]
+  cfg_ann = cfg_info["config"]["annotate"]
+  scale = args.scale if args.scale is not None else int(cfg_ann.get("scale", 2))
+  crop = args.crop if args.crop is not None else cfg_ann.get("crop", "none")
+  if crop == "none":
+    crop = None
+  if args.input is not None:
+    if Path(args.input).resolve() == Path(args.output).resolve():
+      raise ValueError("annotate -o/--output must not overwrite -i/--input")
+    res = annotate_image(
       args.input,
       args.output,
       boxes=args.box,
       labels=args.label,
       arrows=args.arrow,
       callouts=args.callout,
-      spec_path=args.spec,
-      scale=args.scale,
-      project=args.project,
-      crop=args.crop,
+      scale=scale,
+      project=project_dir,
+      crop=crop,
+      renderer=resolve_renderer(),
     )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
-  except (OSError, ValueError, TypeError) as error:
-    print(json.dumps({"tool": "annotate", "status": "error", "error": str(error)}))
-    return 2
+  else:
+    import tempfile
+
+    from playwright.sync_api import sync_playwright
+
+    vp = parse_viewport_spec(args.viewport, cfg_info["config"]["audit"]["viewports"])
+    launch_kwargs = chromium_launch_kwargs(args.executable)
+    resolved_boxes: list[str] = []
+    resolved_labels: list[str] = []
+    resolved_arrows: list[str] = []
+    resolved_callouts: list[str] = []
+    resolved_crop = crop
+    with tempfile.TemporaryDirectory(prefix="nuu-ann-") as tmp_str:
+      tmp_png = Path(tmp_str) / "live-shot.png"
+      with sync_playwright() as pw:
+        browser = pw.chromium.launch(**launch_kwargs)
+        try:
+          ctx = browser.new_context(
+            viewport={"width": int(vp["width"]), "height": int(vp["height"])},
+            color_scheme="dark",
+            is_mobile=bool(vp.get("mobile")),
+            has_touch=bool(vp.get("touch")),
+          )
+          page = ctx.new_page()
+          page.goto(args.url, wait_until="domcontentloaded")
+          settle_page(page)
+
+          def _bbox(sel: str) -> dict[str, int]:
+            box = page.locator(sel).first.bounding_box()
+            if not box or box["width"] <= 0 or box["height"] <= 0:
+              raise ValueError(f"Selector has no visible bounding box: {sel}")
+            return {
+              "x": round(box["x"]),
+              "y": round(box["y"]),
+              "w": max(1, round(box["width"])),
+              "h": max(1, round(box["height"])),
+            }
+
+          for sel in args.selector:
+            b = _bbox(sel)
+            resolved_boxes.append(f"{b['x']},{b['y']},{b['w']},{b['h']},red")
+          for bspec in args.box:
+            parts = [p.strip() for p in bspec.rsplit(",", 1)]
+            if len(parts) == 2 and (
+              parts[1].lower() in COLORS or parts[1].startswith("#")
+            ):
+              sel_part, col_part = parts[0], parts[1]
+            else:
+              sel_part, col_part = bspec.strip(), "red"
+            if re.fullmatch(r"-?\d+,-?\d+,\d+,\d+", sel_part):
+              resolved_boxes.append(f"{sel_part},{col_part}")
+            else:
+              b = _bbox(sel_part)
+              resolved_boxes.append(f"{b['x']},{b['y']},{b['w']},{b['h']},{col_part}")
+          for lspec in args.label:
+            if re.match(r"^-?\d+,-?\d+,", lspec):
+              resolved_labels.append(lspec)
+            else:
+              tokens = [p.strip() for p in lspec.split(",")]
+              if len(tokens) >= 3 and (
+                tokens[-1].lower() in COLORS or tokens[-1].startswith("#")
+              ):
+                sel_part, txt_part, col_part = (
+                  tokens[0],
+                  ",".join(tokens[1:-1]),
+                  tokens[-1],
+                )
+              elif len(tokens) >= 2:
+                sel_part, txt_part, col_part = tokens[0], ",".join(tokens[1:]), "red"
+              else:
+                raise ValueError(f"Invalid live label spec: {lspec}")
+              b = _bbox(sel_part)
+              resolved_labels.append(
+                f"{b['x']},{max(0, b['y'] - 28)},{txt_part},{col_part}"
+              )
+          for aspec in args.arrow:
+            if re.match(r"^-?\d+,-?\d+,-?\d+,-?\d+", aspec):
+              resolved_arrows.append(aspec)
+            else:
+              tokens = [p.strip() for p in aspec.split(",")]
+              if len(tokens) == 3 and (
+                tokens[2].lower() in COLORS or tokens[2].startswith("#")
+              ):
+                s1, s2, col_part = tokens[0], tokens[1], tokens[2]
+              elif len(tokens) == 2:
+                s1, s2, col_part = tokens[0], tokens[1], "red"
+              else:
+                raise ValueError(f"Invalid live arrow spec: {aspec}")
+              b1, b2 = _bbox(s1), _bbox(s2)
+              x1, y1 = b1["x"] + b1["w"] // 2, b1["y"] + b1["h"] // 2
+              x2, y2 = b2["x"] + b2["w"] // 2, b2["y"] + b2["h"] // 2
+              resolved_arrows.append(f"{x1},{y1},{x2},{y2},{col_part}")
+          for cspec in args.callout:
+            if re.match(r"^-?\d+,-?\d+,\d+", cspec):
+              resolved_callouts.append(cspec)
+            else:
+              tokens = [p.strip() for p in cspec.split(",")]
+              if len(tokens) < 2:
+                raise ValueError(f"Invalid live callout spec: {cspec}")
+              b = _bbox(tokens[0])
+              rest = ",".join(tokens[1:])
+              resolved_callouts.append(f"{b['x']},{b['y']},{rest}")
+          if (
+            isinstance(crop, str)
+            and crop not in {"auto", "pad", "none"}
+            and not re.fullmatch(r"\d+,\d+,\d+,\d+", crop)
+          ):
+            c_parts = [p.strip() for p in crop.rsplit(",", 1)]
+            if len(c_parts) == 2 and c_parts[1].isdigit():
+              c_sel, pad_px = c_parts[0], int(c_parts[1])
+            else:
+              c_sel, pad_px = crop.strip(), 16
+            b = _bbox(c_sel)
+            cx = max(0, b["x"] - pad_px)
+            cy = max(0, b["y"] - pad_px)
+            cw = min(int(vp["width"]) - cx, b["w"] + 2 * pad_px)
+            ch = min(int(vp["height"]) - cy, b["h"] + 2 * pad_px)
+            resolved_crop = f"{cx},{cy},{cw},{ch}"
+
+          page.screenshot(path=str(tmp_png))
+          ctx.close()
+        finally:
+          browser.close()
+      res = annotate_image(
+        tmp_png,
+        args.output,
+        boxes=resolved_boxes,
+        labels=resolved_labels,
+        arrows=resolved_arrows,
+        callouts=resolved_callouts,
+        scale=scale,
+        project=project_dir,
+        crop=resolved_crop,
+        renderer=resolve_renderer(),
+      )
+  print(
+    f"# Annotation Complete\n\n"
+    f"- Output: `{res['output']}`\n"
+    f"- Dimensions: `{res['width']}x{res['height']}`\n"
+    f"- Renderer: `{res['renderer']}`\n"
+    f"- Scale: `{res['scale']}`\n",
+    end="",
+  )
+  return 0
 
 
-if __name__ == "__main__":
-  sys.exit(main())
+def run_board_cli(args, cfg_info: dict) -> int:
+  project_dir = cfg_info["dir"]
+  cfg_board = cfg_info["config"]["board"]
+  board_type = args.type or cfg_board.get("type", "panels")
+  columns = (
+    args.columns if args.columns is not None else int(cfg_board.get("columns", 2))
+  )
+  scale = args.scale if args.scale is not None else int(cfg_board.get("scale", 2))
+  wireframe = (
+    bool(args.wireframe)
+    if args.wireframe is not None
+    else bool(cfg_board.get("wireframe", False))
+  )
+  spec_data: dict | None = None
+  spec_base_dir = project_dir
+  if args.spec is not None:
+    spec_file = Path(args.spec).resolve()
+    if not spec_file.is_file():
+      raise FileNotFoundError(f"RUN102: Board spec file not found: {args.spec}")
+    spec_data = tomllib.loads(spec_file.read_text(encoding="utf-8"))
+    spec_base_dir = spec_file.parent
+  elif cfg_board.get("boards"):
+    spec_data = {"board": cfg_board}
+
+  if spec_data is not None and (
+    "boards" in spec_data
+    or (isinstance(spec_data.get("board"), dict) and spec_data["board"].get("boards"))
+  ):
+    b_root = (
+      spec_data.get("board") if isinstance(spec_data.get("board"), dict) else spec_data
+    )
+    shots_map = b_root.get("shots") or spec_data.get("shots") or {}
+    boards_list = b_root.get("boards") or spec_data.get("boards") or []
+    sheet_override = b_root.get("stylesheet") or spec_data.get("stylesheet")
+    icons_override = b_root.get("icons") or spec_data.get("icons")
+    spec_payload: dict = {
+      "stylesheet": str(sheet_override)
+      if sheet_override
+      else str(cfg_info["stylesheet_path"]),
+      "shots": shots_map,
+      "boards": boards_list,
+    }
+    if icons_override:
+      spec_payload["icons"] = icons_override
+    res = build_design_boards(
+      args.output,
+      spec_path=None,
+      spec_obj=spec_payload,
+      project=spec_base_dir,
+      wireframe=wireframe,
+      only=args.only,
+    )
+  else:
+    if str(board_type) not in {"panels", "0", "10"} and not args.panel:
+      res = build_design_boards(
+        args.output,
+        spec_path=None,
+        spec_obj={
+          "stylesheet": str(cfg_info["stylesheet_path"]),
+          "shots": cfg_board.get("shots") or {},
+          "boards": [
+            {
+              "name": Path(args.output).stem or f"board-{board_type}",
+              "type": str(board_type),
+              "title": args.title or f"Board ({board_type})",
+              "frames": [],
+            }
+          ],
+        },
+        project=project_dir,
+        wireframe=wireframe,
+        only=args.only,
+      )
+    else:
+      res = build_board(
+        args.output,
+        title=args.title,
+        panels=args.panel,
+        callouts=args.callout,
+        spec_path=None,
+        columns=columns,
+        scale=scale,
+        project=project_dir,
+        wireframe=wireframe,
+      )
+  if res.get("status") == "failed":
+    lines = ["# Board Failed\n"]
+    for item in res.get("findings") or []:
+      lines.append(
+        f"- `{item.get('id', 'RUN102')}` ({item.get('severity', 'error')}): {item.get('message', '')}"
+      )
+    print("\n".join(lines) + "\n", end="")
+    return 1
+  print(
+    f"# Board Composed\n\n"
+    f"- Output: `{res['output']}`\n"
+    f"- Dimensions: `{res['width']}x{res['height']}`\n"
+    f"- Renderer: `{res['renderer']}`\n"
+    f"- Font: `{res.get('font_family', '')}`\n",
+    end="",
+  )
+  return 0

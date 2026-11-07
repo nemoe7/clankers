@@ -34,7 +34,7 @@ def test_release_pipeline():
     git("init", "-b", "main")
     git("config", "user.name", "Check")
     git("config", "user.email", "check@example.invalid")
-    Path("data").write_text("root marker\n")
+    Path("data").write_text("root marker\n", encoding="utf-8")
     git("add", ".")
     git("commit", "-q", "-m", "feat: root change")
     root = git("rev-parse", "HEAD")
@@ -44,11 +44,11 @@ def test_release_pipeline():
     fails(lambda: release.tag_sha("1.0.0"), "Push that exact tag before dispatch")
 
     git("checkout", "-b", "side")
-    Path("side").write_text("side marker\n")
+    Path("side").write_text("side marker\n", encoding="utf-8")
     git("add", ".")
     git("commit", "-q", "-m", "feat: side change")
     git("checkout", "main")
-    Path("data").write_text("root marker\nnext marker\n")
+    Path("data").write_text("root marker\nnext marker\n", encoding="utf-8")
     Path("binary").write_bytes(b"\0\1\2\3")
     git("add", ".")
     git("commit", "-q", "-m", "feat: next change")
@@ -930,7 +930,7 @@ def test_release_pipeline():
   )
   assert release.release_template("") is release.INITIAL_TEMPLATE
   assert release.release_template("abc") is release.TEMPLATE
-  workflow = (release.HERE / "gemini-release.yml").read_text()
+  workflow = (release.HERE / "gemini-release.yml").read_text(encoding="utf-8")
   assert "python .github/workflows/gemini_release.py" in workflow
   assert "python github/workflows" not in workflow
   assert release.version_tag("0.2.1") == "v0.2.1"
@@ -967,7 +967,7 @@ def test_release_pipeline():
   ):
     sample["tag"] = "v0.1.0"
     release.propose("owner/repo", "main")
-    stored = json.loads(Path(directory, "proposal.json").read_text())
+    stored = json.loads(Path(directory, "proposal.json").read_text(encoding="utf-8"))
     assert stored["target"] == "a" * 40 and stored["version"] == "0.1.0"
     assert stored["body"] == "## Summary\n\ntest\n\n"
     assert notes.call_count == 1, "the override avoids a classifier call"
@@ -1002,7 +1002,7 @@ def test_release_pipeline():
       release.propose("owner/repo", "main")
     assert len(proposal_context) == 1
     assert proposal_context[0]["previous_release_notes"] == previous_notes
-    stored = json.loads(Path(directory, "proposal.json").read_text())
+    stored = json.loads(Path(directory, "proposal.json").read_text(encoding="utf-8"))
     assert stored["baseline_release"] == baseline_record
   # The auto proposal reduces raw evidence once, then makes one structured request for
   # both the SemVer impact and release body.
@@ -1150,17 +1150,19 @@ def test_evidence_scope():
         json.dumps({"include": [], "exclude": ["private/**"]}), encoding="utf-8"
       )
       Path("product").mkdir()
-      Path("product/root.txt").write_text("root evidence\n")
+      Path("product/root.txt").write_text("root evidence\n", encoding="utf-8")
       root = commit("feat: root change")
       Path(".agents").mkdir()
-      Path(".agents/only.txt").write_text("agent-only evidence\n")
+      Path(".agents/only.txt").write_text("agent-only evidence\n", encoding="utf-8")
       commit("feat: agent-only change")
-      Path("product/visible.txt").write_text("visible evidence\n")
-      Path(".agents/secret.txt").write_text("excluded evidence\n")
+      Path("product/visible.txt").write_text("visible evidence\n", encoding="utf-8")
+      Path(".agents/secret.txt").write_text("excluded evidence\n", encoding="utf-8")
       mixed = commit("feat: mixed change")
-      Path("product/skipped.txt").write_text("skip evidence\n")
+      Path("product/skipped.txt").write_text("skip evidence\n", encoding="utf-8")
       commit("feat: skip release\n\nRelease-note: skip")
-      Path("product/not-skipped.txt").write_text("non-exact trailer evidence\n")
+      Path("product/not-skipped.txt").write_text(
+        "non-exact trailer evidence\n", encoding="utf-8"
+      )
       not_skipped = commit("feat: do not skip\n\nRelease-note: skipped")
       scoped_target = git("rev-parse", "HEAD")
       policy = release.load_evidence_policy(policy_path)
@@ -1184,7 +1186,7 @@ def test_evidence_scope():
         )
       ]
       Path("unowned").mkdir()
-      Path("unowned/change.txt").write_text("unknown evidence\n")
+      Path("unowned/change.txt").write_text("unknown evidence\n", encoding="utf-8")
       unknown = commit("feat: unknown path")
       with (
         tempfile.TemporaryDirectory() as artifacts,

@@ -78,6 +78,26 @@ def build_plan(overrides=None):
   return {"domains": domains, "targets": list(targets.values())}
 
 
+def validate_domains(domains, script, environment):
+  """Run the existing source validation for each planned domain."""
+  failed = False
+  for domain in domains:
+    env = environment | {
+      "REPOS_FALLBACK": "",
+      "SKILL_ROOT": "skills",
+      "SKILL_DEST_ROOT": ".agents/skills",
+      "SRC_ROOT": "github/workflows",
+      "DEST_ROOT": ".github/workflows",
+      "VALIDATE_ONLY": "true",
+      "GITHUB_ACTION_PATH": str(script.parent),
+    }
+    env.update({field.upper(): domain[field] for field in ("repos", *FIELDS)})
+    failed |= (
+      subprocess.run(["bash", str(script)], env=env, check=False).returncode != 0
+    )
+  return int(failed)
+
+
 def push_targets(targets, script, environment):
   if not isinstance(targets, list) or not targets:
     raise ValueError("The target plan must be a nonempty array")
@@ -124,14 +144,21 @@ def push_targets(targets, script, environment):
 
 
 def main():
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   if sys.argv[1:] == ["--push"]:
     targets = json.loads(os.environ["TARGETS_JSON"])
     return push_targets(targets, Path(__file__).with_name("sync.sh"), dict(os.environ))
-  if sys.argv[1:]:
-    raise ValueError("Expected no argument or --push")
   plan = build_plan(
     {domain: os.environ.get(name, "") for domain, name in INPUTS.items()}
   )
+  if sys.argv[1:] == ["--validate"]:
+    return validate_domains(
+      plan["domains"], Path(__file__).with_name("sync.sh"), dict(os.environ)
+    )
+  if sys.argv[1:]:
+    raise ValueError("Expected no argument, --validate, or --push")
   with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
     output.write("matrix=" + json.dumps({"include": plan["domains"]}) + "\n")
     output.write("targets=" + json.dumps(plan["targets"]) + "\n")

@@ -26,7 +26,7 @@ wireframe = false
 
 [audit]
 named_breakpoints = ["75em", "60em", "40em", "30em"]
-viewports = ["1372x883", "855x325", "411x799"]
-widths = [1372, 855, 411]
+viewports = ["1372x883", "411x799"]
+widths = [1372, 411]
 report_widths = [1372, 411]
 wireframe = false

@@ -4,6 +4,58 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.3]
+
+### Added
+
+- Seed baseline prose under `skills/refs/arena-steering/` and add worked report-label examples in `references/report-labels.md`.
+
+### Changed
+
+- Require final-decision labels on report questions and options, forbidding question strings and placeholder labels.
+
+- Decode child-process text pipes as strict UTF-8 and reconfigure CLI streams to UTF-8 on Windows.
+
+- Align Steering modals, timestamps, edge fades, live dot, busy state, dark tooltips, and filter persistence with Nuu recipes.
+
+- Grade survey fields with salted SHA-256 substrings, split `S2E5P` names, and simplify the survey modal.
+
+- Parse inline code spans in report field questions and options, and align option inputs with line one.
+
+- Retry failed browser write actions automatically three times with the same request ID, removing manual retry controls.
+
+- Name unnamed and pasted composer uploads with epoch milliseconds and prepend `{messageID}-` on disk after send.
+
+- Relocate task-linked files under `uploads/{taskID}/` and mark missing files `(lost)` dynamically.
+
+- Set link color to `#299bff`, restore solid disc message markers, and lower the mobile `New reply` pill.
+
+- Remove `855x325` from Nuu audit viewports and lock mobile orientation to portrait.
+
+- Share parent-chip rendering, Lucide SVG icons, scroll-jump pills, and borderless button classes across Steering views.
+
+- Remove default boxes on contained Steering buttons, gating interactive hover fills to fine pointers while keeping press fills.
+
+- Load survey question text from `skills/arena-steering/references/survey-questions.txt` for shared consumption with Arena prompt fill.
+
+- Move `README.md` to `docs/arena-steering/README.md` and rewrite it for human readers.
+
+- Update the Messages unseen-reply indicator optimistically while receipts are pending, restore it on failure, and preserve newer acknowledgement revisions.
+
+- Match Mermaid diagram appearance across thumbnails and the modal viewer, using the code-block surface in the modal.
+
+- Enforce `{repo} - Steering` as the `start_process` name for `steer serve`.
+
+- Require an explicit task size whenever task details are added or removed.
+
+- Suppress the mobile browser tap overlay across the v2 interface.
+
+- Align desktop Reports sidebars with the top of the report content.
+
+- Enlarge and inset the mobile Reports submit button, keeping it above the keyboard.
+
+- Share ID chip styling and remove the composer Parents label.
+
 ## [2.2.2]
 
 ### Changed

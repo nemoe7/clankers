@@ -1,3 +1,40 @@
+const MIME_EXT_MAP = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/svg+xml": ".svg",
+  "image/bmp": ".bmp",
+  "image/avif": ".avif",
+  "text/plain": ".txt",
+  "text/markdown": ".md",
+  "application/json": ".json",
+  "application/pdf": ".pdf",
+};
+
+function inferUploadExtension(file) {
+  const rawName = String(file?.name || "").trim();
+  const dot = rawName.lastIndexOf(".");
+  if (dot >= 0 && dot < rawName.length - 1) {
+    const ext = rawName.slice(dot).replace(/[^A-Za-z0-9.]/g, "").slice(0, 20);
+    if (ext.length > 1) return ext.toLowerCase();
+  }
+  const mime = String(file?.type || "").split(";", 1)[0].trim().toLowerCase();
+  return MIME_EXT_MAP[mime] || ".bin";
+}
+
+function normalizeComposerFile(file, epochMs) {
+  const rawName = String(file?.name || "").split(/[\\/]/).pop().trim();
+  const dot = rawName.lastIndexOf(".");
+  const stem = (dot > 0 ? rawName.slice(0, dot) : dot === 0 ? "" : rawName).replace(/^[.-]+|[.-]+$/g, "");
+  if (stem) return file;
+  const fallbackName = `${epochMs}${inferUploadExtension(file)}`;
+  if (typeof File === "function" && file instanceof Blob) {
+    return new File([file], fallbackName, { type: file.type || "" });
+  }
+  return { ...file, name: fallbackName };
+}
+
 // Track staged file uploads independently of the composer view.
 export function createComposerUploads(store, uploadFile) {
   let nextId = 0;
@@ -9,13 +46,13 @@ export function createComposerUploads(store, uploadFile) {
     if (item?.previewUrl && typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(item.previewUrl);
   };
 
-  function upload(id, automaticRetry = false) {
+  function upload(id) {
     if (inflight.has(id)) return inflight.get(id);
     const item = entries().find((entry) => entry.id === id);
     if (!item) return Promise.resolve();
     const request = (async () => {
       try {
-        const attachment = await uploadFile(item.file, { automaticRetry });
+        const attachment = await uploadFile(item.file);
         if (!attachment) throw new Error("Upload returned no attachment");
         update(entries().map((entry) =>
           entry.id === id ? { ...entry, status: "ready", attachment } : entry));
@@ -34,7 +71,9 @@ export function createComposerUploads(store, uploadFile) {
 
   return {
     async stage(files) {
-      const added = Array.from(files || [], (file) => {
+      const baseMs = Date.now();
+      const added = Array.from(files || [], (rawFile, idx) => {
+        const file = normalizeComposerFile(rawFile, baseMs + idx);
         const image = /^image\//i.test(file.type || "") || /\.(?:png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i.test(file.name || "");
         let previewUrl = "";
         if (image && typeof URL.createObjectURL === "function") {
@@ -45,13 +84,6 @@ export function createComposerUploads(store, uploadFile) {
       update([...entries(), ...added]);
       await Promise.all(added.map((entry) => upload(entry.id)));
     },
-    async retry(id) {
-      const item = entries().find((entry) => entry.id === id);
-      if (!item || item.status !== "failed") return;
-      update(entries().map((entry) =>
-        entry.id === id ? { ...entry, status: "uploading" } : entry));
-      await upload(id);
-    },
     async readyForSend(ids) {
       await Promise.all(ids.map((id) => inflight.get(id)).filter(Boolean));
       const failed = ids.filter((id) => entries().find((entry) => entry.id === id)?.status === "failed");
@@ -59,7 +91,7 @@ export function createComposerUploads(store, uploadFile) {
         const failedSet = new Set(failed);
         update(entries().map((entry) =>
           failedSet.has(entry.id) ? { ...entry, status: "uploading" } : entry));
-        await Promise.all(failed.map((id) => upload(id, true)));
+        await Promise.all(failed.map((id) => upload(id)));
       }
       const selected = ids.map((id) => entries().find((entry) => entry.id === id));
       if (selected.some((entry) => !entry || entry.status !== "ready")) {

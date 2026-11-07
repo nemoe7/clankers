@@ -7,18 +7,23 @@ import {
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
-import { reconcileElement } from "./dom.js";
+import { reconcileElement, renderParentChip } from "./dom.js";
 import { readComposerDraft, writeComposerDraft } from "./state.js";
 
-const EYE_OPEN_SVG = `<svg class="lucide lucide-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
-const EYE_CLOSED_SVG = `<svg class="lucide lucide-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>`;
-const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></svg>`;
-const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const EXPAND_SVG = `<svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>`;
-const COLLAPSE_SVG = `<svg class="lucide lucide-minimize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 10 7-7"></path><path d="M20 10h-6V4"></path><path d="m3 21 7-7"></path><path d="M4 14h6v6"></path></svg>`;
-const FILE_SVG = `<svg class="lucide lucide-file-text" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"></path><path d="M14 2v6h6"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>`;
-const SEND_SVG = `<svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>`;
-const SENDING_SVG = `<svg class="lucide lucide-loader-circle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>`;
+import {
+  ARROW_DOWN_SVG,
+  ARROW_UP_SVG as SEND_SVG,
+  CHECK_SVG,
+  COLLAPSE_SVG,
+  EXPAND_SVG,
+  EYE_CLOSED_SVG,
+  EYE_OPEN_SVG,
+  FILE_SVG,
+  MARKDOWN_SVG,
+  PAPERCLIP_SVG,
+  SENDING_SVG,
+  SKIP_FORWARD_SVG,
+} from "./icons.js";
 
 const AGENT_QUIET_MS = 180_000;
 const AGENT_CALL_MS = 1_920_000;
@@ -54,7 +59,15 @@ export function paintConnection(container, connection) {
   if (!dot || !text) return;
   const current = connectionPresentation(connection);
   dot.dataset.state = current.state;
-  dot.setAttribute("aria-label", current.label);
+  if (current.label === current.text) {
+    dot.setAttribute("aria-hidden", "true");
+    dot.removeAttribute("role");
+    dot.removeAttribute("aria-label");
+  } else {
+    dot.removeAttribute("aria-hidden");
+    dot.setAttribute("role", "img");
+    dot.setAttribute("aria-label", current.label);
+  }
   text.textContent = current.text;
 }
 
@@ -87,6 +100,13 @@ let historyScrollTarget = null;
 let historyScrollHandler = null;
 const renderedMessageSignatures = new WeakMap();
 const pendingReplyReceipts = new Set();
+const optimisticReplyRevisions = new Map();
+let latestTrackedMessages = [];
+
+function isReplySeen(msg) {
+  return Boolean(msg.replies_seen) ||
+    (Boolean(msg.replies_revision) && optimisticReplyRevisions.get(msg.id) === msg.replies_revision);
+}
 
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !replyObserver) return;
@@ -123,23 +143,31 @@ function renderComposerAttachment(item, sending) {
   return `<span class="composer-attachment-chip" data-upload-status="${escapeHtml(item.status)}">
     ${lead}
     <span class="composer-attachment-name" title="${name}">${name} · ${escapeHtml(attachmentState(item))}</span>
-    ${item.status === "failed" ? `<button type="button" data-retry-composer-attachment="${escapeHtml(item.id)}" aria-label="Retry ${name}" ${sending ? "disabled" : ""}>Retry</button>` : ""}
     <button type="button" data-remove-composer-attachment="${escapeHtml(item.id)}" aria-label="Remove ${name}" ${sending ? "disabled" : ""}>×</button>
   </span>`;
 }
 
-function parentControls(type, id) {
-  const label = escapeHtml(`${type} ${id}`);
-  return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
-}
+
 
 export function messageQueryKey(state) {
   return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
 }
 
 export function trackMessageAcks(messages) {
-  const unseen = (messages || []).filter((msg) => (msg.acks || []).length && !msg.replies_seen);
+  latestTrackedMessages = Array.isArray(messages) ? messages : [];
+  for (const msg of latestTrackedMessages) {
+    if (msg.replies_seen && optimisticReplyRevisions.get(msg.id) === msg.replies_revision) {
+      optimisticReplyRevisions.delete(msg.id);
+    }
+  }
+  const unseen = latestTrackedMessages.filter((msg) => (msg.acks || []).length && !isReplySeen(msg));
   unreadEditedMsgId = unseen.at(-1)?.id || null;
+}
+
+function syncUnreadEditedButton(root = typeof document !== "undefined" ? document : null) {
+  trackMessageAcks(latestTrackedMessages);
+  const button = root?.querySelector?.("#log-edited");
+  if (button) button.hidden = !unreadEditedMsgId;
 }
 
 function highlightSearchMatches(root, rawQuery) {
@@ -293,12 +321,12 @@ export function renderMessagesView(container, state, handlers) {
     ? state.composerAttachments.filter(item => !sentAttachmentIds.has(item.id))
     : [];
   const composerExpanded = Boolean(state.composerExpanded);
-  const pendingSend = state.pendingSend;
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
   const skipPollBad = skipPollFailure && Date.now() < skipPollFailure.until;
 
   const optimistic = state.optimisticMessage;
   const messages = state.messages || [];
+  trackMessageAcks(messages.filter((msg) => showHidden || !msg.hidden));
   const optimisticMatches = optimistic && (!query || [optimistic.body, ...(optimistic.parent_ids || []), ...(optimistic.parent_refs || []).map(ref => ref.id)].some(value => String(value || "").toLowerCase().includes(query)));
   const alreadyVisible = optimistic?.serverId && messages.some(message => message.id === optimistic.serverId);
   const visibleMessages = optimisticMatches && !alreadyVisible ? [...messages, optimistic] : messages;
@@ -345,26 +373,27 @@ export function renderMessagesView(container, state, handlers) {
             ? `<span class="receipt-file">${attachments
                 .map((att) => {
                   const name = escapeHtml(att.name || "");
-                  const preview = att.present !== false && typeof att.url === "string"
+                  const isLost = Boolean(att.lost) || att.present === false;
+                  const preview = !isLost && typeof att.url === "string"
                     && att.url.startsWith("/static/uploads/")
                     && /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(String(att.name || ""));
                   const displayName = renderAttachmentName(att.name);
                   if (preview) {
                     return `<button class="message-attachment-preview" type="button" aria-label="View image ${name}"><img src="${escapeHtml(att.url)}" alt="" loading="lazy" decoding="async"><span class="message-attachment-name">${displayName}</span></button>`;
                   }
-                  return `<span class="message-attachment-file"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${att.present === false ? " (missing)" : ""}</span></span>`;
+                  return `<span class="message-attachment-file"><span class="message-attachment-file-icon" aria-hidden="true">${FILE_SVG}</span><span class="receipt-filename"><span class="message-attachment-name">${displayName}</span>${isLost ? " (lost)" : ""}</span></span>`;
                 })
                 .join("")}</span>`
             : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
-            ? `<span class="receipt-task-links">${linkedTasks.map((tid) => parentControls("task", tid)).join(" ")}</span>`
+            ? `<span class="receipt-task-links">${linkedTasks.map((tid) => renderParentChip("task", tid)).join(" ")}</span>`
             : "";
           const parentRefs = Array.isArray(msg.parent_refs) && msg.parent_refs.length
             ? msg.parent_refs
             : (msg.parent_ids || []).map((id) => ({ type: "message", id }));
           const parentsSuffix = parentRefs.length
-            ? `<span class="message-parents" aria-label="Message parents">${parentRefs.map((ref) => parentControls(ref.type, ref.id)).join(" ")}</span>`
+            ? `<span class="message-parents" aria-label="Message parents">${parentRefs.map((ref) => renderParentChip(ref.type, ref.id)).join(" ")}</span>`
             : "";
           const replySelected = isParentSelected("message", msg.id);
           messageSignatures.set(msg.id, JSON.stringify({ msg, linkedTasks, selectedParentRefs, query }));
@@ -411,8 +440,8 @@ export function renderMessagesView(container, state, handlers) {
         <div class="row log-toolbar">
           <div class="stack">
             <p id="connection" role="status">
-              <button id="survey-open" type="button" aria-label="Open survey results" title="Open survey results">
-                <span id="connection-dot" class="dot" data-state="connecting" role="img" aria-label="Connecting"></span>
+              <button id="survey-open" class="quiet-btn" type="button" aria-label="Open survey results" title="Open survey results">
+                <span id="connection-dot" class="dot" data-state="connecting" aria-hidden="true"></span>
               </button>
               <span id="connection-text">Connecting…</span>
             </p>
@@ -428,7 +457,7 @@ export function renderMessagesView(container, state, handlers) {
             />
             <button
               id="skip-poll"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               ${skipPollGood ? 'data-state="good"' : skipPollBad ? 'data-state="bad"' : ""}
               ${skipPollPending ? 'disabled aria-busy="true"' : ""}
@@ -439,7 +468,7 @@ export function renderMessagesView(container, state, handlers) {
             </button>
             <button
               id="quiet-msgs"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-pressed="${showHidden ? "true" : "false"}"
               aria-label="${showHidden ? "Hide hidden messages" : "Show hidden messages"}"
@@ -450,14 +479,14 @@ export function renderMessagesView(container, state, handlers) {
           </span>
         </div>
         <div class="log-scroll">
-          <button id="log-edited" class="log-edited" type="button" aria-live="polite" ${unreadEditedMsgId ? "" : "hidden"}>New reply</button>
+          <button id="log-edited" class="scroll-jump-btn log-edited" type="button" aria-live="polite" ${unreadEditedMsgId ? "" : "hidden"}>New reply</button>
           <ol id="history" aria-label="Messages, oldest first">
             <li ${hasOlderMessages ? "" : "hidden"}><button id="load-older-messages" type="button">Show older messages</button></li>
             <li role="alert" ${state.messagesError ? "" : "hidden"}>${escapeHtml(state.messagesError || "")}</li>
             ${historyHtml}
           </ol>
-          <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" hidden>
-            <svg class="lucide lucide-arrow-down" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+          <button id="log-newest" class="scroll-jump-btn log-newest" type="button" aria-label="Scroll to bottom" hidden>
+            ${ARROW_DOWN_SVG}
           </button>
         </div>
         <p id="log-empty" class="receipt" role="status" ${visibleMessages.length || state.messagesError || state.messagesLoading ? "hidden" : ""}>${query ? "No matching messages." : "No messages yet."}</p>
@@ -471,16 +500,14 @@ export function renderMessagesView(container, state, handlers) {
             aria-label="Selected parents"
             ${selectedParentRefs.length ? "" : "hidden"}
           >
-            <span class="composer-reply-label">Parents</span>
             ${selectedParentRefs
               .map(
                 (ref) =>
-                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent">${escapeHtml(ref.id)}</button>`
+                  `<button type="button" class="composer-reply-chip" data-parent-type="${escapeHtml(ref.type)}" data-parent-id="${escapeHtml(ref.id)}" aria-label="Remove ${escapeHtml(ref.type)} ${escapeHtml(ref.id)} as parent"><code>${escapeHtml(ref.id)}</code></button>`
               )
               .join("")}
           </div>
           ${state.composerError ? `<div class="composer-send-status" role="status">${escapeHtml(state.composerError)}</div>` : ""}
-          ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="Original send might have succeeded">Discard retry</button></div>` : ""}
           <div class="composer-shell">
             <div
               id="composer-attachments"
@@ -490,25 +517,25 @@ export function renderMessagesView(container, state, handlers) {
             >${composerAttachments.map((item) => renderComposerAttachment(item, state.sending)).join("")}</div>
             <button
               id="attach-file"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-label="Attach file"
               title="Attach file"
               ${state.sending ? "disabled" : ""}
             >
-              <svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg>
+              ${PAPERCLIP_SVG}
             </button>
             <input id="composer-file-input" type="file" multiple hidden />
             <button
               id="preview-msg"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-pressed="${draftPreviewActive ? "true" : "false"}"
               aria-controls="draft-preview"
               aria-label="Preview Markdown"
               title="Preview Markdown"
             >
-              <svg class="markdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>
+              ${MARKDOWN_SVG}
             </button>
             <textarea
               id="msg"
@@ -528,7 +555,7 @@ export function renderMessagesView(container, state, handlers) {
             >${draftPreviewActive && draftPreviewCache.text === draftValue ? draftPreviewCache.html : ""}</div>
             <button
               id="composer-expand"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-expanded="${composerExpanded ? "true" : "false"}"
               aria-label="${composerExpanded ? "Collapse composer" : "Expand composer"}"
@@ -540,7 +567,7 @@ export function renderMessagesView(container, state, handlers) {
             </button>
             <button
               id="send"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="submit"
               aria-label="${state.sending ? "Sending message" : "Send message"}"
               title="${state.sending ? "Sending message" : "Send message"}"
@@ -668,6 +695,7 @@ export function renderMessagesView(container, state, handlers) {
   if (historyEl && typeof IntersectionObserver === "function") {
     replyObserver = new IntersectionObserver((entries) => {
       if (document.visibilityState !== "visible" || container.hidden) return;
+      let changed = false;
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         const id = entry.target.dataset.replyId;
@@ -675,9 +703,24 @@ export function renderMessagesView(container, state, handlers) {
         const key = `${id}:${revision}`;
         if (!id || !revision || pendingReplyReceipts.has(key)) continue;
         pendingReplyReceipts.add(key);
+        optimisticReplyRevisions.set(id, revision);
+        changed = true;
         Promise.resolve(handlers.onMarkRepliesSeen?.(id, revision))
+          .then(() => {
+            if (handlers.onMarkRepliesSeen && optimisticReplyRevisions.get(id) === revision) {
+              optimisticReplyRevisions.delete(id);
+            }
+            syncUnreadEditedButton(container.isConnected ? container : document);
+          })
+          .catch(() => {
+            if (optimisticReplyRevisions.get(id) === revision) {
+              optimisticReplyRevisions.delete(id);
+            }
+            syncUnreadEditedButton(container.isConnected ? container : document);
+          })
           .finally(() => pendingReplyReceipts.delete(key));
       }
+      if (changed) syncUnreadEditedButton(container);
     }, { root: historyEl });
     historyEl.querySelectorAll(".reply-seen-sentinel").forEach((el) => replyObserver.observe(el));
   }
@@ -702,8 +745,18 @@ export function renderMessagesView(container, state, handlers) {
     logNewestBtn.hidden = true;
   });
 
-  listen(logEditedBtn, "click", () => {
-    if (unreadEditedMsgId) handlers.onNavigateReference?.("message", unreadEditedMsgId);
+  listen(logEditedBtn, "click", async () => {
+    const targetId = unreadEditedMsgId;
+    if (!targetId) return;
+    await handlers.onNavigateReference?.("message", targetId);
+    const root = container.isConnected ? container : document;
+    const sentinel = root?.querySelector?.(
+      `.message[data-msg-id="${CSS.escape(targetId)}"] .reply-seen-sentinel`
+    );
+    if (sentinel && replyObserver) {
+      replyObserver.unobserve(sentinel);
+      replyObserver.observe(sentinel);
+    }
   });
 
   for (const chip of container.querySelectorAll(
@@ -713,12 +766,6 @@ export function renderMessagesView(container, state, handlers) {
       handlers.onRemoveComposerAttachment?.(
         chip.dataset.removeComposerAttachment
       );
-    });
-  }
-
-  for (const button of container.querySelectorAll("[data-retry-composer-attachment]")) {
-    listen(button, "click", () => {
-      handlers.onRetryComposerAttachment?.(button.dataset.retryComposerAttachment);
     });
   }
 
@@ -946,18 +993,45 @@ export function renderMessagesView(container, state, handlers) {
     const pastedText = event.clipboardData?.getData("text/plain") || "";
     if (files.length) {
       if (!pastedText) event.preventDefault();
-      await handlers.onStageComposerFiles?.(files);
+      const baseMs = Date.now();
+      const unnamedFiles = files.map((file, idx) => {
+        const rawName = String(file?.name || "").trim();
+        const dot = rawName.lastIndexOf(".");
+        const nameExt = dot >= 0 && dot < rawName.length - 1
+          ? rawName.slice(dot).replace(/[^A-Za-z0-9.]/g, "").slice(0, 20).toLowerCase()
+          : "";
+        const mime = String(file?.type || "").split(";", 1)[0].trim().toLowerCase();
+        const mimeExt = {
+          "image/png": ".png",
+          "image/jpeg": ".jpg",
+          "image/webp": ".webp",
+          "image/gif": ".gif",
+          "image/svg+xml": ".svg",
+          "image/bmp": ".bmp",
+          "image/avif": ".avif",
+          "text/plain": ".txt",
+          "text/markdown": ".md",
+          "application/json": ".json",
+          "application/pdf": ".pdf",
+        }[mime] || ".bin";
+        const ext = nameExt.length > 1 ? nameExt : mimeExt;
+        return new File([file], `${baseMs + idx}${ext}`, { type: file.type });
+      });
+      await handlers.onStageComposerFiles?.(unnamedFiles);
       return;
     }
-    const lineCount = pastedText.split("\n").length;
+    const lineCount = pastedText.split(/\r\n|\r|\n/).length;
     if (
       Array.from(pastedText).length > PASTE_ATTACHMENT_CHAR_THRESHOLD ||
       lineCount >= PASTE_ATTACHMENT_LINE_THRESHOLD
     ) {
       event.preventDefault();
-      const pasteFile = new File([pastedText], "pasted-text.txt", {
-        type: "text/plain",
-      });
+      const epochMs = Date.now();
+      const pasteFile = new File(
+        [pastedText],
+        `${lineCount}-pasted-lines-${epochMs}.txt`,
+        { type: "text/plain" },
+      );
       await handlers.onStageComposerFiles?.([pasteFile]);
     }
   });
@@ -1022,13 +1096,6 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
-  listen(container.querySelector("#discard-send"), "click", () => handlers.onDiscardPendingSend?.());
-
-  listen(container.querySelector("#retry-send"), "click", () => {
-    if (!pendingSend) return;
-    submitPayload({ ...pendingSend.content, attachmentIds: pendingSend.attachmentIds, rawDraft: pendingSend.rawDraft }, pendingSend.rawDraft);
-  });
-
   const form = container.querySelector("#form");
   listen(form, "submit", (event) => {
     event.preventDefault();
@@ -1046,6 +1113,6 @@ export function renderMessagesView(container, state, handlers) {
       attachments: composerAttachments.map((item) => item.attachment),
       attachmentIds: composerAttachments.map((item) => item.id),
       rawDraft: submittedDraft,
-    }, pendingSend ? pendingSend.rawDraft : submittedDraft);
+    }, submittedDraft);
   });
 }

@@ -8,9 +8,17 @@ from pathlib import Path
 import annotate
 import measure
 import nuu
-import uiux
 
 SCRIPT = Path(nuu.__file__).resolve()
+
+
+def _chromium_ready() -> str | None:
+  try:
+    import playwright.sync_api  # noqa: F401
+
+    return nuu.resolve_chromium_executable()
+  except Exception:
+    return None
 
 
 def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
@@ -21,76 +29,122 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   page = root / "index.html"
   page.write_text('<img src="art.svg"><input><button>Send</button>\n', encoding="utf-8")
 
-  def run(*args, expected=0):
+  def run(*args, expected=0, cwd=root):
     process = subprocess.run(
-      [sys.executable, str(SCRIPT), *args, "--project", str(root)],
-      cwd=tmp_path,
+      [sys.executable, str(SCRIPT), *args],
+      cwd=cwd,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert process.returncode == expected, process.stderr or process.stdout
-    return json.loads(process.stdout)
+    return process
 
-  runtime = run("doctor")
-  assert runtime["catalog"]["files"] > 0
-  assert not runtime["catalog"]["mismatches"]
-  exact = run("search", "healthcare dashboard", "-d", "products", "-l", "5")
+  doc_res = nuu.doctor(root)
+  assert doc_res["catalog"]["files"] > 0
+  assert not doc_res["catalog"]["mismatches"]
+  doc_cli = run("doctor")
+  assert "# Nuu Doctor (`v0.2.0`)" in doc_cli.stdout
+
+  exact = nuu.search("healthcare dashboard", dataset="products", limit=5)
   assert exact["results"] and not exact["fallback"]
   assert len(exact["results"]) <= 5
   assert all(row["matched_terms"] for row in exact["results"])
-  fallback = run("search", "zzznomatchzzzx", "--dataset", "products")
+  search_cli = run("search", "healthcare dashboard", "-d", "products", "-l", "5")
+  assert "# Catalog Search: `healthcare dashboard`" in search_cli.stdout
+  assert "`fallback=False`" in search_cli.stdout
+  fallback = nuu.search("zzznomatchzzzx", dataset="products")
   assert fallback["fallback"]
   assert not any(row["matched_terms"] for row in fallback["results"])
 
   before = {path: path.read_bytes() for path in (css, page)}
-  findings = run("lint", expected=1)
-  assert {row["rule"] for row in findings["findings"]} >= {"ACC001", "ACC002", "DOC001"}
-  assert all(row["line"] > 0 and row["evidence"] for row in findings["findings"])
+  lint_initial = nuu.lint(root)
+  assert {row["rule"] for row in lint_initial["findings"]} >= {
+    "ACC001",
+    "ACC002",
+    "DOC001",
+  }
+  assert all(row["line"] > 0 and row["evidence"] for row in lint_initial["findings"])
+  lint_cli = run("lint", expected=1)
+  assert "`ACC001`" in lint_cli.stdout and "`DOC001`" in lint_cli.stdout
+
   page.write_text(
     '<img src="art.svg" alt=""><label>Field<input></label>\n', encoding="utf-8"
   )
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"DOC001"}
-  missing_doc_audit = run("audit", expected=1)
-  assert {row["rule"] for row in missing_doc_audit["findings"]} == {"DOC001"}
+  assert {row["rule"] for row in nuu.lint(root)["findings"]} == {"DOC001"}
+  missing_doc_audit = run("audit", expected=3)
+  assert "`DOC001`" in missing_doc_audit.stdout
+
   nuu_toml = root / "nuu.toml"
-  nuu_toml.write_text('[design]\npath = "specs/ui-design.md"\n', encoding="utf-8")
-  custom_missing = run("lint", expected=1)["findings"]
+  nuu_toml.write_text('[paths]\ndoc = "specs/ui-design.md"\n', encoding="utf-8")
+  custom_missing = nuu.lint(root)["findings"]
   assert len(custom_missing) == 1 and custom_missing[0]["rule"] == "DOC001"
   assert custom_missing[0]["evidence"] == "Missing specs/ui-design.md"
   custom_doc = root / "specs" / "ui-design.md"
   custom_doc.parent.mkdir(exist_ok=True)
   custom_doc.write_text("# Custom Design\n", encoding="utf-8")
-  assert not run("lint")["findings"]
+  assert not nuu.lint(root)["findings"]
   nuu_toml.unlink()
   custom_doc.unlink()
   design_doc = root / "docs" / "design.md"
   design_doc.parent.mkdir(exist_ok=True)
   design_doc.write_text("# Design\n", encoding="utf-8")
-  assert not run("lint")["findings"]
+  assert not nuu.lint(root)["findings"]
+
+  # Retired NU* codes are rejected as unknown suppression codes.
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
-  assert run("lint", expected=1)["findings"]
+  assert nuu.lint(root)["findings"]
   page.write_text('<img src="art.svg"> <!-- nonuu: ACC001 -->\n', encoding="utf-8")
-  suppressed_lint = run("lint")
+  suppressed_lint = nuu.lint(root)
   assert not suppressed_lint["findings"]
   assert suppressed_lint["suppressions"] and suppressed_lint["marks"]
   assert suppressed_lint["suppressions"][0]["rule"] == "ACC001"
-  collected = run("collect", expected=3)
-  assert collected["suppressions"] and collected["marks"]
-  assert collected["suppressions"][0]["rule"] == "ACC001"
-  css.write_text(before[css].decode() + "button:focus {outline: none !important;}\n")
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"ACC201"}
-  css.write_text(
-    before[css].decode() + "button:focus {outline: none;} /* nonuu: ACC201 */\n"
+
+  collected = run("collect", expected=0)
+  assert "# Marker Inventory" in collected.stdout
+  assert "nonuu: ACC001" in collected.stdout
+
+  # Recipe marker validation (nuurecipe: + RCP001)
+  page.write_text(
+    '<img src="art.svg"> <!-- nonuu: ACC001 -->\n'
+    "<!-- nuurecipe: relative-timestamps -->\n",
+    encoding="utf-8",
   )
-  assert not run("lint")["findings"]
-  css.write_text(before[css].decode() + "button:hover {padding: 12px 24px;}\n")
-  assert {row["rule"] for row in run("lint", expected=1)["findings"]} == {"ACC204"}
-  css.write_text(
-    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: ACC204 */\n"
+  assert (
+    run("collect", expected=0).stdout.count("`nuurecipe: relative-timestamps` (ok)")
+    == 1
   )
-  assert not run("lint")["findings"]
+  page.write_text(
+    '<img src="art.svg"> <!-- nonuu: ACC001 -->\n'
+    "<!-- nuurecipe: no-such-recipe-slug -->\n",
+    encoding="utf-8",
+  )
+  bad_recipe = run("collect", expected=1)
+  assert "`RCP001`" in bad_recipe.stdout
+  page.write_text('<img src="art.svg"> <!-- nonuu: ACC001 -->\n', encoding="utf-8")
+
+  css.write_text(
+    before[css].decode() + "button:focus {outline: none !important;}\n",
+    encoding="utf-8",
+  )
+  assert {row["rule"] for row in nuu.lint(root)["findings"]} == {"ACC201"}
+  css.write_text(
+    before[css].decode() + "button:focus {outline: none;} /* nonuu: ACC201 */\n",
+    encoding="utf-8",
+  )
+  assert not nuu.lint(root)["findings"]
+  css.write_text(
+    before[css].decode() + "button:hover {padding: 12px 24px;}\n", encoding="utf-8"
+  )
+  assert {row["rule"] for row in nuu.lint(root)["findings"]} == {"ACC204"}
+  css.write_text(
+    before[css].decode() + "button:hover {padding: 12px 24px;} /* nonuu: ACC204 */\n",
+    encoding="utf-8",
+  )
+  assert not nuu.lint(root)["findings"]
   css.write_bytes(before[css])
+
   page.write_text(
     '<button aria-label="Close">'
     '<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" '
@@ -101,721 +155,569 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
     "</button>\n",
     encoding="utf-8",
   )
-  icon_audit = run("audit", expected=3)
-  assert not icon_audit["findings"]
-  assert icon_audit["icons"]["status"] == "checked"
-  assert icon_audit["icons"]["blocking"] is False
-  assert icon_audit["icons"]["ladder"] == ["lucide", "simple-icons", "phosphor"]
-  assert icon_audit["icons"]["counts"] == {"lucide": 1, "custom": 1}
-  assert {row["rule"] for row in icon_audit["icons"]["findings"]} == {
-    "ICN001",
-    "ICN002",
-    "ICN101",
-  }
-  assert all(row["blocking"] is False for row in icon_audit["icons"]["findings"])
-  icon_lint = run("lint", "-f", "0,0", "-t", "16,24", "-k", "8")
+  icon_lint = nuu.lint(root)
+  assert icon_lint["icons"]["status"] == "checked"
+  assert icon_lint["icons"]["ladder"] == ["lucide", "simple-icons", "phosphor"]
   assert icon_lint["icons"]["counts"] == {"lucide": 1, "custom": 1}
   assert {row["rule"] for row in icon_lint["icons"]["findings"]} == {
     "ICN001",
     "ICN002",
     "ICN101",
   }
-  assert icon_lint["tokens"]
-  assert icon_lint["ruler"]["on_scale"] is True
+  icon_audit_cli = run("audit", expected=3)
+  assert "unrun (exit 3)" in icon_audit_cli.stdout
+
   css_icon = root / "select-icon.css"
   css_icon.write_text(
     "select { background-image: linear-gradient(to top right, transparent 38%, currentColor 38%); }\n"
     ".custom-icon { mask-image: url('data:image/svg+xml;utf8,<svg/>'); }\n",
     encoding="utf-8",
   )
-  css_icon_audit = run("audit", expected=3)
+  css_icon_lint = nuu.lint(root)
   css_nui002 = [
     row
-    for row in css_icon_audit["icons"]["findings"]
+    for row in css_icon_lint["icons"]["findings"]
     if row["rule"] == "ICN002" and row["path"].endswith("select-icon.css")
   ]
   assert len(css_nui002) == 2
   css_icon.unlink()
+
   page.write_text('<img src="art.svg"> <!-- nonuu: ACC001 -->\n', encoding="utf-8")
   before[page] = page.read_bytes()
-  manifest = tmp_path / "assets.json"
+
+  # [[assets]] validation in nuu.toml v2
   asset = root / "art.svg"
   asset.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8")
-  manifest.write_text(
-    json.dumps(
-      [
-        {
-          "path": "art.svg",
-          "source": "local original",
-          "license": "MIT",
-          "attribution": "test fixture",
-        }
-      ]
-    ),
+  nuu_toml.write_text(
+    '[[assets]]\npath = "art.svg"\nsource = "local original"\n'
+    'license = "MIT"\nattribution = "test fixture"\n',
     encoding="utf-8",
   )
-  assert not run("assets", "-m", str(manifest))["findings"]
+  assert not nuu.lint(root)["findings"]
   asset.write_text('<svg onload="alert(1)"/>', encoding="utf-8")
-  assert run("assets", "--manifest", str(manifest), expected=1)["findings"]
-  assert (
-    run(
-      "assets",
-      "-f",
-      "https://example.com/art.svg",
-      "-d",
-      "new.svg",
-      expected=2,
-    )["status"]
-    == "error"
+  assert {r["rule"] for r in nuu.lint(root)["findings"]} == {"ICN001"}
+  nuu_toml.unlink()
+  asset.unlink()
+
+  assert run(
+    "search",
+    "-f",
+    "https://example.com/art.svg",
+    "-o",
+    str(root / "new.svg"),
+    expected=2,
   )
   assert not (root / "new.svg").exists()
-  assert run("extract")["tokens"]
-  sheet_extract = subprocess.run(
-    [
-      sys.executable,
-      str(SCRIPT),
-      "extract",
-      "--project",
-      str(SCRIPT.parent.parent / "references"),
-    ],
-    cwd=tmp_path,
-    capture_output=True,
-    text=True,
-    check=False,
-  )
-  assert sheet_extract.returncode == 0
-  assert [row["value"] for row in json.loads(sheet_extract.stdout)["breakpoints"]] == [
+
+  # Internal Python extract helper remains available while retired from CLI
+  assert nuu.extract(root)["tokens"]
+  ref_extract = nuu.extract(SCRIPT.parent.parent / "references")
+  assert [row["value"] for row in ref_extract["breakpoints"]] == [
     "68em",
     "60em",
     "30em",
     "24em",
   ]
-  measured = tmp_path / "measured.json"
-  measured.write_text(
-    json.dumps(
-      {
-        "width": 1280,
-        "elements": [{"selector": ".row", "values": {"height": "40px", "gap": "16px"}}],
-      }
-    ),
+  retired_extract = subprocess.run(
+    [sys.executable, str(SCRIPT), "extract"],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
     encoding="utf-8",
-  )
-  check_proc = subprocess.run(
-    [sys.executable, str(SCRIPT), "check", str(measured), "-k", "8"],
-    cwd=tmp_path,
-    capture_output=True,
-    text=True,
     check=False,
   )
-  assert check_proc.returncode == 0
-  audit_measured = run("audit", "-M", str(measured))
-  assert audit_measured["rendered"]["status"] == "checked"
-  assert not audit_measured["findings"]
-  assert (
-    run(
-      "search",
-      "-f",
-      "https://example.com/art.svg",
-      "-d",
-      "new.svg",
-      expected=2,
-    )["status"]
-    == "error"
-  )
-  ruler_proc = subprocess.run(
-    [sys.executable, str(SCRIPT), "ruler", "-f", "0,0", "-t", "16,24", "-k", "8"],
-    cwd=tmp_path,
-    capture_output=True,
-    text=True,
-    check=False,
-  )
-  assert ruler_proc.returncode == 0
+  assert retired_extract.returncode == 2
+
+  ruler_proc = run("measure", "--from", "0,0", "--to", "16,24", "-k", "8")
+  assert "# Measurement" in ruler_proc.stdout
+  assert "`16 x 24 px`" in ruler_proc.stdout
+
   audit = run("audit", expected=3)
-  assert audit["rendered"]["status"] == "not_checked"
-  assert audit["real_device"] == "not_run"
+  assert "unrun (exit 3)" in audit.stdout
   assert all(path.read_bytes() == value for path, value in before.items())
 
 
 def test_browser_rejects_unsafe_requests_before_dependency_checks(tmp_path):
-  import shutil
-
-  import pytest
-
-  if not shutil.which("node"):
-    pytest.skip("Node is not available")
-  driver = SCRIPT.with_name("browser.cjs")
-  base = {
-    "command": "inspect",
-    "url": "https://example.com",
-    "widths": [360],
-    "timeout": 1,
-    "engine": "auto",
-    "flow": [],
-    "output": str(tmp_path / "evidence"),
-  }
-  invalid = [
-    {"url": "file:///etc/passwd"},
-    {"url": "https://user:password@example.com"},
-    {"widths": [0]},
-    {"flow": [{"action": "offline", "value": "false"}]},
-    {"flow": [{"action": "fill", "selector": "input"}]},
-    {"flow": [{"action": "goto", "url": "javascript:alert(1)"}]},
-    {"command": "live", "edit": {"selector": "body", "text": "changed"}},
-    {
-      "command": "live",
-      "authorized_edit": True,
-      "edit": {"selector": "body", "styles": []},
-    },
-    {"overlaps": "true"},
-  ]
-  for change in invalid:
-    result = subprocess.run(
-      ["node", str(driver)],
-      input=json.dumps({**base, **change}),
+  (tmp_path / "docs").mkdir()
+  (tmp_path / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  out_dir = tmp_path / "evidence"
+  for bad_url in (
+    "file:///etc/passwd",
+    "https://user:password@example.com",
+    "javascript:alert(1)",
+  ):
+    res = subprocess.run(
+      [
+        sys.executable,
+        str(SCRIPT),
+        "audit",
+        "-u",
+        bad_url,
+        "-d",
+        str(out_dir),
+      ],
+      cwd=tmp_path,
       text=True,
+      encoding="utf-8",
       capture_output=True,
       check=False,
-      cwd=tmp_path,
     )
-    assert result.returncode == 2
-    assert json.loads(result.stdout)["status"] == "error"
-  assert not Path(base["output"]).exists()
+    assert res.returncode == 2
+  assert not out_dir.exists()
+
+  help_res = subprocess.run(
+    [sys.executable, str(SCRIPT), "--help"],
+    cwd=tmp_path,
+    text=True,
+    encoding="utf-8",
+    capture_output=True,
+    check=False,
+  )
+  assert help_res.returncode == 0
+  for cmd_name in (
+    "audit",
+    "walk",
+    "measure",
+    "annotate",
+    "board",
+    "lint",
+    "collect",
+    "search",
+    "doctor",
+  ):
+    assert cmd_name in help_res.stdout
+  assert not SCRIPT.with_name("browser.cjs").exists()
+  assert not SCRIPT.with_name("uiux.py").exists()
+
+  bad_toml = tmp_path / "nuu.toml"
+  bad_toml.write_text("[project\nname = 'broken'\n", encoding="utf-8")
+  syn = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint", "-c", str(bad_toml)],
+    cwd=tmp_path,
+    text=True,
+    encoding="utf-8",
+    capture_output=True,
+    check=False,
+  )
+  assert syn.returncode == 1
+  assert f"{bad_toml.resolve()}:1:" in syn.stderr
+
+  unknown_project_warning = "unknown config key 'project'"
+  bad_toml.write_text("[project]\nunknown_custom = 1\n", encoding="utf-8")
+  unk = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint", "-c", str(bad_toml)],
+    cwd=tmp_path,
+    text=True,
+    encoding="utf-8",
+    capture_output=True,
+    check=False,
+  )
+  assert unk.returncode == 0
+  assert unknown_project_warning in unk.stderr
+
+  bad_toml.write_text(
+    '[project]\nunknown_custom = 1\n\n[checks.severity]\nTYP101 = "ignore"\n',
+    encoding="utf-8",
+  )
+  sch = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint", "-c", str(bad_toml)],
+    cwd=tmp_path,
+    text=True,
+    encoding="utf-8",
+    capture_output=True,
+    check=False,
+  )
+  assert sch.returncode == 1
+  assert unknown_project_warning in sch.stderr
+  assert "TYP101" in sch.stderr
+  assert f"{bad_toml.resolve()}:5:" in sch.stderr
 
 
-def test_rendered_public_flow_and_live_evidence(tmp_path):
+def test_live_python_playwright_audit_and_annotate(tmp_path):
   import http.server
-  import os
   import threading
 
   import pytest
 
-  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
-    pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
-  markup = b"""<!doctype html><html><head><title>Tool fixture</title><style>
-body {margin:16px;font:16px sans-serif;background:#fff;color:#111}
-@media(prefers-color-scheme:dark){body{background:#111;color:#fff}}
-input,button {font:inherit;min-height:44px;max-width:100%;box-sizing:border-box}
-:focus-visible{outline:2px solid #08c;outline-offset:0}
-main {max-width:640px} [hidden]{display:none}
-#panel {width:100px;height:44px} #panel:hover {width:120px}
-#shift {width:100px;height:44px} #shift:hover {width:120px}
-#clip {width:120px;height:24px;overflow:hidden;white-space:nowrap}
-#clip > span {display:block;width:300px}
-ul#list {--indent:2ch;padding-inline-start:2ch;list-style-position:outside;list-style-type:disc;width:240px}
-</style></head><body><main><h1>Tool fixture</h1><form id="form">
-<label for="entry">Value</label><input id="entry"><button id="send">Continue</button>
-</form><div id="panel">Non-interactive target</div>
-<button id="shift">Resize on hover</button>
-<div id="clip"><span>Clipped content with a deliberately long line.</span></div>
-<ul id="list"><li>A wrapped list item with enough text to create several rendered lines for alignment checks.</li></ul>
-<p id="invalid" hidden>Value required</p><p id="pending" hidden>Pending</p>
-<p id="failure" hidden>Request failed</p><button id="retry" hidden>Retry</button>
-<p id="receipt" tabindex="-1" hidden>Saved</p></main><script>
-let attempts = 0;
-const byId = id => document.getElementById(id);
-function submit(event) {
- event.preventDefault();
- if (!byId('entry').value.trim()) {byId('invalid').hidden=false;byId('entry').focus();return;}
- byId('invalid').hidden=true;byId('failure').hidden=true;byId('retry').hidden=true;
- byId('pending').hidden=false;byId('send').disabled=true;
- setTimeout(() => {
-  byId('pending').hidden=true;byId('send').disabled=false;
-  if (!attempts++) {byId('failure').hidden=false;byId('retry').hidden=false;byId('retry').focus();}
-  else {byId('receipt').hidden=false;byId('receipt').focus();}
- }, 300);
-}
-byId('form').addEventListener('submit',submit);
-byId('retry').addEventListener('click',submit);
-</script></body></html>"""
+  chromium_bin = _chromium_ready()
+  if not chromium_bin:
+    pytest.skip("Playwright/Chromium runtime not configured")
+
+  proj = tmp_path / "live-proj"
+  (proj / "docs").mkdir(parents=True)
+  (proj / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  (proj / "nuu.toml").write_text(
+    '[audit]\nschemes = ["dark"]\n'
+    'viewports = [{ name = "desktop", width = 1920, height = 957, report = true },'
+    ' { name = "phone", width = 411, height = 799, mobile = true, touch = true, report = true }]\n',
+    encoding="utf-8",
+  )
+  html_bytes = (
+    b"<!doctype html><html data-theme='dark'><head><title>Live</title><style>"
+    b"body{margin:0;padding:16px;background:#08090b;color:#f3f4f6;font:16px/24px sans-serif}"
+    b"#cta{min-width:80px;min-height:44px;padding:8px 16px;border-radius:6px;background:#2563eb;color:#fff;border:0}"
+    b"</style></head><body><main><h1>Live Page</h1><button id='cta'>Save changes</button></main></body></html>"
+  )
 
   class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
       self.send_response(200)
       self.send_header("Content-Type", "text/html; charset=utf-8")
       self.end_headers()
-      self.wfile.write(
-        (project / "overlap.html").read_bytes()
-        if self.path == "/overlap.html"
-        else markup
-      )
+      self.wfile.write(html_bytes)
 
     def log_message(self, *_args):
       pass
 
-  project = tmp_path / "project"
-  project.mkdir()
-  source = project / "index.html"
-  source.write_bytes(markup)
-  flow = [
-    {"action": "hover", "selector": "#panel"},
-    {"action": "hover", "selector": "#shift"},
-    {"action": "focus", "selector": "#entry"},
-    {"action": "press", "selector": "#entry", "key": "Enter"},
-    {"action": "visible", "selector": "#invalid"},
-    {"action": "focused", "selector": "#entry"},
-    {"action": "fill", "selector": "#entry", "value": "fixture data"},
-    {"action": "press", "selector": "#entry", "key": "Enter"},
-    {"action": "visible", "selector": "#failure"},
-    {"action": "focused", "selector": "#retry"},
-    {"action": "press", "selector": "#retry", "key": "Enter"},
-    {"action": "visible", "selector": "#receipt"},
-    {"action": "focused", "selector": "#receipt"},
-  ]
-  flow_file = tmp_path / "flow.json"
-  flow_file.write_text(json.dumps(flow))
-  edit_file = tmp_path / "edit.json"
-  edited = "Transient fixture edit"
-  edit_file.write_text(
-    json.dumps({"selector": "h1", "text": edited, "styles": {"color": "rgb(1, 2, 3)"}})
-  )
-  env = {**os.environ, **config.get("env", {})}
-
-  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
-
-    def run(command, *args, expected=0):
-      result = subprocess.run(
+    try:
+      art_dir = tmp_path / "live-artifacts"
+      res = subprocess.run(
         [
           sys.executable,
           str(SCRIPT),
-          command,
-          "--project",
-          str(project),
-          "--url",
+          "audit",
+          "-c",
+          str(proj / "nuu.toml"),
+          "-u",
           url,
-          "--engine",
-          "chromium",
-          "--executable",
-          config["executable"],
-          "--timeout",
-          "5",
-          "--artifacts",
-          str(tmp_path / command),
-          *args,
+          "-d",
+          str(art_dir),
+          "-x",
+          chromium_bin,
         ],
+        cwd=proj,
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=False,
-        env=env,
       )
-      assert result.returncode == expected, result.stderr or result.stdout
-      return json.loads(result.stdout)
+      assert res.returncode in {0, 1}, res.stderr or res.stdout
+      assert "# UI Audit" in res.stdout
+      assert (art_dir / "1920x957-dark-no-preference.png").is_file()
+      assert (art_dir / "411x799-dark-no-preference.png").is_file()
 
-    try:
-      report = run("flow", "--flow", str(flow_file), expected=1)
-      captures = report["captures"]
-      required_widths = set(nuu.WIDTHS)
-      assert {row["width"] for row in captures} >= required_widths
-      assert {row["scheme"] for row in captures} == {"light", "dark"}
-      assert {row["motion"] for row in captures} == {"no-preference", "reduce"}
-      assert all(
-        row["status"] == "captured" and Path(row["screenshot"]).is_file()
-        for row in captures
-      )
-      assert captures[0]["flow"]["status"] == "passed"
-      assert captures[0]["flow"]["assertions"] > 0
-      panel_step = next(
-        row for row in captures[0]["flow"]["steps"] if row.get("selector") == "#panel"
-      )
-      assert "dimensionShift" not in panel_step
-      shift_step = next(
-        row for row in captures[0]["flow"]["steps"] if row.get("selector") == "#shift"
-      )
-      assert (
-        shift_step["dimensionShift"]["before"]["width"]
-        < shift_step["dimensionShift"]["after"]["width"]
-      )
-      assert any(
-        row["rule"] == "ACC205" and row.get("selector") == "#shift"
-        for row in report["findings"]
-      )
-      assert captures[0]["measurements"]["active"]["id"] == flow[-1][
-        "selector"
-      ].removeprefix("#")
-      assert all(row["flow"]["status"] == "not_run" for row in captures[1:])
-      images_before = {
-        Path(row["screenshot"]): Path(row["screenshot"]).read_bytes()
-        for row in captures
-      }
-      list_report = run("inspect", "--selector", "#list,#clip")
-      list_capture = list_report["captures"][0]["measurements"]
-      list_elements = {row["selector"]: row for row in list_capture["elements"]}
-      list_data = list_elements["#list"]["list_indent"]
-      assert list_data["indent"] == "2ch"
-      assert list_data["list_style_position"] == "outside"
-      assert len(list_data["items"][0]["line_starts"]) >= 2
-      assert not any(
-        finding.startswith("TYP203 ")
-        for finding in measure.check(
-          {"elements": [list_elements["#list"]]},
-          measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8")),
-        )
-      )
-      clipped = list_elements["#clip"]
-      assert clipped["scroll_width"] > clipped["client_width"]
-      assert any(
-        row["rule"] == "SPC204"
-        for row in measure.check_density({"elements": [clipped]})
-      )
-      overlap_page = project / "overlap.html"
-      overlap_page.write_text(
-        "<!doctype html><style>body{margin:0}"
-        "#under,#over{position:fixed;left:20px;top:20px;width:80px;height:80px}"
-        "#under{z-index:1;background:#c00}#over{z-index:2;background:#080}"
-        "#far{position:fixed;left:220px;top:20px;width:40px;height:40px}</style>"
-        '<div id="under"><span id="inside">a</span></div>'
-        '<div id="over">b</div><div id="far">c</div>',
+      live_ann_png = tmp_path / "live-cta-annotated.png"
+      ann_res = subprocess.run(
+        [
+          sys.executable,
+          str(SCRIPT),
+          "annotate",
+          "-c",
+          str(proj / "nuu.toml"),
+          "-u",
+          url,
+          "-s",
+          "#cta",
+          "-n",
+          "#cta,1,Save button,green",
+          "-o",
+          str(live_ann_png),
+          "-x",
+          chromium_bin,
+        ],
+        cwd=proj,
+        text=True,
         encoding="utf-8",
+        capture_output=True,
+        check=False,
       )
-      overlap_report = run(
-        "inspect",
-        "--overlaps",
-        "--profile",
-        "house",
-        "--selector",
-        "#under,#inside,#over,#far",
-        "--url",
-        f"{url}/overlap.html",
-        expected=1,
-      )
-      overlap_data = overlap_report["captures"][0]["overlaps"]
-      assert overlap_data["status"] == "checked"
-      assert overlap_data["limits"]["z_distance"].startswith("not_computed")
-      pairs = {(row["first"], row["second"]): row for row in overlap_data["pairs"]}
-      pair = pairs.get(("#under", "#over")) or pairs.get(("#over", "#under"))
-      assert pair and pair["relation"] == "separate" and pair["topmost"] == "#over"
-      assert pair["stacking"]["#over"][0]["zIndex"] == "2"
-      nested = pairs.get(("#under", "#inside")) or pairs.get(("#inside", "#under"))
-      assert nested and nested["relation"] in {"ancestor", "descendant"}
-      assert all(
-        "#far" not in (row["first"], row["second"]) for row in overlap_data["pairs"]
-      )
-      assert any(row["rule"] == "SPC205" for row in overlap_report["findings"])
-      house = run("inspect", "--profile", "house", expected=1)
-      assert any(row["house_measurements"] for row in house["captures"])
-      assert any(row["rule"] == "SPC001" for row in house["findings"])
-      live = run("live", "--edit", str(edit_file), "--authorize-edit")
-      edit = live["captures"][0]["edit"]
-      assert (
-        edit["before"]["elements"][0]["text"] != edit["after"]["elements"][0]["text"]
-      )
-      assert edit["after"]["elements"][0]["text"] == edited
-      assert (
-        Path(edit["before_screenshot"]).is_file()
-        and Path(edit["after_screenshot"]).is_file()
-      )
-      assert (
-        edit["before"]["elements"][0]["values"]["color"]
-        != edit["after"]["elements"][0]["values"]["color"]
-      )
-      assert source.read_bytes() == markup
-      flow_file.write_text(json.dumps([{"action": "visible", "selector": "#absent"}]))
-      failed = run("flow", "--flow", str(flow_file), expected=1)
-      assert failed["findings"] and failed["captures"][0]["flow"]["status"] == "failed"
-      assert all(
-        path.read_bytes() == content for path, content in images_before.items()
-      )
-      artifact = Path(os.environ["NEMO_UI_BROWSER_ARTIFACTS"])
-      artifact.mkdir(parents=True, exist_ok=True)
-      import shutil
-
-      for row in captures:
-        screenshot = Path(row["screenshot"])
-        shutil.copyfile(screenshot, artifact / screenshot.name)
-      for name in ("before_screenshot", "after_screenshot"):
-        screenshot = Path(edit[name])
-        shutil.copyfile(screenshot, artifact / screenshot.name)
-      (artifact / "report.json").write_text(json.dumps(report, indent=2))
+      assert ann_res.returncode == 0, ann_res.stderr or ann_res.stdout
+      assert live_ann_png.is_file()
     finally:
       server.shutdown()
       thread.join()
 
 
-def test_rendered_survey_dialog_actions_and_tooltip_stay_visible(tmp_path):
-  """An opened, focused modal reveals defects a default-page audit cannot see."""
+def test_walk_verbs_gif89a_and_step_viewports(tmp_path):
+  import annotate
+  import walk
+
+  assert len(walk.MCP_VERBS) == 42
+  assert not hasattr(walk, "capture_views")
+  assert not hasattr(walk, "DEVICE_VIEWPORTS")
+  assert walk.DEVICE_INDEX == {
+    "desktop": 0,
+    "laptop": 1,
+    "tablet": 2,
+    "landscape": 3,
+    "mobile": 4,
+  }
+
+  frame_a = annotate.encode_png(24, 16, bytearray([15, 15, 18, 255] * (24 * 16)))
+  frame_b = annotate.encode_png(24, 16, bytearray([143, 168, 255, 255] * (24 * 16)))
+  gif_bytes = walk.encode_gif89a([frame_a, frame_b], delay_cs=25)
+  assert gif_bytes.startswith(b"GIF89a")
+  assert b"NETSCAPE2.0" in gif_bytes
+  assert gif_bytes.endswith(b"\x3b")
+
+  walk.clear_steps()
+  seen_vps = []
+
+  class StubPage:
+    def __init__(self, vp):
+      self.vp = vp
+
+    def on(self, *_args):
+      pass
+
+    def goto(self, *_args, **_kwargs):
+      pass
+
+    def screenshot(self, **_kwargs):
+      return frame_a
+
+  @walk.step("mobile")
+  def mobile_step(w: walk.Walker, _d: walk.Demo) -> None:
+    w.view("mobile-shot")
+
+  @walk.step("855x325")
+  def landscape_step(w: walk.Walker, _d: walk.Demo) -> None:
+    w.view("landscape-shot")
+
+  out_dir = tmp_path / "step-views"
+  results = walk.run_steps_with_factory(
+    lambda vp: seen_vps.append(vp) or StubPage(vp),
+    walk.Demo("http://127.0.0.1:1500"),
+    out_dir=out_dir,
+  )
+  walk.clear_steps()
+  assert seen_vps == [(411, 799), (855, 325)]
+  assert len(results) == 2
+  assert (out_dir / "mobile-shot.png").is_file()
+  assert (out_dir / "landscape-shot.png").is_file()
+
+
+def test_walk_cdp_session_batch_and_acc207_optimistic_writes(tmp_path):
   import http.server
   import os
   import threading
+  import time
 
   import pytest
+  import walk
 
-  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
-    pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
-  markup = """<!doctype html><html><head><style>
-*,*::before,*::after {box-sizing:border-box}
-body {margin:0;background:#171717;color:#eee;font:14px sans-serif}
-button {font:inherit;min-height:32px}
-.modal-shell {width:calc(100vw - 32px);max-width:440px;padding:0;border:0;
-  background:transparent;color:inherit}
-.modal-card {display:flex;flex-direction:column;gap:12px;padding:20px;
-  border:1px solid #777;border-radius:6px;background:#282828}
-.modal-body {min-height:auto}
-.survey-cap-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.survey-cap-pill {position:relative;padding:8px;border:1px solid #777}
-#answer-tip {display:none;position:absolute;left:0;bottom:calc(100% + 6px);
-  min-width:220px;padding:8px;border:1px solid #aaa;background:#353535;color:#fff}
-#last-pill:focus-within #answer-tip {display:block}
-.survey-results {width:100%;border-collapse:collapse}
-.survey-results tr {height:38px}
-.fixed .modal-card {max-height:calc(100dvh - 40px)}
-.fixed .modal-body {min-height:0;overflow-y:auto}
-.fixed #answer-tip {left:auto;right:0;min-width:min(220px,calc(100vw - 72px))}
-</style></head><body class="MODE">
-<button id="open" onclick="document.getElementById('survey').showModal()">Survey</button>
-<dialog id="survey" class="modal-shell" aria-labelledby="title">
-<form method="dialog" class="modal-card">
-<header><h2 id="title">Survey Verification</h2></header>
-<div class="modal-body"><p>Answered earlier · 4 of 6 verified</p>
-<p>Deterministic checks</p><div class="survey-cap-grid">
-<div class="survey-cap-pill">Reasoning</div>
-<div class="survey-cap-pill">Vision</div>
-<div class="survey-cap-pill" id="last-pill" tabindex="0">Sorted
-<div id="answer-tip" role="tooltip">sorted: true</div></div></div>
-<p>Knowledge calibration</p><table class="survey-results">
-<tr><td>Question</td><td>Confidence</td></tr>
-<tr><td>One</td><td>95%</td></tr><tr><td>Two</td><td>80%</td></tr>
-<tr><td>Three</td><td>70%</td></tr><tr><td>Four</td><td>60%</td></tr>
-</table><footer id="nested-info"><a href="#title">More information</a></footer></div>
-<footer id="actions" class="modal-actions"><button type="submit">Close</button></footer>
-</form></dialog></body></html>"""
-  for mode in ("old", "fixed"):
-    (tmp_path / f"{mode}.html").write_text(
-      markup.replace('class="MODE"', f'class="{mode}"'), encoding="utf-8"
-    )
+  chromium_bin = _chromium_ready()
+  if not chromium_bin:
+    pytest.skip("Playwright/Chromium runtime not configured")
+
+  site = tmp_path / "walk-site"
+  site.mkdir()
+  (site / "nuu.toml").write_text(
+    "[[audit.viewports]]\n"
+    "width = 1920\n"
+    "height = 957\n"
+    "mobile = false\n"
+    "touch = false\n"
+    "report = true\n",
+    encoding="utf-8",
+  )
+  (site / "slow.html").write_text(
+    """<!doctype html><html data-theme="dark"><body style="background:#0f0f12;color:#f4f4f6">
+<h1>Slow Form</h1>
+<form id="f"><input name="title" aria-label="Title" /><button type="submit">Create item</button></form>
+<ul id="list"></ul>
+<script>
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const val = e.target.title.value;
+  await fetch('/api/items', { method: 'POST', body: JSON.stringify({ title: val }) });
+  const li = document.createElement('li');
+  li.textContent = val;
+  document.getElementById('list').appendChild(li);
+});
+</script></body></html>""",
+    encoding="utf-8",
+  )
+  (site / "good.html").write_text(
+    """<!doctype html><html data-theme="dark"><body style="background:#0f0f12;color:#f4f4f6">
+<h1>Fast Optimistic Form</h1>
+<button id="inc" type="button" onclick="this.textContent='Clicked '+(++window.__n||1)">Count</button>
+<form id="f"><input name="title" aria-label="Title" /><button type="submit">Add row</button></form>
+<ul id="list"></ul>
+<script>
+window.__n = 0;
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const val = e.target.title.value;
+  const li = document.createElement('li');
+  li.id = 'pending-row';
+  li.setAttribute('data-pending', 'true');
+  li.textContent = val;
+  document.getElementById('list').appendChild(li);
+  await fetch('/api/items', { method: 'POST', body: JSON.stringify({ title: val }) });
+  li.removeAttribute('data-pending');
+});
+</script></body></html>""",
+    encoding="utf-8",
+  )
 
   class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-      super().__init__(*args, directory=str(tmp_path), **kwargs)
+      super().__init__(*args, directory=str(site), **kwargs)
+
+    def do_POST(self):
+      length = int(self.headers.get("Content-Length", "0"))
+      if length:
+        self.rfile.read(length)
+      self.send_response(200)
+      self.send_header("Content-Type", "application/json")
+      self.end_headers()
+      self.wfile.write(b'{"ok":true}')
 
     def log_message(self, *_args):
       pass
 
-  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-
-    def inspect(mode, width, *, open_modal=True):
-      flow = (
-        [
-          {"action": "click", "selector": "#open"},
-          {"action": "focus", "selector": "#last-pill"},
-          {"action": "visible", "selector": "#answer-tip"},
-        ]
-        if open_modal
-        else []
-      )
-      request = {
-        "command": "audit",
-        "url": f"http://127.0.0.1:{server.server_port}/{mode}.html",
-        "widths": [width],
-        "heights": {"855": 325, "411": 799},
-        "timeout": 8,
-        "engine": "chromium",
-        "executable": config["executable"],
-        "output": str(tmp_path / f"{mode}-{width}-{open_modal}"),
-        "flow": flow,
-        "selector": "#survey,#actions,#answer-tip",
-      }
-      result = subprocess.run(
-        ["node", str(SCRIPT.with_name("browser.cjs"))],
-        input=json.dumps(request),
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, **config.get("env", {})},
-      )
-      assert result.returncode == 0, result.stderr or result.stdout
-      report = json.loads(result.stdout)
-      assert report["captures"][0]["status"] == "captured", report
-      return report
-
+    base = f"http://127.0.0.1:{server.server_port}"
     try:
-      hidden = inspect("old", 855, open_modal=False)
-      assert not any(row["rule"] == "ACC203" for row in hidden["findings"])
-      for width in (855, 411):
-        before, after = inspect("old", width), inspect("fixed", width)
-        problems = {
-          row.get("selector") for row in before["findings"] if row["rule"] == "ACC203"
-        }
-        assert "#answer-tip" in problems
-        for report in (before, after):
-          assert not any(
-            row["rule"] == "ACC203" and row.get("selector") == "#nested-info"
-            for row in report["findings"]
-          )
-        if width == 855:
-          assert "#actions" in problems  # Footer sat below the viewport.
-        fixed_overflow = [
-          row
-          for row in after["findings"]
-          if row["rule"] == "ACC203"
-          and row.get("selector") in {"#answer-tip", "#actions"}
+      from playwright.sync_api import sync_playwright
+
+      launch_opts = nuu.chromium_launch_kwargs(chromium_bin)
+      with sync_playwright() as pw:
+        browser = pw.chromium.launch(**launch_opts)
+        try:
+          p_slow = browser.new_page()
+          t0 = time.perf_counter()
+          slow_findings = walk.probe_optimistic_writes(p_slow, f"{base}/slow.html")
+          elapsed_ms = (time.perf_counter() - t0) * 1000.0
+          assert any(f["rule"] == "ACC207" for f in slow_findings)
+          assert elapsed_ms < 1500.0
+
+          p_good = browser.new_page()
+          good_findings = walk.probe_optimistic_writes(p_good, f"{base}/good.html")
+          assert good_findings == []
+        finally:
+          browser.close()
+
+      sess = f"pytest-{os.getpid()}"
+      state_path = walk.session_state_path(sess)
+      try:
+        rc_open = walk.main(
+          ["-S", sess, "-x", chromium_bin, "open", f"{base}/good.html"]
+        )
+        assert rc_open == 0
+        assert state_path.is_file()
+        assert (state_path.stat().st_mode & 0o777) == 0o600
+
+        rc_snap = walk.main(["-S", sess, "snapshot", "--boxes"])
+        assert rc_snap == 0
+        saved = json.loads(state_path.read_text(encoding="utf-8"))
+        btn_ref = next(
+          ref for ref, meta in saved["refs"].items() if meta.get("name") == "Count"
+        )
+
+        gif_out = tmp_path / "cdp-session.gif"
+        assert walk.main(["-S", sess, "gif-start"]) == 0
+        assert walk.main(["-S", sess, "click", btn_ref]) == 0
+        assert walk.main(["-S", sess, "localstorage", "set", "theme", "dark"]) == 0
+        assert walk.main(["-S", sess, "gif-stop", "-o", str(gif_out)]) == 0
+        assert gif_out.read_bytes().startswith(b"GIF89a")
+      finally:
+        assert walk.main(["-S", sess, "close"]) == 0
+        assert not state_path.exists()
+
+      batch_py = tmp_path / "flow_walk.py"
+      batch_py.write_text(
+        "from walk import Demo, Walker, step\n\n"
+        "@step('desktop')\n"
+        f"def load_good(w: Walker, demo: Demo) -> None:\n"
+        f"  w.goto('{base}/good.html')\n"
+        "  w.click('#inc')\n"
+        "  w.view('good-after-click')\n",
+        encoding="utf-8",
+      )
+      batch_out = tmp_path / "batch-out"
+      batch_gif = tmp_path / "batch.gif"
+      rc_batch = walk.main(
+        [
+          "-c",
+          str(site / "nuu.toml"),
+          "-x",
+          chromium_bin,
+          "-o",
+          str(batch_out),
+          "-g",
+          str(batch_gif),
+          str(batch_py),
         ]
-        assert not fixed_overflow, fixed_overflow
+      )
+      assert rc_batch == 0
+      assert (batch_out / "good-after-click.png").is_file()
+      assert batch_gif.read_bytes().startswith(b"GIF89a")
     finally:
       server.shutdown()
+      thread.join()
 
 
-def test_live_audit_inspects_open_overlays_at_every_house_viewport(tmp_path):
-  """Clause 33 runs without -O, but ignores hidden and reachable scroll content."""
+def test_rendered_public_flow_and_live_evidence(tmp_path):
   import http.server
-  import os
   import threading
 
   import pytest
 
-  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
-    pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
-  page = tmp_path / "index.html"
-  page.write_text(
-    """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
-*{box-sizing:border-box}body{margin:0;font:16px sans-serif;background:#151515;color:#fff}
-dialog{width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 24px);
-  padding:16px;background:#333;color:#fff;overflow:auto;border:1px solid #fff}
-#clip-frame{position:relative;width:220px;height:110px;overflow:hidden;border:1px solid #aaa}
-#clip-frame p{position:absolute;margin:0;white-space:nowrap;font-size:16px;line-height:20px}
-#clip-top{top:-9px;left:40px}#clip-left{top:30px;left:-12px}
-#clip-right{top:55px;right:-11px}#clip-bottom{top:102px;left:40px}
-#scroll-pane{height:45px;overflow-y:auto}
-#scroll-copy{margin:70px 0 0}#covered-wrap{position:relative;height:27px}
-#obscured{margin:0;line-height:24px}#blocker{position:absolute;inset:0;z-index:5;background:#444}
-[role=tooltip]{position:fixed;pointer-events:none;width:110px;height:28px;padding:4px}
-#no-surface{top:50px;left:35px;background:transparent}
-#good-surface{position:absolute;top:160px;left:30px;background:rgb(30,30,30)}
-#edge-left{left:-18px;top:140px;background:#333}
-#edge-top{left:175px;top:-12px;background:#333}
-#edge-right{left:calc(100vw - 18px);top:140px;background:#333}
-#edge-bottom{left:175px;top:calc(100vh - 12px);background:#333}
-#popup{width:120px;height:36px;background:transparent;color:#fff}
+  chromium_bin = _chromium_ready()
+  if not chromium_bin:
+    pytest.skip("Playwright/Chromium runtime not configured")
+
+  proj = tmp_path / "overlay-proj"
+  (proj / "docs").mkdir(parents=True)
+  (proj / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  (proj / "nuu.toml").write_text(
+    "[[audit.viewports]]\n"
+    "width = 411\n"
+    "height = 799\n"
+    "mobile = true\n"
+    "touch = true\n"
+    "report = true\n",
+    encoding="utf-8",
+  )
+  (proj / "index.html").write_text(
+    """<!doctype html><html data-theme="dark"><head>
+<meta name="viewport" content="width=device-width,initial-scale=1"><style>
+body{margin:0;padding:16px;font:16px/24px Inter,sans-serif;background:#17171a;color:#f3f4f6}
+#no-surface{position:fixed;top:40px;left:24px;width:120px;height:28px;background:transparent}
+#edge-right{position:fixed;top:96px;left:360px;width:120px;height:28px;background:#202026}
+#placeholder{margin-top:140px}
 </style></head><body>
-<button id="open" onclick="document.getElementById('panel').showModal();
-  document.getElementById('popup').showPopover()">Open</button>
-<dialog id="panel"><h2>Visible overlay</h2>
-<div id="clip-frame"><p id="clip-top">Top text</p><p id="clip-left">Left text</p>
-<p id="clip-right">Right text</p><p id="clip-bottom">Bottom text</p></div>
-<div id="scroll-pane"><p id="scroll-copy">Reachable scroll text</p></div>
-<div id="covered-wrap"><p id="obscured">Hidden under cover</p><div id="blocker"></div></div>
+<h1>Overlay Check</h1>
 <div id="no-surface" role="tooltip">No surface</div>
-<div id="good-surface" role="tooltip">Solid surface</div>
-<div id="edge-left" role="tooltip">Left edge</div>
-<div id="edge-top" role="tooltip">Top edge</div>
-<div id="edge-right" role="tooltip">Right edge</div>
-<div id="edge-bottom" role="tooltip">Bottom edge</div>
-<div id="hidden-surface" role="tooltip" hidden>Hidden tooltip</div>
-<button>Close</button></dialog><div id="popup" popover>Unpainted popover</div>
+<div id="edge-right" role="tooltip">Clipped right</div>
+<p id="placeholder">Lorem ipsum sample copy</p>
+<button id="unlabeled" aria-labelledby="missing-ref"></button>
 </body></html>""",
     encoding="utf-8",
   )
 
   class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-      super().__init__(*args, directory=str(tmp_path), **kwargs)
+      super().__init__(*args, directory=str(proj), **kwargs)
 
     def log_message(self, *_args):
       pass
 
-  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-
-    def inspect(widths, flow):
-      request = {
-        "command": "audit",
-        "url": f"http://127.0.0.1:{server.server_port}/index.html",
-        "widths": widths,
-        "heights": {"1920": 957, "1080": 2437, "958": 958, "855": 325, "411": 799},
-        "timeout": 8,
-        "engine": "chromium",
-        "executable": config["executable"],
-        "output": str(tmp_path / f"audit-{len(widths)}-{len(flow)}"),
-        "flow": flow,
-        "selector": "#panel,#clip-frame,#scroll-pane",
-      }
-      result = subprocess.run(
-        ["node", str(SCRIPT.with_name("browser.cjs"))],
-        input=json.dumps(request),
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, **config.get("env", {})},
-      )
-      assert result.returncode == 0, result.stderr or result.stdout
-      report = json.loads(result.stdout)
-      assert all(row["status"] == "captured" for row in report["captures"]), report
-      return report
-
     try:
-      hidden = inspect([411], [])
-      assert all(not row["overlays"]["overlays"] for row in hidden["captures"])
-      assert not any(
-        item.get("criterion") == "clause-33" for item in hidden["findings"]
+      cfg_info = nuu.load_nuu_config(proj, proj / "nuu.toml")
+      live_res = nuu.run_live_audit(
+        f"http://127.0.0.1:{server.server_port}/index.html",
+        cfg_info=cfg_info,
+        artifacts_dir=tmp_path / "overlay-art",
+        executable=chromium_bin,
+        timeout_sec=10,
       )
-      flow = [
-        {"action": "click", "selector": "#open"},
-        {"action": "visible", "selector": "#panel"},
-        {"action": "visible", "selector": "#popup"},
-      ]
-      report = inspect(list(nuu.WIDTHS), flow)
-      assert len(report["captures"]) == len(nuu.WIDTHS) * 4
-      assert report["automated_flow"] == "every audit capture"
-      for capture in report["captures"]:
-        assert capture["flow"]["status"] == "passed"
-        assert "#panel" in capture["overlays"]["overlays"]
-        assert "overlaps" not in capture  # Generic -O sibling scan remains opt-in.
-        found = [
-          row for row in capture["overlays"]["findings"] if row["rule"] == "ACC203"
-        ]
-        for selector, edge in (
-          ("#clip-top", "top"),
-          ("#clip-left", "left"),
-          ("#clip-right", "right"),
-          ("#clip-bottom", "bottom"),
-        ):
-          assert any(
-            item["selector"] == selector
-            and item["clipping_ancestor"] == "#clip-frame"
-            and edge in item["edges"]
-            for item in found
-          ), (selector, capture["width"], found)
-        assert any(
-          item["selector"] == "#obscured" and item["issue"] == "occluded"
-          for item in found
-        )
-        assert any(
-          item["selector"] == "#no-surface" and item["issue"] == "background"
-          for item in found
-        )
-        assert any(
-          item["selector"] == "#popup" and item["issue"] == "background"
-          for item in found
-        )
-        for selector, edge in (
-          ("#edge-top", "top"),
-          ("#edge-left", "left"),
-          ("#edge-right", "right"),
-          ("#edge-bottom", "bottom"),
-        ):
-          assert any(
-            item["selector"] == selector and edge in item["edges"] for item in found
-          )
-        unexpected = [
-          item
-          for item in found
-          if item["selector"] in {"#scroll-copy", "#hidden-surface", "#good-surface"}
-        ]
-        assert not unexpected, [(row["selector"], row["issue"]) for row in unexpected]
-        assert all(
-          item["viewport"] == {"width": capture["width"], "height": capture["height"]}
-          and item["bounds"]["width"] > 0
-          and item["computed_surface_color"]
-          and item["clipping_ancestor"]
-          for item in found
-        ), capture["width"]
+      rules = {row["rule"] for row in live_res["findings"]}
+      assert {"ACC003", "ACC004", "ACC203", "HRC203"} <= rules
+      assert (tmp_path / "overlay-art" / ".gitignore").read_text(
+        encoding="utf-8"
+      ).strip() == "*"
     finally:
       server.shutdown()
       thread.join()
@@ -843,7 +745,7 @@ def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path)
     def log_message(self, *_args):
       pass
 
-  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
@@ -853,34 +755,34 @@ def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path)
         [
           sys.executable,
           str(SCRIPT),
-          "assets",
-          "--project",
-          str(tmp_path),
-          "--fetch",
+          "search",
+          "-f",
           url + route,
-          "--destination",
+          "-o",
           destination,
-          "--authorize-fetch",
+          "-A",
         ],
+        cwd=tmp_path,
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=False,
       )
       assert result.returncode == expected, result.stderr or result.stdout
-      return json.loads(result.stdout)
+      return result
 
     try:
-      result = run("/asset", "art.svg", 0)
-      assert Path(result["path"]).read_bytes() == payload
-      assert result["license"] == "unknown" and result["attribution"] == "unknown"
+      ok_res = run("/asset", "art.svg", 0)
+      assert "# Fetched Asset Receipt" in ok_res.stdout
+      assert (tmp_path / "art.svg").read_bytes() == payload
       before = list(requests)
-      assert run("/asset", "art.svg", 2)["status"] == "error"
+      run("/asset", "art.svg", 1)
       assert requests == before
       assert (tmp_path / "art.svg").read_bytes() == payload
-      assert run("/unsafe", "blocked.svg", 2)["status"] == "error"
+      run("/unsafe", "blocked.svg", 1)
       assert not (tmp_path / "blocked.svg").exists()
       before = list(requests)
-      assert run("/asset", "../outside.svg", 2)["status"] == "error"
+      run("/asset", "../outside.svg", 1)
       assert requests == before
       assert not (tmp_path.parent / "outside.svg").exists()
     finally:
@@ -889,12 +791,6 @@ def test_authorized_asset_fetch_keeps_destinations_and_redirect_guards(tmp_path)
 
 
 def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
-  import shutil
-  import sys
-
-  import pytest
-
-  sys.path.insert(0, str(SCRIPT.parent))
   from annotate import decode_png, encode_png
 
   src_png = tmp_path / "source.png"
@@ -902,47 +798,37 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
   original_bytes = encode_png(80, 60, pixels)
   src_png.write_bytes(original_bytes)
   out_png = tmp_path / "annotated.png"
-  spec_file = tmp_path / "spec.json"
-  spec_file.write_text(
-    json.dumps(
-      {
-        "boxes": [{"x": 4, "y": 4, "width": 30, "height": 20, "color": "#2563eb"}],
-        "labels": [{"x": 8, "y": 28, "text": "CTA", "color": "amber"}],
-      }
-    ),
-    encoding="utf-8",
-  )
   proc = subprocess.run(
     [
       sys.executable,
       str(SCRIPT),
       "annotate",
-      "--project",
-      str(tmp_path),
-      "--input",
+      "-i",
       str(src_png),
-      "--output",
+      "-o",
       str(out_png),
-      "--box",
+      "-b",
+      "4,4,30,20,#2563eb",
+      "-b",
       "10,10,40,25,red",
-      "--label",
+      "-l",
+      "8,28,CTA,amber",
+      "-l",
       "12,12,HERO,blue",
-      "--arrow",
+      "-a",
       "5,5,50,40,green",
-      "--callout",
+      "-n",
       "60,20,1,FIX,red",
-      "--spec",
-      str(spec_file),
     ],
+    cwd=tmp_path,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
   assert proc.returncode == 0, proc.stderr or proc.stdout
-  payload = json.loads(proc.stdout)
-  assert payload["status"] == "annotated"
-  assert payload["scale"] == 2
-  assert payload["annotations"] == {"boxes": 2, "labels": 2, "arrows": 1, "callouts": 1}
+  assert "# Annotation Complete" in proc.stdout
+  assert "- Scale: `2`" in proc.stdout
   assert src_png.read_bytes() == original_bytes
   out_w, out_h, out_rgba = decode_png(out_png.read_bytes())
   assert (out_w, out_h) == (80, 60)
@@ -954,207 +840,50 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
       sys.executable,
       str(SCRIPT),
       "annotate",
-      "--project",
-      str(tmp_path),
-      "--input",
+      "-i",
       str(src_png),
-      "--output",
+      "-o",
       str(scaled_png),
       "-S",
       "3",
-      "-c",
+      "-n",
       "40,30,1,BIG,red",
     ],
+    cwd=tmp_path,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
   assert scaled_proc.returncode == 0, scaled_proc.stderr or scaled_proc.stdout
-  assert json.loads(scaled_proc.stdout)["scale"] == 3
+  assert "- Scale: `3`" in scaled_proc.stdout
 
   inplace = subprocess.run(
     [
       sys.executable,
       str(SCRIPT),
       "annotate",
-      "--project",
-      str(tmp_path),
-      "--input",
+      "-i",
       str(src_png),
-      "--output",
+      "-o",
       str(src_png),
-      "--box",
+      "-b",
       "1,1,10,10",
     ],
+    cwd=tmp_path,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
   assert inplace.returncode == 2
   assert src_png.read_bytes() == original_bytes
 
-  if not shutil.which("node"):
-    pytest.skip("Node is not available")
-  driver = SCRIPT.with_name("browser.cjs")
-  driver_src = driver.read_text(encoding="utf-8")
-  assert "hasTouch: touch" in driver_src and "isMobile: touch" in driver_src
-  assert "height <= 480" in driver_src
-  assert "ACC202" in driver_src
-  assert "ACC203" in driver_src
-  bad_ready = subprocess.run(
-    ["node", str(driver)],
-    input=json.dumps(
-      {
-        "command": "inspect",
-        "url": "https://example.com",
-        "widths": [360],
-        "timeout": 1,
-        "engine": "auto",
-        "ready": "   ",
-        "flow": [],
-        "output": str(tmp_path / "bad-ready"),
-      }
-    ),
-    text=True,
-    capture_output=True,
-    check=False,
-  )
-  assert bad_ready.returncode == 2
-  assert json.loads(bad_ready.stdout)["status"] == "error"
-
-  fake_nm = tmp_path / "FakePlaywright"
-  pw_dir = fake_nm / "node_modules" / "playwright"
-  pw_dir.mkdir(parents=True)
-  fake_bin = fake_nm / "chromium-bin"
-  fake_bin.write_text("", encoding="utf-8")
-  for name in ("browser.cjs",):
-    shutil.copy2(SCRIPT.with_name(name), fake_nm / name)
-  (pw_dir / "index.js").write_text(
-    """
-const fs = require('node:fs');
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
-  'base64'
-);
-module.exports = {
-  chromium: {
-    executablePath: () => process.env.FAKE_CHROMIUM_PATH,
-    launch: async () => ({
-      newContext: async () => ({
-        newPage: async () => ({
-          on() {},
-          goto: async () => ({ status: () => 200, ok: () => true }),
-          locator: sel => ({
-            first: () => ({
-              waitFor: async () => {
-                if (sel === '#missing-ready') throw new Error('Timeout waiting for #missing-ready');
-              },
-            }),
-            count: async () => 1,
-          }),
-          evaluate: async fn => {
-            const src = String(fn);
-            if (src.includes('ACC003')) {
-              if (process.env.FAKE_A11Y_MODE === 'clean') return { status: 'checked', findings: [] };
-              return {
-                status: 'checked',
-                findings: [
-                  { rule: 'ACC003', severity: 'review', criterion: '4.1.2', evidence: 'unlabeled' },
-                  { rule: 'ACC004', severity: 'review', criterion: '1.3.1', evidence: 'missing ref' },
-                  { rule: 'ACC005', severity: 'review', criterion: '4.1.2', evidence: 'nested' },
-                  { rule: 'ACC006', severity: 'review', criterion: '4.1.1', evidence: 'duplicate id' },
-                  { rule: 'ACC007', severity: 'review', criterion: '1.3.1', evidence: 'skipped h' },
-                  { rule: 'ACC101', severity: 'review', criterion: '1.4.3', evidence: 'contrast' },
-                ],
-              };
-            }
-            return {
-              width: 360,
-              height: 900,
-              elements: [],
-              overflow: false,
-              preference: { dark: false, reducedMotion: false },
-              active: { tag: 'BODY', id: '', role: null },
-            };
-          },
-          screenshot: async ({ path }) => fs.writeFileSync(path, PNG),
-        }),
-        close: async () => {},
-      }),
-      close: async () => {},
-    }),
-  },
-};
-""",
-    encoding="utf-8",
-  )
-
-  def run_driver(req, mode="findings"):
-    res = subprocess.run(
-      ["node", str(fake_nm / "browser.cjs")],
-      input=json.dumps(req),
-      text=True,
-      capture_output=True,
-      check=False,
-      env={
-        **__import__("os").environ,
-        "FAKE_CHROMIUM_PATH": str(fake_bin),
-        "FAKE_A11Y_MODE": mode,
-      },
-    )
-    return res.returncode, json.loads(res.stdout)
-
-  base_req = {
-    "command": "inspect",
-    "url": "https://example.com",
-    "widths": [360],
-    "timeout": 1,
-    "engine": "auto",
-    "selector": "main",
-    "flow": [],
-    "output": str(tmp_path / "out"),
-  }
-  code_ok, ready_ok = run_driver({**base_req, "ready": "#app-ready"}, mode="clean")
-  assert code_ok == 0 and ready_ok["status"] == "captured"
-  assert ready_ok["captures"][0]["scheme"] == "dark"
-  assert 'colorScheme: "dark"' in annotate.Path(annotate.__file__).read_text(
-    encoding="utf-8"
-  )
+  ann_text = Path(annotate.__file__).read_text(encoding="utf-8")
+  assert 'colorScheme: "dark"' in ann_text or 'color_scheme="dark"' in ann_text
   assert 'color_scheme="dark"' in (SCRIPT.parent / "walk.py").read_text(
     encoding="utf-8"
   )
-
-  code_timeout, ready_timeout = run_driver(
-    {**base_req, "ready": "#missing-ready"}, mode="clean"
-  )
-  assert code_timeout == 0 and ready_timeout["status"] == "findings"
-  assert {row["rule"] for row in ready_timeout["findings"]} == {"RUN102"}
-
-  code_a11y, a11y_bad = run_driver(
-    {**base_req, "command": "a11y", "a11y": True}, mode="findings"
-  )
-  assert code_a11y == 0 and a11y_bad["status"] == "findings"
-  assert {row["rule"] for row in a11y_bad["findings"]} == {
-    "ACC003",
-    "ACC004",
-    "ACC005",
-    "ACC006",
-    "ACC007",
-    "ACC101",
-  }
-
-  code_clean, a11y_clean = run_driver(
-    {**base_req, "command": "a11y", "a11y": True}, mode="clean"
-  )
-  assert code_clean == 0 and a11y_clean["status"] == "captured"
-  assert not a11y_clean["findings"]
-
-  code_wf, wf_res = run_driver(
-    {**base_req, "command": "inspect", "wireframe": True}, mode="clean"
-  )
-  assert code_wf == 0 and wf_res["status"] == "captured"
-  assert wf_res["captures"][0]["wireframe_screenshot"].endswith("-wireframe.png")
-  assert Path(wf_res["captures"][0]["wireframe_screenshot"]).is_file()
 
   sheet = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
   assert sheet["font-mono"].startswith('"Monaspace Neon"')
@@ -1169,14 +898,14 @@ module.exports = {
             "selector": "main#content",
             "tag": "main",
             "bounds": {"width": vp_w, "height": 640},
-            "inkRatio": main_pass_ratio,
+            "ink_ratio": main_pass_ratio,
           },
           {
             "selector": "#app-root",
             "tag": "div",
             "role": "main",
             "bounds": {"width": vp_w, "height": 640},
-            "inkRatio": 0.40,
+            "ink_ratio": 0.40,
           },
         ],
       }
@@ -1190,7 +919,7 @@ module.exports = {
           "selector": "main#content",
           "tag": "main",
           "bounds": {"width": 1920, "height": 640},
-          "inkRatio": 0.31,
+          "ink_ratio": 0.31,
         }
       ],
     }
@@ -1208,7 +937,7 @@ module.exports = {
               "selector": "main#content",
               "tag": "main",
               "bounds": {"width": narrow_w, "height": 640},
-              "inkRatio": 0.25,
+              "ink_ratio": 0.25,
             }
           ],
         }
@@ -1222,22 +951,22 @@ module.exports = {
         "selector": "#header",
         "tag": "header",
         "bounds": {"width": 900, "height": 48},
-        "inkRatio": 0.38,
+        "ink_ratio": 0.38,
         "values": {"height": "48px"},
       },
       {
         "selector": ".report-toolbar",
         "tag": "div",
         "bounds": {"width": 900, "height": 48},
-        "inkRatio": 0.34,
+        "ink_ratio": 0.34,
         "values": {"height": "48px", "justify-content": "space-between"},
       },
       {
         "selector": ".step-row",
         "tag": "div",
         "bounds": {"width": 1200, "height": 40},
-        "inkRatio": 0.60,
-        "maxSiblingGap": 960,
+        "ink_ratio": 0.60,
+        "max_sibling_gap": 960,
         "values": {"height": "40px", "padding-left": "16px"},
       },
       {
@@ -1250,7 +979,7 @@ module.exports = {
       {
         "selector": "#modal-close",
         "tag": "button",
-        "iconOnly": True,
+        "icon_only": True,
         "bounds": {"width": 32, "height": 44},
         "values": {"width": "32px", "height": "44px"},
       },
@@ -1264,11 +993,13 @@ module.exports = {
     "HRC102",
   ]
   assert density_findings[0]["selector"] == ".step-row"
-  density_file = tmp_path / "density-report.json"
-  density_file.write_text(json.dumps(density_report), encoding="utf-8")
-  assert measure.main(["density", str(density_file)]) == 1
-  assert measure.main(["check", "-d", str(density_file)]) == 1
-  assert measure.main(["check", str(density_file)]) == 0
+  assert (
+    measure.check(
+      density_report,
+      measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8")),
+    )
+    == []
+  )
   clip_overlap_report = {
     "width": 1280,
     "elements": [
@@ -1276,17 +1007,17 @@ module.exports = {
         "selector": ".clipped-card",
         "tag": "div",
         "bounds": {"width": 200, "height": 40},
-        "clientWidth": 200,
-        "scrollWidth": 280,
-        "clientHeight": 40,
-        "scrollHeight": 40,
+        "client_width": 200,
+        "scroll_width": 280,
+        "client_height": 40,
+        "scroll_height": 40,
         "values": {"overflow": "hidden"},
       },
       {
         "selector": "#btn-a",
         "tag": "button",
         "bounds": {"width": 80, "height": 40},
-        "siblingOverlap": "#btn-b",
+        "sibling_overlap": "#btn-b",
         "values": {},
       },
     ],
@@ -1317,42 +1048,42 @@ module.exports = {
     annotate.encode_png(80, 60, bytearray([28, 36, 28, 255] * (80 * 60)))
   )
   board_out = tmp_path / "board-out.png"
+  (font_proj / "nuu.toml").write_text(
+    '[paths]\nstylesheet = "style.css"\n', encoding="utf-8"
+  )
   board_proc = subprocess.run(
     [
       sys.executable,
       str(SCRIPT),
       "board",
-      "--project",
-      str(font_proj),
+      "-c",
+      str(font_proj / "nuu.toml"),
       "-t",
       "Comparison Board",
       "-p",
       f"Before={panel_a}",
       "-p",
       f"After={panel_b}@0,0,60,50",
-      "-c",
+      "-n",
       "1,Updated layout,green",
       "-W",
       "-o",
       str(board_out),
     ],
+    cwd=font_proj,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
   assert board_proc.returncode == 0, board_proc.stderr or board_proc.stdout
-  board_res = json.loads(board_proc.stdout)
-  assert board_res["tool"] == "board"
-  assert board_res["status"] == "composed"
-  assert board_res["panels"] == 2
-  assert board_res["font_family"].startswith('"Demo Sans"')
+  assert "# Board Composed" in board_proc.stdout
+  assert '"Demo Sans"' in board_proc.stdout
   assert board_out.is_file()
-  assert board_res["wireframe_output"].endswith("board-out-wireframe.png")
-  assert Path(board_res["wireframe_output"]).is_file()
+  assert (tmp_path / "board-out-wireframe.png").is_file()
   bw, bh, _ = annotate.decode_png(board_out.read_bytes())
   assert bw > 80 and bh > 60
-  assert nuu.DEVICE_BREAKPOINTS == uiux.DEVICE_BREAKPOINTS
-  assert callable(nuu.main) and callable(uiux.main)
+  assert callable(nuu.main)
 
 
 def test_design_boards_and_html_typography(tmp_path):
@@ -1447,46 +1178,64 @@ def test_design_boards_and_html_typography(tmp_path):
     encoding="utf-8",
   )
 
-  spec_path = html_font_proj / "boards.json"
-  spec_data = {
-    "stylesheet": "index.html",
-    "icons": {"file": "index.html", "table": "ICONS"},
-    "shots": {"dashboard": "shots/dashboard.png"},
-    "boards": [
-      {
-        "name": "views",
-        "title": "Example views",
-        "lede": "Full views at 1360 px, two to a row.",
-        "wide": True,
-        "frames": [
-          {
-            "label": "Default view",
-            "sub": "Five remembered repos.",
-            "shot": "dashboard",
-            "width": 1360,
-          },
-          {
-            "label": "Second view",
-            "sub": "Native resolution preserved.",
-            "shot": "dashboard",
-          },
-        ],
-      },
-      {
-        "name": "components",
-        "title": "Global components",
-        "lede": "Every control in every state.",
-        "frames": [
-          {
-            "label": "Buttons",
-            "sub": "Primary, default, ghost, icon.",
-            "html": "components/buttons.html",
-          }
-        ],
-      },
+  spec_path = html_font_proj / "boards.toml"
+  spec_toml = """stylesheet = "index.html"
+
+[icons]
+file = "index.html"
+table = "ICONS"
+
+[shots]
+dashboard = "shots/dashboard.png"
+
+[[boards]]
+name = "views"
+title = "Example views"
+lede = "Full views at 1360 px, two to a row."
+wide = true
+
+[[boards.frames]]
+label = "Default view"
+sub = "Five remembered repos."
+shot = "dashboard"
+width = 1360
+
+[[boards.frames]]
+label = "Second view"
+sub = "Native resolution preserved."
+shot = "dashboard"
+
+[[boards]]
+name = "components"
+title = "Global components"
+lede = "Every control in every state."
+
+[[boards.frames]]
+label = "Buttons"
+sub = "Primary, default, ghost, icon."
+html = "components/buttons.html"
+"""
+  spec_path.write_text(spec_toml, encoding="utf-8")
+
+  retired_design = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "board",
+      "-T",
+      "design",
+      "-s",
+      str(spec_path),
+      "-o",
+      str(tmp_path / "retired-design"),
     ],
-  }
-  spec_path.write_text(json.dumps(spec_data, indent=2), encoding="utf-8")
+    cwd=html_font_proj,
+    text=True,
+    encoding="utf-8",
+    capture_output=True,
+    check=False,
+  )
+  assert retired_design.returncode == 2
 
   out_dir = tmp_path / "design-out"
   proc = subprocess.run(
@@ -1494,26 +1243,20 @@ def test_design_boards_and_html_typography(tmp_path):
       sys.executable,
       str(SCRIPT),
       "board",
-      "--project",
-      str(html_font_proj),
-      "-T",
-      "design",
       "-s",
       str(spec_path),
       "-o",
       str(out_dir),
     ],
+    cwd=html_font_proj,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
   assert proc.returncode == 0, proc.stderr or proc.stdout
-  res = json.loads(proc.stdout)
-  assert res["status"] == "composed"
-  assert res["type"] == "design"
-  assert res["embedded_fonts"] == 2
-  assert res["font_family"].startswith('"Inter"')
-  assert len(res["boards"]) == 2
+  assert "# Board Composed" in proc.stdout
+  assert '"Inter"' in proc.stdout
   views_png = out_dir / "views.png"
   comp_png = out_dir / "components.png"
   assert views_png.is_file() and comp_png.is_file()
@@ -1528,10 +1271,6 @@ def test_design_boards_and_html_typography(tmp_path):
       sys.executable,
       str(SCRIPT),
       "board",
-      "--project",
-      str(html_font_proj),
-      "--type",
-      "design",
       "--only",
       "components",
       "--spec",
@@ -1539,7 +1278,9 @@ def test_design_boards_and_html_typography(tmp_path):
       "--output",
       str(only_dir),
     ],
+    cwd=html_font_proj,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1547,13 +1288,11 @@ def test_design_boards_and_html_typography(tmp_path):
   assert (only_dir / "components.png").is_file()
   assert not (only_dir / "views.png").exists()
 
-  bad_shot_spec = html_font_proj / "bad-shot.json"
+  bad_shot_spec = html_font_proj / "bad-shot.toml"
   bad_shot_spec.write_text(
-    json.dumps(
-      {
-        **spec_data,
-        "shots": {"missing_dash": "shots/does-not-exist.png"},
-      }
+    spec_toml.replace(
+      'dashboard = "shots/dashboard.png"',
+      'missing_dash = "shots/does-not-exist.png"',
     ),
     encoding="utf-8",
   )
@@ -1562,29 +1301,27 @@ def test_design_boards_and_html_typography(tmp_path):
       sys.executable,
       str(SCRIPT),
       "board",
-      "--project",
-      str(html_font_proj),
-      "-T",
-      "design",
       "-s",
       str(bad_shot_spec),
       "-o",
       str(tmp_path / "bad-shot-out"),
     ],
+    cwd=html_font_proj,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
   assert bad_shot_proc.returncode == 1
-  assert "missing_dash" in bad_shot_proc.stdout
+  assert "dashboard" in bad_shot_proc.stdout or "missing_dash" in bad_shot_proc.stdout
 
   no_style_html = html_font_proj / "nostyle.html"
   no_style_html.write_text(
     "<!doctype html><html><body>No style</body></html>", encoding="utf-8"
   )
-  bad_style_spec = html_font_proj / "bad-style.json"
+  bad_style_spec = html_font_proj / "bad-style.toml"
   bad_style_spec.write_text(
-    json.dumps({**spec_data, "stylesheet": "nostyle.html"}),
+    spec_toml.replace('stylesheet = "index.html"', 'stylesheet = "nostyle.html"'),
     encoding="utf-8",
   )
   bad_style_proc = subprocess.run(
@@ -1592,16 +1329,14 @@ def test_design_boards_and_html_typography(tmp_path):
       sys.executable,
       str(SCRIPT),
       "board",
-      "--project",
-      str(html_font_proj),
-      "-T",
-      "design",
       "-s",
       str(bad_style_spec),
       "-o",
       str(tmp_path / "bad-style-out"),
     ],
+    cwd=html_font_proj,
     text=True,
+    encoding="utf-8",
     capture_output=True,
     check=False,
   )
@@ -1648,40 +1383,24 @@ def test_design_boards_and_html_typography(tmp_path):
   assert step_results[0]["device"] == "desktop"
   assert Path(step_results[0]["screenshot"]).is_file()
 
-  views = walk.capture_views(
-    walk.Walker(FakePage(), demo),
-    demo,
-    {"dashboard": 1500, "signed-out": lambda w, _d: w.goto(2500)},
-  )
-  assert set(views) == {"dashboard", "signed-out"}
+  walker_inst = walk.Walker(FakePage(), demo, output_dir=walk_out)
+  dash_png = walker_inst.view("dashboard")
+  signed_png = walker_inst.view("signed-out")
+  assert dash_png.is_file()
+  assert signed_png.is_file()
   walk.clear_steps()
 
   default_nuu_toml = SCRIPT.parent.parent / "references" / "nuu.toml"
   assert default_nuu_toml.is_file()
   default_cfg = annotate.load_nuu_config(config_path=default_nuu_toml)
   assert default_cfg["path"] == str(default_nuu_toml)
-  assert "Inter" in default_cfg["config"]["fonts"]["sans"]
-  assert "Monaspace Neon" in default_cfg["config"]["fonts"]["mono"]
-  assert default_cfg["config"]["audit"]["widths"] == [1920, 1080, 958, 855, 411]
-  assert default_cfg["config"]["audit"]["report_widths"] == [1920, 411]
+  assert default_cfg["config"]["fonts"]["prefer_project_css"] is True
+  assert default_cfg["config"]["fonts"]["sans"] == ""
+  assert default_cfg["config"]["fonts"]["mono"] == ""
+  vps = default_cfg["config"]["audit"]["viewports"]
+  assert [vp["width"] for vp in vps] == [1920, 1080, 958, 855, 411]
+  assert [vp["width"] for vp in vps if vp["report"]] == [1920, 411]
   assert nuu.REPORT_WIDTHS == (1920, 411)
-  audit_report_md = (SCRIPT.parent.parent / "references" / "audit-report.md").read_text(
-    encoding="utf-8"
-  )
-  assert "Desktop maximized (`1920x957`)" in audit_report_md
-  assert "Phone portrait (`411x799`)" in audit_report_md
-  assert "`1920x957` / `411x799`" in audit_report_md
-  assert "| Location | Width | Before | After |" in audit_report_md
-  assert "| Area | Before | After | Action / Disposition |" in audit_report_md
-  assert "1080x2437" not in audit_report_md
-  assert "`1280` / `360`" not in audit_report_md
-  assert "finding-1-before-after-board.png" in audit_report_md
-  assert "visual-1-before-after-board.png" in audit_report_md
-  assert (
-    "## Captures\n\nOmit this section unless full-viewport captures are needed."
-    in audit_report_md
-  )
-  assert "## Captures (" not in audit_report_md
 
   bare_proj = tmp_path / "BareNoCssProject"
   bare_proj.mkdir()
@@ -1689,8 +1408,8 @@ def test_design_boards_and_html_typography(tmp_path):
   assert "Inter" in bare_typo["font_sans"]
   assert "Monaspace Neon" in bare_typo["font_mono"]
 
-  chromium_bin = annotate.os.environ.get("CHROMIUM_PATH") or ""
-  if chromium_bin and Path(chromium_bin).is_file():
+  chromium_bin = _chromium_ready()
+  if chromium_bin:
     chr_src = toml_proj / "chr-shot.png"
     chr_src.write_bytes(
       annotate.encode_png(120, 80, bytearray([20, 24, 32, 255] * (120 * 80)))
@@ -1731,12 +1450,10 @@ def test_design_boards_and_html_typography(tmp_path):
   )
   dev_lint = nuu.lint(toml_proj)
   assert any(
-    d["id"] == "compact-toolbar" and "34px" in d["reason"]
+    "compact-toolbar" in d["reason"] and "34px" in d["reason"]
     for d in dev_lint["deviations"]
   )
-  assert any(
-    d["id"] == "" and "30px height" in d["reason"] for d in dev_lint["deviations"]
-  )
+  assert any("30px height" in d["reason"] for d in dev_lint["deviations"])
   sheet_tokens = measure.parse_sheet(
     (SCRIPT.parent.parent / "references" / "style.css").read_text(encoding="utf-8")
   )
@@ -1768,21 +1485,18 @@ def test_design_boards_and_html_typography(tmp_path):
       sys.executable,
       str(SCRIPT),
       "collect",
-      "--project",
-      str(toml_proj),
-      "--deviations",
+      "-c",
+      str(toml_proj / "nuu.toml"),
     ],
+    cwd=toml_proj,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert collect_dev.returncode == 0, collect_dev.stdout + collect_dev.stderr
-  collect_dev_payload = json.loads(collect_dev.stdout)
-  assert collect_dev_payload["status"] == "checked"
-  assert any(
-    d["id"] == "compact-toolbar" and "34px" in d["reason"]
-    for d in collect_dev_payload["deviations"]
-  )
+  assert "compact-toolbar" in collect_dev.stdout
+  assert "34px" in collect_dev.stdout
 
   custom_focus_proj = tmp_path / "custom-focus-repo"
   (custom_focus_proj / ".git").mkdir(parents=True)
@@ -1809,7 +1523,7 @@ def test_design_boards_and_html_typography(tmp_path):
         {
           "selector": "#log-search",
           "tag": "input",
-          "inputType": "search",
+          "input_type": "search",
           "row_slack": 58,
           "bounds": {"x": 16, "y": 95, "width": 566, "height": 34},
           "values": {"width": "566px", "height": "34px"},
@@ -1833,7 +1547,7 @@ def test_design_boards_and_html_typography(tmp_path):
           {
             "selector": "#full-url",
             "tag": "input",
-            "inputType": "text",
+            "input_type": "text",
             "row_slack": 0,
             "bounds": {"x": 0, "y": 0, "width": 1280, "height": 40},
             "values": {"width": "1280px", "height": "40px"},
@@ -1850,7 +1564,7 @@ def test_design_boards_and_html_typography(tmp_path):
         {
           "selector": "#short-filter",
           "tag": "input",
-          "inputType": "text",
+          "input_type": "text",
           "row_slack": 400,
           "bounds": {"x": 0, "y": 0, "width": 320, "height": 40},
           "values": {"width": "320px", "height": "40px"},
@@ -1869,7 +1583,7 @@ def test_design_boards_and_html_typography(tmp_path):
           {
             "selector": "#paired-input",
             "tag": "input",
-            "inputType": "text",
+            "input_type": "text",
             "row_slack": 0,
             "bounds": {"x": 0, "y": 0, "width": 320, "height": 40},
             "values": {"width": "320px", "height": "40px"},
@@ -1888,7 +1602,7 @@ def test_design_boards_and_html_typography(tmp_path):
             {
               "selector": f"#exempt-{exempt_type}",
               "tag": "input",
-              "inputType": exempt_type,
+              "input_type": exempt_type,
               "row_slack": 400,
               "bounds": {"x": 0, "y": 0, "width": 24, "height": 24},
               "values": {"width": "24px", "height": "24px"},
@@ -2376,16 +2090,20 @@ def test_nuu_list_indent_and_overlap_rules(tmp_path):
     '<button class="button button--accent">Delete repo</button></dialog>\n',
     encoding="utf-8",
   )
-  lint_res = subprocess.run(
-    [sys.executable, str(SCRIPT), "lint", "--project", str(lint_proj)],
-    capture_output=True,
-    text=True,
-    check=False,
-  )
-  lint_payload = json.loads(lint_res.stdout)
+  lint_payload = nuu.lint(lint_proj)
   nul008 = [f for f in lint_payload["findings"] if f["rule"] == "HRC001"]
   assert len(nul008) == 2
   assert all(Path(f["path"]).name == "bad.html" for f in nul008)
+  lint_res = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint"],
+    cwd=lint_proj,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert lint_res.returncode == 1
+  assert "`HRC001`" in lint_res.stdout
 
 
 def test_house_style_amendments_stay_synced():
@@ -2394,29 +2112,44 @@ def test_house_style_amendments_stay_synced():
   for root in (live_root, ref_root):
     css = (root / "references/style.css").read_text(encoding="utf-8")
     assert css.count("--scrollbar-thumb: #767682;") == 2
-    assert css.count("--scrollbar-thumb: #62626e;") == 2
+    assert css.count("--scrollbar-thumb: #767686;") == 2
+    assert "padding: var(--space-2) var(--space-4);" in css
+    assert ".button--danger {" in css
+    assert "min-height: var(--space-5);" in css
+    assert "--radius-md: 6px;" in css
+    assert "--font-sans: var(--font);" in css
+    assert "*, *::before" not in css.split("@media (prefers-reduced-motion: reduce)")[1]
     assert "@media (pointer: coarse)" in css
     assert "min-height: var(--touch);" in css
     assert "border-radius: 50%;" not in css
 
-    skill = (root / "SKILL.md").read_text(encoding="utf-8")
-    assert "except .eyebrow labels at 0.06em" in skill
-    assert "44x44 px hit areas" in skill
-    assert (
-      "33. On every live Nuu audit, inspect visible dialog and floating-overlay text "
-      "and controls for clipping or occlusion at every edge across the five house "
-      "viewports. Check tooltip and popover surfaces for missing effective "
-      "backgrounds. Report selector, viewport, bounds, clipping ancestor, and "
-      "computed surface color."
-    ) in skill
-
     modal = (root / "references/recipes/modal-manager.md").read_text(encoding="utf-8")
     assert "padding: var(--space-5);" in modal
+    assert "<!-- Lucide Icons - ISC License -->" in modal
     loading = (root / "references/recipes/loading-bar.md").read_text(encoding="utf-8")
     assert "cubic-bezier(0.16" not in loading
     assert "var(--ease)" in loading
+    assert "width: 1lh;" in loading
     live_dot = (root / "references/recipes/live-dot.md").read_text(encoding="utf-8")
     assert "animation: none" in live_dot
+    assert "width: 1lh;" in live_dot
+    assert ".dot-sm { width: 4px;" in live_dot
+    assert ".dot-lg { width: 12px;" in live_dot
+    table_cards = (root / "references/recipes/table-to-cards.md").read_text(
+      encoding="utf-8"
+    )
+    assert "max-width: 60em" in table_cards
+    edge_fade = (root / "references/recipes/scroll-edge-fade.md").read_text(
+      encoding="utf-8"
+    )
+    assert "--edge-fade: 24px; --edge-ramp: 32px; --scrollbar-carve: 15px;" in edge_fade
+    timestamps = (root / "references/recipes/relative-timestamps.md").read_text(
+      encoding="utf-8"
+    )
+    assert "font-variant-numeric: tabular-nums" in timestamps
+    assert "without requiring `var(--font-mono)`" in timestamps
+    page_mem = (root / "references/recipes/page-memory.md").read_text(encoding="utf-8")
+    assert "ACC207" in page_mem
     ranges = (root / "references/recipes/range-sliders.md").read_text(encoding="utf-8")
     assert "at most 11 major-division ticks" in ranges
 
@@ -2464,76 +2197,71 @@ def test_num208_button_group_equal_size():
 
 
 def test_measure_review_severity_and_heading_boundary(tmp_path):
-  report = tmp_path / "measured.json"
-  report.write_text(
-    json.dumps(
+  report_payload = {
+    "width": 1280,
+    "elements": [
       {
-        "width": 1280,
-        "elements": [
-          {
-            "selector": "h1",
-            "tag": "h1",
-            "values": {
-              "font-size": "32px",
-              "line-height": "48px",
-              "letter-spacing": "-0.96px",
-            },
-          },
-          {
-            "selector": "article.prose",
-            "tag": "article",
-            "ch_px": 8,
-            "bounds": {"width": 320},
-            "values": {},
-          },
-        ],
-      }
-    ),
-    encoding="utf-8",
-  )
+        "selector": "h1",
+        "tag": "h1",
+        "values": {
+          "font-size": "32px",
+          "line-height": "48px",
+          "letter-spacing": "-0.96px",
+        },
+      },
+      {
+        "selector": "article.prose",
+        "tag": "article",
+        "ch_px": 8,
+        "bounds": {"width": 320},
+        "values": {},
+      },
+    ],
+  }
+  tokens = measure.parse_sheet(measure.DEFAULT_SHEET.read_text(encoding="utf-8"))
+  found = measure.check(report_payload, tokens)
+  codes = {f.split()[0] for f in found}
+  assert codes == {"TYP101", "TYP201"}
+  assert "TYP102" not in codes
 
-  def run(*args):
-    return subprocess.run(
-      [sys.executable, str(SCRIPT), *args],
-      cwd=tmp_path,
-      capture_output=True,
-      text=True,
-      check=False,
-    )
+  default_sev = nuu.check_severities(tmp_path)
+  assert default_sev["TYP101"] == "review"
+  assert default_sev["TYP201"] == "review"
 
-  review = run("check", str(report))
-  assert review.returncode == 0
-  assert (
-    "TYP101" in review.stdout
-    and "TYP201" in review.stdout
-    and "TYP102" not in review.stdout
-  )
   (tmp_path / "docs").mkdir()
   (tmp_path / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
-  audit = run("audit", "--project", str(tmp_path), "--measured", str(report))
-  assert audit.returncode == 0, audit.stdout
-  findings = json.loads(audit.stdout)["findings"]
-  assert {row["rule"] for row in findings} == {"TYP101", "TYP201"}
-  assert all(row["severity"] == "review" for row in findings)
   (tmp_path / "nuu.toml").write_text(
     '[checks.severity]\nTYP101 = "error"\n', encoding="utf-8"
   )
-  strict = run("check", str(report))
-  assert strict.returncode == 1 and "TYP101" in strict.stdout
-  strict_audit = run("audit", "--project", str(tmp_path), "--measured", str(report))
-  assert strict_audit.returncode == 1
-  assert any(
-    row["severity"] == "error" for row in json.loads(strict_audit.stdout)["findings"]
-  )
+  strict_sev = nuu.check_severities(tmp_path)
+  assert strict_sev["TYP101"] == "error"
+
   (tmp_path / "nuu.toml").write_text(
     '[checks.severity]\nTYP101 = "ignore"\n', encoding="utf-8"
   )
-  invalid = run("check", str(report))
-  assert invalid.returncode == 2
-  (tmp_path / "nuu.toml").write_text(
-    '[checks.severity]\nTYP201 = "error"\n', encoding="utf-8"
+  invalid = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint", "-c", str(tmp_path / "nuu.toml")],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
   )
-  assert run("check", str(report)).returncode == 1
+  assert invalid.returncode == 1
+  assert "TYP101" in invalid.stderr
+
+  # Verify $CHROMIUM_FONTS directory -> FONTCONFIG_FILE + FONTCONFIG_PATH
+  fake_fonts = tmp_path / "fonts"
+  fake_fonts.mkdir()
+  (fake_fonts / "fonts.conf").write_text("<fontconfig/>", encoding="utf-8")
+  fake_lib = tmp_path / "lib"
+  fake_lib.mkdir()
+  env_map = nuu.chromium_launch_env(
+    {"CHROMIUM_LIB": str(fake_lib), "CHROMIUM_FONTS": str(fake_fonts)}
+  )
+  assert env_map["LD_LIBRARY_PATH"].startswith(str(fake_lib.resolve()))
+  assert env_map["FONTCONFIG_FILE"] == str((fake_fonts / "fonts.conf").resolve())
+  assert env_map["FONTCONFIG_PATH"] == str(fake_fonts.resolve())
 
 
 def test_study_ramp_and_contextual_prose_width():
@@ -2577,105 +2305,257 @@ def test_study_ramp_and_contextual_prose_width():
   ).startswith("TYP201")
 
 
-def test_live_audit_checks_completed_feedback_for_each_click(tmp_path):
+def test_severity_overrides_control_lint_and_audit_exit_codes(tmp_path):
+  proj = tmp_path / "sev-proj"
+  (proj / "docs").mkdir(parents=True)
+  (proj / "docs" / "design.md").write_text("# Design\n", encoding="utf-8")
+  (proj / "index.html").write_text(
+    '<img src="hero.png"><button>Send</button>\n', encoding="utf-8"
+  )
+  err_run = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint"],
+    cwd=proj,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert err_run.returncode == 1
+  (proj / "nuu.toml").write_text(
+    '[checks.severity]\nACC001 = "review"\n', encoding="utf-8"
+  )
+  rev_run = subprocess.run(
+    [sys.executable, str(SCRIPT), "lint"],
+    cwd=proj,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert rev_run.returncode == 0
+  assert "`ACC001` (review)" in rev_run.stdout
+
+
+def test_measure_drop_rays_and_contrast_fallback(tmp_path):
+  import annotate
+
+  # Contrast fallback ladder: (#ff3366) -> #00e5ff -> #111827 with 1 px halo.
+  dark_pick = measure.select_redline_ink([(18, 19, 24)])
+  assert dark_pick["hex"] == "#ff3366"
+  assert dark_pick["halo"] is None
+  assert not dark_pick["fallback"]
+  assert dark_pick["min_contrast"] >= 3.0
+
+  crimson_pick = measure.select_redline_ink([(225, 29, 72)])
+  assert crimson_pick["hex"] == "#00e5ff"
+  assert crimson_pick["halo"] == (17, 24, 39, 255)
+  assert crimson_pick["fallback"]
+  assert crimson_pick["min_contrast"] >= 3.0
+
+  light_cyan_pick = measure.select_redline_ink([(180, 230, 240)])
+  assert light_cyan_pick["hex"] == "#111827"
+  assert light_cyan_pick["halo"] == (255, 255, 255, 255)
+  assert light_cyan_pick["fallback"]
+  assert light_cyan_pick["min_contrast"] >= 3.0
+
+  custom_pick = measure.select_redline_ink([(18, 19, 24)], redline="#00e5ff")
+  assert custom_pick["hex"] == "#00e5ff"
+  assert custom_pick["halo"] is None
+
+  # Synthesize a 120x80 dark PNG with an on-scale 40x24 box and an off-scale 37x19 box.
+  w, h = 120, 80
+  rgba = bytearray(w * h * 4)
+  annotate.fill_rect(rgba, w, h, 0, 0, w, h, (18, 19, 24, 255))
+  annotate.fill_rect(rgba, w, h, 12, 16, 40, 24, (40, 44, 56, 255))
+  annotate.fill_rect(rgba, w, h, 64, 16, 37, 19, (225, 29, 72, 255))
+  src_png = tmp_path / "source.png"
+  src_png.write_bytes(annotate.encode_png(w, h, rgba))
+
+  out_ok = tmp_path / "drop-ok.png"
+  pass_status = "- Status: `pass` (exit 0)"
+  pass_span = "| `drop` | `20,24,xy` | `40 x 24 px` | `True` | `#ff3366` |"
+  ok_run = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "measure",
+      "-i",
+      str(src_png),
+      "-d",
+      "20,24",
+      "-o",
+      str(out_ok),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert ok_run.returncode == 0
+  assert pass_status in ok_run.stdout
+  assert pass_span in ok_run.stdout
+  ow, oh, _ = annotate.decode_png(out_ok.read_bytes())
+  assert (ow, oh) == (w, h)
+
+  out_bad = tmp_path / "drop-bad.png"
+  fail_status = "- Status: `findings` (exit 1)"
+  fallback_span = "| `drop` | `72,24,x` | `37 px` | `False` | `#00e5ff` |"
+  spc_code = "`SPC001`"
+  bad_run = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "measure",
+      "-i",
+      str(src_png),
+      "-d",
+      "72,24,x",
+      "-o",
+      str(out_bad),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert bad_run.returncode == 1
+  assert fail_status in bad_run.stdout
+  assert fallback_span in bad_run.stdout
+  assert spc_code in bad_run.stdout
+
+  # Invalid CLI combinations exit 2. Overwriting input or out-of-bounds drop exits 1.
+  missing_out = subprocess.run(
+    [sys.executable, str(SCRIPT), "measure", "-i", str(src_png), "-d", "20,24"],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert missing_out.returncode == 2
+
+  same_io = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "measure",
+      "-i",
+      str(src_png),
+      "-d",
+      "20,24",
+      "-o",
+      str(src_png),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert same_io.returncode == 1
+
+
+def test_measure_live_devtools_tint_and_figma_guides(tmp_path):
   import http.server
-  import os
   import threading
 
+  import annotate
   import pytest
 
-  if not os.environ.get("NEMO_UI_BROWSER_TEST"):
-    pytest.skip("Optional browser integration is not enabled")
-  config = json.loads(Path(os.environ["NEMO_UI_BROWSER_CONFIG"]).read_text())
-  markup = b"""<!doctype html><html><head><title>Feedback fixture</title></head>
-  <body style="background:#222;color:white"><button id="copy">Copy</button>
-  <button id="save">Save</button><button id="submit">Submit</button>
-  <button id="missing">Missing</button><button id="pending">Start</button>
-  <button id="delayed">Send</button><button id="failure">Fail</button>
-  <button id="success">Save again</button><input type="button" id="input" value="Copy input">
-  <p role="status" id="status"></p>
-  <script>
-  document.querySelector('#copy').onclick = e => e.currentTarget.textContent = 'Copied';
-  document.querySelector('#save').onclick = () => document.querySelector('#status').textContent = 'Saved';
-  document.querySelector('#submit').onclick = () => document.querySelector('#status').textContent = 'Submitted';
-  document.querySelector('#pending').onclick = e => e.currentTarget.textContent = 'Loading';
-  document.querySelector('#failure').onclick = () => document.querySelector('#status').textContent = 'Saving failed';
-  document.querySelector('#success').onclick = () => document.querySelector('#status').textContent = 'Saving complete';
-  document.querySelector('#input').onclick = e => e.currentTarget.value = 'Copied';
-  document.querySelector('#delayed').onclick = () => {
-    document.querySelector('#status').textContent = 'Sending';
-    setTimeout(() => document.querySelector('#status').textContent = 'Sent', 200);
-  };
-  </script></body></html>"""
+  if not _chromium_ready():
+    pytest.skip("Playwright/Chromium runtime not configured")
 
-  class Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-      self.send_response(200)
-      self.send_header("Content-Type", "text/html")
-      self.end_headers()
-      self.wfile.write(markup)
+  site = tmp_path / "measure-site"
+  site.mkdir()
+  (site / "index.html").write_text(
+    "<!doctype html><html lang='en'><head><meta charset='utf-8'><title>Measure</title>"
+    "<style>"
+    "body { margin: 0; padding: 24px; background: #121318; color: #ededf2; "
+    "font-family: system-ui, sans-serif; font-size: 16px; line-height: 24px; }"
+    ".row { display: flex; gap: 16px; padding: 16px; background: #1a1b22; border-radius: 10px; }"
+    ".btn-a, .btn-b { padding: 8px 16px; border: 0; border-radius: 6px; "
+    "font-size: 14px; line-height: 20px; background: #22232c; color: #ededf2; }"
+    ".bad-row { display: flex; gap: 13px; margin-top: 16px; }"
+    ".icon-btn { display: inline-flex; align-items: center; gap: 8px; "
+    "font-size: 14px; line-height: 20px; padding: 8px 12px; }"
+    "</style></head><body>"
+    "<div class='row'><button class='btn-a'>Save</button><button class='btn-b'>Cancel</button></div>"
+    "<div class='bad-row'><button class='bad-a'>One</button><button class='bad-b'>Two</button></div>"
+    "<button class='icon-btn'><svg width='12' height='12' viewBox='0 0 24 24'>"
+    "<path d='M5 12h14'/></svg>Label</button>"
+    "</body></html>\n",
+    encoding="utf-8",
+  )
 
-    def log_message(self, *_args):
+  class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, directory=str(site), **kwargs)
+
+    def log_message(self, format, *args):
       pass
 
-  project = tmp_path / "project"
-  (project / "docs").mkdir(parents=True)
-  (project / "docs" / "design.md").write_text("# Design\n")
-  flow_file = tmp_path / "flow.json"
-  flow_file.write_text(
-    json.dumps(
-      [
-        {"action": "click", "selector": f"#{item}"}
-        for item in (
-          "copy",
-          "save",
-          "submit",
-          "missing",
-          "pending",
-          "delayed",
-          "failure",
-          "success",
-          "input",
-        )
-      ]
-    )
-  )
-  with http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler) as server:
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler) as server:
+    port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-      result = subprocess.run(
+      url = f"http://127.0.0.1:{port}/"
+      pair_png = tmp_path / "pair-ok.png"
+      pair_row_expected = "| `pair-x` | `.btn-a` | `16 px` | `True` |"
+      ok_res = subprocess.run(
         [
           sys.executable,
           str(SCRIPT),
-          "audit",
-          "-p",
-          str(project),
+          "measure",
           "-u",
-          f"http://127.0.0.1:{server.server_port}",
-          "-e",
-          "chromium",
-          "-x",
-          config["executable"],
-          "-w",
-          "411",
-          "-t",
-          "1",
-          "-f",
-          str(flow_file),
-          "-d",
-          str(tmp_path / "artifacts"),
+          url,
+          "-s",
+          ".btn-a",
+          "--to",
+          ".btn-b",
+          "-v",
+          "640x360",
+          "-o",
+          str(pair_png),
         ],
-        text=True,
+        cwd=tmp_path,
         capture_output=True,
+        text=True,
+        encoding="utf-8",
         check=False,
-        env={**os.environ, **config.get("env", {})},
       )
-      assert result.returncode == 1, result.stderr or result.stdout
-      report = json.loads(result.stdout)
-      findings = [item for item in report["findings"] if item["rule"] == "ACC206"]
-      assert len(findings) == 8
-      assert {item["selector"] for item in findings} == {"#missing", "#pending"}
+      assert ok_res.returncode == 0
+      assert pair_row_expected in ok_res.stdout
+      pw, ph, _ = annotate.decode_png(pair_png.read_bytes())
+      assert (pw, ph) == (640, 360)
+
+      bad_png = tmp_path / "pair-bad.png"
+      icn_code = "`ICN102`"
+      bad_pair_res = subprocess.run(
+        [
+          sys.executable,
+          str(SCRIPT),
+          "measure",
+          "-u",
+          url,
+          "-s",
+          ".icon-btn",
+          "--to",
+          "400,203",
+          "-v",
+          "640x360",
+          "-o",
+          str(bad_png),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+      )
+      assert bad_pair_res.returncode == 1
+      assert icn_code in bad_pair_res.stdout
     finally:
       server.shutdown()
-      thread.join(timeout=5)

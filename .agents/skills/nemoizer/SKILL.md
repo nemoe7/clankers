@@ -15,6 +15,8 @@ compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 | `kind` | type |
 | `name` | specify |
 | `repository` | repo |
+| `pull request` | PR |
+| `the nemoizer` | nemoizer |
 
 Read references/rules.md for lint IDs and meanings. `name` rotates only as a verb.
 

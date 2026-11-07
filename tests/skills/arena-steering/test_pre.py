@@ -1771,7 +1771,12 @@ def _git_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
   def git(*args: str, cwd: Path = repo) -> str:
     return subprocess.run(
-      ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+      ["git", *args],
+      cwd=cwd,
+      check=True,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
     ).stdout.strip()
 
   git("init", "-b", "main")
@@ -1965,7 +1970,12 @@ def test_push_uses_remote_default_and_fails_closed(
 
   def git(*args: str, cwd: Path = _git_checkout) -> str:
     return subprocess.run(
-      ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+      ["git", *args],
+      cwd=cwd,
+      check=True,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
     ).stdout.strip()
 
   git("remote", "add", "origin", str(origin))
@@ -2157,6 +2167,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     assert database.is_file()
@@ -2178,6 +2189,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert refreshed.returncode == 0, refreshed.stderr
   assert profile.read_text(encoding="utf-8") == profile_text
@@ -2192,10 +2204,11 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode == 0, result.stderr
   assert str(home / ".local" / "bin" / "steer") in result.stdout
-  assert "steer 2.2.2" in result.stdout
+  assert "steer 2.2.3" in result.stdout
 
   shell = subprocess.run(
     [
@@ -2208,6 +2221,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert shell.returncode == 0, shell.stderr
   assert "safe command" in shell.stdout
@@ -2226,6 +2240,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert clear_inbox_push.returncode == 0, clear_inbox_push.stderr
   assert "STATE UNAVAILABLE" not in clear_inbox_push.stdout
@@ -2247,6 +2262,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
     )
     assert first_probe.returncode == 0, first_probe.stdout + first_probe.stderr
     assert "port-probe-ran" in first_probe.stdout
@@ -2262,6 +2278,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert failing_probe.returncode == 5, failing_probe.stdout + failing_probe.stderr
   assert _count(state_dir) == str(pre.GATE_THRESHOLD)
@@ -2280,6 +2297,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert pending_push.returncode == pre.BLOCK
   assert PENDING_ACK_PUSH_REASON in pending_push.stdout
@@ -2292,6 +2310,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert read.returncode == 0, read.stderr
   assert (project / "arena-state" / "state.sqlite3").is_file()
@@ -2320,6 +2339,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=zone_env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert live_shell.returncode == 0, live_shell.stderr
   assert (home / "tz-before").read_text(encoding="utf-8") == ""
@@ -2340,6 +2360,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
       env=zone_env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
     )
     assert zone_shell.returncode == 0, zone_shell.stderr
     assert (home / "tz-result").read_text(encoding="utf-8") == expected
@@ -2356,6 +2377,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert push.returncode == pre.BLOCK
   assert PENDING_ACK_PUSH_REASON in push.stdout
@@ -2402,6 +2424,7 @@ def test_installer_allows_managed_debug_replay(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert installed.returncode == 0, installed.stderr
@@ -2424,6 +2447,7 @@ def test_installer_allows_managed_debug_replay(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert shell.returncode == 0, shell.stderr
@@ -2469,6 +2493,7 @@ def test_installer_prior_exit_trap_allows_managed_debug_replay(
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert installed.returncode == 0, installed.stderr
@@ -2491,6 +2516,7 @@ def test_installer_prior_exit_trap_allows_managed_debug_replay(
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert shell.returncode == 0, shell.stderr
@@ -2555,6 +2581,7 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert installed.returncode == 0, installed.stderr
@@ -2585,6 +2612,7 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert shell.returncode == status, shell.stderr
@@ -2598,6 +2626,7 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert strict.returncode == 7, strict.stderr
@@ -2624,6 +2653,7 @@ def test_installer_migrates_exit_hook_and_preserves_prior_trap(
     env={**env, "BASH_ENV": str(profile)},
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert (home / "remote-updated").read_text(encoding="utf-8") == "done"
@@ -2653,6 +2683,7 @@ def test_installer_failed_gate_logs_a_blocked_push(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert installed.returncode == 0, installed.stderr
@@ -2669,6 +2700,7 @@ def test_installer_failed_gate_logs_a_blocked_push(tmp_path: Path) -> None:
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert shell.returncode == pre.BLOCK
@@ -2712,6 +2744,7 @@ def test_installer_enforces_commit_messages_without_a_runtime_spec(
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert installed.returncode == 0, installed.stderr
@@ -2723,6 +2756,7 @@ def test_installer_enforces_commit_messages_without_a_runtime_spec(
     cwd=project,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=True,
   )
   assert config.stdout.strip() == str(hook.parent)
@@ -2744,6 +2778,7 @@ def test_installer_enforces_commit_messages_without_a_runtime_spec(
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -2765,6 +2800,7 @@ def test_installer_enforces_commit_messages_without_a_runtime_spec(
       env=env,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert result.returncode != 0, message
@@ -2785,6 +2821,7 @@ def test_installer_enforces_commit_messages_without_a_runtime_spec(
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert refused.returncode != 0
@@ -2806,6 +2843,7 @@ def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode != 0
   assert "already exists" in result.stderr
@@ -2821,6 +2859,7 @@ def test_installer_does_not_overwrite_an_unrelated_steer(tmp_path: Path) -> None
     env=env,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode != 0 and "already exists" in result.stderr
   assert (
@@ -2868,6 +2907,7 @@ def test_demo_lives_in_maintenance_and_retains_port_option(tmp_path: Path) -> No
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert help_result.returncode == 0, help_result.stderr
   assert "--port" in help_result.stdout
@@ -2880,6 +2920,7 @@ def test_demo_lives_in_maintenance_and_retains_port_option(tmp_path: Path) -> No
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert seed_result.returncode == 0, seed_result.stderr
   assert (tmp_path / "arena-state" / "demo" / "state.sqlite3").is_file()
@@ -3206,6 +3247,7 @@ def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
     env={**os.environ, "HOME": str(home)},
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert shell.returncode == 7
@@ -3944,3 +3986,120 @@ def test_native_file_activity_rejects_unsafe_mkdir(tmp_path: Path) -> None:
     )
     != "edit"
   )
+
+
+def _start_process_wrapper(
+  process_id: str, name: str, command: str, cwd: str
+) -> tuple[str, str]:
+  record = f"/tmp/arena-workspace/procs/{process_id}"
+  metadata = json.dumps(
+    {
+      "processId": process_id,
+      "name": name,
+      "command": command,
+      "cwd": cwd,
+      "startedAt": 1000,
+    },
+    separators=(",", ":"),
+  )
+  line = f"""/bin/bash -l -c mkdir -p '{record}'
+printf '%s' {shlex.quote(metadata)} > '{record}'/meta.json
+printf '%s' {shlex.quote(command)} > '{record}'/run.cmd
+setsid bash -c 'bash "$0/run.cmd" > "$0/out.log" 2>&1; echo $? > "$0/exit"' '{record}' </dev/null >/dev/null 2>&1 &
+echo $! > '{record}'/pid
+cat '{record}'/pid"""
+  return line, f"mkdir -p '{record}'"
+
+
+def test_steer_serve_enforces_start_process_title(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  procs = tmp_path / "procs"
+  good_dir = procs / "clankers-steering-1234"
+  bad_dir = procs / "website-1234"
+  good_dir.mkdir(parents=True)
+  bad_dir.mkdir(parents=True)
+  checkout = pre.repo_root()
+  expected_title = f"{checkout.name} - Steering"
+  (good_dir / "meta.json").write_text(
+    json.dumps(
+      {
+        "processId": "clankers-steering-1234",
+        "name": expected_title,
+        "command": "steer serve",
+        "cwd": str(checkout),
+        "startedAt": 1000,
+      }
+    ),
+    encoding="utf-8",
+  )
+  (bad_dir / "meta.json").write_text(
+    json.dumps(
+      {
+        "processId": "website-1234",
+        "name": "Website",
+        "command": "steer serve",
+        "cwd": str(checkout),
+        "startedAt": 1000,
+      }
+    ),
+    encoding="utf-8",
+  )
+  monkeypatch.setattr(cli, "ARENA_PROCS_DIR", procs, raising=False)
+
+  seen: list[tuple[str, int]] = []
+
+  class FakeServer:
+    server_address = ("0.0.0.0", 8000)
+
+    def serve_forever(self) -> None:
+      pass
+
+    def server_close(self) -> None:
+      pass
+
+  monkeypatch.setattr(
+    cli,
+    "create_http_server",
+    lambda _app, *, host, port: seen.append((host, port)) or FakeServer(),
+  )
+
+  err = io.StringIO()
+  with (bad_dir / "out.log").open("w", encoding="utf-8") as bad_out:
+    code = cli_main(["serve"], out=bad_out, err=err)
+  assert code == 1 and expected_title in err.getvalue()
+  assert seen == []
+
+  outside_err = io.StringIO()
+  with (tmp_path / "plain.log").open("w", encoding="utf-8") as plain_out:
+    code = cli_main(["serve"], out=plain_out, err=outside_err)
+  assert code == 1 and expected_title in outside_err.getvalue()
+  assert seen == []
+
+  ok_err = io.StringIO()
+  with (good_dir / "out.log").open("w", encoding="utf-8") as good_out:
+    code = cli_main(["serve"], out=good_out, err=ok_err)
+  assert (code, ok_err.getvalue()) == (0, "")
+  assert seen == [("0.0.0.0", 8000)]
+
+
+def test_pre_enforces_steering_start_process_title(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Pending work")
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  checkout = pre.repo_root()
+  expected_title = f"{checkout.name} - Steering"
+
+  bad_line, bad_cmd = _start_process_wrapper(
+    "preview-1234", "Preview", "steer serve", str(checkout)
+  )
+  code, output = _run("pre", "-l", bad_line, "-c", bad_cmd, "-s", "bash")
+  assert code == pre.BLOCK and expected_title in output
+
+  good_line, good_cmd = _start_process_wrapper(
+    "clankers-steering-1234", expected_title, "steer serve", str(checkout)
+  )
+  code, output = _run("pre", "-l", good_line, "-c", good_cmd, "-s", "bash")
+  assert code == pre.CONTINUE, output
+  assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)

@@ -7,27 +7,27 @@ One Agent Plugins 1.0.0 collection and seven single-skill plugins for GPT-specif
 | `plugin.json` | Manifest. The checker checks it against the canonical schema at agent-plugins.org. |
 | `assets/<name>.svg` | Square `64x64` SVG icons for the collection and each single-skill archive, packaged at `assets/icon.svg` and `skills/<name>/assets/icon.svg` with `skills/<name>/agents/openai.yaml`. |
 | `skills/<name>/SKILL.md` | Shipped skill copies. The archive carries these. |
-| `refs/skills/<name>/SKILL.md` | Readable sources. Keep these full. Compress shipped copies without losing rules. |
-| `skills/<name>/references/` | Per-type detail files. A reader loads only the file its answer needs. The shipped copy may be squashed, but it preserves every fenced code block byte for byte. |
-| `README.md` | This file. It never ships. |
+| `refs/skills/<name>/SKILL.md` | Uncompressed source skills kept in full wording for human review and editing. |
+| `skills/<name>/references/` | Per-type detail files loaded on demand. Shipped copies may be compressed while keeping fenced code blocks byte-identical. |
+| `README.md` | Human overview (`docs/gpt-plugins/README.md`), omitted from packaged ZIPs. |
 
 ## Skills
 
 | Skill | Purpose |
 | --- | --- |
-| [gpt-quirks](../../gpt-plugins/skills/gpt-quirks/SKILL.md) | Apply verified GPT and connected tool quirks when they are relevant |
-| [gpt-handoff](../../gpt-plugins/skills/gpt-handoff/SKILL.md) | Audit agent work and human-facing docs. Use Ponytail for code and docs audits. Own the final format or draft a handoff. |
-| [gpt-planning](../../gpt-plugins/skills/gpt-planning/SKILL.md) | Check requirements and completion before each plan, handoff, execution, and final report. |
-| [gpt-github](../../gpt-plugins/skills/gpt-github/SKILL.md) | Apply the owner's git and GitHub rules to every git or GitHub action. |
-| [gpt-display](../../gpt-plugins/skills/gpt-display/SKILL.md) | Choose and author supported response representations: DIL interfaces, source bindings, charts, maps, host actions, and Mermaid diagrams. |
-| [gpt-question](../../gpt-plugins/skills/gpt-question/SKILL.md) | Ask for needed user input with supported interactive forms and visible custom answers. |
-| [nemoizer](../../skills/nemoizer/SKILL.md) | Write and edit prose, comments, and documentation, and audit code comments and tests. |
+| [gpt-quirks](../../gpt-plugins/skills/gpt-quirks/SKILL.md) | Verified GPT and connected-tool quirks and workarounds. |
+| [gpt-handoff](../../gpt-plugins/skills/gpt-handoff/SKILL.md) | Code and documentation audits (including Ponytail findings) and cross-session handoff drafts. |
+| [gpt-planning](../../gpt-plugins/skills/gpt-planning/SKILL.md) | Requirement tracking and completion checks across plans, handoffs, execution, and final reports. |
+| [gpt-github](../../gpt-plugins/skills/gpt-github/SKILL.md) | Repo Git and GitHub conventions for branch, commit, and PR operations. |
+| [gpt-display](../../gpt-plugins/skills/gpt-display/SKILL.md) | Response format selection across DIL interfaces, source bindings, charts, maps, host actions, and Mermaid diagrams. |
+| [gpt-question](../../gpt-plugins/skills/gpt-question/SKILL.md) | Interactive decision forms with preset choices and visible custom answers. |
+| [nemoizer](../../skills/nemoizer/SKILL.md) | Plain-word prose and comment editing plus lexical and test-assertion linting. |
 
 ## Edit a skill
 
-Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command, and heading. Review each clause against its source. Increase the plugin version for every update.
+Maintainers edit uncompressed sources under `refs/skills/` and compress shipped copies under `skills/` while keeping every rule, condition, exception, command, and heading. Every shipped plugin change increments the version in `plugin.json`.
 
-See [maintenance/README.md](../../maintenance/README.md) for synchronization and validation.
+See [maintenance/README.md](../../maintenance/README.md) for sync and validation gates.
 
 ## Package
 
@@ -62,6 +62,6 @@ Every single-skill ZIP has a unique manifest name and the collection version. It
 | `gpt-question.zip` | Host interactive form features |
 | `nemoizer.zip` | Python 3 runtime for `scripts/` linters |
 
-The single-skill ZIPs do not bundle the other skills or install host tools. Archive checks do not prove ChatGPT import support. No ChatGPT import test ran for this change.
+The single-skill ZIPs do not bundle the other skills or install host tools. Archive checks do not prove ChatGPT import support.
 
 The checker builds and checks all eight ZIPs with `--package-dir`. It checks downloaded ZIPs with `--archives-dir`. The existing `--archive` flag checks the collection, or one single-skill ZIP when paired with `--skill`.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
@@ -24,7 +25,12 @@ from . import __version__, git_safety
 from . import pre as pre_mod
 from .blocked_bash import append_blocked_bash
 from .display_paths import home_relative
-from .gates import FileGateStatus, RunCompletionWatcher
+from .gates import (
+  FileGateStatus,
+  RunCompletionWatcher,
+  process_identity,
+  run_is_running,
+)
 from .git_safety import DirtyTreeError, completion_tree_check
 from .models import (
   MESSAGE_ID_RE,
@@ -63,6 +69,42 @@ def _snippet_words(text: str, max_words: int = 6) -> str:
   return " ".join(words[:max_words]) + "..."
 
 
+ARENA_PROCS_DIR = pre_mod.ARENA_PROCS_DIR
+
+
+def _validate_serve_process_title(stdout: TextIO) -> None:
+  """Require `start_process` named `{repo} - Steering` inside Arena sandboxes."""
+  procs_dir = ARENA_PROCS_DIR
+  if not procs_dir.is_dir():
+    return
+  try:
+    fd = stdout.fileno()
+  except (AttributeError, OSError, io.UnsupportedOperation):
+    return
+  proc_fd = Path(f"/proc/self/fd/{fd}")
+  if not proc_fd.exists():
+    return
+  out_path = proc_fd.resolve()
+  expected = pre_mod.expected_steering_process_name()
+  if out_path.name != "out.log" or out_path.parent.parent != procs_dir.resolve():
+    raise ValueError(f"Start steer serve via start_process named {expected!r}")
+  meta_path = out_path.parent / "meta.json"
+  try:
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError) as exc:
+    raise ValueError(
+      f"Cannot read start_process metadata for steer serve ({expected!r})"
+    ) from exc
+  if not isinstance(meta, dict):
+    raise TypeError(f"Invalid start_process metadata for steer serve ({expected!r})")
+  expected = pre_mod.expected_steering_process_name(meta.get("cwd"))
+  actual = meta.get("name")
+  if actual != expected:
+    raise ValueError(
+      f"Steering start_process name must be {expected!r}, got {actual!r}"
+    )
+
+
 def resolve_state_dir() -> Path:
   """Return the fixed state directory for this checkout."""
   path = pre_mod.repo_root() / "arena-state"
@@ -75,7 +117,8 @@ def open_services(
 ) -> tuple[SqliteStore, MessageService, TaskService, ReportService]:
   """Open SqliteStore and domain services for a state directory."""
   store = SqliteStore(state_dir / "state.sqlite3")
-  messages = MessageService(store, store, store, store)
+  uploads_dir = state_dir / "uploads"
+  messages = MessageService(store, store, store, store, uploads_dir=uploads_dir)
   tree_check = completion_tree_check(state_dir)
   tasks = TaskService(
     store,
@@ -84,6 +127,7 @@ def open_services(
     gates=FileGateStatus(state_dir),
     clean_tree_verifier=tree_check,
     on_dirty_finish=messages.flag_dirty_finish if tree_check is not None else None,
+    uploads_dir=uploads_dir,
   )
   reports = ReportService(
     store,
@@ -101,6 +145,9 @@ def main(
   err: TextIO | None = None,
 ) -> int:
   """Run a `steer` CLI command and return its exit code."""
+  for stream, custom in ((sys.stdout, out), (sys.stderr, err)):
+    if custom is None and hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   stdout = out if out is not None else sys.stdout
   stderr = err if err is not None else sys.stderr
   args_list = list(sys.argv[1:] if argv is None else argv)
@@ -327,6 +374,7 @@ def main(
       messages.clear_poll_repeat()
     if cmd == "serve":
       serve_p.parse_args(cmd_args)
+      _validate_serve_process_title(stdout)
       app = SteeringApp(store)
       httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
       port = int(httpd.server_address[1])
@@ -476,6 +524,7 @@ def main(
     return 1
   except (
     KeyError,
+    TypeError,
     ValueError,
     IndexError,
     OSError,
@@ -532,7 +581,10 @@ def _run_ack(
   for item in acked:
     if isinstance(item, Message):
       print("If msg asks for work or details, add to task", file=out)
-      print(f"steer task mod <task-id> links msg {item.id} -A '<detail>'", file=out)
+      print(
+        f"steer task mod <task-id> links msg {item.id} -A '<detail>' -z <size>",
+        file=out,
+      )
     if isinstance(item, ReportAnswer):
       for task_id, details in item.task_details_added.items():
         print(f"Added to task {task_id}:", file=out)
@@ -540,7 +592,7 @@ def _run_ack(
           print(f"- {detail}", file=out)
   if created:
     _, blocked = tasks.get_task(created.id)
-    _print_single_task(created, blocked, out)
+    _print_single_task(created, blocked, out, tasks=tasks)
   return 0
 
 
@@ -589,7 +641,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
       print("No current task.", file=out)
     else:
       task, blocked = current
-      _print_single_task(task, blocked, out, include_details=bool(args))
+      _print_single_task(task, blocked, out, include_details=bool(args), tasks=tasks)
     return 0
   subcmd = args[0]
   if subcmd == "new":
@@ -627,7 +679,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
       },
     )
     _, blocked = tasks.get_task(task.id)
-    _print_single_task(task, blocked, out)
+    _print_single_task(task, blocked, out, tasks=tasks)
     return 0
 
   if subcmd == "finish":
@@ -637,7 +689,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     parsed = finish_p.parse_args(args[1:])
     task = tasks.finish_phase(parsed.id, commit_hash=parsed.commit)
     _, blocked = tasks.get_task(task.id)
-    _print_single_task(task, blocked, out)
+    _print_single_task(task, blocked, out, tasks=tasks)
     return 0
 
   if subcmd == "rm":
@@ -662,15 +714,53 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
         "Usage: steer task unlink <id> [<msg|report|task|gate>] <link-id>"
       )
     _, blocked = tasks.get_task(updated.id)
-    _print_single_task(updated, blocked, out)
+    _print_single_task(updated, blocked, out, tasks=tasks)
     return 0
 
   if len(args) == 1:
     task, blocked = tasks.get_task(subcmd)
-    _print_single_task(task, blocked, out)
+    _print_single_task(task, blocked, out, tasks=tasks)
     return 0
 
   raise ValueError(f"Unrecognized task arguments: {args}")
+
+
+def _parse_task_size_value(raw: str) -> int:
+  try:
+    size = int(raw)
+  except ValueError as exc:
+    raise ValueError(f"Task size must be one of {TASK_SIZES}, got {raw!r}") from exc
+  if size not in TASK_SIZES:
+    raise ValueError(f"Task size must be one of {TASK_SIZES}, got {size}")
+  return size
+
+
+def _extract_size_flag(tokens: list[str]) -> tuple[int | None, list[str]]:
+  size: int | None = None
+  remaining: list[str] = []
+  idx = 0
+  while idx < len(tokens):
+    token = tokens[idx]
+    if token == "--":
+      remaining.extend(tokens[idx + 1 :])
+      break
+    if token in {"-z", "--size"}:
+      if idx + 1 >= len(tokens):
+        raise ValueError("Option -z/--size requires a value")
+      size = _parse_task_size_value(tokens[idx + 1])
+      idx += 2
+      continue
+    if token.startswith("--size="):
+      size = _parse_task_size_value(token.split("=", 1)[1])
+      idx += 1
+      continue
+    if token.startswith("-z") and len(token) > 2:
+      size = _parse_task_size_value(token[2:])
+      idx += 1
+      continue
+    remaining.append(token)
+    idx += 1
+  return size, remaining
 
 
 def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
@@ -680,12 +770,15 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   rest = args[2:]
 
   if field == "deets":
-    if rest[0] == "rm":
-      if len(rest) != 2:
-        raise ValueError("Usage: steer task mod <id> deets rm <number>")
-      updated = tasks.mod_deets_rm(task_id, int(rest[1]))
+    size, detail_args = _extract_size_flag(rest)
+    if not detail_args:
+      raise ValueError("Usage: steer task mod <id> deets <text> -z <size>")
+    if detail_args[0] == "rm":
+      if len(detail_args) != 2:
+        raise ValueError("Usage: steer task mod <id> deets rm <number> -z <size>")
+      updated = tasks.mod_deets_rm(task_id, int(detail_args[1]), size=size)
     else:
-      updated = tasks.mod_deets(task_id, " ".join(rest))
+      updated = tasks.mod_deets(task_id, " ".join(detail_args), size=size)
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
@@ -698,7 +791,8 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
       link_parser.add_argument("link", nargs="+")
       link_parser.add_argument("-A", "--append", dest="append_detail")
       link_parser.add_argument("--delete", dest="remove_detail", type=int)
-      parsed = link_parser.parse_args(rest)
+      link_parser.add_argument("-z", "--size", type=int, choices=TASK_SIZES)
+      parsed = link_parser.parse_intermixed_args(rest)
       if len(parsed.link) == 2 and parsed.link[0].lower() in {
         "msg",
         "report",
@@ -711,7 +805,8 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         link_type, link_id = None, parsed.link[0]
       else:
         raise ValueError(
-          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> [-A detail] [--delete number]"
+          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> "
+          "[-A detail] [--delete number] [-z size]"
         )
       updated = tasks.mod_links_add(
         task_id,
@@ -719,6 +814,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         link_type=link_type,
         append_detail=parsed.append_detail,
         remove_detail=parsed.remove_detail,
+        size=parsed.size,
       )
   elif field == "deps":
     if rest[0] == "rm":
@@ -752,7 +848,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
     )
 
   _, blocked = tasks.get_task(updated.id)
-  _print_single_task(updated, blocked, out)
+  _print_single_task(updated, blocked, out, tasks=tasks)
   return 0
 
 
@@ -770,7 +866,7 @@ def _run_rename(
     return 0
   print(f"Renamed task {parsed.old_id} -> {renamed.id}", file=out)
   _, blocked = tasks.get_task(renamed.id)
-  _print_single_task(renamed, blocked, out)
+  _print_single_task(renamed, blocked, out, tasks=tasks)
   return 0
 
 
@@ -781,6 +877,7 @@ def _run_gh(args: list[str], *, input_text: str | None = None) -> str:
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   if result.returncode != 0:
     detail = (result.stderr or result.stdout or "").strip()
@@ -837,7 +934,9 @@ def _run_pr_update(parsed: argparse.Namespace, store: SqliteStore, out: TextIO) 
 def _gh_url(args: list[str]) -> tuple[str, str]:
   """Return a log URL and the reason it is missing, when it is."""
   try:
-    result = subprocess.run(args, check=False, capture_output=True, text=True)
+    result = subprocess.run(
+      args, check=False, capture_output=True, text=True, encoding="utf-8"
+    )
   except OSError as exc:
     return "", f"gh could not start: {exc}"
   if result.returncode != 0:
@@ -946,6 +1045,7 @@ def _run_git(args: list[str]) -> str:
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   if result.returncode != 0:
     detail = (result.stderr or result.stdout or "").strip()
@@ -1132,7 +1232,12 @@ def _run_pre_route(
       else:
         env = {**os.environ, "ARENA_STEER_ROUTE": "1"}
         result = subprocess.run(
-          ["bash", "-c", script], env=env, capture_output=True, text=True, check=False
+          ["bash", "-c", script],
+          env=env,
+          capture_output=True,
+          text=True,
+          encoding="utf-8",
+          check=False,
         )
         print("_steer_route_output=1", file=out)
         if result.stdout:
@@ -1448,7 +1553,7 @@ def _start_locked_run(
   record_path = runs / f"{name}.json"
   if record_path.exists():
     previous = json.loads(record_path.read_text(encoding="utf-8"))
-    if not Path(previous["exit_path"]).is_file():
+    if run_is_running(previous):
       raise ValueError(f"Run {name} is already active")
   dependency = None
   if after:
@@ -1456,6 +1561,7 @@ def _start_locked_run(
     if not dep_record_path.is_file():
       raise ValueError(f"Unknown dependency: {after}")
     dependency = json.loads(dep_record_path.read_text(encoding="utf-8"))
+    run_is_running(dependency)
   run_id = uuid.uuid4().hex
   log_path = runs / f"{name}-{run_id}.log"
   exit_path = runs / f"{name}-{run_id}.exit"
@@ -1491,12 +1597,14 @@ def _start_locked_run(
   finally:
     log_handle.close()
   temp_record = runs / f".{name}-{run_id}.json"
+  identity = process_identity(proc.pid)
   try:
     temp_record.write_text(
       json.dumps(
         {
           "name": name,
           "pid": proc.pid,
+          "process_identity": list(identity[1:]) if identity else None,
           "command": command,
           "after": after,
           "log_path": str(log_path),
@@ -1523,6 +1631,7 @@ def _unpushed_commit_count(root: Path) -> int:
       cwd=root,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
       timeout=5,
     )
@@ -1534,6 +1643,7 @@ def _unpushed_commit_count(root: Path) -> int:
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
         timeout=5,
       )
@@ -1704,10 +1814,10 @@ def _run_run(
       raise KeyError(f"Unknown run: {name}")
     record = json.loads((runs / f"{name}.json").read_text(encoding="utf-8"))
     exit_path = Path(record["exit_path"])
-    if exit_path.is_file():
-      status = f"exit {exit_path.read_text(encoding='utf-8').strip()}"
-    else:
+    if run_is_running(record):
       status = "running"
+    else:
+      status = f"exit {exit_path.read_text(encoding='utf-8').strip()}"
     print(f"run {name} {status}", file=out)
     log_path = Path(record["log_path"])
     if log_path.is_file():
@@ -1757,7 +1867,6 @@ def _run_report(
       allow_unparsed_markers=parsed.allow_unparsed_markers,
       source_file=str(source_path.resolve()),
     )
-    SteeringApp(store).verify_published_report(report)
     print(
       f"Published {report.id}, {len(report.fields)} fields. Verified.",
       file=out,
@@ -1837,6 +1946,8 @@ def _print_delivered(
 
 
 def _print_message(msg: Message, out: TextIO) -> None:
+  from .services import is_attachment_present
+
   print(f"`{msg.id}`", file=out)
   if msg.parent_refs:
     parents = (
@@ -1848,7 +1959,11 @@ def _print_message(msg: Message, out: TextIO) -> None:
   if msg.body:
     print(msg.body, file=out)
   for att in msg.attachments:
-    print(f"attachment: {att.name} -> {att.path} ({att.size_bytes} B)", file=out)
+    lost_suffix = "" if is_attachment_present(att) else " (lost)"
+    print(
+      f"attachment: {att.name} -> {att.path} ({att.size_bytes} B){lost_suffix}",
+      file=out,
+    )
   for ack_text in msg.acks:
     print(f"ack: {ack_text}", file=out)
 
@@ -1869,8 +1984,15 @@ def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
 
 
 def _print_single_task(
-  task: Task, blocked: bool, out: TextIO, *, include_details: bool = True
+  task: Task,
+  blocked: bool,
+  out: TextIO,
+  *,
+  include_details: bool = True,
+  tasks: TaskService | None = None,
 ) -> None:
+  from .services import format_task_detail_status
+
   state_str = f"{task.status}, blocked" if blocked else task.status
   print(f"task {task.id}, status {state_str}, type {_task_type_label(task)}", file=out)
   print(task.title, file=out)
@@ -1887,7 +2009,15 @@ def _print_single_task(
   if include_details:
     print(f"- Priority: {task.effective_priority}", file=out)
     print(f"- Size: {task.size}", file=out)
-    for idx, line in enumerate(task.details, 1):
+    rendered_details = (
+      tasks.format_task_details(task)
+      if tasks is not None
+      else [
+        format_task_detail_status(line, uploads_dir=resolve_state_dir() / "uploads")
+        for line in task.details
+      ]
+    )
+    for idx, line in enumerate(rendered_details, 1):
       print(f"- [{idx}] {line}", file=out)
 
 

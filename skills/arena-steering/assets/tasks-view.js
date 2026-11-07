@@ -4,21 +4,46 @@ import { reconcileView } from "./dom.js";
 import { escapeHtml } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 
-const CHEVRON_DOWN_SVG = `<svg class="lucide lucide-chevron-down select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"></path></svg>`;
+import { CHEVRON_SELECT_SVG as CHEVRON_DOWN_SVG } from "./icons.js";
 
 const TASK_TYPES = ["report", "code", "docs", "ops", "misc"];
 const FINISHED_TASK_PAGE_SIZE = 10;
+const TASK_SEARCH_KEY = "steer:taskSearch";
+const TASK_TYPE_KEY = "steer:taskTypeFilter";
 
-let taskSearchQuery = "";
-let taskTypeFilter = "all";
+function readTaskSession(key) {
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage.getItem(key) || "" : "";
+  } catch {
+    return "";
+  }
+}
+
+function writeTaskSession(key, value) {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
+  } catch {
+    // Session storage is optional.
+  }
+}
+
+let taskSearchInput = readTaskSession(TASK_SEARCH_KEY);
+let taskSearchQuery = taskSearchInput.trim().toLowerCase();
+const savedTaskType = readTaskSession(TASK_TYPE_KEY);
+let taskTypeFilter = TASK_TYPES.includes(savedTaskType) ? savedTaskType : "all";
 let visibleFinishedCount = FINISHED_TASK_PAGE_SIZE;
 const openTaskDetails = new Set();
 let taskRenderEvents = null;
 
 export function expandTaskTarget(id) {
   if (taskSearchQuery) openTaskDetails.clear();
+  taskSearchInput = "";
   taskSearchQuery = "";
   taskTypeFilter = "all";
+  writeTaskSession(TASK_SEARCH_KEY, "");
+  writeTaskSession(TASK_TYPE_KEY, "");
   visibleFinishedCount = Infinity;
   openTaskDetails.add(id);
 }
@@ -181,7 +206,7 @@ export function renderTasksView(container, state) {
           id="task-search"
           type="search"
           class="input"
-          value="${escapeHtml(taskSearchQuery)}"
+          value="${escapeHtml(taskSearchInput)}"
           placeholder="Search tasks"
           aria-label="Search task list"
         />
@@ -222,15 +247,18 @@ export function renderTasksView(container, state) {
 
   const searchEl = container.querySelector("#task-search");
   searchEl?.addEventListener("input", () => {
-    const nextQuery = searchEl.value.trim().toLowerCase();
+    taskSearchInput = searchEl.value;
+    const nextQuery = taskSearchInput.trim().toLowerCase();
     if (taskSearchQuery && !nextQuery) openTaskDetails.clear();
     taskSearchQuery = nextQuery;
+    writeTaskSession(TASK_SEARCH_KEY, taskSearchInput.trim());
     renderTasksView(container, state);
   }, { signal });
 
   const filterEl = container.querySelector("#task-type-filter");
   filterEl?.addEventListener("change", () => {
     taskTypeFilter = filterEl.value;
+    writeTaskSession(TASK_TYPE_KEY, taskTypeFilter === "all" ? "" : taskTypeFilter);
     renderTasksView(container, state);
   }, { signal });
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import itertools
 import os
+import re
 import subprocess
 import threading
 from collections.abc import Iterator
@@ -335,10 +336,16 @@ def test_failed_upload_does_not_send_or_discard_the_draft() -> None:
     page.wait_for_function(
       "document.querySelector('.composer-attachment-chip')?.dataset.uploadStatus === 'failed'"
     )
+    assert page.locator("[data-retry-composer-attachment]").count() == 0
+    assert page.evaluate(
+      "window.uploadIds.length === 4 && new Set(window.uploadIds.slice(0, 4)).size === 1"
+    )
     page.locator("#send").click()
-    page.wait_for_function("window.uploadIds.length >= 2")
+    page.wait_for_function("window.uploadIds.length === 8")
     page.get_by_role("status").filter(has_text="A file did not upload").wait_for()
-    assert page.evaluate("window.uploadIds[0] === window.uploadIds[1]")
+    assert page.evaluate(
+      "new Set(window.uploadIds.slice(4, 8)).size === 1 && window.uploadIds[0] !== window.uploadIds[4]"
+    )
     assert page.locator("#msg").input_value() == "Do not lose this draft"
     assert page.locator(".composer-attachment-chip").count() == 1
     assert page.locator("#history .message").count() == 0
@@ -373,33 +380,35 @@ def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
     )
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
-      window.firstSend = true;
+      window.sendRequestIds = [];
+      window.sendAttempts = 0;
       window.fetch = async (...args) => {
-        const result = await original(...args);
-        if (window.firstSend && String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
-          window.firstSend = false;
-          return new Response(JSON.stringify({error: 'response lost'}), {
-            status: 503, headers: {'content-type': 'application/json'}
-          });
+        if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
+          window.sendAttempts += 1;
+          window.sendRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+          const result = window.sendAttempts === 1 || window.sendAttempts === 4
+            ? await original(...args)
+            : null;
+          if (window.sendAttempts <= 3) {
+            return new Response(JSON.stringify({error: 'response lost'}), {
+              status: 503, headers: {'content-type': 'application/json'}
+            });
+          }
+          return result;
         }
-        return result;
+        return original(...args);
       };
     }""")
     page.locator("#msg").fill("Reply once despite a lost response")
     page.locator("#send").click()
-    page.locator("#retry-send").wait_for(timeout=6000)
-    assert (
-      page.locator(
-        '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa01"]'
-      ).count()
-      == 1
-    )
-    assert page.locator("#msg").input_value() == "Reply once despite a lost response"
-    page.locator("#retry-send").click()
-    page.wait_for_function("!document.querySelector('#retry-send')")
     page.wait_for_function(
-      "Array.from(document.querySelectorAll('#history .message'))"
+      "Array.from(document.querySelectorAll('#history .message:not([data-msg-id^=\"pending-\"])'))"
       ".some(e => e.textContent.includes('Reply once despite a lost response'))"
+    )
+    assert page.locator("#retry-send").count() == 0
+    assert page.locator("#discard-send").count() == 0
+    assert page.evaluate(
+      "window.sendRequestIds.length === 4 && new Set(window.sendRequestIds).size === 1"
     )
     matching = page.locator("#history .message").filter(
       has_text="Reply once despite a lost response"
@@ -603,9 +612,15 @@ def test_optimistic_send_failure_preserves_new_draft() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
+      window.sendRequestIds = [];
+      let held = false;
       window.fetch = async (...args) => {
         if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
-          await new Promise(resolve => { window.failSend = resolve; });
+          window.sendRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+          if (!held) {
+            held = true;
+            await new Promise(resolve => { window.failSend = resolve; });
+          }
           return new Response(JSON.stringify({error: 'offline'}), {
             status: 503, headers: {'content-type': 'application/json'}
           });
@@ -619,9 +634,14 @@ def test_optimistic_send_failure_preserves_new_draft() -> None:
     assert page.locator("#msg").input_value() == ""
     page.locator("#msg").fill("A newer draft")
     page.evaluate("window.failSend()")
-    page.locator("#retry-send").wait_for()
+    page.locator(".composer-send-status").filter(has_text="offline").wait_for()
+    assert page.evaluate(
+      "window.sendRequestIds.length === 4 && new Set(window.sendRequestIds).size === 1"
+    )
     assert page.locator("#msg").input_value() == "A newer draft"
-    assert page.locator("#retry-send").is_visible()
+    assert page.locator("#retry-send").count() == 0
+    assert page.locator("#discard-send").count() == 0
+    assert page.evaluate("sessionStorage.getItem('steer:pendingSend')") is None
 
 
 @pytest.mark.skipif(
@@ -640,12 +660,21 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
     parent.click()
     page.evaluate("""() => {
       const original = window.fetch.bind(window);
+      window.sendRequestIds = [];
+      window.allowSend = false;
+      let held = false;
       window.fetch = async (...args) => {
         if (String(args[0]).endsWith('/messages') && args[1]?.method === 'POST') {
-          await new Promise(resolve => { window.failSend = resolve; });
-          return new Response(JSON.stringify({error: 'offline'}), {
-            status: 503, headers: {'content-type': 'application/json'}
-          });
+          window.sendRequestIds.push(JSON.parse(args[1].body || '{}')._request_id);
+          if (!window.allowSend) {
+            if (!held) {
+              held = true;
+              await new Promise(resolve => { window.failSend = resolve; });
+            }
+            return new Response(JSON.stringify({error: 'offline'}), {
+              status: 503, headers: {'content-type': 'application/json'}
+            });
+          }
         }
         return original(...args);
       };
@@ -663,7 +692,11 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
       page.locator("#history .message").filter(has_text="Reply waiting").is_visible()
     )
     page.evaluate("window.failSend()")
-    page.locator("#retry-send").wait_for()
+    page.locator(".composer-send-status").filter(has_text="offline").wait_for()
+    assert page.evaluate(
+      "window.sendRequestIds.length === 4 && new Set(window.sendRequestIds).size === 1"
+    )
+    assert page.locator("#retry-send").count() == 0
     assert (
       page.locator(
         '#composer-reply-bar .composer-reply-chip[data-parent-id="aaaa02"]'
@@ -671,6 +704,13 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
       == 1
     )
     assert page.locator("#msg").input_value() == "Reply waiting"
+    page.evaluate("window.allowSend = true")
+    page.locator("#send").click()
+    page.wait_for_function(
+      "Array.from(document.querySelectorAll('#history .message:not([data-msg-id^=\"pending-\"])'))"
+      ".some(e => e.textContent.includes('Reply waiting'))"
+    )
+    assert page.evaluate("window.sendRequestIds[4] !== window.sendRequestIds[0]")
 
 
 @pytest.mark.skipif(
@@ -1098,6 +1138,191 @@ def test_send_hover_changes_background_without_resizing(
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+def test_contained_buttons_hide_default_box_and_reveal_on_hover_and_press(
+  tmp_path: Path,
+) -> None:
+  transparent = "rgba(0, 0, 0, 0)"
+  style_probe = """el => {
+    const s = getComputedStyle(el);
+    const box = el.getBoundingClientRect().toJSON();
+    return {
+      background: s.backgroundColor,
+      border: s.borderColor,
+      width: box.width,
+      height: box.height,
+    };
+  }"""
+  with composer_page(1200) as page:
+    page.locator("#msg").fill("Draft message")
+    page.mouse.move(0, 0)
+    for selector in (
+      "#send",
+      "#blocked-bash-open",
+      "#agent-interrupt",
+      "#skip-poll",
+      "#quiet-msgs",
+    ):
+      btn = page.locator(selector)
+      idle = btn.evaluate(style_probe)
+      assert idle["background"] == transparent, f"{selector} idle bg"
+      assert idle["border"] == transparent, f"{selector} idle border"
+
+      btn.hover()
+      page.wait_for_function(
+        """([sel, clear]) => {
+          const s = getComputedStyle(document.querySelector(sel));
+          return s.backgroundColor !== clear;
+        }""",
+        arg=[selector, transparent],
+      )
+      hovered = btn.evaluate(style_probe)
+      assert hovered["background"] != transparent, f"{selector} hover bg"
+      assert hovered["border"] == transparent, f"{selector} hover border"
+      assert hovered["width"] == pytest.approx(idle["width"])
+      assert hovered["height"] == pytest.approx(idle["height"])
+
+      box_rect = btn.bounding_box()
+      assert box_rect is not None
+      page.mouse.move(
+        box_rect["x"] + box_rect["width"] / 2,
+        box_rect["y"] + box_rect["height"] / 2,
+      )
+      page.mouse.down()
+      assert btn.evaluate("el => el.matches(':active')")
+      active = btn.evaluate(style_probe)
+      assert active["background"] != transparent, f"{selector} active bg"
+      assert active["border"] == transparent, f"{selector} active border"
+      # Move off target before mouseup so we do not trigger modal/submit clicks.
+      page.mouse.move(0, 0)
+      page.mouse.up()
+      page.wait_for_function(
+        """([sel, clear]) => {
+          const s = getComputedStyle(document.querySelector(sel));
+          return s.backgroundColor === clear && s.borderColor === clear;
+        }""",
+        arg=[selector, transparent],
+      )
+
+    # Toggle-pressed state keeps background visible after pointer leaves.
+    quiet = page.locator("#quiet-msgs")
+    quiet.click()
+    page.mouse.move(0, 0)
+    assert quiet.get_attribute("aria-pressed") == "true"
+    page.wait_for_function(
+      """clear => {
+        const s = getComputedStyle(document.querySelector('#quiet-msgs'));
+        return s.backgroundColor !== clear;
+      }""",
+      arg=transparent,
+    )
+    quiet_pressed = quiet.evaluate(style_probe)
+    assert quiet_pressed["background"] != transparent
+    assert quiet_pressed["border"] == transparent
+
+    interrupt = page.locator("#agent-interrupt")
+    page.evaluate(
+      "el => el.setAttribute('aria-pressed', 'true')", interrupt.element_handle()
+    )
+    page.mouse.move(0, 0)
+    page.wait_for_function(
+      """clear => {
+        const s = getComputedStyle(document.querySelector('#agent-interrupt'));
+        return s.backgroundColor !== clear;
+      }""",
+      arg=transparent,
+    )
+    interrupt_pressed = interrupt.evaluate(style_probe)
+    assert interrupt_pressed["background"] != transparent
+
+    # Publish a fielded report and verify rail icon buttons vs Submit Answer CTA.
+    base_url = page.url.split("/?", 1)[0]
+    report_md = (
+      '# Button check\n\n<!-- question {"id":"action","label":"Pick an action"} -->\n'
+      'Pick an action\n- (x) Keep current <!-- option {"label":"Keep current"} -->\n'
+      '- ( ) Change later <!-- option {"label":"Change later"} -->\n'
+    )
+    assert page.request.post(
+      f"{base_url}/reports",
+      data={"id": "button-check", "title": "Button check", "body": report_md},
+    ).ok
+    page.locator("#tab-reports").click()
+    page.locator("#report-submit-float").wait_for()
+    page.mouse.move(0, 0)
+
+    for rail_selector in ("#copy-report-btn", "#dismiss-report-btn"):
+      rail_btn = page.locator(rail_selector)
+      rail_idle = rail_btn.evaluate(style_probe)
+      assert rail_idle["background"] == transparent
+      assert rail_idle["border"] == transparent
+      rail_btn.hover()
+      page.wait_for_function(
+        """([sel, clear]) => {
+          const s = getComputedStyle(document.querySelector(sel));
+          return s.backgroundColor !== clear;
+        }""",
+        arg=[rail_selector, transparent],
+      )
+      rail_hover = rail_btn.evaluate(style_probe)
+      assert rail_hover["background"] != transparent
+      assert rail_hover["border"] == transparent
+      page.mouse.move(0, 0)
+
+    submit_idle = page.locator("#report-submit-float").evaluate(style_probe)
+    assert submit_idle["background"] != transparent
+    page.screenshot(path=str(tmp_path / "reports-submit-unchanged.png"))
+
+    mobile_context = page.context.browser.new_context(
+      viewport={"width": 390, "height": 800},
+      is_mobile=True,
+      has_touch=True,
+      reduced_motion="reduce",
+    )
+    try:
+      mobile_page = mobile_context.new_page()
+      mobile_page.goto(page.url, wait_until="domcontentloaded")
+      mobile_page.locator("#msg").fill("Mobile touch draft")
+      assert not mobile_page.evaluate(
+        "() => matchMedia('(hover: hover) and (pointer: fine)').matches"
+      )
+      mobile_btn = mobile_page.locator("#skip-poll")
+      rect = mobile_btn.bounding_box()
+      assert rect is not None
+      cx = round(rect["x"] + rect["width"] / 2)
+      cy = round(rect["y"] + rect["height"] / 2)
+      mobile_page.mouse.move(cx, cy)
+      mobile_page.mouse.down()
+      mobile_page.wait_for_function(
+        """clear => {
+          const s = getComputedStyle(document.querySelector('#skip-poll'));
+          return s.backgroundColor !== clear;
+        }""",
+        arg=transparent,
+      )
+      mobile_page.mouse.up()
+      mobile_page.wait_for_function(
+        """clear => {
+          const s = getComputedStyle(document.querySelector('#skip-poll'));
+          return s.backgroundColor === clear && s.borderColor === clear;
+        }""",
+        arg=transparent,
+      )
+      # Touch tap leaves pointer on button on mobile, yet background stays clear.
+      mobile_page.touchscreen.tap(cx, cy)
+      mobile_page.wait_for_function(
+        """clear => {
+          const s = getComputedStyle(document.querySelector('#skip-poll'));
+          return s.backgroundColor === clear && s.borderColor === clear;
+        }""",
+        arg=transparent,
+      )
+    finally:
+      mobile_context.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_reload_preserves_parents_and_completed_uploads_only(width: int) -> None:
   with composer_page(width) as page:
@@ -1380,7 +1605,7 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           ).all_text_contents() == ["bb0001", "reference"]
           assert short.locator(
             ".message-attachments .receipt-filename"
-          ).all_text_contents() == ["notes.txt (missing)", "other.txt (missing)"]
+          ).all_text_contents() == ["notes.txt (lost)", "other.txt (lost)"]
           image_button = short.get_by_role("button", name="View image layout.png")
           image_button.scroll_into_view_if_needed()
           page.wait_for_function(
@@ -1787,6 +2012,25 @@ def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
           )
           assert geometry["parentDelta"] <= 1, geometry
           assert geometry["taskDelta"] <= 1, geometry
+          page.locator('.message[data-msg-id="cc0001"] button.receipt-id').click()
+          composer = page.locator("#composer-reply-bar .composer-reply-chip")
+          parent = page.locator('.message[data-msg-id="cc0002"] .reply-parent-chip')
+          assert page.locator("#composer-reply-bar").inner_text() == "cc0001"
+          for chip in (composer, parent):
+            chip.hover()
+            chip.evaluate(
+              "el => Promise.all(el.getAnimations().map(animation => animation.finished))"
+            )
+            style = chip.evaluate("""element => {
+              const css = getComputedStyle(element);
+              const text = getComputedStyle(element.querySelector('code'));
+              const box = element.getBoundingClientRect();
+              return [css.borderRadius, css.backgroundColor, css.borderColor, text.fontSize, box.width, box.height];
+            }""")
+            if chip == composer:
+              composer_style = style
+            else:
+              assert style == composer_style, (composer_style, style)
           page.screenshot(path=str(tmp_path / f"chip-row-{width}.png"))
           page.close()
       finally:
@@ -2032,6 +2276,7 @@ assert.equal(history.removed, 1, 'rerender replaces the old scroll listener');
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
@@ -2184,3 +2429,400 @@ def test_multiline_optimistic_paragraph_matches_confirmed_render(
     assert text.inner_html() == pending_html
     assert abs(text.bounding_box()["height"] - pending_height) < 1
     page.screenshot(path=str(tmp_path / "multiline-confirmed.png"))
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_reply_seen_indicator_optimistic_rollback_and_revision_guard(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for index in range(14):
+    app.messages.send_message(
+      f"History filler {index}\n\nExtra line to ensure scroll height.",
+      msg_id=f"ff00{index:02x}",
+    )
+  target_id = "aa9999"
+  app.messages.send_message("Target message for reply receipts", msg_id=target_id)
+
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      context = browser.new_context(
+        viewport={"width": 900, "height": 540}, reduced_motion="reduce"
+      )
+      page = context.new_page()
+      page.goto(
+        f"http://127.0.0.1:{server.server_port}/?transport=poll",
+        wait_until="domcontentloaded",
+      )
+      page.locator(f'.message[data-msg-id="{target_id}"]').wait_for()
+      page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      page.wait_for_function("() => document.querySelector('#history').scrollTop === 0")
+
+      app.dispatch("POST", f"/messages/{target_id}/ack", {"markdown": "First reply."})
+      rev1 = app.messages.get_message(target_id).replies_revision
+      third_reply = "Third reply."
+      indicator = page.locator("#log-edited")
+      indicator.wait_for(state="visible")
+
+      page.evaluate("""() => {
+        const original = window.fetch.bind(window);
+        window.seenCalls = [];
+        window.seenMode = 'hold-fail';
+        window.fetch = async (...args) => {
+          const url = String(args[0]);
+          if (url.includes('/replies-seen')) {
+            const body = JSON.parse(args[1]?.body || '{}');
+            window.seenCalls.push(body.revision);
+            if (window.seenMode === 'hold-fail') {
+              await new Promise(resolve => { window.releaseSeenFail = resolve; });
+              return new Response(JSON.stringify({ error: 'Receipt storage failed' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+              });
+            }
+            if (window.seenMode === 'hold-ok') {
+              const response = await original(...args);
+              await new Promise(resolve => { window.releaseSeenOk = resolve; });
+              return response;
+            }
+            if (window.seenMode === 'hold-stale-ok') {
+              const stalePayload = await (await original(...args)).json();
+              await new Promise(resolve => { window.releaseStaleOk = resolve; });
+              return new Response(JSON.stringify(stalePayload), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+              });
+            }
+          }
+          return original(...args);
+        };
+      }""")
+
+      page.locator("#history").evaluate("el => { el.scrollTop = el.scrollHeight; }")
+      page.wait_for_function("() => typeof window.releaseSeenFail === 'function'")
+      assert indicator.is_hidden(), (
+        "Indicator must hide immediately while receipt is pending"
+      )
+      page.screenshot(path=str(tmp_path / "reply-seen-optimistic.png"))
+
+      page.evaluate("window.releaseSeenFail()")
+      indicator.wait_for(state="visible")
+      page.wait_for_timeout(150)
+      assert page.evaluate("() => window.seenCalls") == [rev1]
+      page.screenshot(path=str(tmp_path / "reply-seen-restored.png"))
+
+      page.evaluate("() => { window.seenMode = 'hold-ok'; }")
+      indicator.click()
+      page.wait_for_function("() => typeof window.releaseSeenOk === 'function'")
+      assert indicator.is_hidden()
+      page.evaluate("window.releaseSeenOk()")
+      page.locator(
+        f'.message[data-msg-id="{target_id}"] .reply-seen-sentinel'
+      ).wait_for(state="detached")
+      assert app.messages.get_message(target_id).replies_seen
+
+      page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      page.wait_for_function("() => document.querySelector('#history').scrollTop === 0")
+      app.dispatch("POST", f"/messages/{target_id}/ack", {"markdown": "Second reply."})
+      rev2 = app.messages.get_message(target_id).replies_revision
+      indicator.wait_for(state="visible")
+
+      page.evaluate("() => { window.seenMode = 'hold-stale-ok'; }")
+      page.locator("#history").evaluate("el => { el.scrollTop = el.scrollHeight; }")
+      page.wait_for_function("() => typeof window.releaseStaleOk === 'function'")
+      assert indicator.is_hidden()
+
+      page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      app.dispatch("POST", f"/messages/{target_id}/ack", {"markdown": third_reply})
+      rev3 = app.messages.get_message(target_id).replies_revision
+      assert rev3 != rev2
+      page.wait_for_function(
+        "rev => document.querySelector('.message[data-msg-id=\"aa9999\"] .reply-seen-sentinel')"
+        "?.dataset.revision === rev",
+        arg=rev3,
+      )
+      indicator.wait_for(state="visible")
+
+      page.evaluate("window.releaseStaleOk()")
+      page.wait_for_timeout(150)
+      assert indicator.is_visible()
+      assert (
+        page.locator(
+          f'.message[data-msg-id="{target_id}"] .reply-seen-sentinel'
+        ).get_attribute("data-revision")
+        == rev3
+      )
+      assert (
+        third_reply
+        in page.locator(
+          f'.message[data-msg-id="{target_id}"] .answer.reply'
+        ).inner_text()
+      )
+      assert not app.messages.get_message(target_id).replies_seen
+      page.screenshot(path=str(tmp_path / "reply-seen-newer-revision.png"))
+
+      context.close()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+EXPECTED_LINK_RGB = "rgb(41, 155, 255)"
+EXPECTED_PORTRAIT_ORIENTATION = "portrait"
+EXPECTED_LIST_MARKERS = ("disc", "circle", "square")
+REMOVED_LANDSCAPE_VIEWPORT = "855x325"
+REMOVED_LANDSCAPE_WIDTH = 855
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN to run the browser regression",
+)
+def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
+  tmp_path: Path,
+) -> None:
+  import json
+  import tomllib
+  import urllib.request
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  nuu_cfg = tomllib.loads(
+    (Path(__file__).resolve().parents[3] / "skills/arena-steering/nuu.toml").read_text(
+      encoding="utf-8"
+    )
+  )
+  assert REMOVED_LANDSCAPE_VIEWPORT not in nuu_cfg["audit"]["viewports"]
+  assert REMOVED_LANDSCAPE_WIDTH not in nuu_cfg["audit"]["widths"]
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for index in range(14):
+    app.messages.send_message(
+      f"Message {index}: [link](https://example.com/{index})\n\n"
+      "- Top item\n"
+      "  - Second item\n"
+      "    - Third item\n\n"
+      "- [x] Task item",
+      msg_id=f"dd{index:04x}",
+      blocking=False,
+    )
+
+  resolved_manifest = app.resolve_asset("/static/assets/manifest.webmanifest")
+  assert resolved_manifest is not None
+  manifest_json = json.loads(resolved_manifest[0].decode("utf-8"))
+  assert manifest_json["orientation"] == EXPECTED_PORTRAIT_ORIENTATION
+
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with urllib.request.urlopen(
+      f"http://127.0.0.1:{server.server_port}/static/assets/manifest.webmanifest",
+      timeout=5,
+    ) as resp:
+      assert "application/manifest+json" in resp.headers.get("Content-Type", "")
+      assert json.loads(resp.read().decode("utf-8"))["orientation"] == (
+        EXPECTED_PORTRAIT_ORIENTATION
+      )
+
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      desktop = browser.new_page(viewport={"width": 1372, "height": 883})
+      desktop.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      desktop.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      desktop.wait_for_function(
+        "() => document.querySelector('#history').scrollTop === 0"
+      )
+      app.dispatch("POST", "/messages/dd000d/ack", {"markdown": "Unseen reply."})
+      desktop.locator("#log-edited").wait_for(state="visible")
+      desktop.locator("#log-newest").wait_for(state="visible")
+      desktop_metrics = desktop.evaluate("""() => {
+        const msg = document.querySelector('.message[data-msg-id="dd0000"] .message-text');
+        const uls = [...msg.querySelectorAll('ul')];
+        const edited = document.querySelector('#log-edited');
+        const newest = document.querySelector('#log-newest').getBoundingClientRect();
+        return {
+          manifestHref: document.querySelector('link[rel="manifest"]')?.getAttribute('href'),
+          linkColor: getComputedStyle(msg.querySelector('a')).color,
+          markers: uls.slice(0, 3).map(ul => getComputedStyle(ul).listStyleType),
+          taskItemMarker: getComputedStyle(msg.querySelector('.task-list-item')).listStyleType,
+          editedTopCss: parseFloat(getComputedStyle(edited).top),
+          newestWidth: newest.width,
+          newestHeight: newest.height,
+        };
+      }""")
+      assert desktop_metrics["manifestHref"] == "/static/assets/manifest.webmanifest"
+      assert desktop_metrics["linkColor"] == EXPECTED_LINK_RGB
+      assert tuple(desktop_metrics["markers"]) == EXPECTED_LIST_MARKERS
+      assert desktop_metrics["taskItemMarker"] == "none"
+      assert desktop_metrics["newestWidth"] > desktop_metrics["newestHeight"]
+
+      mobile = browser.new_page(
+        viewport={"width": 411, "height": 799},
+        is_mobile=True,
+        has_touch=True,
+      )
+      mobile.add_init_script("""(() => {
+        window.__lockedOrientations = [];
+        try {
+          Object.defineProperty(window.screen, 'orientation', {
+            configurable: true,
+            value: {
+              lock(mode) {
+                window.__lockedOrientations.push(mode);
+                return Promise.resolve();
+              },
+            },
+          });
+        } catch {}
+      })();""")
+      mobile.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      mobile.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      mobile.wait_for_function(
+        "() => document.querySelector('#history').scrollTop === 0"
+      )
+      app.dispatch("POST", "/messages/dd000c/ack", {"markdown": "Second unseen reply."})
+      mobile.locator("#log-edited").wait_for(state="visible")
+      mobile_metrics = mobile.evaluate("""() => {
+        const edited = document.querySelector('#log-edited');
+        const toolbar = document.querySelector('.log-toolbar');
+        return {
+          locked: window.__lockedOrientations || [],
+          editedTopCss: parseFloat(getComputedStyle(edited).top),
+          editedTopRect: edited.getBoundingClientRect().top,
+          toolbarBottomRect: toolbar.getBoundingClientRect().bottom,
+        };
+      }""")
+      assert EXPECTED_PORTRAIT_ORIENTATION in mobile_metrics["locked"]
+      assert mobile_metrics["editedTopCss"] > desktop_metrics["editedTopCss"]
+      assert mobile_metrics["editedTopRect"] > mobile_metrics["toolbarBottomRect"]
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN to run the browser regression",
+)
+def test_composer_paste_unnamed_templates_and_dynamic_lost_ui(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  png_bytes = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
+  )
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      page = browser.new_page(viewport={"width": 1372, "height": 883})
+      page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      composer = page.locator("#msg")
+      composer.wait_for(state="visible")
+
+      # 1. Stage a named file via file input, a clipboard image paste, and pasted lines.
+      named_path = tmp_path / "architecture.png"
+      named_path.write_bytes(png_bytes)
+      page.locator("#composer-file-input").set_input_files(str(named_path))
+      page.wait_for_function(
+        "() => document.querySelectorAll('.composer-attachment-chip').length === 1"
+      )
+
+      page.evaluate(
+        """(b64) => {
+          const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+          const file = new File([bytes], 'image.png', { type: 'image/png' });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+          document.querySelector('#msg').dispatchEvent(ev);
+        }""",
+        base64.b64encode(png_bytes).decode("ascii"),
+      )
+      page.wait_for_function(
+        "() => document.querySelectorAll('.composer-attachment-chip').length === 2"
+      )
+
+      many_lines = "\\n".join(f"line {i}" for i in range(18))
+      page.evaluate(
+        f"""() => {{
+          const dt = new DataTransfer();
+          dt.setData('text/plain', '{many_lines}');
+          const ev = new ClipboardEvent('paste', {{ clipboardData: dt, bubbles: true, cancelable: true }});
+          document.querySelector('#msg').dispatchEvent(ev);
+        }}"""
+      )
+      page.wait_for_function(
+        "() => document.querySelectorAll('.composer-attachment-chip[data-upload-status=\"ready\"]').length === 3"
+      )
+
+      staged_names = page.evaluate(
+        "() => Array.from(document.querySelectorAll('.composer-attachment-name'), el => el.getAttribute('title'))"
+      )
+      assert staged_names[0] == "architecture.png"
+      assert re.fullmatch(r"[0-9]{10,}\.png", staged_names[1])
+      assert re.fullmatch(r"18-pasted-lines-[0-9]{10,}\.txt", staged_names[2])
+
+      composer.fill("Send three templates")
+      page.locator("#send").click()
+      page.wait_for_function(
+        "() => document.querySelectorAll('.message:not([data-msg-id^=\"pending-\"])').length === 1"
+      )
+
+      sent = app.messages.list_messages(include_hidden=False)[0]
+      assert [Path(att.path).name for att in sent.attachments] == [
+        f"{sent.id}-architecture.png",
+        f"{sent.id}-{staged_names[1]}",
+        f"{sent.id}-{staged_names[2]}",
+      ]
+
+      # Link to task and delete the pasted-lines file on disk to verify dynamic (lost).
+      app.tasks.create_task("ui-reloc-task", "UI relocation", size=3, msg_ids=[sent.id])
+      relocated = (
+        state_dir / "uploads" / "ui-reloc-task" / f"{sent.id}-{staged_names[2]}"
+      )
+      assert relocated.is_file()
+      relocated.unlink()
+
+      page.reload()
+      page.locator(f'.message[data-msg-id="{sent.id}"]').wait_for(state="visible")
+      assert page.locator(
+        f'.message[data-msg-id="{sent.id}"] .receipt-filename'
+      ).all_text_contents() == [f"{staged_names[2]} (lost)"]
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

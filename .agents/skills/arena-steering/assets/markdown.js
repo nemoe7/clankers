@@ -1,7 +1,6 @@
 // Safe offline Markdown renderer for messages, acks, and report blocks.
 
-const BRACES_SVG = `<svg class="lucide lucide-braces" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"></path><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"></path></svg>`;
-const COPY_SVG = `<svg class="lucide lucide-copy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`;
+import { BRACES_14_SVG as BRACES_SVG, COPY_14_SVG as COPY_SVG } from "./icons.js";
 
 let taskLabelSeq = 0;
 
@@ -123,14 +122,14 @@ function renderCodeFence(lang, codeLines) {
   const highlightedAttr = prismGrammar ? ` data-highlighted="true"` : "";
   const mermaidBtn =
     langKey === "mermaid"
-      ? `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
+      ? `<button type="button" class="preview-code-mermaid quiet-btn" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
       : "";
   const mermaidStateAttr =
     langKey === "mermaid" ? ` data-mermaid-state="pending"` : "";
   return `
     <div class="code-block"${mermaidStateAttr}>
       ${mermaidBtn}
-      <button type="button" class="copy-code" aria-label="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
+      <button type="button" class="copy-code quiet-btn" aria-label="Copy code" data-code="${dataCode}">${COPY_SVG}</button>
       <div class="code-block-header">
         <span class="code-block-lang">${BRACES_SVG}<span>${langLabel}</span></span>
       </div>
@@ -336,6 +335,7 @@ export function initializeMermaid() {
         noteBkgColor: "#292624",
         noteTextColor: "#f4f0eb",
         noteBorderColor: "#e5bb8b",
+        dropShadow: "none",
       },
       flowchart: { htmlLabels: false },
     });
@@ -349,7 +349,7 @@ function mountMermaidDiagram(block, codeEl, rawSource, safeSvg) {
     const dataCode = escapeHtml(rawSource).replace(/\n/g, "&#10;");
     block.insertAdjacentHTML(
       "afterbegin",
-      `<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
+      `<button type="button" class="preview-code-mermaid quiet-btn" aria-label="Show Mermaid code" title="Show Mermaid code" aria-pressed="false" data-code="${dataCode}">${BRACES_SVG}</button>`
     );
   }
   let diagramDiv = block.querySelector(":scope > .mermaid-diagram");
@@ -479,9 +479,21 @@ export function toggleCodeMermaid(button) {
   }
 }
 
+export function renderInlineCode(text) {
+  return escapeHtml(text).replace(/(`+)([^`\n]+?)\1/g, (_m, ticks, inner) => {
+    const trimmed =
+      ticks.length > 1 &&
+      inner.startsWith(" ") &&
+      inner.endsWith(" ") &&
+      inner.trim().length > 0
+        ? inner.slice(1, -1)
+        : inner;
+    return `<code>${trimmed}</code>`;
+  });
+}
+
 export function renderInlineMarkdown(text) {
-  let out = escapeHtml(text);
-  out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  let out = renderInlineCode(text);
   out = out.replace(
     /!\[([^\]]*)\]\(((?:https?:\/\/|\/|data:image\/)[^\s)]+)\)/g,
     (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`

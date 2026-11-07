@@ -19,6 +19,7 @@ def run(*arguments, cwd):
     [sys.executable, str(SCRIPT), *arguments],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     cwd=cwd,
   )
@@ -252,7 +253,8 @@ def test_rule_ids_suppress_only_the_named_rotation():
     result = run("--format", cwd=directory)
     assert result.returncode == 0
     assert (
-      note.read_text() == "kind and selected  # nonemo: NMO100\nsend # nonemo: N999\n"
+      note.read_text(encoding="utf-8")
+      == "kind and selected  # nonemo: NMO100\nsend # nonemo: N999\n"
     )
 
 
@@ -271,10 +273,11 @@ def test_collect_keeps_all_markers_including_suppressed_files():
       cwd=directory,
       capture_output=True,
       text=True,
+      encoding="utf-8",
       check=False,
     )
     assert result.returncode == 0, result.stderr
-    expected_markers = note.read_text().count("nonemo:")
+    expected_markers = note.read_text(encoding="utf-8").count("nonemo:")
     assert len(result.stdout.splitlines()) == expected_markers
     assert "note.md:1: NMO100 file:" in result.stdout  # nonemo: NMT100
     assert "note.md:3: HMN000 file:" in result.stdout  # nonemo: NMT100
@@ -338,7 +341,7 @@ def test_multiple_rule_exclusions_preserve_the_marker_text():
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0
     assert (
-      note.read_text()
+      note.read_text(encoding="utf-8")
       == "picked kind # nonemo: NMO901 # nonemo: NMO100\ntype # nonemo: kind\n"
     )
 
@@ -360,7 +363,7 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   import json
 
   source = tmp_path / "example.md"
-  source.write_text("Run.\n")
+  source.write_text("Run.\n", encoding="utf-8")
   probe = run("prose", "--context", "instruction", str(source), cwd=tmp_path)
   assert probe.returncode == 0, probe.stderr
 
@@ -373,7 +376,7 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   assert instruction_cap < description_cap
   source = tmp_path / "example.md"
   sentence = " ".join("term" for _ in range(instruction_cap + 1)) + "."
-  source.write_text(sentence + "\n")
+  source.write_text(sentence + "\n", encoding="utf-8")
 
   def inspect(context, *extra):
     result = run("prose", "--context", context, *extra, str(source), cwd=tmp_path)
@@ -387,39 +390,48 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
   finding = instruction["findings"][0]
   assert finding["count"] > finding["cap"] == instruction_cap
   assert finding["path"] == str(source)
-  assert finding["line"] == source.read_text().splitlines().index(sentence) + 1
+  assert (
+    finding["line"]
+    == source.read_text(encoding="utf-8").splitlines().index(sentence) + 1
+  )
   assert inspect("unknown")["coverage"][0]["sentences"] == "checked"
   assert inspect("unknown")["findings"]
   code = finding["rule"]
-  source.write_text(f"<!-- nonemo: {code} -->\n{sentence}\n")
+  source.write_text(f"<!-- nonemo: {code} -->\n{sentence}\n", encoding="utf-8")
   assert not inspect("instruction")["findings"]
   listing = run("--ignores", str(source), cwd=tmp_path)
   assert listing.returncode == 0 and code in listing.stdout
 
   cap = limits.PARAGRAPH_CAP
-  source.write_text(" ".join("Short." for _ in range(cap + 1)) + "\n")
+  source.write_text(" ".join("Short." for _ in range(cap + 1)) + "\n", encoding="utf-8")
   paragraphs = inspect("description")["findings"]
   assert paragraphs and paragraphs[0]["count"] > paragraphs[0]["cap"] == cap
-  source.write_text(" ".join("Short." for _ in range(cap)) + "\n")
+  source.write_text(" ".join("Short." for _ in range(cap)) + "\n", encoding="utf-8")
   assert not inspect("description")["findings"]
   stricter = cap - 1
   assert inspect("description", "--paragraph-cap", str(stricter))["findings"]
   relaxed = run("prose", "--paragraph-cap", str(cap + 1), str(source), cwd=tmp_path)
   assert relaxed.returncode == 2
-  source.write_text("```\n" + sentence + "\n```\n")
+  source.write_text("```\n" + sentence + "\n```\n", encoding="utf-8")
   assert not inspect("instruction")["findings"]
-  source.write_text("~~~\n" + sentence + "\n~~~\n")
+  source.write_text("~~~\n" + sentence + "\n~~~\n", encoding="utf-8")
   assert not inspect("instruction")["findings"]
-  source.write_text("`" + sentence + "`\n")
+  source.write_text("`" + sentence + "`\n", encoding="utf-8")
   assert not inspect("instruction")["findings"]
   cell = " ".join("term" for _ in range(instruction_cap // 2 + 1))
-  source.write_text(f"| Left | Right |\n| --- | --- |\n| {cell} | {cell} |\n")
+  source.write_text(
+    f"| Left | Right |\n| --- | --- |\n| {cell} | {cell} |\n", encoding="utf-8"
+  )
   assert not inspect("instruction")["findings"]
-  source.write_text(f"| Left | Right |\n| --- | --- |\n| {sentence} | Short |\n")
+  source.write_text(
+    f"| Left | Right |\n| --- | --- |\n| {sentence} | Short |\n", encoding="utf-8"
+  )
   assert inspect("instruction")["findings"]
   import csv
 
-  source.write_text("term" * (csv.field_size_limit() + 1) + " | term\n")
+  source.write_text(
+    "term" * (csv.field_size_limit() + 1) + " | term\n", encoding="utf-8"
+  )
   assert not inspect("instruction")["findings"]
   import shutil
 
@@ -432,7 +444,7 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
     SCRIPT.with_name("javascript-comments.cjs"),
   ):
     shutil.copy2(entry, portable / "scripts" / entry.name)
-  source.write_text("Run.\n")
+  source.write_text("Run.\n", encoding="utf-8")
   shipped = subprocess.run(
     [
       sys.executable,
@@ -444,6 +456,7 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
     ],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     cwd=tmp_path,
   )
@@ -471,7 +484,7 @@ self.assertEqual(result.stderr, "The report was saved.")
 self.assertIn("The report was saved.", result.stdout)
 cls.assertEqual(panel.clientWidth, 320.5)
 """
-  source.write_text(original)
+  source.write_text(original, encoding="utf-8")
 
   def inspect(*paths, cwd=tmp_path):
     result = run("review-tests", *map(str, paths), cwd=cwd)
@@ -500,11 +513,13 @@ cls.assertEqual(panel.clientWidth, 320.5)
   assert all(
     row["path"] == str(source) and row["status"] == "review" for row in data["findings"]
   )
-  assert source.read_text() == original
+  assert source.read_text(encoding="utf-8") == original
   measurement = next(
     row["rule"] for row in data["findings"] if row["category"] == "measurement"
   )
-  source.write_text(f"# nonemo: {measurement}\n# nonemo: N999\n" + original)
+  source.write_text(
+    f"# nonemo: {measurement}\n# nonemo: N999\n" + original, encoding="utf-8"
+  )
   _, suppressed = inspect(source)
   assert suppressed["findings"]
   assert all(row["rule"] != measurement for row in suppressed["findings"])
@@ -541,14 +556,14 @@ cls.assertEqual(panel.clientWidth, 320.5)
     assert (
       coverage["status"] == "not_checked" and coverage["reason"] == "parser_unavailable"
     )
-  source.write_text("assert (\n")
+  source.write_text("assert (\n", encoding="utf-8")
   failed, malformed = inspect(source)
   assert failed.returncode == 2
   assert malformed["errors"][0]["path"] == str(source)
   assert malformed["errors"][0]["type"] == "SyntaxError"
   assert malformed["errors"][0]["line"] > 0
   other = tmp_path / "fixture.txt"
-  other.write_text(original)
+  other.write_text(original, encoding="utf-8")
   _, unsupported = inspect(other)
   assert unsupported["coverage"][0]["status"] == "not_checked"
   assert not unsupported["findings"]
@@ -579,6 +594,7 @@ cls.assertEqual(panel.clientWidth, 320.5)
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     env={**os.environ, "PATH": ""},
     check=False,
   )
@@ -596,6 +612,7 @@ cls.assertEqual(panel.clientWidth, 320.5)
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert shipped.returncode == 1, shipped.stderr
@@ -728,7 +745,11 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "note.md"
   source.write_text(
-    sentence + "\n\n" + "Short. " * (nemoize.PARAGRAPH_CAP + 1) + "\n\nFirst; second.\n"
+    sentence
+    + "\n\n"
+    + "Short. " * (nemoize.PARAGRAPH_CAP + 1)
+    + "\n\nFirst; second.\n",
+    encoding="utf-8",
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
@@ -749,7 +770,9 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   assert "STE200" not in description.stdout
   assert "NMP100" in description.stdout and "STE100" in description.stdout
   code_file = tmp_path / "app.py"
-  code_file.write_text("# Line one.\n# Line two.\n# Line three.\nx = 1\n")
+  code_file.write_text(
+    "# Line one.\n# Line two.\n# Line three.\nx = 1\n", encoding="utf-8"
+  )
   comment_res = run(str(code_file), cwd=tmp_path)
   assert comment_res.returncode == 1, comment_res.stderr
   assert (
@@ -780,9 +803,9 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
 def test_default_prose_checks_extract_python_comments_not_literals(tmp_path):
   sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
-  source.write_text(f'value = "{sentence}"\n')
+  source.write_text(f'value = "{sentence}"\n', encoding="utf-8")
   assert run(cwd=tmp_path).returncode == 0
-  source.write_text(f'value = "{sentence}"\n# {sentence}\n')
+  source.write_text(f'value = "{sentence}"\n# {sentence}\n', encoding="utf-8")
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert "example.py:2: [STE200]" in result.stdout  # nonemo: NMT100
@@ -793,7 +816,8 @@ def test_rotation_group_markers_and_removed_legacy_aliases(tmp_path):
   source = tmp_path / "note.md"
   source.write_text(
     "kind picked transmit # nonemo: NMO100 # nonemo: NMO901\n"
-    "kind picked transmit # nonemo: N003 # nonemo: P001\n"
+    "kind picked transmit # nonemo: N003 # nonemo: P001\n",
+    encoding="utf-8",
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
@@ -805,16 +829,18 @@ def test_rotation_group_markers_and_removed_legacy_aliases(tmp_path):
 
 def test_default_prose_scan_reports_parse_errors(tmp_path):
   source = tmp_path / "broken.py"
-  source.write_text("def unfinished(\n")
+  source.write_text("def unfinished(\n", encoding="utf-8")
   result = run(cwd=tmp_path)
   assert result.returncode == 2
   assert str(source) in result.stderr or source.name in result.stderr
 
 
 def test_default_test_scope_excludes_imported_production_files(tmp_path):
-  (tmp_path / "app.py").write_text('assert result.stdout == "Saved the report."\n')
+  (tmp_path / "app.py").write_text(
+    'assert result.stdout == "Saved the report."\n', encoding="utf-8"
+  )
   (tmp_path / "test_status.py").write_text(
-    'import app\nassert result.stdout == "Saved the report."\n'
+    'import app\nassert result.stdout == "Saved the report."\n', encoding="utf-8"
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
@@ -824,15 +850,15 @@ def test_default_test_scope_excludes_imported_production_files(tmp_path):
 
 def test_default_test_scope_uses_configured_patterns_and_explicit_helpers(tmp_path):
   (tmp_path / "pytest.ini").write_text(
-    "[pytest]\ntestpaths = specs\npython_files = scenario_*.py\n"
+    "[pytest]\ntestpaths = specs\npython_files = scenario_*.py\n", encoding="utf-8"
   )
   specs = tmp_path / "specs"
   specs.mkdir()
   (specs / "scenario_status.py").write_text(
-    'assert result.stdout == "Saved the report."\n'
+    'assert result.stdout == "Saved the report."\n', encoding="utf-8"
   )
   helper = tmp_path / "helper.py"
-  helper.write_text('assert result.stdout == "Saved the report."\n')
+  helper.write_text('assert result.stdout == "Saved the report."\n', encoding="utf-8")
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert "scenario_status.py:1: [NMT100]" in result.stdout  # nonemo: NMT100
@@ -845,13 +871,15 @@ def test_default_test_scope_uses_configured_patterns_and_explicit_helpers(tmp_pa
 def test_default_javascript_test_scope_uses_declarations_not_string_examples(tmp_path):
   app = tmp_path / "app.js"
   app.write_text(
-    'const example = "from \'node:test\'"; assert.equal(result.stdout, "Saved the report.");\n'
+    'const example = "from \'node:test\'"; assert.equal(result.stdout, "Saved the report.");\n',
+    encoding="utf-8",
   )
   assert run(cwd=tmp_path).returncode == 0
   suite = tmp_path / "suite.js"
   suite.write_text(
     'const { test } = require("node:test"); '
-    'test("status", () => { assert.equal(result.stdout, "Saved the report."); });\n'
+    'test("status", () => { assert.equal(result.stdout, "Saved the report."); });\n',
+    encoding="utf-8",
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
@@ -864,10 +892,10 @@ def test_explicit_prose_mode_uses_shared_source_extraction(tmp_path):
 
   sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
-  source.write_text(f'value = "{sentence}"\n')
+  source.write_text(f'value = "{sentence}"\n', encoding="utf-8")
   result = run("prose", str(source), cwd=tmp_path)
   assert result.returncode == 0, result.stderr
-  source.write_text(f'value = "{sentence}"\n# {sentence}\n')
+  source.write_text(f'value = "{sentence}"\n# {sentence}\n', encoding="utf-8")
   result = run("prose", str(source), cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert {row["line"] for row in json.loads(result.stdout)["findings"]} == {2}
@@ -888,13 +916,14 @@ def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
   sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.js"
   prefix = "\n" * 4
-  source.write_text(prefix + "/*\n * " + sentence + "\n */\n")
-  first = source.read_text().splitlines().index(" * " + sentence) + 1
+  source.write_text(prefix + "/*\n * " + sentence + "\n */\n", encoding="utf-8")
+  first = source.read_text(encoding="utf-8").splitlines().index(" * " + sentence) + 1
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert f"example.js:{first}: [STE200]" in result.stdout
   source.write_text(
-    prefix + "/*\n * " + sentence + " nonemo: STE200\n * " + sentence + "\n */\n"
+    prefix + "/*\n * " + sentence + " nonemo: STE200\n * " + sentence + "\n */\n",
+    encoding="utf-8",
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
@@ -906,7 +935,7 @@ def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
   sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   for prefix in ("Short.\\n", "\\n", "\\nShort.\\n"):
-    source.write_text('"""' + prefix + sentence + '"""\n')
+    source.write_text('"""' + prefix + sentence + '"""\n', encoding="utf-8")
     result = run(cwd=tmp_path)
     assert result.returncode == 1, result.stderr
     assert "example.py:1: [STE200]" in result.stdout  # nonemo: NMT100
@@ -919,7 +948,7 @@ def test_source_extractors_skip_module_and_yaml_data_literals(tmp_path):
     ("example.yaml", 'value: "' + sentence + '"\n'),
   ):
     source = tmp_path / filename
-    source.write_text(code)
+    source.write_text(code, encoding="utf-8")
     result = run(str(source), cwd=tmp_path)
     assert result.returncode == 0, (filename, result.stdout, result.stderr)
 
@@ -928,7 +957,7 @@ def test_explicit_prose_reports_parser_runtime_failures(tmp_path, monkeypatch, c
   import json
 
   source = tmp_path / "example.py"
-  source.write_text('"""Short."""\n')
+  source.write_text('"""Short."""\n', encoding="utf-8")
   for error in (RuntimeError, RecursionError):
 
     def fail(*arguments, error=error):
@@ -957,7 +986,7 @@ def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_p
     "",
     sentence + " <!-- nonemo: STE200 -->",
   ]
-  source.write_text("\n".join(lines) + "\n")
+  source.write_text("\n".join(lines) + "\n", encoding="utf-8")
   result = run(cwd=tmp_path)
   first = lines.index(sentence) + 1
   second = len(lines)
@@ -978,38 +1007,39 @@ def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
         prefix + " ".join(words[:middle]),
         prefix + " ".join(words[middle:]) + ".",
       ]
-      source.write_text("\n".join(lines) + "\n")
+      source.write_text("\n".join(lines) + "\n", encoding="utf-8")
       result = run(str(source), cwd=tmp_path)
       assert result.returncode == int(count > cap), result.stderr
       if count > cap:
         assert f"{source}:{first}: [STE200]" in result.stdout
     lines[first - 1] += " nonemo: STE200"
-    source.write_text("\n".join(lines) + "\n")
+    source.write_text("\n".join(lines) + "\n", encoding="utf-8")
     assert run(str(source), cwd=tmp_path).returncode == 0
 
 
 def test_soft_rotation_is_advisory_in_checks_and_explicit_in_format(tmp_path):
   source = tmp_path / "note.md"
   original = "Pick one.\n"
-  source.write_text(original)
+  source.write_text(original, encoding="utf-8")
   result = run(str(source), cwd=tmp_path)
   assert result.returncode == 0, result.stderr
   assert "[NMO901] (advisory) Pick -> select" in result.stdout
   assert "manual review" in result.stdout
-  assert source.read_text() == original
+  assert source.read_text(encoding="utf-8") == original
   formatted = run("--format", str(source), cwd=tmp_path)
   assert formatted.returncode == 0
-  assert source.read_text() == "Select one.\n"
-  source.write_text("Pick this kind.\n")
+  assert source.read_text(encoding="utf-8") == "Select one.\n"
+  source.write_text("Pick this kind.\n", encoding="utf-8")
   assert run(str(source), cwd=tmp_path).returncode == 1
-  source.write_text("Pick one. <!-- nonemo: NMO901 -->\n")
+  source.write_text("Pick one. <!-- nonemo: NMO901 -->\n", encoding="utf-8")
   assert not run(str(source), cwd=tmp_path).stdout.strip()
 
 
 def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path):
   source = tmp_path / "note.md"
   source.write_text(
-    "Clone the Repository and both repositories. The report was published.\n"
+    "Clone the Repository and both repositories. The report was published.\n",
+    encoding="utf-8",
   )
   result = run(str(source), cwd=tmp_path)
   assert result.returncode == 0, result.stderr
@@ -1022,11 +1052,16 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   formatted = run("--format", str(source), cwd=tmp_path)
   assert formatted.returncode == 0
   assert (
-    source.read_text() == "Clone the Repo and both repos. The report was published.\n"
+    source.read_text(encoding="utf-8")
+    == "Clone the Repo and both repos. The report was published.\n"
   )
-  source.write_text("The report was published. <!-- nonemo: STE901 -->\n")
+  source.write_text(
+    "The report was published. <!-- nonemo: STE901 -->\n", encoding="utf-8"
+  )
   assert not run(str(source), cwd=tmp_path).stdout.strip()
-  source.write_text("Set up the server. The state is parsed and validated.\n")
+  source.write_text(
+    "Set up the server. The state is parsed and validated.\n", encoding="utf-8"
+  )
   advisory = run(str(source), cwd=tmp_path)
   assert advisory.returncode == 0, advisory.stderr
   assert (
@@ -1037,7 +1072,7 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
     f"[STE903] (advisory) {nemoize.RULE_DESCRIPTIONS['STE903']} (manual review)"
     in advisory.stdout
   )
-  source.write_text("Check red, green and blue.\n")
+  source.write_text("Check red, green and blue.\n", encoding="utf-8")
   serial = run(str(source), cwd=tmp_path)
   assert serial.returncode == 1, serial.stderr
   assert (
@@ -1046,7 +1081,8 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   assert "manual review" not in serial.stdout
   test_sample = tmp_path / "test_sample.py"
   test_sample.write_text(
-    'def test_sample():\n  assert "three plain words" in result.stderr.strip()\n  assert check.measure(path) == 2\n'
+    'def test_sample():\n  assert "three plain words" in result.stderr.strip()\n  assert check.measure(path) == 2\n',
+    encoding="utf-8",
   )
   reviewed = nemoize.review_tests([test_sample])
   assert {row["rule"] for row in reviewed["findings"]} == {"NMT100", "NMT200"}
@@ -1150,6 +1186,7 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   collect_alias = subprocess.run(
@@ -1157,6 +1194,7 @@ def test_ste_and_hmn_rules_and_audit_mode(tmp_path):
     cwd=tmp_path,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert audit.returncode == 0, audit.stderr
@@ -2092,6 +2130,38 @@ def test_extend_exclude_supports_globstar_and_negation(tmp_path, monkeypatch):
   assert nemoize.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
 
 
+def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
+  import tomllib
+
+  root = SCRIPT.parents[3]
+  config = tomllib.loads((root / "nemoizer.toml").read_text(encoding="utf-8"))
+  monkeypatch.setitem(
+    nemoize.ACTIVE_CONFIG, "extend_exclude", tuple(config["extend-exclude"])
+  )
+  for name in (
+    "app.min.js",
+    "nested/site.min.css",
+    "nested/code.min.mjs",
+    "docs/archive/README.md",
+    "archive/note.py",
+    "other/archives/old.md",
+    "vendor/library.js",
+    "nested/vendor/README.md",
+    "third_party/module.py",
+    "nested/third-party/module.py",
+    "vendored/module.py",
+    "files/source.tar.gz",
+  ):
+    assert nemoize.skipped(tmp_path / name, tmp_path, ()), name
+  for name in (
+    "src/app.js",
+    "docs/README.md",
+    "src/archive_helper.py",
+    "src/vendor_helper.py",
+  ):
+    assert not nemoize.skipped(tmp_path / name, tmp_path, ()), name
+
+
 def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
   view = tmp_path / "reports-view.js"
   source = (
@@ -2135,6 +2205,7 @@ raise SystemExit(nemoize.main(['--no-config', sys.argv[2]]))
     [sys.executable, "-c", script, str(SCRIPT.parent), str(note)],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     timeout=15,
   )
@@ -2159,6 +2230,7 @@ raise SystemExit(nemoize.main(['--no-config', *sys.argv[2:]]))
     [sys.executable, "-c", script, str(SCRIPT.parent), *(str(note) for note in notes)],
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
     timeout=25,
   )

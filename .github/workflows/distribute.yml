@@ -1,4 +1,4 @@
-# Keep domain rows visible. One push job applies each target's matching domains in one checkout.
+# Validate every domain before one push per target.
 # CLANKERS_DIST_PAT needs Contents write on each target and Workflows write on the Gemini ones.
 name: Distribution
 on:
@@ -45,56 +45,28 @@ concurrency:
   group: Distribute-${{ github.repository }}
   cancel-in-progress: false
 jobs:
-  plan:
-    name: Plan Distribution
+  sync:
+    name: Validate and Sync Targets
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-      targets: ${{ steps.plan.outputs.targets }}
+    timeout-minutes: 30
+    env:
+      ARENA_REPOS: ${{ inputs.repos }}
+      GEMINI_REPOS: ${{ inputs.gemini_repos }}
+      NUU_REPOS: ${{ inputs.nuu_repos }}
+      NEMOIZER_REPOS: ${{ inputs.nemoizer_repos }}
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Group Domain Targets
         id: plan
-        env:
-          ARENA_REPOS: ${{ inputs.repos }}
-          GEMINI_REPOS: ${{ inputs.gemini_repos }}
-          NUU_REPOS: ${{ inputs.nuu_repos }}
-          NEMOIZER_REPOS: ${{ inputs.nemoizer_repos }}
         run: python3 .github/actions/distribute-sync/plan.py
-  domains:
-    name: Validate ${{ matrix.domain }}
-    needs: plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    steps:
-      - name: Check Out Source Repository
-        uses: actions/checkout@v7
-      - name: Check Domain Payload
-        uses: ./.github/actions/distribute-sync
-        with:
-          validate-only: true
-          repos: ${{ matrix.repos }}
-          repos-fallback: ${{ matrix.repos }}
-          rule-src: ${{ matrix.rule_src }}
-          rule-dest: ${{ matrix.rule_dest }}
-          skills: ${{ matrix.skills }}
-          files: ${{ matrix.files }}
-  push:
-    name: Push and Verify Targets
-    needs: [plan, domains]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check Out Source Repository
-        uses: actions/checkout@v7
+      - name: Check Domain Payloads
+        run: python3 .github/actions/distribute-sync/plan.py --validate
       - name: Push Each Target Once
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
           ARENA_REMOVE_SKILLS: ${{ inputs.remove_skills }}
-          TARGETS_JSON: ${{ needs.plan.outputs.targets }}
+          TARGETS_JSON: ${{ steps.plan.outputs.targets }}
         run: python3 .github/actions/distribute-sync/plan.py --push

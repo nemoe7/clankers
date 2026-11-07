@@ -52,7 +52,7 @@ The bar serves a session. On a new chat the composer's own repository chip names
 
 A selected diff branch wears the same owner/repo shape as the repository chip. The read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository beside it.
 
-The fill fetches `userscripts/arena-prompt-fill.txt` once from this repository. It waits for that text before writing, and leaves the composer unchanged if the fetch fails. The fill optionally fetches `rules/ARENA.md` and appends it when that fetch succeeds.
+The fill fetches `userscripts/arena-prompt-fill.txt` and `skills/arena-steering/references/survey-questions.txt` once from this repository. It waits for both files before writing, and leaves the composer unchanged if either fetch fails. The fill optionally fetches `rules/ARENA.md` and appends it when that fetch succeeds.
 
 The template requests strong reasoning and context retention for a potentially long, complex task, not model selection. It says work can continue indefinitely, and each final poll waits up to 1,800 seconds or until skipped.
 

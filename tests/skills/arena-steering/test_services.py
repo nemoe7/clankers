@@ -531,9 +531,9 @@ def test_task_service_mutable_dependency_queue_and_derived_blocking() -> None:
   assert "We should use this database: SQLite" in tasks.get_task("task-b")[0].details
   assert tasks.get_task("task-b")[1] is False
 
-  tasks.mod_deets("task-b", "Added integration check.")
+  tasks.mod_deets("task-b", "Added integration check.", size=3)
   count_before = len(tasks.get_task("task-b")[0].details)
-  tasks.mod_deets_rm("task-b", count_before)
+  tasks.mod_deets_rm("task-b", count_before, size=3)
   assert len(tasks.get_task("task-b")[0].details) == count_before - 1
 
   with pytest.raises(ValueError, match="cycle"):
@@ -599,9 +599,9 @@ def test_task_details_required_for_create_and_legacy_update(tmp_path) -> None:
   with pytest.raises(ValueError, match="at least one detail"):
     tasks.patch_task("legacy-task", {"title": "Changed"})
   assert tasks.get_task("legacy-task")[0].title == "Legacy"
-  tasks.mod_deets("legacy-task", "Add a detail")
+  tasks.mod_deets("legacy-task", "Add a detail", size=3)
   with pytest.raises(ValueError, match="at least one detail"):
-    tasks.mod_deets_rm("legacy-task", 1)
+    tasks.mod_deets_rm("legacy-task", 1, size=3)
   assert tasks.get_task("legacy-task")[0].details == ["Add a detail"]
   store.close()
 
@@ -635,7 +635,7 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   details = tasks.get_task("work")[0].details
   assert details == ["Act on the answer", "Choice?: A"]
   tasks.mod_scalar("work", "title", "Updated work")
-  tasks.mod_deets("work", "Another detail")
+  tasks.mod_deets("work", "Another detail", size=3)
   tasks.patch_task("work", {"scope": "test"})
   tasks.rename_task("work", "renamed")
   reports.remove_report("decision")
@@ -808,7 +808,7 @@ def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> Non
   second = reports.submit_answer("decision", {"select": "No"}, answer_id="ac0002")
   reports.ack_answer("decision", second.id, "Read")
   assert tasks.get_task("work")[0].details == ["Review", "Select?: Yes", "Select?: No"]
-  tasks.mod_deets_rm("work", 2)
+  tasks.mod_deets_rm("work", 2, size=3)
   task = tasks.get_task("work")[0]
   assert task.report_ids == ["decision"]
   assert task.details == ["Review", "Select?: No"]
@@ -895,9 +895,9 @@ def test_ack_adds_full_details_and_identical_submission_is_unchanged(tmp_path) -
     task = tasks.get_task(task_id)[0]
     assert task.details == expected
     assert "answer_snapshots" not in task.to_dict()
-  tasks.mod_deets_rm("one", 2)
+  tasks.mod_deets_rm("one", 2, size=3)
   tasks.mod_scalar("one", "title", "Renamed")
-  tasks.mod_deets("one", "Short addition")
+  tasks.mod_deets("one", "Short addition", size=3)
   tasks.patch_task("one", {"scope": "checked"})
   tasks.rename_task("one", "renamed")
   store.close()
@@ -934,8 +934,8 @@ def test_manual_task_detail_limit_survives_generated_long_detail(tmp_path) -> No
   details = tasks.get_task("work")[0].details
   assert details[1] == f"Choice: {option}"
   with pytest.raises(ValueError, match="120"):
-    tasks.patch_task("work", {"details": [*details, details[1]]})
-  tasks.patch_task("work", {"details": [*details, "Short"]})
+    tasks.patch_task("work", {"details": [*details, details[1]], "size": 3})
+  tasks.patch_task("work", {"details": [*details, "Short"], "size": 3})
   assert tasks.get_task("work")[0].details == [*details, "Short"]
   store.close()
 
@@ -1314,8 +1314,10 @@ def test_task_details_are_unique_on_create_and_update() -> None:
     "work", "Work", size=3, details=["Repeat", " Repeat ", "Other"]
   )
   assert task.details == ["Repeat", "Other"]
-  assert tasks.mod_deets("work", "Repeat").details == ["Repeat", "Other"]
-  task = tasks.patch_task("work", {"details": ["Other", "Other", "New", "New"]})
+  assert tasks.mod_deets("work", "Repeat", size=3).details == ["Repeat", "Other"]
+  task = tasks.patch_task(
+    "work", {"details": ["Other", "Other", "New", "New"], "size": 3}
+  )
   assert task.details == ["Other", "New"]
   assert store.get_task("work").details == ["Other", "New"]
   store.close()
@@ -1377,7 +1379,7 @@ def test_answer_details_wait_for_first_ack_and_ignore_links() -> None:
   _, acked = messages.ack(first.id, "Read")
   assert acked.task_details_added == {"work": ["Choice?: A"]}
   assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
-  tasks.mod_deets_rm("work", 2)
+  tasks.mod_deets_rm("work", 2, size=3)
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
   assert tasks.get_task("work")[0].details == ["Review"]
@@ -1433,7 +1435,7 @@ def test_ack_answer_details_sync_without_repeating_on_receiver() -> None:
   target.merge_rows(source.export_rows())
   assert target.get_task("work").details == ["Review", "Choice?: A"]
   target_tasks = TaskService(target, target)
-  target_tasks.mod_deets_rm("work", 2)
+  target_tasks.mod_deets_rm("work", 2, size=3)
   repeated = ReportService(target, target).ack_answer("decision", answer.id, "Again")
   assert repeated.task_details_added == {}
   assert target.get_task("work").details == ["Review"]
@@ -1520,12 +1522,12 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   assert created.details == ["Inspect.", *paths]
 
   tasks.create_task("explicit", "Explicit", size=2, priority="P4", details=["Inspect."])
-  tasks.mod_links_add("explicit", "ab1020", link_type="msg")
+  tasks.mod_links_add("explicit", "ab1020", link_type="msg", size=2)
   assert (
     tasks.get_task("explicit")[0].priority,
     tasks.get_task("explicit")[0].details,
   ) == ("P4", ["Inspect.", *paths])
-  tasks.mod_links_add("plain", "ab1020", link_type="msg")
+  tasks.mod_links_add("plain", "ab1020", link_type="msg", size=2)
   tasks.mod_links_add("plain", "ab1020", link_type="msg")
   assert (tasks.get_task("plain")[0].priority, tasks.get_task("plain")[0].details) == (
     "P4",
@@ -1533,7 +1535,7 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   )
 
   patched = tasks.create_task("patched", "Patched", size=2, details=["Inspect."])
-  tasks.patch_task(patched.id, {"msg_ids": ["ab1020"]})
+  tasks.patch_task(patched.id, {"msg_ids": ["ab1020"], "size": 2})
   assert (
     tasks.get_task("patched")[0].priority,
     tasks.get_task("patched")[0].details,
@@ -1549,7 +1551,9 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
     tasks.get_task("plain")[0].priority,
   ) == (True, "P5")
   tasks.mod_links_rm("plain", "msg", "ab1020")
-  tasks.mod_links_add("plain", "ab1020", link_type="msg", append_detail="Relinked.")
+  tasks.mod_links_add(
+    "plain", "ab1020", link_type="msg", append_detail="Relinked.", size=2
+  )
   assert (tasks.get_task("plain")[0].priority, tasks.get_task("plain")[0].details) == (
     "P5",
     ["Inspect.", *paths, "Relinked."],
@@ -1560,6 +1564,10 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
 def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+  monkeypatch.setenv("HOME", str(tmp_path))
+  fixture_dir = tmp_path / "steer-fixture"
+  fixture_dir.mkdir(parents=True, exist_ok=True)
+  (fixture_dir / "first.txt").write_text("four", encoding="utf-8")
   monkeypatch.setattr(cli, "resolve_state_dir", lambda: tmp_path)
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)
@@ -1607,7 +1615,7 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   assert payload["task"]["priority"] == "P4"
   assert payload["task"]["details"] == [
     "~/steer-fixture/first.txt",
-    "~/steer-fixture/missing.png",
+    "~/steer-fixture/missing.png (lost)",
   ]
   status, payload = app.dispatch(
     "POST",
@@ -1643,7 +1651,7 @@ def test_old_priority_override_survives_migration_and_later_links(
   SteeringApp(reopened).messages.send_message(
     "See attached file", attachments=_attachments(), msg_id="ab1024"
   )
-  tasks.mod_links_add("old-override", "ab1024", link_type="msg")
+  tasks.mod_links_add("old-override", "ab1024", link_type="msg", size=2)
   assert tasks.get_task("old-override")[0].priority == "P4"
   reopened.close()
 
@@ -1803,7 +1811,7 @@ def test_phase_evidence_is_required_unique_and_immutable() -> None:
     tasks.patch_task("work", {"phase_index": 0})
   with pytest.raises(ValueError, match="phase|progress"):
     tasks.patch_task("work", {"types": ["docs"]})
-  tasks.mod_deets("work", "Write release notes.")
+  tasks.mod_deets("work", "Write release notes.", size=3)
   assert tasks.get_task("work")[0].phase_evidence == [FIRST_COMMIT, None]
   done = tasks.patch_task("work", {"status": "finished", "commit_hash": SECOND_COMMIT})
   assert done.status == "finished"
@@ -1930,10 +1938,11 @@ assert.ok(row.indexOf('Code') < row.indexOf('Docs'));
     cwd=repo,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   assert result.returncode == 0, result.stderr
-  style = (repo / "skills/arena-steering/assets/style.css").read_text()
+  style = (repo / "skills/arena-steering/assets/style.css").read_text(encoding="utf-8")
   assert '.task-type[data-phase-state="finished"]' in style
   assert "text-decoration: line-through" in style
   assert "opacity:" in style
@@ -2010,9 +2019,11 @@ def test_browser_shimmers_only_for_active_task_gates(tmp_path: Path) -> None:
   runs.mkdir()
   for name, exit_code in (("active", None), ("failed", "7"), ("passed", "0")):
     marker = runs / f"{name}.exit"
-    (runs / f"{name}.json").write_text(json.dumps({"exit_path": str(marker)}))
+    (runs / f"{name}.json").write_text(
+      json.dumps({"exit_path": str(marker)}), encoding="utf-8"
+    )
     if exit_code is not None:
-      marker.write_text(exit_code)
+      marker.write_text(exit_code, encoding="utf-8")
     app.tasks.create_task(
       name, name.title(), size=3, details=["Verify."], gate_names=[name]
     )
@@ -2066,14 +2077,19 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
 
   def git(*args: str) -> str:
     result = subprocess.run(
-      ["git", *args], cwd=checkout, capture_output=True, text=True, check=True
+      ["git", *args],
+      cwd=checkout,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=True,
     )
     return result.stdout.strip()
 
   git("init", "-b", "test")
   git("config", "user.name", "Test")
   git("config", "user.email", "test@example.com")
-  (checkout / ".gitignore").write_text("arena-state/\n")
+  (checkout / ".gitignore").write_text("arena-state/\n", encoding="utf-8")
   git("add", ".gitignore")
   git("commit", "-m", "test: ignore installed state")
 
@@ -2087,7 +2103,7 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
       phase_type, phase_type, size=3, type=phase_type, details=["Review."]
     )
   assert not git("status", "--porcelain=v1", "--untracked-files=all")
-  (checkout / "unfinished.txt").write_text("dirty")
+  (checkout / "unfinished.txt").write_text("dirty", encoding="utf-8")
   for task_id in ("review", "ops", "report", "code", "docs"):
     with pytest.raises(DirtyTreeError, match="clean Git tree"):
       tasks.finish_phase(task_id, commit_hash=FIRST_COMMIT)
@@ -2128,7 +2144,9 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
   (checkout / "unfinished.txt").unlink()
   assert not git("status", "--porcelain=v1", "--untracked-files=all")
   messages.ack(cli_flag.id, "Read and corrected.")
-  (checkout / ".gitignore").write_text("arena-state/\n# tracked change\n")
+  (checkout / ".gitignore").write_text(
+    "arena-state/\n# tracked change\n", encoding="utf-8"
+  )
   with pytest.raises(DirtyTreeError, match="clean Git tree"):
     tasks.finish_phase("review")
   tracked_flag = messages.pending_violation()
@@ -2144,7 +2162,12 @@ def test_git_completion_checks_clean_tree_and_remote(tmp_path: Path) -> None:
 
   def git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
-      ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+      ["git", *args],
+      cwd=cwd,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=True,
     )
     return result.stdout.strip()
 
@@ -2154,18 +2177,18 @@ def test_git_completion_checks_clean_tree_and_remote(tmp_path: Path) -> None:
   git(tmp_path, "init", "-b", "task-check", str(checkout))
   git(checkout, "config", "user.name", "Test")
   git(checkout, "config", "user.email", "test@example.com")
-  (checkout / "work.txt").write_text("first")
+  (checkout / "work.txt").write_text("first", encoding="utf-8")
   git(checkout, "add", "work.txt")
   git(checkout, "commit", "-m", "test: first")
   first = git(checkout, "rev-parse", "HEAD")
   git(checkout, "remote", "add", "origin", str(remote))
   git(checkout, "push", "-u", "origin", "HEAD")
   assert verify_completion_commit(checkout, first) == first
-  (checkout / "work.txt").write_text("dirty")
+  (checkout / "work.txt").write_text("dirty", encoding="utf-8")
   with pytest.raises(GitCheckError, match="clean|dirty"):
     verify_completion_commit(checkout, first)
-  (checkout / "work.txt").write_text("first")
-  (checkout / "work.txt").write_text("second")
+  (checkout / "work.txt").write_text("first", encoding="utf-8")
+  (checkout / "work.txt").write_text("second", encoding="utf-8")
   git(checkout, "add", "work.txt")
   git(checkout, "commit", "-m", "test: second")
   second = git(checkout, "rev-parse", "HEAD")
@@ -2251,7 +2274,7 @@ def test_task_fields_round_trip_and_persist_across_edits_and_reopen(
   assert created.to_dict()["priority"] == "P2"
   original_order = created.insertion_order
   assert Task.from_dict(created.to_dict()) == created
-  tasks.mod_deets("work", "Test.")
+  tasks.mod_deets("work", "Test.", size=8)
   tasks.rename_task("work", "renamed")
   store.close()
 
@@ -2559,6 +2582,7 @@ assert.match(markup, /Work &lt;now&gt;/);
     check=False,
     capture_output=True,
     text=True,
+    encoding="utf-8",
   )
   assert result.returncode == 0, result.stderr
 
@@ -2597,12 +2621,53 @@ def test_existing_task_message_links_require_atomic_detail_change(
   with pytest.raises(ValueError, match="detail"):
     tasks.patch_task("work", {"msg_ids": ["abc123"], "details": ["Second", "First"]})
   assert tasks.get_task("work")[0].msg_ids == []
-  linked = tasks.patch_task("work", {"msg_ids": ["abc123"], "details": ["First"]})
+  linked = tasks.patch_task(
+    "work", {"msg_ids": ["abc123"], "details": ["First"], "size": 2}
+  )
   assert linked.msg_ids == ["abc123"]
   assert linked.details == ["First"]
   tasks.mod_links_add("work", "abc123", link_type="msg")
   app.messages.send_message("More work", msg_id="abc124", blocking=False)
-  linked = tasks.mod_links_add("work", "abc124", link_type="msg", append_detail="More")
+  linked = tasks.mod_links_add(
+    "work", "abc124", link_type="msg", append_detail="More", size=2
+  )
   assert linked.msg_ids == ["abc123", "abc124"]
   assert linked.details == ["First", "More"]
+  store.close()
+
+
+def test_task_detail_changes_require_explicit_size(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("Note", msg_id="ab2001", blocking=False)
+  app.reports.publish_report("doc", "Doc", "# Plain\n")
+  tasks = app.tasks
+  tasks.create_task("work", "Work", size=3, details=["First", "Second"])
+
+  with pytest.raises(ValueError, match="size"):
+    tasks.mod_deets("work", "Third")
+  with pytest.raises(ValueError, match="size"):
+    tasks.mod_deets_rm("work", 2)
+  with pytest.raises(ValueError, match="size"):
+    tasks.mod_links_add("work", "ab2001", link_type="msg", append_detail="Added")
+  with pytest.raises(ValueError, match="size"):
+    tasks.mod_links_add("work", "doc", link_type="report", remove_detail=2)
+  with pytest.raises(ValueError, match="size"):
+    tasks.patch_task("work", {"details": ["First", "Second", "Third"]})
+  with pytest.raises(ValueError, match="size"):
+    tasks.patch_task("work", {"details": ["First"]})
+
+  same_size = tasks.mod_deets("work", "Third", size=3)
+  assert (same_size.size, same_size.details) == (3, ["First", "Second", "Third"])
+  resized = tasks.mod_deets_rm("work", 2, size=5)
+  assert (resized.size, resized.details) == (5, ["First", "Third"])
+  linked = tasks.mod_links_add(
+    "work", "ab2001", link_type="msg", append_detail="Linked", size=5
+  )
+  assert (linked.size, linked.details) == (5, ["First", "Third", "Linked"])
+  patched = tasks.patch_task("work", {"details": ["First", "Linked"], "size": 8})
+  assert (patched.size, patched.details) == (8, ["First", "Linked"])
+  unchanged = tasks.patch_task("work", {"title": "Renamed"})
+  assert unchanged.title == "Renamed"
+  tasks.mod_links_add("work", "doc", link_type="report")
   store.close()

@@ -2,7 +2,7 @@ import { createComposerUploads } from "./composer-uploads.js";
 import { copyText } from "./copy.js";
 // Main ES module controller for Arena Steering.
 
-import { api, connectWebSocket, setPendingWriteChooser } from "./api.js";
+import { api, connectWebSocket } from "./api.js";
 import { expandMessageHistory, messageQueryKey, paintConnection, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
@@ -12,14 +12,16 @@ import {
 } from "./markdown.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
-import { createStore, writePendingSend } from "./state.js";
+import { createStore } from "./state.js";
 import { expandTaskTarget, renderTasksView } from "./tasks-view.js";
 import { mountRelativeTimers, relativeTime } from "./timestamps.js";
 
-const CHECK_SVG = `<svg class="lucide lucide-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const SURVEY_OK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const SURVEY_BAD_SVG = `<svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
-const SURVEY_WARN_SVG = `<svg class="lucide lucide-circle-question-mark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>`;
+import {
+  CHECK_14_SVG as CHECK_SVG,
+  SURVEY_BAD_SVG,
+  SURVEY_OK_SVG,
+  SURVEY_WARN_SVG,
+} from "./icons.js";
 const CAPABILITY_LABELS = {
   R3S0N: "Reasoning",
   V1S0N: "Vision",
@@ -62,28 +64,24 @@ function renderSurveyModalContent(survey) {
         const state = item.correct === true ? "ok" : item.correct === false ? "bad" : "warn";
         const icon = item.correct === true ? SURVEY_OK_SVG : item.correct === false ? SURVEY_BAD_SVG : SURVEY_WARN_SVG;
         const label = CAPABILITY_LABELS[item.id] || item.id;
-        return `<div class="survey-cap-pill ${state}" tabindex="0"><span class="survey-status ${state}">${icon}</span><div class="survey-cap-text"><code>${escapeHtml(item.id)}</code><span class="survey-cap-label">${escapeHtml(label)}</span></div>${renderAnswerTooltip(item.answer)}</div>`;
+        return `<div class="survey-cap-pill ${state}"><span class="survey-status ${state}">${icon}</span><div class="survey-cap-text"><code>${escapeHtml(item.id)}</code><span class="survey-cap-label">${escapeHtml(label)}</span></div></div>`;
       })
       .join("");
     const calRows = calItems
       .map((item) => {
         const state = item.correct === true ? "ok" : item.correct === false ? "bad" : "warn";
         const icon = item.correct === true ? SURVEY_OK_SVG : item.correct === false ? SURVEY_BAD_SVG : SURVEY_WARN_SVG;
-        const entries = item.answer && typeof item.answer === "object" ? Object.entries(item.answer) : [];
-        const knownCount = entries.filter(([, v]) => formatSurveyFieldValue(v).toLowerCase() !== "unknown").length;
-        const fieldLabel = knownCount === 0 ? "unknown" : `${knownCount}/${entries.length} fields`;
         const pct = Math.max(0, Math.min(100, Math.round(Number(item.confidence || 0) * 100)));
         return `<tr>
           <td>
             <div class="survey-result-id">
               <span class="survey-status ${state}">${icon}</span>
               <span class="survey-id-wrap">
-                <button type="button" class="survey-id-trigger"><code>${escapeHtml(item.id)}</code></button>
+                <button type="button" class="survey-id-trigger quiet-btn"><code>${escapeHtml(item.id)}</code></button>
                 ${renderAnswerTooltip(item.answer)}
               </span>
             </div>
           </td>
-          <td><span class="survey-field-chip">${escapeHtml(fieldLabel)}</span></td>
           <td>
             <div class="survey-confidence" style="--confidence-pct: ${pct}%">
               <div class="survey-confidence-track"><span class="survey-confidence-fill"></span></div>
@@ -104,7 +102,6 @@ function renderSurveyModalContent(survey) {
           <thead>
             <tr>
               <th scope="col">ID</th>
-              <th scope="col">Fields</th>
               <th scope="col">Confidence</th>
             </tr>
           </thead>
@@ -117,9 +114,6 @@ function renderSurveyModalContent(survey) {
 
 const store = createStore();
 const modal = createModalManager();
-setPendingWriteChooser(() => modal.open("retry-write", {
-  title: "Unconfirmed action",
-}));
 const SURVEY_RELOAD_KEY = "steer-survey-open-on-reload";
 let surveyOpen = false;
 let surveyOpenRevision = 0;
@@ -226,9 +220,17 @@ async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet =
     return cached.report;
   }
   const loadKey = `${reportId}:${expectedModifiedAt || ""}`;
-  if (pendingReportLoads.has(loadKey)) return pendingReportLoads.get(loadKey);
-  const load = (async () => {
-    if (!quiet) setLoading(true);
+  if (pendingReportLoads.has(loadKey)) {
+    const existing = pendingReportLoads.get(loadKey);
+    if (!quiet && existing.quiet) {
+      existing.quiet = false;
+      setLoading(true);
+    }
+    return existing.promise;
+  }
+  const entry = { quiet, promise: null };
+  entry.promise = (async () => {
+    if (!entry.quiet) setLoading(true);
     try {
       const res = await api.getReport(reportId);
       if (res?.report) {
@@ -244,12 +246,12 @@ async function ensureReportCached(reportId, expectedModifiedAt = null, { quiet =
       }
       return null;
     } finally {
-      if (!quiet) setLoading(false);
+      if (!entry.quiet) setLoading(false);
       pendingReportLoads.delete(loadKey);
     }
   })();
-  pendingReportLoads.set(loadKey, load);
-  return load;
+  pendingReportLoads.set(loadKey, entry);
+  return entry.promise;
 }
 
 function hydrateReportsWithCache(summaries) {
@@ -285,6 +287,14 @@ function hydrateReportsWithCache(summaries) {
   return merged;
 }
 
+function syncReportRailTop() {
+  const panel = document.getElementById("view-reports");
+  if (!panel || panel.hidden) return;
+  document.documentElement.style?.setProperty?.(
+    "--reports-rail-top", `${Math.max(0, panel.getBoundingClientRect().top)}px`
+  );
+}
+
 function syncViewportHeight() {
   const vv = window.visualViewport;
   const vvScale = vv?.scale > 0 ? vv.scale : 1;
@@ -311,11 +321,16 @@ function syncViewportHeight() {
     Math.max(innerHeight, docHeight) - vvHeight >= MOBILE_KEYBOARD_MIN_SHRINK
   );
   document.documentElement.toggleAttribute("data-mobile-keyboard-open", keyboardOpen);
+  document.documentElement.style?.setProperty?.(
+    "--reports-keyboard-inset",
+    `${keyboardOpen ? Math.max(0, innerHeight - ((vv?.offsetTop || 0) + vvHeight)) : 0}px`
+  );
   // A panned visual viewport starts below the layout viewport. Keep the shell
   // within that visible region rather than leaving an offset-sized bottom gap.
   document.documentElement.style?.setProperty?.(
     "--app-offset-top", `${keyboardOpen ? Math.max(0, vv?.offsetTop || 0) : 0}px`
   );
+  syncReportRailTop();
   if (
     ((vvScale <= 1.01 && vv?.offsetTop) || window.scrollY) &&
     typeof window.scrollTo === "function"
@@ -342,10 +357,12 @@ function setLoading(active) {
     if (panel.getAttribute("data-loading") !== "true") {
       loadingStartAt = Date.now();
       panel.setAttribute("data-loading", "true");
+      panel.setAttribute("aria-busy", "true");
     }
   } else {
     loadingCount = Math.max(0, loadingCount - 1);
     if (loadingCount === 0) {
+      panel.setAttribute("aria-busy", "false");
       const elapsed = Date.now() - loadingStartAt;
       if (elapsed >= 200) {
         panel.setAttribute("data-loading", "done");
@@ -373,6 +390,33 @@ let historyCache = null;
 let hiddenMessageCache = null;
 let loadedMessageRevision = null;
 let searchBase = null;
+const confirmedSeenRevisions = new Map();
+
+function preserveConfirmedRepliesSeen(messages) {
+  return (messages || []).map((item) => {
+    const confirmedRev = confirmedSeenRevisions.get(item.id);
+    if (!confirmedRev) return item;
+    if (item.replies_revision !== confirmedRev) {
+      confirmedSeenRevisions.delete(item.id);
+      return item;
+    }
+    return item.replies_seen ? item : { ...item, replies_seen: true };
+  });
+}
+
+function markMessageRevisionSeenInList(list, id, revision, modifiedAt) {
+  let changed = false;
+  const next = (list || []).map((item) => {
+    if (item.id !== id || item.replies_revision !== revision || item.replies_seen) return item;
+    changed = true;
+    return {
+      ...item,
+      replies_seen: true,
+      ...(modifiedAt && modifiedAt > (item.modified_at || "") ? { modified_at: modifiedAt } : {}),
+    };
+  });
+  return changed ? next : list;
+}
 
 export function messageMatchesQuery(message, query) {
   const needle = String(query || "").trim().toLowerCase();
@@ -416,9 +460,9 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
       }
     }
     const ids = new Set(fresh.map((item) => item.id));
-    const merged = before
+    const merged = preserveConfirmedRepliesSeen(before
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
-      : fresh;
+      : fresh);
     const current = store.getState();
     if (!before) loadedMessageRevision = result.revision;
     if (result.pending_message_id && current.optimisticMessage?.requestId === options.requestId) {
@@ -556,7 +600,7 @@ async function refreshAll(force = false) {
   }
 }
 
-const composerUploads = createComposerUploads(store, (file, options) => api.uploadFile(file, options));
+const composerUploads = createComposerUploads(store, (file) => api.uploadFile(file));
 let replySelectionRevision = 0;
 let reportSelectionRevision = 0;
 let confirmedReportId = null;
@@ -566,9 +610,8 @@ const handlers = {
     return api.renderMarkdown(markdown, { breaks: true, preWrap: true });
   },
   async onSendMessage(payload) {
-    let pending = store.getState().pendingSend;
     if (store.getState().sending) throw new Error("A send is already in progress");
-    const requestId = pending?.request_id || crypto.randomUUID();
+    const requestId = crypto.randomUUID();
     // A page requested before this send cannot reconcile its optimistic row.
     messageEpoch += 1;
     const selectedRefs = store.getState().replyParentRefs || [];
@@ -587,31 +630,22 @@ const handlers = {
     };
     store.setState({ sending: true, composerError: "", optimisticMessage, optimisticConfirmation: null, ...(clearRefs ? { replyParentRefs: [] } : {}) });
     try {
-      const attachments = pending
-        ? payload.attachments || []
-        : await composerUploads.readyForSend(payload.attachmentIds || []);
+      const attachmentIds = payload.attachmentIds || [];
+      const attachments = await composerUploads.readyForSend(attachmentIds);
       const parentRefs = payload.parent_refs || [];
-      const content = {
+      const request = {
         body: payload.body,
         parent_ids: parentRefs.length
           ? parentRefs.filter((ref) => ref.type === "message").map((ref) => ref.id)
           : payload.parent_ids || [],
         attachments,
+        request_id: requestId,
       };
-      if (parentRefs.length) content.parent_refs = parentRefs;
-      if (pending && JSON.stringify(pending.content) !== JSON.stringify(content)) {
-        throw new Error("Retry the unconfirmed send before sending changes");
-      }
-      if (!pending) {
-        pending = { request_id: requestId, content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
-        writePendingSend(pending);
-      }
-      store.setState({ pendingSend: pending });
-      const request = { ...pending.content, request_id: pending.request_id };
+      if (parentRefs.length) request.parent_refs = parentRefs;
       let response;
       if (request.attachments.length) {
         response = await api.sendMessageWithFile(request);
-        composerUploads.clearSent(pending.attachmentIds);
+        composerUploads.clearSent(attachmentIds);
       } else {
         response = await api.sendMessage(request);
       }
@@ -625,9 +659,7 @@ const handlers = {
       const messages = confirmed && messageMatchesQuery(confirmed, current.searchQuery) && !confirmed.hidden
         ? [...(current.messages || []).filter(item => item.id !== confirmed.id), confirmed]
         : current.messages;
-      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null });
-      writePendingSend(null);
-      store.setState({ pendingSend: null, sending: false });
+      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false });
     } catch (error) {
       const restoreRefs = clearRefs && replySelectionRevision === selectedRevision;
       store.setState({ sending: false, optimisticMessage: null, composerError: String(error.message || error), ...(restoreRefs ? { replyParentRefs: selectedRefs } : {}) });
@@ -635,10 +667,6 @@ const handlers = {
     }
     // Do not keep a confirmed draft editable while an unrelated refresh waits.
     void refreshAll(true);
-  },
-  onDiscardPendingSend() {
-    writePendingSend(null);
-    store.setState({ pendingSend: null });
   },
   async onNavigateReference(type, id) {
     if (!id) return;
@@ -687,17 +715,47 @@ const handlers = {
   },
   async onMarkRepliesSeen(id, revision) {
     try {
-      await api.markRepliesSeen(id, revision);
+      const response = await api.markRepliesSeen(id, revision);
+      const confirmedMsg = response?.message;
+      if (!confirmedMsg || confirmedMsg.replies_revision === revision) {
+        confirmedSeenRevisions.set(id, revision);
+        const modifiedAt = confirmedMsg?.replies_revision === revision ? confirmedMsg.modified_at : "";
+        if (historyCache) {
+          historyCache = {
+            ...historyCache,
+            messages: markMessageRevisionSeenInList(historyCache.messages, id, revision, modifiedAt),
+          };
+        }
+        if (hiddenMessageCache) {
+          hiddenMessageCache = {
+            ...hiddenMessageCache,
+            messages: markMessageRevisionSeenInList(hiddenMessageCache.messages, id, revision, modifiedAt),
+          };
+        }
+        if (searchBase) {
+          searchBase = {
+            ...searchBase,
+            messages: markMessageRevisionSeenInList(searchBase.messages, id, revision, modifiedAt),
+          };
+        }
+        const current = store.getState().messages || [];
+        const nextMessages = markMessageRevisionSeenInList(current, id, revision, modifiedAt);
+        if (nextMessages !== current) {
+          lastDataSignature = "";
+          store.setState({ messages: nextMessages });
+        }
+      }
     } catch (error) {
-      if (!String(error.message).includes("(409)")) console.error(error);
+      if (String(error.message).includes("(409)")) {
+        await fetchMessagePage().catch(() => {});
+      } else {
+        console.error(error);
+      }
+      throw error;
     }
-    await refreshAll(true);
   },
   onStageComposerFiles(files) {
     return composerUploads.stage(files);
-  },
-  onRetryComposerAttachment(id) {
-    return composerUploads.retry(id);
   },
   onRemoveComposerAttachment(id) {
     composerUploads.remove(id);
@@ -1059,6 +1117,7 @@ function renderApp(state) {
   if (messagesEl) messagesEl.hidden = state.activeTab !== "messages";
   if (tasksEl) tasksEl.hidden = state.activeTab !== "tasks";
   if (reportsEl) reportsEl.hidden = state.activeTab !== "reports";
+  if (state.activeTab === "reports") syncReportRailTop();
   markVisibleReport(state);
 
   if (state.activeTab !== "reports") lastReportRenderSignature = null;
@@ -1190,14 +1249,49 @@ function initImageModal() {
     clone.setAttribute("draggable", "false");
     if (media.tagName.toLowerCase() === "svg") {
       const sourceBox = media.getBoundingClientRect();
-      clone.setAttribute("class", "mermaid-svg");
-      if (sourceBox.width) clone.style.width = `${Math.round(sourceBox.width)}px`;
-      // Mermaid scopes its embedded styles to the diagram ID, so the copy keeps a unique one.
+      const existingClass = clone.getAttribute("class") || "";
+      clone.setAttribute(
+        "class",
+        existingClass.split(/\s+/).includes("mermaid-svg")
+          ? existingClass
+          : `mermaid-svg ${existingClass}`.trim(),
+      );
+      const viewBox = (clone.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+      const naturalWidth = viewBox.length === 4 && viewBox[2] > 0 ? viewBox[2] : sourceBox.width;
+      if (viewBox.length === 4 && viewBox[2] > 0) {
+        if (clone.style.removeProperty) clone.style.removeProperty("max-width");
+        else delete clone.style.maxWidth;
+      }
+      if (naturalWidth) clone.style.width = `${Math.round(naturalWidth)}px`;
+      // Mermaid scopes styles and marker references to diagram IDs, so each viewer copy rewrites its IDs.
       if (sourceId) {
         const viewerId = `${sourceId}-viewer-${++viewerSeq}`;
+        const ids = new Map([[sourceId, viewerId]]);
+        const inner = clone.querySelectorAll ? [...clone.querySelectorAll("[id]")] : [];
+        for (const element of inner) {
+          const id = element.getAttribute?.("id") || element.id;
+          if (id) ids.set(id, `${viewerId}-${id}`);
+        }
+        const rewriteRefs = (value) =>
+          String(value).replace(/#([\w-]+)/g, (match, id) => (ids.has(id) ? `#${ids.get(id)}` : match));
         clone.setAttribute("id", viewerId);
-        const style = clone.querySelector("style");
-        if (style) style.textContent = style.textContent.split(`#${sourceId}`).join(`#${viewerId}`);
+        if (clone.querySelectorAll) {
+          for (const element of [clone, ...clone.querySelectorAll("*")]) {
+            for (const attribute of [...(element.attributes || [])]) {
+              if (attribute.name === "id" && ids.has(attribute.value)) {
+                element.setAttribute("id", ids.get(attribute.value));
+              } else {
+                element.setAttribute(attribute.name, rewriteRefs(attribute.value));
+              }
+            }
+            if (element.localName === "style") {
+              element.textContent = rewriteRefs(element.textContent || "");
+            }
+          }
+        } else {
+          const style = clone.querySelector("style");
+          if (style) style.textContent = rewriteRefs(style.textContent || "");
+        }
       }
     }
     stage.replaceChildren(clone);
@@ -1364,7 +1458,22 @@ function openViolationForm(health, trigger, draft = null, failure = null) {
   });
 }
 
+function lockMobilePortrait() {
+  if (!window.matchMedia?.("(pointer: coarse), (max-width: 48em)")?.matches) return;
+  const requestLock = () => {
+    try {
+      const result = window.screen?.orientation?.lock?.("portrait");
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } catch {
+      // Browsers outside installed or fullscreen mobile contexts reject orientation locks.
+    }
+  };
+  requestLock();
+  window.addEventListener("pointerdown", requestLock, { once: true, passive: true });
+}
+
 function initEvents() {
+  lockMobilePortrait();
   initImageModal();
   syncViewportHeight();
   window.addEventListener("resize", syncViewportHeight);
@@ -1513,16 +1622,46 @@ function initEvents() {
 }
 
 let activeTooltip = null;
+let pendingTooltip = null;
+let lastTooltipClosedAt = -Infinity;
+const tooltipCloseTimers = new WeakMap();
+const TOOLTIP_DELAY = 500;
+const TOOLTIP_ANIMATION = 150;
+
+function cancelPendingTooltip() {
+  if (!pendingTooltip) return;
+  clearTimeout(pendingTooltip.timer);
+  pendingTooltip = null;
+}
 
 function hideTitleTooltip() {
+  cancelPendingTooltip();
   if (!activeTooltip) return;
-  const { target, title, describedBy, addedLabel, tip } = activeTooltip;
-  if (!target.hasAttribute("title")) target.setAttribute("title", title);
-  if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
-  if (describedBy === null) target.removeAttribute("aria-describedby");
-  else target.setAttribute("aria-describedby", describedBy);
-  tip.remove();
+  const { target, title, describedBy, addedLabel, tip, kind } = activeTooltip;
   activeTooltip = null;
+  lastTooltipClosedAt = performance.now();
+  if (kind === "title") {
+    if (!target.hasAttribute("title")) target.setAttribute("title", title);
+    if (addedLabel && target.getAttribute("aria-label") === title) target.removeAttribute("aria-label");
+    if (describedBy === null) target.removeAttribute("aria-describedby");
+    else target.setAttribute("aria-describedby", describedBy);
+    tip.removeAttribute("id");
+    tip.removeAttribute("role");
+    tip.setAttribute("aria-hidden", "true");
+  } else {
+    tip.classList.remove("tooltip-active");
+  }
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (kind === "title") tip.remove();
+    return;
+  }
+  tip.classList.add("tooltip-closing");
+  const timer = setTimeout(() => {
+    tip.classList.remove("tooltip-closing");
+    if (kind === "title") tip.remove();
+    tooltipCloseTimers.delete(tip);
+  }, TOOLTIP_ANIMATION);
+  tooltipCloseTimers.set(tip, timer);
 }
 
 function positionTitleTooltip(target, tip) {
@@ -1558,49 +1697,99 @@ function showTitleTooltip(target) {
   target.setAttribute("aria-describedby", [describedBy, tip.id].filter(Boolean).join(" "));
   (target.closest("dialog[open]") || document.body).append(tip);
   positionTitleTooltip(target, tip);
-  activeTooltip = { target, title, describedBy, addedLabel, tip };
+  activeTooltip = { target, title, describedBy, addedLabel, tip, kind: "title" };
 }
 
 function positionSurveyTooltip(trigger) {
   const tip = trigger?.querySelector(".survey-answer-tooltip");
   const body = trigger?.closest(".modal-body");
   if (!tip || !body) return;
+  tip.style.left = "";
   tip.classList.add("above");
   const box = tip.getBoundingClientRect();
-  const heading = trigger.matches(".survey-cap-pill") ? body.querySelector(".survey-section-label")?.getBoundingClientRect() : null;
-  const coversHeading = heading && box.top < heading.bottom && box.bottom > heading.top && box.left < heading.right && box.right > heading.left;
-  if (box.top < body.getBoundingClientRect().top || coversHeading) tip.classList.remove("above");
+  const bodyRect = body.getBoundingClientRect();
+  if (box.top < bodyRect.top) tip.classList.remove("above");
+  const nextBox = tip.getBoundingClientRect();
+  const maxRight = Math.min(bodyRect.right, window.innerWidth - 8);
+  const minLeft = Math.max(bodyRect.left, 8);
+  if (nextBox.right > maxRight) {
+    tip.style.left = `${Math.round(maxRight - nextBox.right)}px`;
+  } else if (nextBox.left < minLeft) {
+    tip.style.left = `${Math.round(minLeft - nextBox.left)}px`;
+  }
+}
+
+function showSurveyTooltip(target) {
+  const tip = target?.querySelector(".survey-answer-tooltip");
+  if (!tip) return;
+  const timer = tooltipCloseTimers.get(tip);
+  if (timer) clearTimeout(timer);
+  tooltipCloseTimers.delete(tip);
+  tip.classList.remove("tooltip-closing");
+  tip.classList.add("tooltip-active");
+  positionSurveyTooltip(target);
+  activeTooltip = { target, tip, kind: "survey" };
+}
+
+function requestTooltip(target, kind, immediate = false) {
+  if (!target) return;
+  if (activeTooltip?.target === target) {
+    cancelPendingTooltip();
+    return;
+  }
+  if (pendingTooltip?.target === target && !immediate) return;
+  const showNow = immediate || Boolean(activeTooltip) || performance.now() - lastTooltipClosedAt <= TOOLTIP_DELAY;
+  hideTitleTooltip();
+  const show = () => {
+    pendingTooltip = null;
+    if (!target.isConnected) return;
+    if (kind === "survey") showSurveyTooltip(target);
+    else showTitleTooltip(target);
+  };
+  if (showNow) show();
+  else pendingTooltip = { target, timer: setTimeout(show, TOOLTIP_DELAY) };
+}
+
+function tooltipTarget(node) {
+  const survey = node?.closest?.(".survey-id-wrap");
+  if (survey?.querySelector(".survey-answer-tooltip")) return { target: survey, kind: "survey" };
+  const title = node?.closest?.("[title]");
+  if (title && !title.dataset.tooltip) return { target: title, kind: "title" };
+  if (activeTooltip?.target.contains(node)) return { target: activeTooltip.target, kind: activeTooltip.kind };
+  return null;
 }
 
 document.addEventListener("mouseover", (event) => {
-  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
-  const target = event.target.closest?.("[title]");
-  if (target) showTitleTooltip(target);
+  const match = tooltipTarget(event.target);
+  if (match) requestTooltip(match.target, match.kind);
   else if (activeTooltip && !activeTooltip.target.contains(event.target)) hideTitleTooltip();
 });
 document.addEventListener("mouseout", (event) => {
-  if (activeTooltip && !(event.relatedTarget instanceof Node && activeTooltip.target.contains(event.relatedTarget)) && document.activeElement !== activeTooltip.target) hideTitleTooltip();
+  const target = pendingTooltip?.target || activeTooltip?.target;
+  if (!target) return;
+  if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return;
+  if (target.contains(document.activeElement)) return;
+  hideTitleTooltip();
 });
 document.addEventListener("focusin", (event) => {
-  positionSurveyTooltip(event.target.closest?.(".survey-id-wrap, .survey-cap-pill"));
-  if (event.target.matches?.(":focus-visible")) showTitleTooltip(event.target.closest?.("[title]"));
+  if (!event.target.matches?.(":focus-visible")) return;
+  const match = tooltipTarget(event.target);
+  if (match) requestTooltip(match.target, match.kind, true);
 });
 document.addEventListener("focusout", () => hideTitleTooltip());
 document.addEventListener("click", () => hideTitleTooltip(), true);
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideTitleTooltip(); });
 window.addEventListener("resize", hideTitleTooltip);
-document.addEventListener("scroll", () => {
-  hideTitleTooltip();
-  positionSurveyTooltip(document.querySelector(".survey-id-wrap:hover, .survey-cap-pill:hover, .survey-id-wrap:focus-within, .survey-cap-pill:focus-within"));
-}, true);
+document.addEventListener("scroll", hideTitleTooltip, true);
 new MutationObserver(() => {
+  if (pendingTooltip && !pendingTooltip.target.isConnected) cancelPendingTooltip();
   if (!activeTooltip) return;
-  const { target, tip, addedLabel } = activeTooltip;
+  const { target, tip, addedLabel, kind } = activeTooltip;
   if (!target.isConnected) {
     hideTitleTooltip();
     return;
   }
-  if (!target.hasAttribute("title")) return;
+  if (kind !== "title" || !target.hasAttribute("title")) return;
   const title = target.getAttribute("title").trim();
   if (!title) {
     hideTitleTooltip();

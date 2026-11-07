@@ -301,6 +301,7 @@ def _git(*arguments: str) -> str:
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   if result.returncode:
@@ -352,6 +353,7 @@ def _run_gate(script: Path, *arguments: str) -> tuple[bool, str]:
     cwd=ROOT,
     capture_output=True,
     text=True,
+    encoding="utf-8",
     check=False,
   )
   return result.returncode == 0, (result.stdout + result.stderr).strip()
@@ -445,6 +447,9 @@ def check(
 
 
 def main(argv: list[str] | None = None) -> int:
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8", errors="replace")
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--range", dest="revision_range", help="commit range, BASE..HEAD")
   parser.add_argument("--pr-title", help="PR title to validate as a commit subject")

@@ -1,3 +1,5 @@
+import { escapeHtml } from "./markdown.js";
+
 // Reconcile rendered view markup without detaching unchanged controls or cards.
 // Reparenting a focused input drops focus in Chromium, even if it is reinserted.
 const KEY_ATTRIBUTES = ["id", "data-msg-id", "data-task-id", "data-report-id", "data-field-id", "data-toc-target"];
@@ -108,4 +110,9 @@ export function reconcileElement(current, next) {
     return;
   }
   updateNode(current, next);
+}
+
+export function renderParentChip(type, id) {
+  const label = escapeHtml(`${type} ${id}`);
+  return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
 }
