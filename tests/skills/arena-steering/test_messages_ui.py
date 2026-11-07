@@ -2203,3 +2203,155 @@ def test_multiline_optimistic_paragraph_matches_confirmed_render(
     assert text.inner_html() == pending_html
     assert abs(text.bounding_box()["height"] - pending_height) < 1
     page.screenshot(path=str(tmp_path / "multiline-confirmed.png"))
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_reply_seen_indicator_optimistic_rollback_and_revision_guard(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for index in range(14):
+    app.messages.send_message(
+      f"History filler {index}\n\nExtra line to ensure scroll height.",
+      msg_id=f"ff00{index:02x}",
+    )
+  target_id = "aa9999"
+  app.messages.send_message("Target message for reply receipts", msg_id=target_id)
+
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      context = browser.new_context(
+        viewport={"width": 900, "height": 540}, reduced_motion="reduce"
+      )
+      page = context.new_page()
+      page.goto(
+        f"http://127.0.0.1:{server.server_port}/?transport=poll",
+        wait_until="domcontentloaded",
+      )
+      page.locator(f'.message[data-msg-id="{target_id}"]').wait_for()
+      page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      page.wait_for_function("() => document.querySelector('#history').scrollTop === 0")
+
+      app.dispatch("POST", f"/messages/{target_id}/ack", {"markdown": "First reply."})
+      rev1 = app.messages.get_message(target_id).replies_revision
+      third_reply = "Third reply."
+      indicator = page.locator("#log-edited")
+      indicator.wait_for(state="visible")
+
+      page.evaluate("""() => {
+        const original = window.fetch.bind(window);
+        window.seenCalls = [];
+        window.seenMode = 'hold-fail';
+        window.fetch = async (...args) => {
+          const url = String(args[0]);
+          if (url.includes('/replies-seen')) {
+            const body = JSON.parse(args[1]?.body || '{}');
+            window.seenCalls.push(body.revision);
+            if (window.seenMode === 'hold-fail') {
+              await new Promise(resolve => { window.releaseSeenFail = resolve; });
+              return new Response(JSON.stringify({ error: 'Receipt storage failed' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+              });
+            }
+            if (window.seenMode === 'hold-ok') {
+              const response = await original(...args);
+              await new Promise(resolve => { window.releaseSeenOk = resolve; });
+              return response;
+            }
+            if (window.seenMode === 'hold-stale-ok') {
+              const stalePayload = await (await original(...args)).json();
+              await new Promise(resolve => { window.releaseStaleOk = resolve; });
+              return new Response(JSON.stringify(stalePayload), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+              });
+            }
+          }
+          return original(...args);
+        };
+      }""")
+
+      page.locator("#history").evaluate("el => { el.scrollTop = el.scrollHeight; }")
+      page.wait_for_function("() => typeof window.releaseSeenFail === 'function'")
+      assert indicator.is_hidden(), (
+        "Indicator must hide immediately while receipt is pending"
+      )
+      page.screenshot(path=str(tmp_path / "reply-seen-optimistic.png"))
+
+      page.evaluate("window.releaseSeenFail()")
+      indicator.wait_for(state="visible")
+      page.wait_for_timeout(150)
+      assert page.evaluate("() => window.seenCalls") == [rev1]
+      page.screenshot(path=str(tmp_path / "reply-seen-restored.png"))
+
+      page.evaluate("() => { window.seenMode = 'hold-ok'; }")
+      indicator.click()
+      page.wait_for_function("() => typeof window.releaseSeenOk === 'function'")
+      assert indicator.is_hidden()
+      page.evaluate("window.releaseSeenOk()")
+      page.locator(
+        f'.message[data-msg-id="{target_id}"] .reply-seen-sentinel'
+      ).wait_for(state="detached")
+      assert app.messages.get_message(target_id).replies_seen
+
+      page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      page.wait_for_function("() => document.querySelector('#history').scrollTop === 0")
+      app.dispatch("POST", f"/messages/{target_id}/ack", {"markdown": "Second reply."})
+      rev2 = app.messages.get_message(target_id).replies_revision
+      indicator.wait_for(state="visible")
+
+      page.evaluate("() => { window.seenMode = 'hold-stale-ok'; }")
+      page.locator("#history").evaluate("el => { el.scrollTop = el.scrollHeight; }")
+      page.wait_for_function("() => typeof window.releaseStaleOk === 'function'")
+      assert indicator.is_hidden()
+
+      page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+      app.dispatch("POST", f"/messages/{target_id}/ack", {"markdown": third_reply})
+      rev3 = app.messages.get_message(target_id).replies_revision
+      assert rev3 != rev2
+      page.wait_for_function(
+        "rev => document.querySelector('.message[data-msg-id=\"aa9999\"] .reply-seen-sentinel')"
+        "?.dataset.revision === rev",
+        arg=rev3,
+      )
+      indicator.wait_for(state="visible")
+
+      page.evaluate("window.releaseStaleOk()")
+      page.wait_for_timeout(150)
+      assert indicator.is_visible()
+      assert (
+        page.locator(
+          f'.message[data-msg-id="{target_id}"] .reply-seen-sentinel'
+        ).get_attribute("data-revision")
+        == rev3
+      )
+      assert (
+        third_reply
+        in page.locator(
+          f'.message[data-msg-id="{target_id}"] .answer.reply'
+        ).inner_text()
+      )
+      assert not app.messages.get_message(target_id).replies_seen
+      page.screenshot(path=str(tmp_path / "reply-seen-newer-revision.png"))
+
+      context.close()
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

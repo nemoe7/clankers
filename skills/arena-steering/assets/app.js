@@ -386,6 +386,33 @@ let historyCache = null;
 let hiddenMessageCache = null;
 let loadedMessageRevision = null;
 let searchBase = null;
+const confirmedSeenRevisions = new Map();
+
+function preserveConfirmedRepliesSeen(messages) {
+  return (messages || []).map((item) => {
+    const confirmedRev = confirmedSeenRevisions.get(item.id);
+    if (!confirmedRev) return item;
+    if (item.replies_revision !== confirmedRev) {
+      confirmedSeenRevisions.delete(item.id);
+      return item;
+    }
+    return item.replies_seen ? item : { ...item, replies_seen: true };
+  });
+}
+
+function markMessageRevisionSeenInList(list, id, revision, modifiedAt) {
+  let changed = false;
+  const next = (list || []).map((item) => {
+    if (item.id !== id || item.replies_revision !== revision || item.replies_seen) return item;
+    changed = true;
+    return {
+      ...item,
+      replies_seen: true,
+      ...(modifiedAt && modifiedAt > (item.modified_at || "") ? { modified_at: modifiedAt } : {}),
+    };
+  });
+  return changed ? next : list;
+}
 
 export function messageMatchesQuery(message, query) {
   const needle = String(query || "").trim().toLowerCase();
@@ -429,9 +456,9 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
       }
     }
     const ids = new Set(fresh.map((item) => item.id));
-    const merged = before
+    const merged = preserveConfirmedRepliesSeen(before
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
-      : fresh;
+      : fresh);
     const current = store.getState();
     if (!before) loadedMessageRevision = result.revision;
     if (result.pending_message_id && current.optimisticMessage?.requestId === options.requestId) {
@@ -700,11 +727,44 @@ const handlers = {
   },
   async onMarkRepliesSeen(id, revision) {
     try {
-      await api.markRepliesSeen(id, revision);
+      const response = await api.markRepliesSeen(id, revision);
+      const confirmedMsg = response?.message;
+      if (!confirmedMsg || confirmedMsg.replies_revision === revision) {
+        confirmedSeenRevisions.set(id, revision);
+        const modifiedAt = confirmedMsg?.replies_revision === revision ? confirmedMsg.modified_at : "";
+        if (historyCache) {
+          historyCache = {
+            ...historyCache,
+            messages: markMessageRevisionSeenInList(historyCache.messages, id, revision, modifiedAt),
+          };
+        }
+        if (hiddenMessageCache) {
+          hiddenMessageCache = {
+            ...hiddenMessageCache,
+            messages: markMessageRevisionSeenInList(hiddenMessageCache.messages, id, revision, modifiedAt),
+          };
+        }
+        if (searchBase) {
+          searchBase = {
+            ...searchBase,
+            messages: markMessageRevisionSeenInList(searchBase.messages, id, revision, modifiedAt),
+          };
+        }
+        const current = store.getState().messages || [];
+        const nextMessages = markMessageRevisionSeenInList(current, id, revision, modifiedAt);
+        if (nextMessages !== current) {
+          lastDataSignature = "";
+          store.setState({ messages: nextMessages });
+        }
+      }
     } catch (error) {
-      if (!String(error.message).includes("(409)")) console.error(error);
+      if (String(error.message).includes("(409)")) {
+        await fetchMessagePage().catch(() => {});
+      } else {
+        console.error(error);
+      }
+      throw error;
     }
-    await refreshAll(true);
   },
   onStageComposerFiles(files) {
     return composerUploads.stage(files);
