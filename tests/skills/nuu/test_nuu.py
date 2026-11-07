@@ -432,6 +432,229 @@ def test_live_python_playwright_audit_and_annotate(tmp_path):
       thread.join()
 
 
+def test_walk_verbs_gif89a_and_step_viewports(tmp_path):
+  import annotate
+  import walk
+
+  assert len(walk.MCP_VERBS) == 42
+  assert not hasattr(walk, "capture_views")
+  assert not hasattr(walk, "DEVICE_VIEWPORTS")
+  assert walk.DEVICE_INDEX == {
+    "desktop": 0,
+    "laptop": 1,
+    "tablet": 2,
+    "landscape": 3,
+    "mobile": 4,
+  }
+
+  frame_a = annotate.encode_png(24, 16, bytearray([15, 15, 18, 255] * (24 * 16)))
+  frame_b = annotate.encode_png(24, 16, bytearray([143, 168, 255, 255] * (24 * 16)))
+  gif_bytes = walk.encode_gif89a([frame_a, frame_b], delay_cs=25)
+  assert gif_bytes.startswith(b"GIF89a")
+  assert b"NETSCAPE2.0" in gif_bytes
+  assert gif_bytes.endswith(b"\x3b")
+
+  walk.clear_steps()
+  seen_vps = []
+
+  class StubPage:
+    def __init__(self, vp):
+      self.vp = vp
+
+    def on(self, *_args):
+      pass
+
+    def goto(self, *_args, **_kwargs):
+      pass
+
+    def screenshot(self, **_kwargs):
+      return frame_a
+
+  @walk.step("mobile")
+  def mobile_step(w: walk.Walker, _d: walk.Demo) -> None:
+    w.view("mobile-shot")
+
+  @walk.step("855x325")
+  def landscape_step(w: walk.Walker, _d: walk.Demo) -> None:
+    w.view("landscape-shot")
+
+  out_dir = tmp_path / "step-views"
+  results = walk.run_steps_with_factory(
+    lambda vp: seen_vps.append(vp) or StubPage(vp),
+    walk.Demo("http://127.0.0.1:1500"),
+    out_dir=out_dir,
+  )
+  walk.clear_steps()
+  assert seen_vps == [(411, 799), (855, 325)]
+  assert len(results) == 2
+  assert (out_dir / "mobile-shot.png").is_file()
+  assert (out_dir / "landscape-shot.png").is_file()
+
+
+def test_walk_cdp_session_batch_and_acc207_optimistic_writes(tmp_path):
+  import http.server
+  import os
+  import threading
+  import time
+
+  import pytest
+  import walk
+
+  chromium_bin = _chromium_ready()
+  if not chromium_bin:
+    pytest.skip("Playwright/Chromium runtime not configured")
+
+  site = tmp_path / "walk-site"
+  site.mkdir()
+  (site / "nuu.toml").write_text(
+    "[[audit.viewports]]\n"
+    "width = 1920\n"
+    "height = 957\n"
+    "mobile = false\n"
+    "touch = false\n"
+    "report = true\n",
+    encoding="utf-8",
+  )
+  (site / "slow.html").write_text(
+    """<!doctype html><html data-theme="dark"><body style="background:#0f0f12;color:#f4f4f6">
+<h1>Slow Form</h1>
+<form id="f"><input name="title" aria-label="Title" /><button type="submit">Create item</button></form>
+<ul id="list"></ul>
+<script>
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const val = e.target.title.value;
+  await fetch('/api/items', { method: 'POST', body: JSON.stringify({ title: val }) });
+  const li = document.createElement('li');
+  li.textContent = val;
+  document.getElementById('list').appendChild(li);
+});
+</script></body></html>""",
+    encoding="utf-8",
+  )
+  (site / "good.html").write_text(
+    """<!doctype html><html data-theme="dark"><body style="background:#0f0f12;color:#f4f4f6">
+<h1>Fast Optimistic Form</h1>
+<button id="inc" type="button" onclick="this.textContent='Clicked '+(++window.__n||1)">Count</button>
+<form id="f"><input name="title" aria-label="Title" /><button type="submit">Add row</button></form>
+<ul id="list"></ul>
+<script>
+window.__n = 0;
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const val = e.target.title.value;
+  const li = document.createElement('li');
+  li.id = 'pending-row';
+  li.setAttribute('data-pending', 'true');
+  li.textContent = val;
+  document.getElementById('list').appendChild(li);
+  await fetch('/api/items', { method: 'POST', body: JSON.stringify({ title: val }) });
+  li.removeAttribute('data-pending');
+});
+</script></body></html>""",
+    encoding="utf-8",
+  )
+
+  class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, directory=str(site), **kwargs)
+
+    def do_POST(self):
+      length = int(self.headers.get("Content-Length", "0"))
+      if length:
+        self.rfile.read(length)
+      self.send_response(200)
+      self.send_header("Content-Type", "application/json")
+      self.end_headers()
+      self.wfile.write(b'{"ok":true}')
+
+    def log_message(self, *_args):
+      pass
+
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+      from playwright.sync_api import sync_playwright
+
+      launch_opts = nuu.chromium_launch_kwargs(chromium_bin)
+      with sync_playwright() as pw:
+        browser = pw.chromium.launch(**launch_opts)
+        try:
+          p_slow = browser.new_page()
+          t0 = time.perf_counter()
+          slow_findings = walk.probe_optimistic_writes(p_slow, f"{base}/slow.html")
+          elapsed_ms = (time.perf_counter() - t0) * 1000.0
+          assert any(f["rule"] == "ACC207" for f in slow_findings)
+          assert elapsed_ms < 1500.0
+
+          p_good = browser.new_page()
+          good_findings = walk.probe_optimistic_writes(p_good, f"{base}/good.html")
+          assert good_findings == []
+        finally:
+          browser.close()
+
+      sess = f"pytest-{os.getpid()}"
+      state_path = walk.session_state_path(sess)
+      try:
+        rc_open = walk.main(
+          ["-S", sess, "-x", chromium_bin, "open", f"{base}/good.html"]
+        )
+        assert rc_open == 0
+        assert state_path.is_file()
+        assert (state_path.stat().st_mode & 0o777) == 0o600
+
+        rc_snap = walk.main(["-S", sess, "snapshot", "--boxes"])
+        assert rc_snap == 0
+        saved = json.loads(state_path.read_text(encoding="utf-8"))
+        btn_ref = next(
+          ref for ref, meta in saved["refs"].items() if meta.get("name") == "Count"
+        )
+
+        gif_out = tmp_path / "cdp-session.gif"
+        assert walk.main(["-S", sess, "gif-start"]) == 0
+        assert walk.main(["-S", sess, "click", btn_ref]) == 0
+        assert walk.main(["-S", sess, "localstorage", "set", "theme", "dark"]) == 0
+        assert walk.main(["-S", sess, "gif-stop", "-o", str(gif_out)]) == 0
+        assert gif_out.read_bytes().startswith(b"GIF89a")
+      finally:
+        assert walk.main(["-S", sess, "close"]) == 0
+        assert not state_path.exists()
+
+      batch_py = tmp_path / "flow_walk.py"
+      batch_py.write_text(
+        "from walk import Demo, Walker, step\n\n"
+        "@step('desktop')\n"
+        f"def load_good(w: Walker, demo: Demo) -> None:\n"
+        f"  w.goto('{base}/good.html')\n"
+        "  w.click('#inc')\n"
+        "  w.view('good-after-click')\n",
+        encoding="utf-8",
+      )
+      batch_out = tmp_path / "batch-out"
+      batch_gif = tmp_path / "batch.gif"
+      rc_batch = walk.main(
+        [
+          "-c",
+          str(site / "nuu.toml"),
+          "-x",
+          chromium_bin,
+          "-o",
+          str(batch_out),
+          "-g",
+          str(batch_gif),
+          str(batch_py),
+        ]
+      )
+      assert rc_batch == 0
+      assert (batch_out / "good-after-click.png").is_file()
+      assert batch_gif.read_bytes().startswith(b"GIF89a")
+    finally:
+      server.shutdown()
+      thread.join()
+
+
 def test_rendered_public_flow_and_live_evidence(tmp_path):
   import http.server
   import threading
@@ -1160,12 +1383,11 @@ html = "components/buttons.html"
   assert step_results[0]["device"] == "desktop"
   assert Path(step_results[0]["screenshot"]).is_file()
 
-  views = walk.capture_views(
-    walk.Walker(FakePage(), demo),
-    demo,
-    {"dashboard": 1500, "signed-out": lambda w, _d: w.goto(2500)},
-  )
-  assert set(views) == {"dashboard", "signed-out"}
+  walker_inst = walk.Walker(FakePage(), demo, output_dir=walk_out)
+  dash_png = walker_inst.view("dashboard")
+  signed_png = walker_inst.view("signed-out")
+  assert dash_png.is_file()
+  assert signed_png.is_file()
   walk.clear_steps()
 
   default_nuu_toml = SCRIPT.parent.parent / "references" / "nuu.toml"
