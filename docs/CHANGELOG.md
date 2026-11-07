@@ -35,6 +35,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Parse README budgets without `markdown-it-py`, drop retired group budgets and `maintenance/javascript-comments.cjs`, and refresh `maintenance/README.md`.
 - Rewrite `maintenance/README.md` for human maintainers and replace retired `arena-preview` hook tables with `steer pre`.
 - Archive the retired minification workflow check and its tests under `docs/archive/arena-skill/`.
 - Exclude minified, archived, and vendored material from the root Nemoizer scan.

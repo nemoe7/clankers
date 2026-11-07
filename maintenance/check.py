@@ -21,7 +21,6 @@ from typing import Any
 CHILD_ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 import yaml
-from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
@@ -67,9 +66,6 @@ EXPECTED_BUDGETS = {
   "gpt-plugins/skills/gpt-question/SKILL.md": "o200k_base",
 }
 
-# No grouped asset budgets remain after the v1 archive.
-EXPECTED_GROUPS = {}
-
 # Root `ARENA.md` copies the source that distribution pushes to target repos.
 # The byte check guards against drift.
 ROOT_COPIES = ("ARENA.md",)
@@ -83,22 +79,19 @@ SYSTEM_PROMPT_PAIRS = ("NEMOGPT.md",)
 HEADER_MAX = 40
 NEMOIZE = "skills/nemoizer/scripts/nemoize.py"
 CODE_SPAN_RE = re.compile(r"(`+)[^`\n]*?\1")
-SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
-LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
+BUDGET_HEADER = "| File | Measure | Current |\n"
+BUDGET_LINK_RE = re.compile(r"^\[([^\]]+)\]\([^)]+\)$")
 
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "CLINE.md", "KILO.md")
-# Both ChatGPT fields extract from one merged baseline under `rules/refs/`.
-PLAIN_PAIRS = {
-  "CHATGPT-CUSTOM.txt": "CHATGPT.txt",
-  "CHATGPT-MORE.txt": "CHATGPT.txt",
-  "COMMIT-SPEC.txt": "COMMIT-SPEC.txt",
-}
-
-# Kilo mode overrides live under a directory on both sides. The check pairs them by
-# name and compares them the plain way: live compresses wording, never adds rules.
-KILO_PAIRS = ("plan.md", "code.md", "debug.md")
+# Kilo mode overrides and both ChatGPT fields compare plain non-empty line counts.
+PLAIN_PAIRS = (
+  *((f"kilo/{name}", f"kilo/{name}") for name in ("plan.md", "code.md", "debug.md")),
+  ("CHATGPT-CUSTOM.txt", "CHATGPT.txt"),
+  ("CHATGPT-MORE.txt", "CHATGPT.txt"),
+  ("COMMIT-SPEC.txt", "COMMIT-SPEC.txt"),
+)
 
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
 # and `More about you`, each capped at 1,500 characters.
@@ -184,88 +177,43 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
   }, []
 
 
-def markdown_inline_text(token: Any) -> str:
-  """Reconstruct inline text while preserving text around code spans."""
-  if not token.children:
-    return token.content
-
-  return "".join(
-    child.content
-    for child in token.children
-    if child.type
-    in {
-      "text",
-      "code_inline",
-      "html_inline",
-      "softbreak",
-      "hardbreak",
-    }
-  )
+def _clean_budget_cell(cell: str) -> str:
+  cleaned = cell.strip()
+  linked = BUDGET_LINK_RE.fullmatch(cleaned)
+  if linked:
+    cleaned = linked.group(1).strip()
+  return cleaned.replace("`", "").strip()
 
 
 def parse_budget_table(text: str) -> list[list[str]]:
-  """Parse Markdown tables and return rendered cell text."""
-  markdown = MarkdownIt("commonmark").enable("table")
-  tokens = markdown.parse(text)
+  """Parse the README File / Measure / Current pipe table."""
+  lines = text.splitlines(keepends=True)
+  if BUDGET_HEADER not in lines:
+    raise RuntimeError("README budget table not found")
 
-  tables: list[list[list[str]]] = []
-  current_table: list[list[str]] | None = None
-  current_row: list[str] | None = None
+  start = lines.index(BUDGET_HEADER)
+  rows: list[list[str]] = [["File", "Measure", "Current"]]
 
-  for token in tokens:
-    if token.type == "table_open":
-      current_table = []
+  for line in lines[start + 1 :]:
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+      break
+    cells = [part.strip() for part in stripped.strip("|").split("|")]
+    if len(cells) == 3 and all(cell and set(cell) <= {"-", ":"} for cell in cells):
       continue
+    rows.append([_clean_budget_cell(cell) for cell in cells])
 
-    if token.type == "tr_open":
-      current_row = []
-      continue
-
-    if token.type == "inline" and current_row is not None:
-      current_row.append(markdown_inline_text(token))
-      continue
-
-    if token.type == "tr_close":
-      if current_table is not None and current_row is not None:
-        current_table.append(current_row)
-      current_row = None
-      continue
-
-    if token.type == "table_close":
-      if current_table is not None:
-        tables.append(current_table)
-      current_table = None
-
-  for table in tables:
-    if table and table[0] == ["File", "Measure", "Current"]:
-      return table
-
-  raise RuntimeError("README budget table not found")
+  return rows
 
 
 def read_budget_table() -> dict[str, tuple[str, str]]:
   text = README.read_text(encoding="utf-8")
-  rows = parse_budget_table(text)
-
-  result: dict[str, tuple[str, str]] = {}
-
-  for row in rows[1:]:
-    if len(row) != 3:
-      continue
-
-    relative, type, current = row
-
-    relative = relative.strip()
-
-    if relative.startswith("`") and relative.endswith("`"):
-      relative = relative[1:-1]
-
-    result[relative] = (
-      type.strip(),
-      current.strip(),
+  return {
+    relative: (measure_type, current)
+    for relative, measure_type, current in (
+      row for row in parse_budget_table(text)[1:] if len(row) == 3
     )
-
-  return result
+  }
 
 
 def load_token_counts(paths: list[Path]) -> dict[str, int]:
@@ -317,42 +265,44 @@ def measure(path: Path, type: str) -> int:
 
 
 def budget_value(relative: str, type: str) -> int:
-  """Measure one row, summing the files of a group row."""
-  parts = EXPECTED_GROUPS.get(relative, (type, (relative,)))[1]
-  total = 0
-  for part in parts:
-    path = ROOT / part
-    if not path.is_file():
-      raise RuntimeError(f"README budget path missing: {part}")
-    total += measure(path, type)
-  return total
+  """Measure one instruction-budget file."""
+  path = ROOT / relative
+  if not path.is_file():
+    raise RuntimeError(f"README budget path missing: {relative}")
+  return measure(path, type)
 
 
 def format_unit(type: str) -> str:
   return measurement(type)[1]
 
 
+def expected_budget_items() -> list[tuple[str, str]]:
+  """Return canonical sorted `(relative_path, measure_type)` budget entries."""
+  return sorted(EXPECTED_BUDGETS.items(), key=lambda item: item[0].casefold())
+
+
+def format_budget_row(relative: str, type: str) -> str:
+  current = f"{budget_value(relative, type):,}"
+  return (
+    f"| [`{relative}`]({relative}) | `{type}` | {current} `{format_unit(type)}` |\n"
+  )
+
+
 def update_readme_measurements() -> bool:
   text = README.read_text(encoding="utf-8")
   lines = text.splitlines(keepends=True)
-  header = "| File | Measure | Current |\n"
-  if lines.count(header) != 1:
+  if lines.count(BUDGET_HEADER) != 1:
     raise RuntimeError("README must contain exactly one instruction-budget table")
-  start = lines.index(header)
+  start = lines.index(BUDGET_HEADER)
   end = start + 1
   while end < len(lines) and lines[end].lstrip().startswith("|"):
     end += 1
 
-  table = [header, "| --- | --- | --- |\n"]
-  rows = {
-    **EXPECTED_BUDGETS,
-    **{row: type for row, (type, _) in EXPECTED_GROUPS.items()},
-  }
-  for relative, type in sorted(rows.items(), key=lambda item: item[0].casefold()):
-    current = f"{budget_value(relative, type):,}"
-    table.append(
-      f"| [`{relative}`]({relative}) | `{type}` | {current} `{format_unit(type)}` |\n"
-    )
+  table = [
+    BUDGET_HEADER,
+    "| --- | --- | --- |\n",
+    *(format_budget_row(relative, type) for relative, type in expected_budget_items()),
+  ]
 
   updated = "".join(lines[:start] + table + lines[end:])
   if updated == text:
@@ -544,12 +494,12 @@ def check_refs_parity(errors: list[str]) -> None:
           f"rules/refs/{name}; compression may merge lines but never add rules"
         )
 
-  for name in KILO_PAIRS:
-    reference = REFS / "kilo" / name
-    live = RULES / "kilo" / name
+  for live_rel, reference_rel in PLAIN_PAIRS:
+    reference = REFS / reference_rel
+    live = RULES / live_rel
 
     if not reference.is_file() or not live.is_file():
-      errors.append(f"rules/kilo/{name}: refs/live pair incomplete")
+      errors.append(f"rules/{live_rel}: refs/live pair incomplete")
       continue
 
     ref_rules = rule_line_count(reference)
@@ -557,25 +507,8 @@ def check_refs_parity(errors: list[str]) -> None:
 
     if live_rules > ref_rules:
       errors.append(
-        f"rules/kilo/{name}: {live_rules} rule lines vs {ref_rules} in rules/refs/kilo/{name}; "
-        "compression may merge lines but never add rules"
-      )
-
-  for name, reference_name in PLAIN_PAIRS.items():
-    reference = REFS / reference_name
-    live = RULES / name
-
-    if not reference.is_file() or not live.is_file():
-      errors.append(f"rules/{name}: refs/live pair incomplete")
-      continue
-
-    ref_rules = rule_line_count(reference)
-    live_rules = rule_line_count(live)
-
-    if live_rules > ref_rules:
-      errors.append(
-        f"rules/{name}: {live_rules} rule lines vs {ref_rules} in rules/refs/{reference_name}; "
-        "compression may merge lines but never add rules"
+        f"rules/{live_rel}: {live_rules} rule lines vs {ref_rules} in "
+        f"rules/refs/{reference_rel}; compression may merge lines but never add rules"
       )
 
 
@@ -694,19 +627,17 @@ def check_links(errors: list[str]) -> None:
 
 def check_budgets(errors: list[str]) -> None:
   budgets = read_budget_table()
-  rows = {
-    **EXPECTED_BUDGETS,
-    **{row: type for row, (type, _) in EXPECTED_GROUPS.items()},
-  }
+  items = expected_budget_items()
+  expected_paths = {relative for relative, _ in items}
 
-  if set(budgets) != set(rows):
+  if set(budgets) != expected_paths:
     errors.append(
       "README budget table entries mismatch: "
       f"documented={sorted(budgets)} "
-      f"expected={sorted(rows)}"
+      f"expected={sorted(expected_paths)}"
     )
   else:
-    for relative, expected_type in rows.items():
+    for relative, expected_type in items:
       recorded_type, recorded_value = budgets[relative]
 
       if recorded_type != expected_type:

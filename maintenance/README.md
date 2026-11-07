@@ -60,9 +60,7 @@ Verbatim baselines would exceed live budgets. Refs preserve originals, identical
 
 ### Formatting
 
-Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `CORE.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/`, plus `rules/wenyan/README.md`. This set contains 11 files.
-
-The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
+Markdown linting covers repository Markdown and `README.md` files selected by [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc). It excludes `AGENTS.md`, `ARENA.md`, non-README rule and skill files, system prompts, automations, archived notes, and `.agents/`. The required blank first line and `###` heading of a Kilo mode override fail MD001 and MD041.
 
 Soft-wrap prose: one line per paragraph, list item and table row. Keep third-party license wrapping.
 
@@ -82,7 +80,7 @@ Kilo wraps the mode overrides as a mode reminder rather than loading them as a f
 
 [.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps the file selection, the exclusions, and the rule settings together. It keeps the markdownlint defaults, enables **MD060** for table-column consistency, and disables **MD013** so there is no line-length constraint. MD060 uses its default `any` style, and MD007 uses its default two-space list indent, so neither needs a pin.
 
-If markdownlint-cli2 is available, run it from the repository root with no additional file globs to use this scope. The workflow passes no globs either, so both use this one definition. `maintenance/check.py` recomputes the scope from this config and fails when it drifts from the counts recorded here and in the root guide. No tooling installation is necessary.
+Run `markdownlint-cli2` from the repository root with no extra globs so local runs match CI.
 
 Core defines Python style (Ruff E4, E7, E9, F), with no managed Ruff dependency. `maintenance/check.py` checks both ChatGPT fields against 1,500 Unicode characters each, including newlines.
 
@@ -102,7 +100,6 @@ python3 maintenance/check.py
 The checker reports every problem it finds in:
 
 - Skill discovery metadata, required `SKILL.md` files, and the Agent Skills naming and frontmatter limits.
-- Workflow listing and frontmatter descriptions.
 - Internal links, README skill coverage, and recorded measurements.
 - Both ChatGPT custom-instruction character limits.
 - A license declaration on every skill that records `metadata.upstream`, and the `LICENSE.txt` file that the declaration points at.
@@ -113,20 +110,12 @@ The checker reports every problem it finds in:
 ## Prose lint
 
 ```bash
-python3 maintenance/lint_prose.py
+python3 skills/nemoizer/scripts/nemoize.py .
 ```
 
-`maintenance/check.py` runs the same lint, so the local gate and CI cover it.
+`maintenance/check.py` runs the same root `nemoize.py` command, configured by `nemoizer.toml`. The scan covers `docs/`, selected `README.md` files, and first-party code comments, docstrings, and visible HTML text.
 
-The root `nemoizer.toml` defines exclusions and file-specific rules for the single nemoizer stage. The prose linter covers `docs/` and selected `README.md` files. It also checks each tracked first-party code comment and Python docstring. It reads `.bat`, `.cjs`, `.css`, `.html`, `.ini`, `.js`, `.jsonc`, `.py`, `.sh`, `.svg`, `.toml`, and `.yml` files, plus `Dockerfile` and `arena-preview`.
-
-`maintenance/extract_prose.py` groups code prose by file in JSON. With no path arguments it selects tracked first-party code. `lint_prose.py` consumes these groups. Sentence rules apply per section, and synonym rules span each file.
-
-Identifiers and ordinary code strings remain outside the extracted prose, while visible HTML text nodes and HTML `aria-label`, `title`, and `placeholder` attributes are included.
-
-Vendored code stays outside the code target. Required userscript metadata stays, and the linter checks prose in `@name` and `@description`. Every ordinary code-comment block has a two-line limit. Required directive markers stay outside that limit.
-
-`docs/CHANGELOG.md` and `docs/**/CHANGELOG.md` bullets cap at 3 sentences.
+Vendored, minified, and archived files stay excluded in `nemoizer.toml`. Ordinary code-comment blocks cap at two lines, and `docs/**/CHANGELOG.md` bullets cap at 3 sentences.
 
 ## Update README measurements
 
@@ -134,14 +123,14 @@ Vendored code stays outside the code target. Required userscript metadata stays,
 python3 maintenance/check.py --update
 ```
 
-`check.py` needs `markdown-it-py` from pip to parse the README budget table, `pyyaml` to read skill frontmatter, and the npm package `gpt-tokenizer` to measure `o200k_base` tokens. Everything else is the Python standard library.
+`check.py` needs `pyyaml` from pip to read skill frontmatter and `gpt-tokenizer` from npm to measure `o200k_base` tokens. Everything else uses the Python standard library.
 
 ```bash
 python3 -m pip install -r requirements.txt
 npm ci
 ```
 
-`--update` rebuilds the budget table from `EXPECTED_BUDGETS` and `EXPECTED_GROUPS` before checking, including added and retired skills. Test it with `python3 -m pytest tests/maintenance/test_check.py`.
+`--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 -m pytest tests/maintenance/test_check.py`.
 
 ## PR checks
 

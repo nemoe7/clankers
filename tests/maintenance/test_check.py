@@ -70,8 +70,26 @@ def test_run_logged_prints_command_and_exit(monkeypatch, capsys):
   assert "exit 0: python 'script with spaces.py' ." in printed
 
 
-def test_grouped_budgets_are_empty_after_v1_archive():
-  assert check.EXPECTED_GROUPS == {}
+def test_parse_budget_table_reads_linked_and_plain_pipe_rows():
+  sample = (
+    "# Heading\n\n"
+    "| Other | Header |\n| --- | --- |\n| x | y |\n\n"
+    "| File | Measure | Current |\n"
+    "| --- | --- | --- |\n"
+    "| [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,234 `tok` |\n"
+    "| `plain.md` | `UTF-8 file size` | 42 `B` |\n\n"
+    "Trailing prose.\n"
+  )
+  assert check.parse_budget_table(sample) == [
+    ["File", "Measure", "Current"],
+    ["rules/CORE.md", "o200k_base", "1,234 tok"],
+    ["plain.md", "UTF-8 file size", "42 B"],
+  ]
+  try:
+    check.parse_budget_table("# No budget table\n")
+    raise AssertionError("Missing table was accepted")
+  except RuntimeError as exc:
+    assert "README budget table not found" in str(exc)
 
 
 def test_root_arena_is_regular_copy_of_rule_source():
@@ -158,10 +176,8 @@ def test_ste_linter_keeps_the_tool_standalone(tmp_path):
 
 
 def test_main_enforces_rotation_findings(monkeypatch, capsys):
-  monkeypatch.setattr(
-    check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
-  )
-  monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
+  monkeypatch.setattr(check, "parse_args", lambda: SimpleNamespace(update=False))
+  monkeypatch.setattr(check, "validate", lambda errors: 0)
   monkeypatch.setattr(
     check,
     "check_nemoizer",
@@ -194,10 +210,8 @@ def test_nemoizer_scope_is_root_config_and_one_stage(monkeypatch, capsys):
   assert nemoize.skipped(check.ROOT / "docs/archive/CHANGELOG.md", check.ROOT, ())
   assert nemoize.skipped(check.ROOT / ".agents/skills/other.md", check.ROOT, ())
   assert nemoize.skipped(check.ROOT / "rules/other.md", check.ROOT, ())
-  monkeypatch.setattr(
-    check, "parse_args", lambda: SimpleNamespace(update=False, ste=False)
-  )
-  monkeypatch.setattr(check, "validate", lambda errors: (0, 0))
+  monkeypatch.setattr(check, "parse_args", lambda: SimpleNamespace(update=False))
+  monkeypatch.setattr(check, "validate", lambda errors: 0)
   calls = []
   monkeypatch.setattr(check, "check_nemoizer", lambda errors: calls.append(True))
   assert check.main() == 0
@@ -216,7 +230,6 @@ def test_budget_updates_handle_additions_removals_and_measurements(
     "EXPECTED_BUDGETS",
     {"Zed.md": "UTF-8 file size", "alpha.md": "UTF-8 file size"},
   )
-  monkeypatch.setattr(check, "EXPECTED_GROUPS", {})
   (root / "Zed.md").write_text("one", encoding="utf-8")
   (root / "alpha.md").write_text("two!", encoding="utf-8")
   check.README.write_text(
@@ -251,51 +264,6 @@ def test_budget_updates_handle_additions_removals_and_measurements(
   (root / "tok.md").write_text("hello world", encoding="utf-8")
   assert check.measure(root / "tok.md", "o200k_base") > 0
   assert check.format_unit("o200k_base") == "tok"
-
-
-def test_budget_group_row_sums_its_files(tmp_path: Path, monkeypatch):
-  root = tmp_path
-  monkeypatch.setattr(check, "ROOT", root)
-  monkeypatch.setattr(check, "README", root / "README.md")
-  monkeypatch.setattr(check, "EXPECTED_BUDGETS", {"rules.md": "UTF-8 file size"})
-  monkeypatch.setattr(
-    check,
-    "EXPECTED_GROUPS",
-    {"skills/example": ("UTF-8 file size", ("a.js", "b.css"))},
-  )
-  (root / "rules.md").write_text("call", encoding="utf-8")
-  (root / "a.js").write_text("fóur", encoding="utf-8")
-  (root / "b.css").write_text("sixsix", encoding="utf-8")
-  check.README.write_text(
-    "Latest measurements as of 2000-01-01.\n\n"
-    "| File | Measure | Current |\n| --- | --- | --- |\n",
-    encoding="utf-8",
-  )
-  assert check.update_readme_measurements()
-  text = check.README.read_text(encoding="utf-8")
-  # One row carries every non-clause file, so the table stays readable.
-  assert "a.js" not in text and "b.css" not in text
-  group, (unit, members) = next(iter(check.EXPECTED_GROUPS.items()))
-  size = sum((root / member).stat().st_size for member in members)
-  assert size > sum(
-    len((root / member).read_text(encoding="utf-8")) for member in members
-  )
-  assert f"| [`{group}`]({group}) | `{unit}` | {size:,} `B` |" in text
-  assert check.read_budget_table()[group] == (unit, f"{size:,} B")
-  assert not check.update_readme_measurements()
-  with (root / "b.css").open("a", encoding="utf-8") as file:
-    file.write("!")
-  assert check.update_readme_measurements()
-  grown = sum((root / member).stat().st_size for member in members)
-  assert grown > size
-  assert check.read_budget_table()[group] == (unit, f"{grown:,} B")
-  before = check.README.read_bytes()
-  (root / "a.js").unlink()
-  try:
-    check.update_readme_measurements()
-    raise AssertionError("A missing group file was accepted")
-  except RuntimeError:
-    assert check.README.read_bytes() == before
 
 
 def test_check_case_collisions_rejects_case_only_tracked_duplicates(
