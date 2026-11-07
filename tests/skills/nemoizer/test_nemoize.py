@@ -2092,6 +2092,38 @@ def test_extend_exclude_supports_globstar_and_negation(tmp_path, monkeypatch):
   assert nemoize.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
 
 
+def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
+  import tomllib
+
+  root = SCRIPT.parents[3]
+  config = tomllib.loads((root / "nemoizer.toml").read_text(encoding="utf-8"))
+  monkeypatch.setitem(
+    nemoize.ACTIVE_CONFIG, "extend_exclude", tuple(config["extend-exclude"])
+  )
+  for name in (
+    "app.min.js",
+    "nested/site.min.css",
+    "nested/code.min.mjs",
+    "docs/archive/README.md",
+    "archive/note.py",
+    "other/archives/old.md",
+    "vendor/library.js",
+    "nested/vendor/README.md",
+    "third_party/module.py",
+    "nested/third-party/module.py",
+    "vendored/module.py",
+    "files/source.tar.gz",
+  ):
+    assert nemoize.skipped(tmp_path / name, tmp_path, ()), name
+  for name in (
+    "src/app.js",
+    "docs/README.md",
+    "src/archive_helper.py",
+    "src/vendor_helper.py",
+  ):
+    assert not nemoize.skipped(tmp_path / name, tmp_path, ()), name
+
+
 def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
   view = tmp_path / "reports-view.js"
   source = (

@@ -30,6 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Exclude minified, archived, and vendored material from the root Nemoizer scan.
 - Group read-only CI checks into one job and reuse successful input digests.
 - Guard the archived Arena proxy tests against returning to the active test matrix.
 - Refresh Ponytail and its audit skill from upstream `96608e0`, keeping only those two skills.
