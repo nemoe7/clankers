@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Match Mermaid diagram appearance across thumbnails and the modal viewer, using the code-block surface in the modal.
+
 - Enforce `{repo} - Steering` as the `start_process` name for `steer serve`.
 
 - Require an explicit task size whenever task details are added or removed.

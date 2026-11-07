@@ -1204,14 +1204,49 @@ function initImageModal() {
     clone.setAttribute("draggable", "false");
     if (media.tagName.toLowerCase() === "svg") {
       const sourceBox = media.getBoundingClientRect();
-      clone.setAttribute("class", "mermaid-svg");
-      if (sourceBox.width) clone.style.width = `${Math.round(sourceBox.width)}px`;
-      // Mermaid scopes its embedded styles to the diagram ID, so the copy keeps a unique one.
+      const existingClass = clone.getAttribute("class") || "";
+      clone.setAttribute(
+        "class",
+        existingClass.split(/\s+/).includes("mermaid-svg")
+          ? existingClass
+          : `mermaid-svg ${existingClass}`.trim(),
+      );
+      const viewBox = (clone.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+      const naturalWidth = viewBox.length === 4 && viewBox[2] > 0 ? viewBox[2] : sourceBox.width;
+      if (viewBox.length === 4 && viewBox[2] > 0) {
+        if (clone.style.removeProperty) clone.style.removeProperty("max-width");
+        else delete clone.style.maxWidth;
+      }
+      if (naturalWidth) clone.style.width = `${Math.round(naturalWidth)}px`;
+      // Mermaid scopes styles and marker references to diagram IDs, so each viewer copy rewrites its IDs.
       if (sourceId) {
         const viewerId = `${sourceId}-viewer-${++viewerSeq}`;
+        const ids = new Map([[sourceId, viewerId]]);
+        const inner = clone.querySelectorAll ? [...clone.querySelectorAll("[id]")] : [];
+        for (const element of inner) {
+          const id = element.getAttribute?.("id") || element.id;
+          if (id) ids.set(id, `${viewerId}-${id}`);
+        }
+        const rewriteRefs = (value) =>
+          String(value).replace(/#([\w-]+)/g, (match, id) => (ids.has(id) ? `#${ids.get(id)}` : match));
         clone.setAttribute("id", viewerId);
-        const style = clone.querySelector("style");
-        if (style) style.textContent = style.textContent.split(`#${sourceId}`).join(`#${viewerId}`);
+        if (clone.querySelectorAll) {
+          for (const element of [clone, ...clone.querySelectorAll("*")]) {
+            for (const attribute of [...(element.attributes || [])]) {
+              if (attribute.name === "id" && ids.has(attribute.value)) {
+                element.setAttribute("id", ids.get(attribute.value));
+              } else {
+                element.setAttribute(attribute.name, rewriteRefs(attribute.value));
+              }
+            }
+            if (element.localName === "style") {
+              element.textContent = rewriteRefs(element.textContent || "");
+            }
+          }
+        } else {
+          const style = clone.querySelector("style");
+          if (style) style.textContent = rewriteRefs(style.textContent || "");
+        }
       }
     }
     stage.replaceChildren(clone);
