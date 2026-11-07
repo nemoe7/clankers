@@ -675,14 +675,14 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
             "selector": "main#content",
             "tag": "main",
             "bounds": {"width": vp_w, "height": 640},
-            "inkRatio": main_pass_ratio,
+            "ink_ratio": main_pass_ratio,
           },
           {
             "selector": "#app-root",
             "tag": "div",
             "role": "main",
             "bounds": {"width": vp_w, "height": 640},
-            "inkRatio": 0.40,
+            "ink_ratio": 0.40,
           },
         ],
       }
@@ -696,7 +696,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
           "selector": "main#content",
           "tag": "main",
           "bounds": {"width": 1920, "height": 640},
-          "inkRatio": 0.31,
+          "ink_ratio": 0.31,
         }
       ],
     }
@@ -714,7 +714,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
               "selector": "main#content",
               "tag": "main",
               "bounds": {"width": narrow_w, "height": 640},
-              "inkRatio": 0.25,
+              "ink_ratio": 0.25,
             }
           ],
         }
@@ -728,22 +728,22 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
         "selector": "#header",
         "tag": "header",
         "bounds": {"width": 900, "height": 48},
-        "inkRatio": 0.38,
+        "ink_ratio": 0.38,
         "values": {"height": "48px"},
       },
       {
         "selector": ".report-toolbar",
         "tag": "div",
         "bounds": {"width": 900, "height": 48},
-        "inkRatio": 0.34,
+        "ink_ratio": 0.34,
         "values": {"height": "48px", "justify-content": "space-between"},
       },
       {
         "selector": ".step-row",
         "tag": "div",
         "bounds": {"width": 1200, "height": 40},
-        "inkRatio": 0.60,
-        "maxSiblingGap": 960,
+        "ink_ratio": 0.60,
+        "max_sibling_gap": 960,
         "values": {"height": "40px", "padding-left": "16px"},
       },
       {
@@ -756,7 +756,7 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
       {
         "selector": "#modal-close",
         "tag": "button",
-        "iconOnly": True,
+        "icon_only": True,
         "bounds": {"width": 32, "height": 44},
         "values": {"width": "32px", "height": "44px"},
       },
@@ -784,17 +784,17 @@ def test_ready_selector_and_rendered_a11y_pass_and_annotate(tmp_path):
         "selector": ".clipped-card",
         "tag": "div",
         "bounds": {"width": 200, "height": 40},
-        "clientWidth": 200,
-        "scrollWidth": 280,
-        "clientHeight": 40,
-        "scrollHeight": 40,
+        "client_width": 200,
+        "scroll_width": 280,
+        "client_height": 40,
+        "scroll_height": 40,
         "values": {"overflow": "hidden"},
       },
       {
         "selector": "#btn-a",
         "tag": "button",
         "bounds": {"width": 80, "height": 40},
-        "siblingOverlap": "#btn-b",
+        "sibling_overlap": "#btn-b",
         "values": {},
       },
     ],
@@ -1318,7 +1318,7 @@ html = "components/buttons.html"
         {
           "selector": "#log-search",
           "tag": "input",
-          "inputType": "search",
+          "input_type": "search",
           "row_slack": 58,
           "bounds": {"x": 16, "y": 95, "width": 566, "height": 34},
           "values": {"width": "566px", "height": "34px"},
@@ -1342,7 +1342,7 @@ html = "components/buttons.html"
           {
             "selector": "#full-url",
             "tag": "input",
-            "inputType": "text",
+            "input_type": "text",
             "row_slack": 0,
             "bounds": {"x": 0, "y": 0, "width": 1280, "height": 40},
             "values": {"width": "1280px", "height": "40px"},
@@ -1359,7 +1359,7 @@ html = "components/buttons.html"
         {
           "selector": "#short-filter",
           "tag": "input",
-          "inputType": "text",
+          "input_type": "text",
           "row_slack": 400,
           "bounds": {"x": 0, "y": 0, "width": 320, "height": 40},
           "values": {"width": "320px", "height": "40px"},
@@ -1378,7 +1378,7 @@ html = "components/buttons.html"
           {
             "selector": "#paired-input",
             "tag": "input",
-            "inputType": "text",
+            "input_type": "text",
             "row_slack": 0,
             "bounds": {"x": 0, "y": 0, "width": 320, "height": 40},
             "values": {"width": "320px", "height": "40px"},
@@ -1397,7 +1397,7 @@ html = "components/buttons.html"
             {
               "selector": f"#exempt-{exempt_type}",
               "tag": "input",
-              "inputType": exempt_type,
+              "input_type": exempt_type,
               "row_slack": 400,
               "bounds": {"x": 0, "y": 0, "width": 24, "height": 24},
               "values": {"width": "24px", "height": "24px"},
@@ -2140,3 +2140,228 @@ def test_severity_overrides_control_lint_and_audit_exit_codes(tmp_path):
   )
   assert rev_run.returncode == 0
   assert "`ACC001` (review)" in rev_run.stdout
+
+
+def test_measure_drop_rays_and_contrast_fallback(tmp_path):
+  import annotate
+
+  # Contrast fallback ladder: (#ff3366) -> #00e5ff -> #111827 with 1 px halo.
+  dark_pick = measure.select_redline_ink([(18, 19, 24)])
+  assert dark_pick["hex"] == "#ff3366"
+  assert dark_pick["halo"] is None
+  assert not dark_pick["fallback"]
+  assert dark_pick["min_contrast"] >= 3.0
+
+  crimson_pick = measure.select_redline_ink([(225, 29, 72)])
+  assert crimson_pick["hex"] == "#00e5ff"
+  assert crimson_pick["halo"] == (17, 24, 39, 255)
+  assert crimson_pick["fallback"]
+  assert crimson_pick["min_contrast"] >= 3.0
+
+  light_cyan_pick = measure.select_redline_ink([(180, 230, 240)])
+  assert light_cyan_pick["hex"] == "#111827"
+  assert light_cyan_pick["halo"] == (255, 255, 255, 255)
+  assert light_cyan_pick["fallback"]
+  assert light_cyan_pick["min_contrast"] >= 3.0
+
+  custom_pick = measure.select_redline_ink([(18, 19, 24)], redline="#00e5ff")
+  assert custom_pick["hex"] == "#00e5ff"
+  assert custom_pick["halo"] is None
+
+  # Synthesize a 120x80 dark PNG with an on-scale 40x24 box and an off-scale 37x19 box.
+  w, h = 120, 80
+  rgba = bytearray(w * h * 4)
+  annotate.fill_rect(rgba, w, h, 0, 0, w, h, (18, 19, 24, 255))
+  annotate.fill_rect(rgba, w, h, 12, 16, 40, 24, (40, 44, 56, 255))
+  annotate.fill_rect(rgba, w, h, 64, 16, 37, 19, (225, 29, 72, 255))
+  src_png = tmp_path / "source.png"
+  src_png.write_bytes(annotate.encode_png(w, h, rgba))
+
+  out_ok = tmp_path / "drop-ok.png"
+  pass_status = "- Status: `pass` (exit 0)"
+  pass_span = "| `drop` | `20,24,xy` | `40 x 24 px` | `True` | `#ff3366` |"
+  ok_run = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "measure",
+      "-i",
+      str(src_png),
+      "-d",
+      "20,24",
+      "-o",
+      str(out_ok),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert ok_run.returncode == 0
+  assert pass_status in ok_run.stdout
+  assert pass_span in ok_run.stdout
+  ow, oh, _ = annotate.decode_png(out_ok.read_bytes())
+  assert (ow, oh) == (w, h)
+
+  out_bad = tmp_path / "drop-bad.png"
+  fail_status = "- Status: `findings` (exit 1)"
+  fallback_span = "| `drop` | `72,24,x` | `37 px` | `False` | `#00e5ff` |"
+  spc_code = "`SPC001`"
+  bad_run = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "measure",
+      "-i",
+      str(src_png),
+      "-d",
+      "72,24,x",
+      "-o",
+      str(out_bad),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert bad_run.returncode == 1
+  assert fail_status in bad_run.stdout
+  assert fallback_span in bad_run.stdout
+  assert spc_code in bad_run.stdout
+
+  # Invalid CLI combinations exit 2. Overwriting input or out-of-bounds drop exits 1.
+  missing_out = subprocess.run(
+    [sys.executable, str(SCRIPT), "measure", "-i", str(src_png), "-d", "20,24"],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert missing_out.returncode == 2
+
+  same_io = subprocess.run(
+    [
+      sys.executable,
+      str(SCRIPT),
+      "measure",
+      "-i",
+      str(src_png),
+      "-d",
+      "20,24",
+      "-o",
+      str(src_png),
+    ],
+    cwd=tmp_path,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert same_io.returncode == 1
+
+
+def test_measure_live_devtools_tint_and_figma_guides(tmp_path):
+  import http.server
+  import threading
+
+  import annotate
+  import pytest
+
+  if not _chromium_ready():
+    pytest.skip("Playwright/Chromium runtime not configured")
+
+  site = tmp_path / "measure-site"
+  site.mkdir()
+  (site / "index.html").write_text(
+    "<!doctype html><html lang='en'><head><meta charset='utf-8'><title>Measure</title>"
+    "<style>"
+    "body { margin: 0; padding: 24px; background: #121318; color: #ededf2; "
+    "font-family: system-ui, sans-serif; font-size: 16px; line-height: 24px; }"
+    ".row { display: flex; gap: 16px; padding: 16px; background: #1a1b22; border-radius: 10px; }"
+    ".btn-a, .btn-b { padding: 8px 16px; border: 0; border-radius: 6px; "
+    "font-size: 14px; line-height: 20px; background: #22232c; color: #ededf2; }"
+    ".bad-row { display: flex; gap: 13px; margin-top: 16px; }"
+    ".icon-btn { display: inline-flex; align-items: center; gap: 8px; "
+    "font-size: 14px; line-height: 20px; padding: 8px 12px; }"
+    "</style></head><body>"
+    "<div class='row'><button class='btn-a'>Save</button><button class='btn-b'>Cancel</button></div>"
+    "<div class='bad-row'><button class='bad-a'>One</button><button class='bad-b'>Two</button></div>"
+    "<button class='icon-btn'><svg width='12' height='12' viewBox='0 0 24 24'>"
+    "<path d='M5 12h14'/></svg>Label</button>"
+    "</body></html>\n",
+    encoding="utf-8",
+  )
+
+  class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, directory=str(site), **kwargs)
+
+    def log_message(self, format, *args):
+      pass
+
+  with http.server.ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler) as server:
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+      url = f"http://127.0.0.1:{port}/"
+      pair_png = tmp_path / "pair-ok.png"
+      pair_row_expected = "| `pair-x` | `.btn-a` | `16 px` | `True` |"
+      ok_res = subprocess.run(
+        [
+          sys.executable,
+          str(SCRIPT),
+          "measure",
+          "-u",
+          url,
+          "-s",
+          ".btn-a",
+          "--to",
+          ".btn-b",
+          "-v",
+          "640x360",
+          "-o",
+          str(pair_png),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+      )
+      assert ok_res.returncode == 0
+      assert pair_row_expected in ok_res.stdout
+      pw, ph, _ = annotate.decode_png(pair_png.read_bytes())
+      assert (pw, ph) == (640, 360)
+
+      bad_png = tmp_path / "pair-bad.png"
+      icn_code = "`ICN102`"
+      bad_pair_res = subprocess.run(
+        [
+          sys.executable,
+          str(SCRIPT),
+          "measure",
+          "-u",
+          url,
+          "-s",
+          ".icon-btn",
+          "--to",
+          "400,203",
+          "-v",
+          "640x360",
+          "-o",
+          str(bad_png),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+      )
+      assert bad_pair_res.returncode == 1
+      assert icn_code in bad_pair_res.stdout
+    finally:
+      server.shutdown()
