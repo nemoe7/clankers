@@ -20,8 +20,6 @@ compatibility: Python 3.11+, with Node.js and Acorn for JavaScript checks.
 
 Read references/rules.md for lint IDs and meanings. `name` rotates only as a verb.
 
-When adding a row, add each inflection and plain word to `ROTATION_FORMS` and its rule and pattern to `ROTATIONS` in `scripts/nemoize.py`.
-
 ```bash
 python3 skills/nemoizer/scripts/nemoize.py .
 python3 skills/nemoizer/scripts/nemoize.py --ignore vendor .

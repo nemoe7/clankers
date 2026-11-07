@@ -11,6 +11,7 @@ This log has no Unreleased section.
 ### Fixed
 
 - Align bundled nemoizer rotation guidance with the current implementation.
+- Remove self-maintenance instructions from the bundled nemoizer skill.
 
 ## [1.10.31]
 
