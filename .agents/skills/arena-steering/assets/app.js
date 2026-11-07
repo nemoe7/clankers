@@ -2,7 +2,7 @@ import { createComposerUploads } from "./composer-uploads.js";
 import { copyText } from "./copy.js";
 // Main ES module controller for Arena Steering.
 
-import { api, connectWebSocket, setPendingWriteChooser } from "./api.js";
+import { api, connectWebSocket } from "./api.js";
 import { expandMessageHistory, messageQueryKey, paintConnection, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
@@ -12,7 +12,7 @@ import {
 } from "./markdown.js";
 import { createModalManager } from "./modal.js";
 import { renderReportsView } from "./reports-view.js";
-import { createStore, writePendingSend } from "./state.js";
+import { createStore } from "./state.js";
 import { expandTaskTarget, renderTasksView } from "./tasks-view.js";
 import { mountRelativeTimers, relativeTime } from "./timestamps.js";
 
@@ -119,9 +119,6 @@ function renderSurveyModalContent(survey) {
 
 const store = createStore();
 const modal = createModalManager();
-setPendingWriteChooser(() => modal.open("retry-write", {
-  title: "Unconfirmed action",
-}));
 const SURVEY_RELOAD_KEY = "steer-survey-open-on-reload";
 let surveyOpen = false;
 let surveyOpenRevision = 0;
@@ -598,7 +595,7 @@ async function refreshAll(force = false) {
   }
 }
 
-const composerUploads = createComposerUploads(store, (file, options) => api.uploadFile(file, options));
+const composerUploads = createComposerUploads(store, (file) => api.uploadFile(file));
 let replySelectionRevision = 0;
 let reportSelectionRevision = 0;
 let confirmedReportId = null;
@@ -608,9 +605,8 @@ const handlers = {
     return api.renderMarkdown(markdown, { breaks: true, preWrap: true });
   },
   async onSendMessage(payload) {
-    let pending = store.getState().pendingSend;
     if (store.getState().sending) throw new Error("A send is already in progress");
-    const requestId = pending?.request_id || crypto.randomUUID();
+    const requestId = crypto.randomUUID();
     // A page requested before this send cannot reconcile its optimistic row.
     messageEpoch += 1;
     const selectedRefs = store.getState().replyParentRefs || [];
@@ -629,31 +625,22 @@ const handlers = {
     };
     store.setState({ sending: true, composerError: "", optimisticMessage, optimisticConfirmation: null, ...(clearRefs ? { replyParentRefs: [] } : {}) });
     try {
-      const attachments = pending
-        ? payload.attachments || []
-        : await composerUploads.readyForSend(payload.attachmentIds || []);
+      const attachmentIds = payload.attachmentIds || [];
+      const attachments = await composerUploads.readyForSend(attachmentIds);
       const parentRefs = payload.parent_refs || [];
-      const content = {
+      const request = {
         body: payload.body,
         parent_ids: parentRefs.length
           ? parentRefs.filter((ref) => ref.type === "message").map((ref) => ref.id)
           : payload.parent_ids || [],
         attachments,
+        request_id: requestId,
       };
-      if (parentRefs.length) content.parent_refs = parentRefs;
-      if (pending && JSON.stringify(pending.content) !== JSON.stringify(content)) {
-        throw new Error("Retry the unconfirmed send before sending changes");
-      }
-      if (!pending) {
-        pending = { request_id: requestId, content, rawDraft: payload.rawDraft, attachmentIds: payload.attachmentIds || [] };
-        writePendingSend(pending);
-      }
-      store.setState({ pendingSend: pending });
-      const request = { ...pending.content, request_id: pending.request_id };
+      if (parentRefs.length) request.parent_refs = parentRefs;
       let response;
       if (request.attachments.length) {
         response = await api.sendMessageWithFile(request);
-        composerUploads.clearSent(pending.attachmentIds);
+        composerUploads.clearSent(attachmentIds);
       } else {
         response = await api.sendMessage(request);
       }
@@ -667,9 +654,7 @@ const handlers = {
       const messages = confirmed && messageMatchesQuery(confirmed, current.searchQuery) && !confirmed.hidden
         ? [...(current.messages || []).filter(item => item.id !== confirmed.id), confirmed]
         : current.messages;
-      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null });
-      writePendingSend(null);
-      store.setState({ pendingSend: null, sending: false });
+      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false });
     } catch (error) {
       const restoreRefs = clearRefs && replySelectionRevision === selectedRevision;
       store.setState({ sending: false, optimisticMessage: null, composerError: String(error.message || error), ...(restoreRefs ? { replyParentRefs: selectedRefs } : {}) });
@@ -677,10 +662,6 @@ const handlers = {
     }
     // Do not keep a confirmed draft editable while an unrelated refresh waits.
     void refreshAll(true);
-  },
-  onDiscardPendingSend() {
-    writePendingSend(null);
-    store.setState({ pendingSend: null });
   },
   async onNavigateReference(type, id) {
     if (!id) return;
@@ -770,9 +751,6 @@ const handlers = {
   },
   onStageComposerFiles(files) {
     return composerUploads.stage(files);
-  },
-  onRetryComposerAttachment(id) {
-    return composerUploads.retry(id);
   },
   onRemoveComposerAttachment(id) {
     composerUploads.remove(id);

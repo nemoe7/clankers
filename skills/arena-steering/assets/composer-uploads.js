@@ -46,13 +46,13 @@ export function createComposerUploads(store, uploadFile) {
     if (item?.previewUrl && typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(item.previewUrl);
   };
 
-  function upload(id, automaticRetry = false) {
+  function upload(id) {
     if (inflight.has(id)) return inflight.get(id);
     const item = entries().find((entry) => entry.id === id);
     if (!item) return Promise.resolve();
     const request = (async () => {
       try {
-        const attachment = await uploadFile(item.file, { automaticRetry });
+        const attachment = await uploadFile(item.file);
         if (!attachment) throw new Error("Upload returned no attachment");
         update(entries().map((entry) =>
           entry.id === id ? { ...entry, status: "ready", attachment } : entry));
@@ -84,13 +84,6 @@ export function createComposerUploads(store, uploadFile) {
       update([...entries(), ...added]);
       await Promise.all(added.map((entry) => upload(entry.id)));
     },
-    async retry(id) {
-      const item = entries().find((entry) => entry.id === id);
-      if (!item || item.status !== "failed") return;
-      update(entries().map((entry) =>
-        entry.id === id ? { ...entry, status: "uploading" } : entry));
-      await upload(id);
-    },
     async readyForSend(ids) {
       await Promise.all(ids.map((id) => inflight.get(id)).filter(Boolean));
       const failed = ids.filter((id) => entries().find((entry) => entry.id === id)?.status === "failed");
@@ -98,7 +91,7 @@ export function createComposerUploads(store, uploadFile) {
         const failedSet = new Set(failed);
         update(entries().map((entry) =>
           failedSet.has(entry.id) ? { ...entry, status: "uploading" } : entry));
-        await Promise.all(failed.map((id) => upload(id, true)));
+        await Promise.all(failed.map((id) => upload(id)));
       }
       const selected = ids.map((id) => entries().find((entry) => entry.id === id));
       if (selected.some((entry) => !entry || entry.status !== "ready")) {

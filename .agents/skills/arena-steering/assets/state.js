@@ -3,7 +3,6 @@
 const TAB_STORAGE_KEY = "steer:activeTab";
 const REPORT_STORAGE_KEY = "steer:selectedReportId";
 const DRAFT_STORAGE_KEY = "steer:messageDraft";
-const PENDING_SEND_KEY = "steer:pendingSend";
 const COMPOSER_STATE_KEY = "steer:composerState";
 const VALID_TABS = new Set(["messages", "tasks", "reports"]);
 
@@ -55,19 +54,6 @@ export function writeComposerDraft(value) {
   writeSessionValue(DRAFT_STORAGE_KEY, value);
 }
 
-export function readPendingSend() {
-  try {
-    const value = JSON.parse(readSessionValue(PENDING_SEND_KEY) || "null");
-    return value && typeof value.request_id === "string" && value.content && typeof value.rawDraft === "string" && Array.isArray(value.attachmentIds) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writePendingSend(value) {
-  writeSessionValue(PENDING_SEND_KEY, value ? JSON.stringify(value) : null);
-}
-
 function readComposerState() {
   try {
     const saved = JSON.parse(readSessionValue(COMPOSER_STATE_KEY) || "{}");
@@ -102,7 +88,6 @@ export function createStore(initial = {}) {
     composerAttachments: composer.attachments,
     composerExpanded: false,
     composerError: "",
-    pendingSend: readPendingSend(),
     optimisticMessage: null,
     sending: false,
     selectedReportId: savedReportId || null,

@@ -458,8 +458,10 @@ def test_assets_do_not_use_browser_owned_prompts() -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-@pytest.mark.parametrize("decision", ["retry", "new", "cancel"])
-def test_unconfirmed_write_uses_html_dialog(tmp_path: Path, decision: str) -> None:
+@pytest.mark.parametrize("failures_before_ok", [3, 4])
+def test_unconfirmed_write_uses_html_dialog(
+  tmp_path: Path, failures_before_ok: int
+) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)
@@ -475,42 +477,45 @@ def test_unconfirmed_write_uses_html_dialog(tmp_path: Path, decision: str) -> No
       )
       try:
         page = browser.new_page(viewport={"width": 411, "height": 799})
-        page.add_init_script("""(() => {
-          const key = JSON.stringify(['POST', '/poll/skip', {}]);
-          sessionStorage.setItem('steer:pendingWrites', JSON.stringify([
-            {key, id: '550e8400-e29b-41d4-a716-446655440000'}
-          ]));
-        })();""")
-        writes = []
-        page.route(
-          "**/poll/skip",
-          lambda route: (
-            writes.append(route.request.post_data_json),
+        writes: list[dict[str, object]] = []
+
+        def handle_skip(route: object) -> None:
+          writes.append(route.request.post_data_json)
+          if len(writes) <= failures_before_ok:
             route.fulfill(
-              status=200, content_type="application/json", body='{"skip_poll":true}'
-            ),
-          ),
-        )
+              status=503,
+              content_type="application/json",
+              body='{"error":"offline"}',
+            )
+          else:
+            route.fulfill(
+              status=200,
+              content_type="application/json",
+              body='{"skip_poll":true}',
+            )
+
+        page.route("**/poll/skip", handle_skip)
         native = []
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on("dialog", lambda dialog: (native.append(dialog.type), dialog.dismiss()))
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#skip-poll").click()
-        dialog = page.locator("#modal-shell[open]")
-        dialog.wait_for()
-        button = dialog.locator(f'#modal-actions button[value="{decision}"]')
-        if decision == "cancel":
-          button.click()
-          page.wait_for_timeout(200)
-          assert not writes
-          assert page.locator("#skip-poll").get_attribute("data-state") != "good"
-        else:
+        expected_state = "good" if failures_before_ok == 3 else "bad"
+        page.wait_for_function(
+          "expected => { const btn = document.querySelector('#skip-poll'); "
+          "return btn && !btn.disabled && btn.getAttribute('data-state') === expected; }",
+          arg=expected_state,
+        )
+        assert len(writes) == 4
+        assert len({item["_request_id"] for item in writes}) == 1
+        assert page.locator("#modal-shell[open]").count() == 0
+        if failures_before_ok == 4:
           with page.expect_response("**/poll/skip"):
-            button.click()
-          assert len(writes) == 1
-          reused = writes[0]["_request_id"] == "550e8400-e29b-41d4-a716-446655440000"
-          assert reused == (decision == "retry")
+            page.locator("#skip-poll").click()
+          assert len(writes) == 5
+          assert writes[4]["_request_id"] != writes[0]["_request_id"]
+          assert page.locator("#modal-shell[open]").count() == 0
         assert not native
         assert not errors
       finally:
@@ -2529,7 +2534,8 @@ assert.deepEqual(state.composerAttachments.map(x => x.status), ['uploading', 're
 rejectFirst(new Error('offline'));
 await first;
 assert.equal(state.composerAttachments[0].status, 'failed');
-await uploads.retry(firstId);
+assert.equal('retry' in uploads, false);
+await uploads.readyForSend([firstId]);
 assert.deepEqual(state.composerAttachments.map(x => x.status), ['ready', 'ready']);
 uploads.clearSent([firstId]);
 assert.deepEqual(state.composerAttachments.map(x => x.name), ['second']);
@@ -7030,50 +7036,46 @@ def test_violation_form_and_cancel_in_browser(
         assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
         page.screenshot(path=str(tmp_path / f"violation-form-{width}.png"))
 
-        page.route(
-          "**/agent-interrupt",
-          lambda route: route.fulfill(
+        interrupt_ids: list[str] = []
+
+        def fail_interrupt(route: object) -> None:
+          interrupt_ids.append(route.request.post_data_json["_request_id"])
+          route.fulfill(
             status=503, body='{"error":"Try again"}', content_type="application/json"
-          ),
-          times=1,
-        )
+          )
+
+        page.route("**/agent-interrupt", fail_interrupt, times=4)
         with page.expect_request("**/agent-interrupt") as sent:
           page.locator("#violation-submit").click()
         assert sent.value.post_data_json["msg"] == cited_reason
         assert "note" not in sent.value.post_data_json
         page.locator("#violation-error").wait_for(state="visible", timeout=5000)
+        assert len(interrupt_ids) == 4 and len(set(interrupt_ids)) == 1
         assert form.is_visible()
         assert button.get_attribute("aria-pressed") == "false"
-        page.locator("#violation-submit").click()
-        page.get_by_role("button", name="Cancel", exact=True).click()
-        page.locator("#violation-form").wait_for(state="visible", timeout=5000)
         assert page.locator("#violation-msg").input_value() == cited_reason
-        page.locator("#violation-submit").click()
+
+        page.route("**/agent-interrupt", fail_interrupt, times=3)
         with page.expect_response("**/agent-interrupt"):
-          page.get_by_role("button", name="Retry same action").click()
+          page.locator("#violation-submit").click()
         page.locator("#modal-shell").wait_for(state="hidden")
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'true'"
         )
+        assert len(interrupt_ids) == 7 and len(set(interrupt_ids[4:])) == 1
+        assert interrupt_ids[4] != interrupt_ids[0]
         violation = app.messages.pending_violation()
         assert violation is not None and violation.violation_clause_file == "ARENA.md"
         assert cited_reason in violation.body
         page.screenshot(path=str(tmp_path / f"violation-pending-{width}.png"))
 
-        page.route(
-          "**/agent-interrupt",
-          lambda route: route.fulfill(
-            status=503, body='{"error":"Try again"}', content_type="application/json"
-          ),
-          times=1,
-        )
+        page.route("**/agent-interrupt", fail_interrupt, times=4)
         button.click()
         page.locator("#violation-status").wait_for(state="visible", timeout=5000)
         assert button.get_attribute("aria-pressed") == "true"
         assert app.messages.pending_violation() is not None
-        button.click()
         with page.expect_response("**/agent-interrupt"):
-          page.get_by_role("button", name="Retry same action").click()
+          button.click()
         page.wait_for_function(
           "document.querySelector('#agent-interrupt').getAttribute('aria-pressed') === 'false'"
         )
@@ -7160,9 +7162,15 @@ def test_violation_flag_updates_before_write_and_restores_on_failure(
       page.evaluate(
         """fail => {
         const original = window.fetch.bind(window);
+        window.interruptIds = [];
+        let held = false;
         window.fetch = async (...args) => {
           if (String(args[0]) === '/agent-interrupt' && args[1]?.method === 'POST') {
-            await new Promise(resolve => { window.releaseFlag = resolve; });
+            window.interruptIds.push(JSON.parse(args[1].body || '{}')._request_id);
+            if (!held) {
+              held = true;
+              await new Promise(resolve => { window.releaseFlag = resolve; });
+            }
             if (fail) return new Response(JSON.stringify({error:'offline'}), {
               status:503, headers:{'content-type':'application/json'}
             });
@@ -7182,6 +7190,9 @@ def test_violation_flag_updates_before_write_and_restores_on_failure(
       if fail:
         page.locator("#violation-error" if armed else "#violation-status").wait_for(
           state="visible"
+        )
+        assert page.evaluate(
+          "window.interruptIds.length === 4 && new Set(window.interruptIds).size === 1"
         )
         assert button.get_attribute("aria-pressed") == str(not armed).lower()
         if armed:

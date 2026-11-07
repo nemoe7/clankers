@@ -128,7 +128,6 @@ function renderComposerAttachment(item, sending) {
   return `<span class="composer-attachment-chip" data-upload-status="${escapeHtml(item.status)}">
     ${lead}
     <span class="composer-attachment-name" title="${name}">${name} · ${escapeHtml(attachmentState(item))}</span>
-    ${item.status === "failed" ? `<button type="button" data-retry-composer-attachment="${escapeHtml(item.id)}" aria-label="Retry ${name}" ${sending ? "disabled" : ""}>Retry</button>` : ""}
     <button type="button" data-remove-composer-attachment="${escapeHtml(item.id)}" aria-label="Remove ${name}" ${sending ? "disabled" : ""}>×</button>
   </span>`;
 }
@@ -295,7 +294,6 @@ export function renderMessagesView(container, state, handlers) {
     ? state.composerAttachments.filter(item => !sentAttachmentIds.has(item.id))
     : [];
   const composerExpanded = Boolean(state.composerExpanded);
-  const pendingSend = state.pendingSend;
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
   const skipPollBad = skipPollFailure && Date.now() < skipPollFailure.until;
 
@@ -483,7 +481,6 @@ export function renderMessagesView(container, state, handlers) {
               .join("")}
           </div>
           ${state.composerError ? `<div class="composer-send-status" role="status">${escapeHtml(state.composerError)}</div>` : ""}
-          ${pendingSend && !state.sending ? `<div class="composer-send-status" role="status">Send unconfirmed. The original may have been sent. <button type="button" id="retry-send">Retry previous send</button> <button type="button" id="discard-send" title="Original send might have succeeded">Discard retry</button></div>` : ""}
           <div class="composer-shell">
             <div
               id="composer-attachments"
@@ -716,12 +713,6 @@ export function renderMessagesView(container, state, handlers) {
       handlers.onRemoveComposerAttachment?.(
         chip.dataset.removeComposerAttachment
       );
-    });
-  }
-
-  for (const button of container.querySelectorAll("[data-retry-composer-attachment]")) {
-    listen(button, "click", () => {
-      handlers.onRetryComposerAttachment?.(button.dataset.retryComposerAttachment);
     });
   }
 
@@ -1052,13 +1043,6 @@ export function renderMessagesView(container, state, handlers) {
     }
   }
 
-  listen(container.querySelector("#discard-send"), "click", () => handlers.onDiscardPendingSend?.());
-
-  listen(container.querySelector("#retry-send"), "click", () => {
-    if (!pendingSend) return;
-    submitPayload({ ...pendingSend.content, attachmentIds: pendingSend.attachmentIds, rawDraft: pendingSend.rawDraft }, pendingSend.rawDraft);
-  });
-
   const form = container.querySelector("#form");
   listen(form, "submit", (event) => {
     event.preventDefault();
@@ -1076,6 +1060,6 @@ export function renderMessagesView(container, state, handlers) {
       attachments: composerAttachments.map((item) => item.attachment),
       attachmentIds: composerAttachments.map((item) => item.id),
       rawDraft: submittedDraft,
-    }, pendingSend ? pendingSend.rawDraft : submittedDraft);
+    }, submittedDraft);
   });
 }

@@ -95,9 +95,9 @@ export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
           ? JSON.parse(value.body)
           : {};
       if (value.status < 200 || value.status >= 300) {
-        pending.reject(
-          new Error(payload.error || `Request failed (${value.status})`)
-        );
+        const error = new Error(payload.error || `Request failed (${value.status})`);
+        error.status = value.status;
+        pending.reject(error);
       } else {
         pending.resolve(payload);
       }
@@ -164,130 +164,122 @@ function socketRequest(method, path, bodyStr, timeoutMs = 15000) {
   });
 }
 
-const PENDING_WRITES_KEY = "steer:pendingWrites";
-let choosePendingWrite = async () => "cancel";
+export const AUTOMATIC_WRITE_RETRIES = 3;
+const WRITE_RETRY_DELAYS_MS = [50, 100, 200];
 
-export function setPendingWriteChooser(chooser) {
-  choosePendingWrite = chooser;
+function isRetryableWriteFailure(status) {
+  return status == null || status === 408 || status === 429 || status >= 500;
 }
 
-const activeWrites = new Set();
-const pendingChoices = new Set();
-let pendingWrites = [];
-let pendingStorageAvailable = true;
-try {
-  const saved = JSON.parse(sessionStorage.getItem(PENDING_WRITES_KEY) || "[]");
-  if (Array.isArray(saved)) pendingWrites = saved;
-} catch {
-  pendingStorageAvailable = false;
+function waitRetryDelay(attempt) {
+  const delayMs = WRITE_RETRY_DELAYS_MS[attempt - 1] ?? WRITE_RETRY_DELAYS_MS[WRITE_RETRY_DELAYS_MS.length - 1];
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-function savePendingWrites() {
+async function parseJsonPayload(response) {
   try {
-    sessionStorage.setItem(PENDING_WRITES_KEY, JSON.stringify(pendingWrites));
+    return await response.json();
   } catch {
-    pendingStorageAvailable = false;
-    throw new Error("Cannot safely send: browser session storage is unavailable");
+    return {};
   }
 }
 
-async function beginWrite(key, interactive = false) {
-  if (!pendingStorageAvailable) throw new Error("Cannot safely send: browser session storage is unavailable");
-  if (pendingChoices.has(key)) throw new Error("A retry decision is already open");
-  const pending = pendingWrites.find((item) => item.key === key && !activeWrites.has(item.id));
-  let id = pending?.id;
-  if (id && interactive) {
-    activeWrites.add(id);
-    pendingChoices.add(key);
-    let decision;
-    try {
-      decision = await choosePendingWrite();
-    } finally {
-      activeWrites.delete(id);
-      pendingChoices.delete(key);
-    }
-    if (decision === "cancel" || !["retry", "new"].includes(decision)) {
-      throw new Error("Action canceled");
-    }
-    if (decision === "new") id = null;
-  }
-  if (!id) {
-    id = crypto.randomUUID();
-    pendingWrites.push({ key, id });
-    savePendingWrites();
-  }
-  activeWrites.add(id);
-  return { id, retry: Boolean(pending && pending.id === id) };
-}
-
-function finishWrite(id, confirmed) {
-  activeWrites.delete(id);
-  if (confirmed) {
-    pendingWrites = pendingWrites.filter((item) => item.id !== id);
-    savePendingWrites();
-  }
-}
-
-async function requestJson(method, path, body = undefined, interactive = false, onRequestId = null) {
+async function requestJson(method, path, body = undefined, retryOnFailure = false, onRequestId = null) {
   const write = ["POST", "PATCH", "DELETE"].includes(method) && path !== "/markdown";
-  const writeInfo = write ? await beginWrite(JSON.stringify([method, path, body || {}]), interactive) : null;
-  const id = writeInfo?.id || null;
-  const requestBody = write ? { ...(body || {}), _request_id: id } : body;
+  const id = write ? (body?.request_id || crypto.randomUUID()) : null;
+  const requestBody = write
+    ? { ...(body || {}), ...(body && "request_id" in body ? { request_id: id } : {}), _request_id: id }
+    : body;
   const bodyStr = requestBody !== undefined ? JSON.stringify(requestBody) : undefined;
-  let confirmed = false;
-  try {
-    if (id && onRequestId) await onRequestId(id, writeInfo.retry);
+  const maxAttempts = write && retryOnFailure ? AUTOMATIC_WRITE_RETRIES + 1 : 1;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) await waitRetryDelay(attempt);
+    if (id && onRequestId) {
+      try {
+        await onRequestId(id, attempt > 0);
+      } catch (error) {
+        if (attempt === 0) throw error;
+      }
+    }
     if (liveSocket?.readyState === 1) {
       try {
-        const payload = await socketRequest(method, path, bodyStr);
-        confirmed = true;
-        return payload;
-      } catch {
-        // A lost response can mean the write succeeded. Reuse the request ID.
+        return await socketRequest(method, path, bodyStr);
+      } catch (error) {
+        if (typeof error?.status === "number") {
+          if (!isRetryableWriteFailure(error.status) || attempt + 1 >= maxAttempts) {
+            throw error;
+          }
+          continue;
+        }
+        // A lost WebSocket reply falls back to HTTP with the same request ID.
       }
     }
     const options = { method, headers: { "Content-Type": "application/json" } };
     if (bodyStr !== undefined) options.body = bodyStr;
-    const response = await fetch(path, options);
-    const payload = await response.json();
-    if (!response.ok) {
-      confirmed = response.status < 500;
-      throw new Error(payload.error || `Request failed (${response.status})`);
+    let response;
+    try {
+      response = await fetch(path, options);
+    } catch (error) {
+      if (attempt + 1 >= maxAttempts) throw error;
+      continue;
     }
-    confirmed = true;
-    return payload;
-  } finally {
-    if (id) finishWrite(id, confirmed);
+    const payload = await parseJsonPayload(response);
+    if (response.ok) return payload;
+    const error = new Error(payload.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    if (!isRetryableWriteFailure(response.status) || attempt + 1 >= maxAttempts) {
+      throw error;
+    }
   }
+  throw new Error("Request failed");
 }
 
-async function requestForm(path, formData, file, { automaticRetry = false } = {}) {
-  const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  const digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const { id } = await beginWrite(JSON.stringify(["POST", path, file.name, digest]), !automaticRetry);
-  formData.append("_request_id", id);
-  let confirmed = false;
-  try {
-    const response = await fetch(path, { method: "POST", body: formData });
-    const payload = await response.json();
-    if (!response.ok) {
-      confirmed = response.status < 500;
-      throw new Error(payload.error || `Request failed (${response.status})`);
+async function requestForm(path, buildFormData) {
+  const id = crypto.randomUUID();
+  const maxAttempts = AUTOMATIC_WRITE_RETRIES + 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) await waitRetryDelay(attempt);
+    const formData = buildFormData();
+    formData.append("_request_id", id);
+    let response;
+    try {
+      response = await fetch(path, { method: "POST", body: formData });
+    } catch (error) {
+      if (attempt + 1 >= maxAttempts) throw error;
+      continue;
     }
-    confirmed = true;
-    return payload;
-  } finally {
-    finishWrite(id, confirmed);
+    const payload = await parseJsonPayload(response);
+    if (response.ok) return payload;
+    const error = new Error(payload.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    if (!isRetryableWriteFailure(response.status) || attempt + 1 >= maxAttempts) {
+      throw error;
+    }
   }
+  throw new Error("Upload failed");
 }
 
 async function blockedBashRequest(method, path) {
-  const response = await fetch(path, { method, cache: "no-store", mode: "same-origin" });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed (${response.status})`);
+  const maxAttempts = method === "DELETE" ? AUTOMATIC_WRITE_RETRIES + 1 : 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) await waitRetryDelay(attempt);
+    let response;
+    try {
+      response = await fetch(path, { method, cache: "no-store", mode: "same-origin" });
+    } catch (error) {
+      if (attempt + 1 >= maxAttempts) throw error;
+      continue;
+    }
+    const payload = await parseJsonPayload(response);
+    if (response.ok) return payload;
+    const error = new Error(payload.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    if (!isRetryableWriteFailure(response.status) || attempt + 1 >= maxAttempts) {
+      throw error;
+    }
   }
-  return payload;
+  throw new Error("Request failed");
 }
 
 export const api = {
@@ -311,15 +303,17 @@ export const api = {
     return requestJson("GET", `/messages/${encodeURIComponent(id)}`);
   },
   sendMessage({ body, hidden = false, blocking = true, parent_ids = [], parent_refs, request_id }) {
-    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids, parent_refs, request_id });
+    return requestJson("POST", "/messages", { body, hidden, blocking, parent_ids, parent_refs, request_id }, true);
   },
   markRepliesSeen(id, revision) {
     return requestJson("POST", `/messages/${encodeURIComponent(id)}/replies-seen`, { revision });
   },
-  async uploadFile(file, options = {}) {
-    const formData = new FormData();
-    formData.append("file", file, file.name || "upload.bin");
-    const payload = await requestForm("/uploads", formData, file, options);
+  async uploadFile(file) {
+    const payload = await requestForm("/uploads", () => {
+      const formData = new FormData();
+      formData.append("file", file, file.name || "upload.bin");
+      return formData;
+    });
     return payload.attachment;
   },
   sendMessageWithFile({
@@ -341,7 +335,7 @@ export const api = {
       attachments,
       pasted_text,
       request_id,
-    });
+    }, true);
   },
   skipPoll() {
     return requestJson("POST", "/poll/skip", {}, true);
