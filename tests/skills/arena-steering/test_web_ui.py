@@ -72,6 +72,7 @@ EXPECTED_JS_MODULES = (
   "api.js",
   "app.js",
   "dom.js",
+  "icons.js",
   "messages-view.js",
   "markdown.js",
   "modal.js",
@@ -80,6 +81,10 @@ EXPECTED_JS_MODULES = (
   "tasks-view.js",
   "timestamps.js",
 )
+
+SHARED_SCROLL_JUMP_CLASS = "scroll-jump-btn"
+SHARED_QUIET_BTN_CLASS = "quiet-btn"
+SHARED_PARENT_CHIP_FN = "renderParentChip"
 
 
 PRELOAD_ATTR = 'rel="preload"'
@@ -1295,18 +1300,25 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert MANUAL_BLOCKING_INPUT not in messages_js
   assert MANUAL_HIDDEN_INPUT not in messages_js
 
+  icons_js = (ASSETS_DIR / "icons.js").read_text(encoding="utf-8")
+  assert "lucide lucide-${name}" in icons_js
+  assert LUCIDE_CHEVRON_DOWN_ICON.removeprefix("lucide-") in icons_js
+  assert SELECT_CHEVRON_CLASS in icons_js
+  assert LUCIDE_COPY_ICON.removeprefix("lucide-") in icons_js
+  assert LUCIDE_CLOSE_ICON.removeprefix("lucide-") in icons_js
+  assert LUCIDE_SEND_ICON.removeprefix("lucide-") in icons_js
+
   tasks_js = (ASSETS_DIR / "tasks-view.js").read_text(encoding="utf-8")
   assert LUCIDE_LOCK_ICON not in tasks_js
   assert "Report: " in tasks_js
   assert "Needs: " in tasks_js
-  assert LUCIDE_CHEVRON_DOWN_ICON in tasks_js
-  assert SELECT_CHEVRON_CLASS in tasks_js
+  assert "CHEVRON_SELECT_SVG" in tasks_js
 
   reports_js = (ASSETS_DIR / "reports-view.js").read_text(encoding="utf-8")
   assert CUSTOM_OPTION_MARKER in reports_js
-  assert LUCIDE_COPY_ICON in reports_js
-  assert LUCIDE_CLOSE_ICON in reports_js
-  assert LUCIDE_SEND_ICON in reports_js
+  assert "COPY_SVG" in reports_js
+  assert "DISMISS_SVG" in reports_js
+  assert "SEND_PLANE_SVG" in reports_js
   assert REPORT_TOC_ID in reports_js
   assert REPORT_PICKER_ID in reports_js
   assert REPORT_RAIL_ID in reports_js
@@ -1537,14 +1549,17 @@ def test_report_floating_submit_assets() -> None:
 
 
 def test_multi_message_reply_assets() -> None:
+  dom_js = (ASSETS_DIR / "dom.js").read_text(encoding="utf-8")
+  assert REPLY_PARENT_CHIP_CLASS in dom_js
+  assert "data-reference-type" in dom_js
+
   messages_js = (ASSETS_DIR / "messages-view.js").read_text(encoding="utf-8")
   assert RECEIPT_ID_CLASS in messages_js
-  assert REPLY_PARENT_CHIP_CLASS in messages_js
+  assert SHARED_PARENT_CHIP_FN in messages_js
   assert COMPOSER_REPLY_BAR_ID in messages_js
   assert COMPOSER_REPLY_CHIP_CLASS in messages_js
   assert PARENT_IDS_FIELD in messages_js
   assert PARENT_REFS_FIELD in messages_js
-  assert "data-reference-type" in messages_js
 
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
   assert REPLY_PARENT_REFS_STATE in app_js
@@ -7592,6 +7607,131 @@ def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
         page.wait_for_timeout(200)
         assert tip.is_hidden()
         tip.wait_for(state="visible", timeout=1000)
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_shared_ui_helpers_icons_and_classes(tmp_path: Path) -> None:
+  icons_js = (ASSETS_DIR / "icons.js").read_text(encoding="utf-8")
+  assert "lucideSvg" in icons_js
+  for js_name in (
+    "app.js",
+    "markdown.js",
+    "messages-view.js",
+    "reports-view.js",
+    "tasks-view.js",
+  ):
+    src = (ASSETS_DIR / js_name).read_text(encoding="utf-8")
+    assert "./icons.js" in src
+    assert '<svg class="lucide' not in src
+
+  dom_js = (ASSETS_DIR / "dom.js").read_text(encoding="utf-8")
+  assert f"export function {SHARED_PARENT_CHIP_FN}" in dom_js
+  for js_name in ("messages-view.js", "reports-view.js"):
+    src = (ASSETS_DIR / js_name).read_text(encoding="utf-8")
+    assert SHARED_PARENT_CHIP_FN in src
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  first = app.messages.send_message("Initial parent message")
+  second = app.messages.send_message(
+    "Follow-up with\n\n```js\nconsole.log(1);\n```",
+    parent_refs=[{"type": "message", "id": first.id}],
+  )
+  app.messages.ack(second.id, "Acked reply")
+  report_md = (
+    "# Shared UI Check\n\n"
+    "## Section One\n\n"
+    '<!-- question {"id":"pick-one","label":"Pick one"} -->\n\n'
+    "Which option should apply?\n"
+    '- (x) Use shared classes <!-- option {"label":"Shared"} -->\n'
+    '- ( ) Keep separate classes <!-- option {"label":"Separate"} -->\n'
+  )
+  app.reports.publish_report("shared-ui-check", "Shared UI Check", report_md)
+  app.tasks.create_task(
+    "linked-ui-task",
+    "Linked UI task",
+    size=3,
+    details=["Verify shared parent chip"],
+    links={"msg_ids": [second.id], "report_ids": ["shared-ui-check"]},
+  )
+
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator(f'.message[data-msg-id="{second.id}"]').wait_for()
+
+        # Message parent chip renders left of message ID via shared helper.
+        positions = page.locator(
+          f'.message[data-msg-id="{second.id}"] .message-heading'
+        ).evaluate(
+          """heading => {
+            const parent = heading.querySelector('.reply-parent-chip').getBoundingClientRect();
+            const idBtn = heading.querySelector('.parent-id-button').getBoundingClientRect();
+            return {parentRight: parent.right, idLeft: idBtn.left};
+          }"""
+        )
+        assert positions["parentRight"] <= positions["idLeft"] + 1
+
+        for selector in ("#log-edited", "#log-newest"):
+          assert page.locator(selector).evaluate(
+            f"el => el.classList.contains('{SHARED_SCROLL_JUMP_CLASS}')"
+          )
+
+        for selector in (
+          "#blocked-bash-open",
+          "#agent-interrupt",
+          "#survey-open",
+          "#skip-poll",
+          "#quiet-msgs",
+          "#attach-file",
+          "#preview-msg",
+          "#send",
+          ".copy-code",
+        ):
+          assert page.locator(selector).first.evaluate(
+            f"el => el.classList.contains('{SHARED_QUIET_BTN_CLASS}')"
+          )
+
+        page.locator("#tab-reports").click()
+        page.locator("#report-scroll-top").wait_for(state="attached")
+        assert page.locator("#report-scroll-top").evaluate(
+          f"el => el.classList.contains('{SHARED_SCROLL_JUMP_CLASS}')"
+        )
+        assert (
+          page.locator(".report-task-links .reply-parent-chip").get_attribute(
+            "data-reference-id"
+          )
+          == "linked-ui-task"
+        )
+        for selector in (
+          "#report-picker-toggle",
+          "#copy-report-btn",
+          "#dismiss-report-btn",
+          ".report-toc-link",
+          ".report-picker-link",
+        ):
+          assert page.locator(selector).first.evaluate(
+            f"el => el.classList.contains('{SHARED_QUIET_BTN_CLASS}')"
+          )
       finally:
         browser.close()
   finally:

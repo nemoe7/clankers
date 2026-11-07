@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Share parent-chip rendering, Lucide SVG icons, scroll-jump pills, and borderless button classes across Steering views.
+
 - Remove default boxes on contained Steering buttons, gating interactive hover fills to fine pointers while keeping press fills.
 
 - Load survey question text from `skills/arena-steering/references/survey-questions.txt` for shared consumption with Arena prompt fill.

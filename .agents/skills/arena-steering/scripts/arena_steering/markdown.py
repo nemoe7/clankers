@@ -292,20 +292,20 @@ def render_code_block(raw_lang: str, raw_code: str) -> str:
     f' class="language-{html.escape(lang_key, quote=True)}"' if lang_key else ""
   )
   md_button = (
-    f'<button type="button" class="preview-code-md" aria-label="Preview Markdown" '
+    f'<button type="button" class="preview-code-md quiet-btn" aria-label="Preview Markdown" '
     f'title="Preview Markdown" aria-pressed="false" data-code="{payload}">{ICON_MARKDOWN}</button>'
     if lang_key in {"markdown", "md"}
     else ""
   )
   mermaid_button = (
-    f'<button type="button" class="preview-code-mermaid" aria-label="Show Mermaid code" '
+    f'<button type="button" class="preview-code-mermaid quiet-btn" aria-label="Show Mermaid code" '
     f'title="Show Mermaid code" aria-pressed="false" data-code="{payload}">{ICON_BRACES}</button>'
     if lang_key == "mermaid"
     else ""
   )
   mermaid_state_attr = ' data-mermaid-state="pending"' if lang_key == "mermaid" else ""
   copy_button = (
-    f'<button type="button" class="copy-code" aria-label="Copy code" '
+    f'<button type="button" class="copy-code quiet-btn" aria-label="Copy code" '
     f'data-code="{payload}">{ICON_COPY}</button>'
   )
   lang_label = html.escape(format_code_language(lang_key), quote=True)

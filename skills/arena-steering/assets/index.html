@@ -15,6 +15,7 @@
   <link rel="modulepreload" href="/static/assets/state.js">
   <link rel="modulepreload" href="/static/assets/modal.js">
   <link rel="modulepreload" href="/static/assets/dom.js">
+  <link rel="modulepreload" href="/static/assets/icons.js">
   <link rel="modulepreload" href="/static/assets/messages-view.js">
   <link rel="modulepreload" href="/static/assets/tasks-view.js">
   <link rel="modulepreload" href="/static/assets/reports-view.js">
@@ -37,10 +38,10 @@
         </button>
       </nav>
       <div class="topbar-actions row tight">
-        <button id="blocked-bash-open" class="icon-button" type="button" aria-label="Blocked Bash log" title="Blocked Bash log">
+        <button id="blocked-bash-open" class="icon-button quiet-btn" type="button" aria-label="Blocked Bash log" title="Blocked Bash log">
           <svg class="lucide lucide-terminal" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"></rect><path d="m6 8 4 4-4 4M12 16h6"></path></svg>
         </button>
-        <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button" type="button" aria-label="Flag violation" title="Flag violation">
+        <button id="agent-interrupt" aria-pressed="false" aria-busy="false" class="icon-button quiet-btn" type="button" aria-label="Flag violation" title="Flag violation">
           <svg class="lucide lucide-flag" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"></path></svg>
         </button>
         <p id="violation-status" class="violation-status" role="alert" hidden></p>
@@ -55,7 +56,7 @@
   </div>
 
   <dialog id="image-modal" class="image-modal" aria-label="Image viewer">
-    <button id="image-modal-close" class="icon-button image-modal-close" type="button" aria-label="Close image viewer">×</button>
+    <button id="image-modal-close" class="icon-button quiet-btn image-modal-close" type="button" aria-label="Close image viewer">×</button>
     <div id="image-modal-stage" class="image-modal-stage"></div>
   </dialog>
 
@@ -63,7 +64,7 @@
     <form method="dialog" class="modal-card">
       <header class="modal-header">
         <h2 id="modal-title" class="modal-title"></h2>
-        <button class="close-button icon-button" id="modal-close" type="submit" value="cancel" aria-label="Close dialog">
+        <button class="close-button icon-button quiet-btn" id="modal-close" type="submit" value="cancel" aria-label="Close dialog">
           <svg class="lucide lucide-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
         </button>
       </header>

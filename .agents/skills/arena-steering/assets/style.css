@@ -650,48 +650,44 @@ code.msg-id[data-state="bad"],
 #connection-dot[data-state="idle"] { background: var(--connection-idle); }
 #connection-dot[data-state="down"] { background: var(--connection-down); }
 
-.log-edited {
-  position: absolute;
-  left: 50%;
-  top: 76px;
-  transform: translateX(-50%);
-  z-index: 4;
-  min-height: 0;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 4px;
-  border: 1px solid hsl(var(--border-faint) / 0.5);
-  background: hsl(var(--surface-primary) / 0.9);
-  color: hsl(var(--text-primary));
-  box-shadow: 0 4px 6px rgb(0 0 0 / 0.25);
-  backdrop-filter: blur(8px);
-  cursor: pointer;
-  transition: background-color var(--fast) var(--ease);
+.quiet-btn {
+  border-color: transparent;
+  background-color: transparent;
 }
 
-.log-newest {
-  position: absolute;
+.scroll-jump-btn {
   left: 50%;
-  bottom: 92px;
   transform: translateX(-50%);
-  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   min-height: 0;
   padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 400;
   border-radius: 4px;
   border: 1px solid hsl(var(--border-faint) / 0.5);
   background: hsl(var(--surface-primary) / 0.9);
   color: hsl(var(--text-primary));
   box-shadow: 0 4px 6px rgb(0 0 0 / 0.25);
   backdrop-filter: blur(12px);
+  font-size: 12px;
   cursor: pointer;
   transition: background-color var(--fast) var(--ease);
+}
+
+.log-edited {
+  position: absolute;
+  top: 76px;
+  z-index: 4;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+}
+
+.log-newest {
+  position: absolute;
+  bottom: 92px;
+  z-index: 4;
+  gap: 8px;
+  font-weight: 400;
 }
 
 .answer.reply[data-highlight="true"] {
@@ -2312,26 +2308,10 @@ code.msg-id {
 
 .report-scroll-top {
   position: fixed;
-  left: 50%;
   top: 76px;
-  transform: translateX(-50%);
   z-index: 6;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: auto;
   height: auto;
-  min-height: 0;
-  padding: 4px 12px;
-  border-radius: 4px;
-  border: 1px solid hsl(var(--border-faint) / 0.5);
-  background: hsl(var(--surface-primary) / 0.9);
-  color: hsl(var(--text-primary));
-  box-shadow: 0 4px 6px rgb(0 0 0 / 0.25);
-  backdrop-filter: blur(12px);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color var(--fast) var(--ease);
 }
 
 [data-toc-flash="true"] {
@@ -3356,11 +3336,10 @@ article#report.report img,
 }
 
 @media (hover: hover) and (pointer: fine) {
-  :is(.tab-btn, .icon-button, .btn-secondary, #survey-open, .survey-id-trigger,
-    .survey-cap-pill, .message-attachment-preview, .composer-reply-chip,
-    .reply-parent-chip, .composer-attachment-chip button, .parent-id-button,
-    .task-title, .report-toc-link, .report-picker-toggle,
-    .report-picker-link):hover:not(:disabled) {
+  :is(.quiet-btn, .tab-btn, .btn-secondary, .survey-cap-pill,
+    .message-attachment-preview, .composer-reply-chip, .reply-parent-chip,
+    .composer-attachment-chip button, .parent-id-button,
+    .task-title):hover:not(:disabled) {
     background-color: hsl(var(--surface-tertiary));
   }
 
@@ -3372,14 +3351,13 @@ article#report.report img,
   :is(.preview-code-mermaid, .preview-code-md, .copy-code, .report-toc-link,
     .report-picker-toggle, .report-picker-link):hover:not(:disabled) {
     color: hsl(var(--text-primary));
-    background-color: hsl(var(--surface-tertiary));
   }
 
   .btn-primary:hover:not(:disabled) {
     background-color: hsl(var(--interactive-cta-hover));
   }
 
-  :is(.log-edited, .log-newest, .report-scroll-top):hover:not(:disabled) {
+  .scroll-jump-btn:hover:not(:disabled) {
     background-color: hsl(var(--surface-secondary) / 0.9);
   }
 
@@ -3397,9 +3375,7 @@ article#report.report img,
   }
 }
 
-:is(.tab-btn, .icon-button, #survey-open, .survey-id-trigger,
-  .composer-attachment-chip button, .report-toc-link, .report-picker-toggle,
-  .report-picker-link):active:not(:disabled) {
+:is(.quiet-btn, .tab-btn, .composer-attachment-chip button):active:not(:disabled) {
   background-color: hsl(var(--surface-tertiary));
 }
 
@@ -3420,7 +3396,7 @@ article#report.report img,
   background-color: hsl(var(--interactive-cta-secondary-hover));
 }
 
-:is(.log-edited, .log-newest, .report-scroll-top):active:not(:disabled) {
+.scroll-jump-btn:active:not(:disabled) {
   background-color: hsl(var(--surface-secondary) / 0.9);
 }
 

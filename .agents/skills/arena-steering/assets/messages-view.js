@@ -7,18 +7,23 @@ import {
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
-import { reconcileElement } from "./dom.js";
+import { reconcileElement, renderParentChip } from "./dom.js";
 import { readComposerDraft, writeComposerDraft } from "./state.js";
 
-const EYE_OPEN_SVG = `<svg class="lucide lucide-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
-const EYE_CLOSED_SVG = `<svg class="lucide lucide-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>`;
-const SKIP_FORWARD_SVG = `<svg class="lucide lucide-skip-forward" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v16"></path><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"></path></svg>`;
-const CHECK_SVG = `<svg class="lucide lucide-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>`;
-const EXPAND_SVG = `<svg class="lucide lucide-maximize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m21 3-7 7"></path><path d="m3 21 7-7"></path><path d="M9 21H3v-6"></path></svg>`;
-const COLLAPSE_SVG = `<svg class="lucide lucide-minimize-2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 10 7-7"></path><path d="M20 10h-6V4"></path><path d="m3 21 7-7"></path><path d="M4 14h6v6"></path></svg>`;
-const FILE_SVG = `<svg class="lucide lucide-file-text" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"></path><path d="M14 2v6h6"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>`;
-const SEND_SVG = `<svg class="lucide lucide-arrow-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>`;
-const SENDING_SVG = `<svg class="lucide lucide-loader-circle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>`;
+import {
+  ARROW_DOWN_SVG,
+  ARROW_UP_SVG as SEND_SVG,
+  CHECK_SVG,
+  COLLAPSE_SVG,
+  EXPAND_SVG,
+  EYE_CLOSED_SVG,
+  EYE_OPEN_SVG,
+  FILE_SVG,
+  MARKDOWN_SVG,
+  PAPERCLIP_SVG,
+  SENDING_SVG,
+  SKIP_FORWARD_SVG,
+} from "./icons.js";
 
 const AGENT_QUIET_MS = 180_000;
 const AGENT_CALL_MS = 1_920_000;
@@ -128,10 +133,7 @@ function renderComposerAttachment(item, sending) {
   </span>`;
 }
 
-function parentControls(type, id) {
-  const label = escapeHtml(`${type} ${id}`);
-  return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
-}
+
 
 export function messageQueryKey(state) {
   return JSON.stringify([Boolean(state.showHidden), (state.searchQuery || "").trim()]);
@@ -358,13 +360,13 @@ export function renderMessagesView(container, state, handlers) {
             : "";
           const linkedTasks = linkedTasksByMsg.get(msg.id) || [];
           const tasksSuffix = linkedTasks.length
-            ? `<span class="receipt-task-links">${linkedTasks.map((tid) => parentControls("task", tid)).join(" ")}</span>`
+            ? `<span class="receipt-task-links">${linkedTasks.map((tid) => renderParentChip("task", tid)).join(" ")}</span>`
             : "";
           const parentRefs = Array.isArray(msg.parent_refs) && msg.parent_refs.length
             ? msg.parent_refs
             : (msg.parent_ids || []).map((id) => ({ type: "message", id }));
           const parentsSuffix = parentRefs.length
-            ? `<span class="message-parents" aria-label="Message parents">${parentRefs.map((ref) => parentControls(ref.type, ref.id)).join(" ")}</span>`
+            ? `<span class="message-parents" aria-label="Message parents">${parentRefs.map((ref) => renderParentChip(ref.type, ref.id)).join(" ")}</span>`
             : "";
           const replySelected = isParentSelected("message", msg.id);
           messageSignatures.set(msg.id, JSON.stringify({ msg, linkedTasks, selectedParentRefs, query }));
@@ -411,7 +413,7 @@ export function renderMessagesView(container, state, handlers) {
         <div class="row log-toolbar">
           <div class="stack">
             <p id="connection" role="status">
-              <button id="survey-open" type="button" aria-label="Open survey results" title="Open survey results">
+              <button id="survey-open" class="quiet-btn" type="button" aria-label="Open survey results" title="Open survey results">
                 <span id="connection-dot" class="dot" data-state="connecting" role="img" aria-label="Connecting"></span>
               </button>
               <span id="connection-text">Connecting…</span>
@@ -428,7 +430,7 @@ export function renderMessagesView(container, state, handlers) {
             />
             <button
               id="skip-poll"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               ${skipPollGood ? 'data-state="good"' : skipPollBad ? 'data-state="bad"' : ""}
               ${skipPollPending ? 'disabled aria-busy="true"' : ""}
@@ -439,7 +441,7 @@ export function renderMessagesView(container, state, handlers) {
             </button>
             <button
               id="quiet-msgs"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-pressed="${showHidden ? "true" : "false"}"
               aria-label="${showHidden ? "Hide hidden messages" : "Show hidden messages"}"
@@ -450,14 +452,14 @@ export function renderMessagesView(container, state, handlers) {
           </span>
         </div>
         <div class="log-scroll">
-          <button id="log-edited" class="log-edited" type="button" aria-live="polite" ${unreadEditedMsgId ? "" : "hidden"}>New reply</button>
+          <button id="log-edited" class="scroll-jump-btn log-edited" type="button" aria-live="polite" ${unreadEditedMsgId ? "" : "hidden"}>New reply</button>
           <ol id="history" aria-label="Messages, oldest first">
             <li ${hasOlderMessages ? "" : "hidden"}><button id="load-older-messages" type="button">Show older messages</button></li>
             <li role="alert" ${state.messagesError ? "" : "hidden"}>${escapeHtml(state.messagesError || "")}</li>
             ${historyHtml}
           </ol>
-          <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" hidden>
-            <svg class="lucide lucide-arrow-down" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+          <button id="log-newest" class="scroll-jump-btn log-newest" type="button" aria-label="Scroll to bottom" hidden>
+            ${ARROW_DOWN_SVG}
           </button>
         </div>
         <p id="log-empty" class="receipt" role="status" ${visibleMessages.length || state.messagesError || state.messagesLoading ? "hidden" : ""}>${query ? "No matching messages." : "No messages yet."}</p>
@@ -490,25 +492,25 @@ export function renderMessagesView(container, state, handlers) {
             >${composerAttachments.map((item) => renderComposerAttachment(item, state.sending)).join("")}</div>
             <button
               id="attach-file"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-label="Attach file"
               title="Attach file"
               ${state.sending ? "disabled" : ""}
             >
-              <svg class="lucide lucide-paperclip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></svg>
+              ${PAPERCLIP_SVG}
             </button>
             <input id="composer-file-input" type="file" multiple hidden />
             <button
               id="preview-msg"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-pressed="${draftPreviewActive ? "true" : "false"}"
               aria-controls="draft-preview"
               aria-label="Preview Markdown"
               title="Preview Markdown"
             >
-              <svg class="markdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z" fill="currentColor" stroke="none"></path></svg>
+              ${MARKDOWN_SVG}
             </button>
             <textarea
               id="msg"
@@ -528,7 +530,7 @@ export function renderMessagesView(container, state, handlers) {
             >${draftPreviewActive && draftPreviewCache.text === draftValue ? draftPreviewCache.html : ""}</div>
             <button
               id="composer-expand"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="button"
               aria-expanded="${composerExpanded ? "true" : "false"}"
               aria-label="${composerExpanded ? "Collapse composer" : "Expand composer"}"
@@ -540,7 +542,7 @@ export function renderMessagesView(container, state, handlers) {
             </button>
             <button
               id="send"
-              class="icon-button"
+              class="icon-button quiet-btn"
               type="submit"
               aria-label="${state.sending ? "Sending message" : "Send message"}"
               title="${state.sending ? "Sending message" : "Send message"}"
