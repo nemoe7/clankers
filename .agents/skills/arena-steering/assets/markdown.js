@@ -335,6 +335,7 @@ export function initializeMermaid() {
         noteBkgColor: "#292624",
         noteTextColor: "#f4f0eb",
         noteBorderColor: "#e5bb8b",
+        dropShadow: "none",
       },
       flowchart: { htmlLabels: false },
     });
@@ -478,9 +479,21 @@ export function toggleCodeMermaid(button) {
   }
 }
 
+export function renderInlineCode(text) {
+  return escapeHtml(text).replace(/(`+)([^`\n]+?)\1/g, (_m, ticks, inner) => {
+    const trimmed =
+      ticks.length > 1 &&
+      inner.startsWith(" ") &&
+      inner.endsWith(" ") &&
+      inner.trim().length > 0
+        ? inner.slice(1, -1)
+        : inner;
+    return `<code>${trimmed}</code>`;
+  });
+}
+
 export function renderInlineMarkdown(text) {
-  let out = escapeHtml(text);
-  out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  let out = renderInlineCode(text);
   out = out.replace(
     /!\[([^\]]*)\]\(((?:https?:\/\/|\/|data:image\/)[^\s)]+)\)/g,
     (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`

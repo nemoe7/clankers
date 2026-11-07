@@ -7751,3 +7751,115 @@ def test_shared_ui_helpers_icons_and_classes(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_report_options_parse_inline_code_and_align_radio_with_first_line(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Report option code and radio alignment")
+  raw_long_option = (
+    'Accept `"codex"` or `"product"` (`Codex Lead` and `Head of Core Products`)'
+  )
+  report_md = (
+    "# Matcher Contract\n\n"
+    '<!-- question {"id":"survey-s2e5p-role","label":"S2E5P role"} -->\n\n'
+    "Which hashed substring(s) should pass `S2E5P.role`?\n"
+    f'- (x) {raw_long_option} <!-- option {{"label":"codex or product"}} -->\n'
+    '- ( ) Require `"codex"` only <!-- option {"label":"codex only"} -->\n'
+  )
+  app.reports.publish_report("matcher-contract", "Matcher Contract", report_md)
+
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 440, "height": 760})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#tab-reports").click()
+        page.locator("#field-survey-s2e5p-role").wait_for()
+
+        label_codes = page.locator(
+          "#field-survey-s2e5p-role .field-label code"
+        ).all_inner_texts()
+        assert label_codes == ["S2E5P.role"]
+        assert (
+          "`" not in page.locator("#field-survey-s2e5p-role .field-label").inner_text()
+        )
+
+        first_row = page.locator("#field-survey-s2e5p-role .option-row").first
+        option_codes = first_row.locator("span code").all_inner_texts()
+        assert option_codes == [
+          '"codex"',
+          '"product"',
+          "Codex Lead",
+          "Head of Core Products",
+        ]
+        assert "`" not in first_row.locator("span").last.inner_text()
+        assert first_row.locator("input").get_attribute("value") == raw_long_option
+
+        # Wrapped option text spans at least 2 lines, and the radio centers on line 1.
+        metrics = first_row.evaluate(
+          """row => {
+            const input = row.querySelector('input').getBoundingClientRect();
+            const span = row.querySelector('span:last-child');
+            const spanRect = span.getBoundingClientRect();
+            const range = document.createRange();
+            range.selectNodeContents(span);
+            const rects = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
+            const topY = Math.min(...rects.map(r => r.top));
+            const firstLine = rects.filter(r => Math.abs(r.top - topY) < 6);
+            const line1Top = Math.min(...firstLine.map(r => r.top));
+            const line1Bottom = Math.max(...firstLine.map(r => r.bottom));
+            return {
+              inputCenter: (input.top + input.bottom) / 2,
+              line1Center: (line1Top + line1Bottom) / 2,
+              spanCenter: (spanRect.top + spanRect.bottom) / 2,
+              spanHeight: spanRect.height,
+            };
+          }"""
+        )
+        assert metrics["spanHeight"] >= 36, metrics
+        assert abs(metrics["inputCenter"] - metrics["line1Center"]) <= 3.0, metrics
+        assert metrics["spanCenter"] - metrics["inputCenter"] >= 6.0, metrics
+
+        # Multi-line custom textarea also keeps its radio aligned with line 1.
+        custom_row = page.locator("#field-survey-s2e5p-role .option-custom")
+        custom_row.locator("textarea").fill(
+          "First line of custom notes\nSecond line of custom notes\nThird line of custom notes"
+        )
+        custom_row.locator("textarea").evaluate(
+          "el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }"
+        )
+        custom_metrics = custom_row.evaluate(
+          """row => {
+            const input = row.querySelector('input').getBoundingClientRect();
+            const ta = row.querySelector('textarea').getBoundingClientRect();
+            return {
+              inputCenter: (input.top + input.bottom) / 2,
+              firstLineCenter: ta.top + 16,
+              taHeight: ta.height,
+            };
+          }"""
+        )
+        assert custom_metrics["taHeight"] >= 50, custom_metrics
+        assert (
+          abs(custom_metrics["inputCenter"] - custom_metrics["firstLineCenter"]) <= 3.0
+        ), custom_metrics
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
