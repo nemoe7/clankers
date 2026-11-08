@@ -113,7 +113,7 @@ Read these first:
 - No clause in a rule, skill, workflow or system-prompt file is added, amended, or deleted until the user approves the report; hold the work and say so in one line.
 - Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
 - For skills, restrict this section's clause-proposal and approval requirements to first-party agent-facing text; unchanged third-party copies are exempt.
-- Every clause change takes a proposal on its initial refs wording, owner-supplied text included; the compressed live mirrors and platform copies follow the approved line.
+- Propose every clause from refs, including owner text, then squash approved wording into live and platform copies via [squash](skills/squash/SKILL.md).
 - A custom answer on a clause takes a fresh proposal of the new wording; the line lands only after that proposal is approved.
 - Report at the level the user approves from — the clause change and why, not a full implementation patch; the fenced `diff` block describes only the proposed clause.
 - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are NEVER pushed.
