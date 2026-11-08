@@ -25,7 +25,7 @@ For GitHub Actions logs, follow [the direct job-log recipe](references/recipes/j
 ```bash
 steer read
 steer poll
-steer ack <id> '<Markdown>' [-i <task-id> -t "<title>" -T <type> -S <scope> -d "<detail>"]
+steer ack <id> '<Markdown>' [-i <new-task-id> -t "<title>" -z <size> [-p <priority>] [-T <type>]... [-S <scope>] -d "<detail>"...]
 steer msg list [-p PAGE] [-s SIZE]
 steer msg <id>
 ```
@@ -34,6 +34,7 @@ steer msg <id>
 - `blocking=true` messages advance `sent -> seen -> acked`; `blocking=false` messages advance `sent -> seen` on `read` or `poll`.
 - ALWAYS read attached images and text in full with `functions.read_file` before acknowledging their note.
 - Report missing attachment bytes instead of inferring content from a listed path.
+- Use `steer ack -i -t -z -d` to create and link a task while acknowledging one message or report answer.
 
 ## Tasks (`Tasks`)
 

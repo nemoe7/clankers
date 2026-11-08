@@ -4,6 +4,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.4]
+
+### Added
+
+- Permit user-approved formatting-only report-source edits without republishing answered reports.
+
+### Changed
+
+- Document the required `steer ack -i` flags and one-call task creation and linking.
+
 ## [2.2.3]
 
 ### Added
