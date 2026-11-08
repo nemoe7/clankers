@@ -656,7 +656,7 @@ def test_task_answer_details_survive_report_removal_and_edits(tmp_path) -> None:
   reopened.close()
 
 
-def test_linking_an_answered_report_does_not_copy_details(tmp_path) -> None:
+def test_linking_an_answered_report_backfills_details(tmp_path) -> None:
   store = SqliteStore(tmp_path / "link.sqlite3")
   reports = ReportService(store, store)
   tasks = TaskService(store, store)
@@ -674,20 +674,22 @@ def test_linking_an_answered_report_does_not_copy_details(tmp_path) -> None:
   reports.ack_answer("decision", answer.id, "Read")
   tasks.create_task("work", "Do work", size=3, details=["Act on the answer"])
   tasks.mod_links_add("work", "decision", link_type="report")
+  expected_after_first = ["Act on the answer", "Choice?: B"]
   task = tasks.get_task("work")[0]
   assert task.report_ids == ["decision"]
-  assert task.details == ["Act on the answer"]
+  assert task.details == expected_after_first
   tasks.mod_links_add("work", "decision", link_type="report")
-  assert tasks.get_task("work")[0].details == task.details
+  assert tasks.get_task("work")[0].details == expected_after_first
   second = reports.submit_answer("decision", {"choice": "A"}, answer_id="cd0002")
-  assert tasks.get_task("work")[0].details == ["Act on the answer"]
+  assert tasks.get_task("work")[0].details == expected_after_first
   reports.ack_answer("decision", second.id, "Read")
-  assert tasks.get_task("work")[0].details == ["Act on the answer", "Choice?: A"]
+  expected_details = [*expected_after_first, "Choice?: A"]
+  assert tasks.get_task("work")[0].details == expected_details
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
-  assert tasks.get_task("work")[0].details == ["Act on the answer", "Choice?: A"]
+  assert tasks.get_task("work")[0].details == expected_details
   reports.rename_report("decision", "renamed-decision")
-  assert tasks.get_task("work")[0].details == ["Act on the answer", "Choice?: A"]
+  assert tasks.get_task("work")[0].details == expected_details
   store.close()
 
 
@@ -736,15 +738,16 @@ def test_task_details_keep_original_labels_after_republish(tmp_path) -> None:
     details=["Review"],
     report_ids=["decision"],
   )
-  assert created.details == ["Review"]
+  expected_backfill = ["Review", "New label?: B"]
+  assert created.details == expected_backfill
   tasks.create_task("patched-later", "Patched later", size=3, details=["Review"])
   patched = tasks.patch_task("patched-later", {"links": {"report_ids": ["decision"]}})
-  assert patched.details == ["Review"]
+  assert patched.details == expected_backfill
   patched = tasks.patch_task("patched-later", {"report_ids": ["decision"]})
-  assert patched.details == ["Review"]
+  assert patched.details == expected_backfill
   tasks.patch_task("patched-later", {"report_ids": []})
   patched = tasks.patch_task("patched-later", {"report_ids": ["decision"]})
-  assert patched.details == ["Review"]
+  assert patched.details == expected_backfill
   store.close()
 
 
@@ -787,7 +790,7 @@ def test_concurrent_report_answers_keep_unique_details(tmp_path) -> None:
     store.close()
 
 
-def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> None:
+def test_relinking_backfills_removed_answer_details_and_keeps_answers(tmp_path) -> None:
   path = tmp_path / "unlink-answer.sqlite3"
   store = SqliteStore(path)
   reports = ReportService(store, store)
@@ -820,7 +823,7 @@ def test_removing_answer_details_keeps_answers_and_report_links(tmp_path) -> Non
   tasks.mod_scalar("work", "title", "Renamed work")
   tasks.mod_links_rm("work", "report", "decision")
   tasks.mod_links_add("work", "decision", link_type="report")
-  relinked_details = ["Review", "Select?: No"]
+  relinked_details = ["Review", "Select?: No", "Select?: Yes"]
   assert tasks.get_task("work")[0].details == relinked_details
   store.close()
 
@@ -1366,34 +1369,92 @@ def test_state_merge_normalizes_duplicate_task_details() -> None:
   target.close()
 
 
-def test_answer_details_wait_for_first_ack_and_ignore_links() -> None:
+def test_answer_details_backfill_on_report_link_and_task_creation() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)
-  tasks = TaskService(store, store)
+  tasks = TaskService(store, store, messages=store)
   messages = MessageService(store, store, store, store)
   _publish_answer_message_report(reports)
-  tasks.create_task("work", "Work", size=3, details=["Review"], report_ids=["decision"])
+  tasks.create_task("work", "Work", size=3, details=["Review"])
   first = reports.submit_answer("decision", {"choice": "A"}, answer_id="fa0001")
+  _, acked = messages.ack(first.id, "Read")
+  assert acked.task_details_added == {}
   assert tasks.get_task("work")[0].details == ["Review"]
 
-  _, acked = messages.ack(first.id, "Read")
-  assert acked.task_details_added == {"work": ["Choice?: A"]}
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
+  tasks.mod_links_add("work", "decision", link_type="report")
   assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
   tasks.mod_deets_rm("work", 2, size=3)
   tasks.mod_links_rm("work", "report", "decision")
-  tasks.mod_links_add("work", "decision", link_type="report")
-  assert tasks.get_task("work")[0].details == ["Review"]
   _, repeated = messages.ack(first.id, "Read again")
   assert repeated.task_details_added == {}
   assert tasks.get_task("work")[0].details == ["Review"]
+  tasks.mod_links_add("work", "decision", link_type="report")
+  assert tasks.get_task("work")[0].details == ["Review", "Choice?: A"]
 
   later = reports.submit_answer("decision", {"choice": "B"}, answer_id="fa0002")
-  assert tasks.get_task("work")[0].details == ["Review"]
+  tasks.create_task(
+    "pending",
+    "Pending",
+    size=3,
+    details=["Review"],
+    report_ids=["decision"],
+  )
+  expected_before_later_ack = ["Review", "Choice?: A"]
+  assert tasks.get_task("work")[0].details == expected_before_later_ack
+  assert tasks.get_task("pending")[0].details == expected_before_later_ack
   acked_later = reports.ack_answer("decision", later.id, "Read later")
-  assert acked_later.task_details_added == {"work": ["Choice?: B"]}
-  assert tasks.get_task("work")[0].details == ["Review", "Choice?: B"]
-  tasks.create_task("late", "Late", size=3, details=["Review"], report_ids=["decision"])
-  assert tasks.get_task("late")[0].details == ["Review"]
+  assert acked_later.task_details_added == {
+    "work": ["Choice?: B"],
+    "pending": ["Choice?: B"],
+  }
+  expected_details = ["Review", "Choice?: A", "Choice?: B"]
+  assert tasks.get_task("work")[0].details == expected_details
+  assert tasks.get_task("pending")[0].details == expected_details
+
+  tasks.create_task(
+    "late",
+    "Late",
+    size=3,
+    details=["Review"],
+    report_ids=["decision"],
+  )
+  assert tasks.get_task("late")[0].details == expected_details
+
+  regular_before_link = messages.send_message(
+    "Choice?: C", msg_id="fa0003", blocking=False
+  )
+  _, regular_acked = messages.ack(regular_before_link.id, "Choice?: D")
+  assert regular_acked.type == "message"
+  assert tasks.get_task("late")[0].details == expected_details
+  tasks.mod_links_add(
+    "late",
+    regular_before_link.id,
+    link_type="msg",
+    append_detail="Manual regular-message note",
+    size=3,
+  )
+  expected_with_message_note = [*expected_details, "Manual regular-message note"]
+  assert tasks.get_task("late")[0].details == expected_with_message_note
+
+  regular_after_link = messages.send_message(
+    "Choice?: E", msg_id="fa0004", blocking=False
+  )
+  tasks.mod_links_add(
+    "late",
+    regular_after_link.id,
+    link_type="msg",
+    append_detail="Manual second-message note",
+    size=3,
+  )
+  expected_with_message_notes = [
+    *expected_with_message_note,
+    "Manual second-message note",
+  ]
+  _, regular_acked = messages.ack(regular_after_link.id, "Choice?: F")
+  assert regular_acked.type == "message"
+  assert tasks.get_task("late")[0].details == expected_with_message_notes
   store.close()
 
 
