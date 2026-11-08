@@ -2175,6 +2175,123 @@ def test_websocket_upgrade_and_rpc() -> None:
     store.close()
 
 
+def test_existing_websocket_rebinds_after_python_reload(
+  tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+  if run_reload_in_child(request):
+    return
+  import socket
+  import urllib.request
+
+  from arena_steering import survey
+
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  sock: socket.socket | None = None
+  reloaded_store: SqliteStore | None = None
+  incoming = bytearray()
+
+  def receive_frame() -> bytes:
+    assert sock is not None
+    while len(incoming) < 2:
+      chunk = sock.recv(4096)
+      assert chunk
+      incoming.extend(chunk)
+    first, second = incoming[:2]
+    assert first & 15 == 1 and second & 128 == 0
+    size, offset = second & 127, 2
+    if size == 126:
+      while len(incoming) < 4:
+        chunk = sock.recv(4096)
+        assert chunk
+        incoming.extend(chunk)
+      size, offset = int.from_bytes(incoming[2:4], "big"), 4
+    elif size == 127:
+      while len(incoming) < 10:
+        chunk = sock.recv(4096)
+        assert chunk
+        incoming.extend(chunk)
+      size, offset = int.from_bytes(incoming[2:10], "big"), 10
+    while len(incoming) < offset + size:
+      chunk = sock.recv(4096)
+      assert chunk
+      incoming.extend(chunk)
+    payload = bytes(incoming[offset : offset + size])
+    del incoming[: offset + size]
+    return payload
+
+  def receive_message() -> dict[str, object]:
+    value = json.loads(receive_frame().decode("utf-8"))
+    assert isinstance(value, dict)
+    return value
+
+  def send_message(value: dict[str, str]) -> None:
+    assert sock is not None
+    payload = json.dumps(value, separators=(",", ":")).encode("utf-8")
+    assert len(payload) < 126
+    mask = b"\x01\x02\x03\x04"
+    masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+    sock.sendall(bytes([0x81, 0x80 | len(payload)]) + mask + masked)
+
+  try:
+    sock = socket.create_connection(("127.0.0.1", server.server_port), timeout=5.0)
+    sock.settimeout(5.0)
+    key = base64.b64encode(b"0123456789abcdef").decode("ascii")
+    request_bytes = (
+      f"GET /api/ws HTTP/1.1\r\n"
+      f"Host: 127.0.0.1:{server.server_port}\r\n"
+      f"Upgrade: websocket\r\n"
+      f"Connection: Upgrade\r\n"
+      f"Sec-WebSocket-Key: {key}\r\n"
+      f"Sec-WebSocket-Version: 13\r\n\r\n"
+    ).encode("ascii")
+    sock.sendall(request_bytes)
+    handshake = bytearray()
+    while b"\r\n\r\n" not in handshake:
+      chunk = sock.recv(4096)
+      assert chunk
+      handshake.extend(chunk)
+    header, first_frame = bytes(handshake).split(b"\r\n\r\n", 1)
+    assert b"101 Switching Protocols" in header
+    incoming.extend(first_frame)
+    assert receive_message() == {"type": "change"}
+
+    reloaded = reload_server_handler(server, app)
+    reloaded_store = reloaded.store
+    assert receive_message() == {"type": "change"}
+
+    survey_request = urllib.request.Request(
+      f"http://127.0.0.1:{server.server_port}/survey",
+      data=json.dumps({"answers": survey.template()}).encode("utf-8"),
+      headers={"Content-Type": "application/json"},
+      method="POST",
+    )
+    with urllib.request.urlopen(survey_request, timeout=5.0) as response:
+      assert response.status == int(HTTPStatus.OK)
+      survey_body = json.loads(response.read().decode("utf-8"))
+    assert len(survey_body["survey"]["results"]) == 6
+    assert receive_message() == {"type": "change"}
+    send_message({"id": "survey", "method": "GET", "path": "/survey"})
+    reply = receive_message()
+    assert reply["type"] == "response"
+    assert reply["id"] == "survey"
+    assert reply["status"] == int(HTTPStatus.OK)
+    body = json.loads(str(reply["body"]))
+    assert len(body["survey"]["results"]) == 6
+  finally:
+    if sock is not None:
+      sock.close()
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    if reloaded_store is not None:
+      reloaded_store.close()
+    store.close()
+
+
 def test_upload_endpoints_store_files_and_paste_attachments(tmp_path: Path) -> None:
   import base64
 
