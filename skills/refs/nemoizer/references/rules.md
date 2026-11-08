@@ -1,4 +1,4 @@
-<!-- nonemo: NMO100; nonemo: NMO901; nonemo: NMO902; nonemo: NMO003; nonemo: STE001; nonemo: STE100; nonemo: STE200; nonemo: STE300; nonemo: STE400; nonemo: STE401; nonemo: STE901; nonemo: STE902; nonemo: STE903; nonemo: STE904; nonemo: STE905; nonemo: STE906; nonemo: STE908; nonemo: STE909; nonemo: STE910; nonemo: HMN100; nonemo: HMN200; nonemo: HMN300; nonemo: HMN400; nonemo: HMN500; nonemo: HMN600; nonemo: HMN901; nonemo: HMN902; nonemo: HMN903; nonemo: HMN904; nonemo: HMN905; nonemo: HMN906; nonemo: HMN907; nonemo: HMN908; nonemo: HMN909; nonemo: HMN910; nonemo: NMP100; nonemo: NMP101; nonemo: NMU100; nonemo: NMT100; nonemo: NMT200 -->
+<!-- nonemo: NMO100; nonemo: NMO901; nonemo: NMO902; nonemo: NMO003; nonemo: STE001; nonemo: STE100; nonemo: STE200; nonemo: STE300; nonemo: STE400; nonemo: STE401; nonemo: STE901; nonemo: STE902; nonemo: STE903; nonemo: STE904; nonemo: STE905; nonemo: STE906; nonemo: STE908; nonemo: STE909; nonemo: STE910; nonemo: HMN100; nonemo: HMN200; nonemo: HMN300; nonemo: HMN400; nonemo: HMN500; nonemo: HMN600; nonemo: HMN901; nonemo: HMN902; nonemo: HMN903; nonemo: HMN904; nonemo: HMN905; nonemo: HMN906; nonemo: HMN907; nonemo: HMN908; nonemo: HMN909; nonemo: HMN910; nonemo: NMP100; nonemo: NMP101; nonemo: NMU100; nonemo: NMT100; nonemo: NMT200; nonemo: NMT300 -->
 # Rules
 
 This document describes the rules enforced by `nemoizer`. Each rule also has a standalone reference file (`<id>.md`) in this directory.
@@ -868,7 +868,7 @@ Tags: `tests`, `measurements`, `blocking`
 
 Aliases: `measurement-equality`
 
-This rule triggers when a test asserts exact literal equality against a measurement call (`measure`, `token_count`, `byte_count`, `duration`, `width`, `height`).
+This rule flags tests that assert literal equality on measurement calls (`measure`, `token_count`, `byte_count`, `duration`, `width`, `height`). Only positive numeric values trigger it. Zero-valued measurements are exempt.
 
 ```text
 assert check.measure(path) == 42
@@ -881,3 +881,21 @@ assert check.measure(path) > 0
 ```
 
 Rationale: Relational or named-constant assertions keep tests resilient to legitimate size or timing changes.
+
+## `NMT300` - Unconditional real-time wait in tests
+
+Tags: `tests`, `timing`, `advisory`
+
+Aliases: `unconditional-test-wait`
+
+This rule reports direct real-time sleeps in discovered tests: Python `sleep`, `time.sleep`, and awaited `asyncio.sleep`. It also reports awaited JavaScript `sleep` calls and `setTimeout` delays inside awaited Promises.
+
+A bounded polling loop guarded by a clock check and a deadline or timeout is exempt. Python tests that patch sleep calls and JavaScript tests that enable fake timers are exempt. Playwright `wait_for_timeout` and `waitForTimeout` calls are outside this rule.
+
+```text
+time.sleep(0.1)
+```
+
+To fix this issue, replace the fixed delay with a condition-based wait, bounded polling, or a fake timer.
+
+Rationale: Real-time sleeps add latency and can make tests depend on scheduling.
