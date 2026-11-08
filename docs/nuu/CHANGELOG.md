@@ -12,10 +12,12 @@ This log has no Unreleased section.
 
 - **Stylesheet-driven design boards (`scripts/annotate.py`)**: Resolve semantic colors, fonts, and radii from configured `:root` and dark-scheme stylesheet tokens for browser and bitmap output.
 - **Routed design boards**: Add `orthogonal`, `scurve`, and `straight` arrows, custom canvases, responsive captures, and detailed anatomy, style-guide, and focus presets.
+- **Visual examples (`references/examples/`)**: Add eight dark-mode examples for design records, inline markers, goal-based flows, overlay clipping, offline fonts, and scroll behavior.
 
 ### Changed
 
 - **Annotation and board specs**: Require TOML inputs and preserve configurable HTML/JavaScript icon-table extraction through `[icons].file` and `table`.
+- **Visual examples (`references/examples.md`, `references/nuu.md`)**: Regenerate 48 PNGs and the motion GIF with dark-mode `Pass`/`Fail` pairs. Rename rule images and correct example links.
 
 ## [0.2.0]
 
