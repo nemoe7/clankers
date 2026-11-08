@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.5]
+
+### Changed
+
+- Remove field ID chips from report input cards.
+
 ## [2.2.4]
 
 ### Added
