@@ -974,12 +974,18 @@ def test_checkout_directory_validator_requires_one_confined_template(
 
   def script(root: Path, target: Path) -> tuple[str, str]:
     relative = target.relative_to(root)
-    prefixes = (relative.parts[:index] for index in range(1, len(relative.parts)))
-    checks = [
-      f"[ -e '{root.joinpath(*prefix)}' ] && [ ! -d '{root.joinpath(*prefix)}' ] "
-      f"&& {{ printf 'FILE:%s\\n' '{'/'.join(prefix)}'; exit 0; }}"
-      for prefix in prefixes
-    ]
+    checks = []
+    prefix_parts: list[str] = []
+    prefix_path = root
+    for index in range(len(relative.parts) - 1):
+      part = relative.parts[index]
+      prefix_parts.append(part)
+      prefix_path = prefix_path / part
+      prefix = "/".join(prefix_parts)
+      checks.append(
+        f"[ -e '{prefix_path}' ] && [ ! -d '{prefix_path}' ] "
+        f"&& {{ printf 'FILE:%s\\n' '{prefix}'; exit 0; }}"
+      )
     checks.extend(
       [f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}", "printf 'OK\\n'"]
     )
@@ -997,6 +1003,13 @@ def test_checkout_directory_validator_requires_one_confined_template(
   code, output = _run("pre", "-l", direct_line, "-c", direct_command, "-s", "bash")
   assert code == pre.CONTINUE, output
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+  long_path_component_count = 120
+  long_target = root.joinpath(
+    *(f"segment-{index:03d}" for index in range(long_path_component_count))
+  )
+  long_line, long_command = script(root, long_target)
+  assert pre._checkout_directory_validator(long_line, long_command, root)
 
   quoted, quoted_command = script(
     root, root / "tests" / "x' && echo unsafe; #" / "target.py"

@@ -175,39 +175,45 @@ def _checkout_directory_validator(
       return False
   except (OSError, RuntimeError, ValueError):
     return False
-  expected = []
-  native_commands = {
+  prefix_count = len(relative.parts) - 1
+  if len(checks) != prefix_count + 2:
+    return False
+  command_text = command.strip()
+  first_command = checks[0].split(" && ", 1)[0]
+  native_match = allow_inner and command_text in {
     "exit 0",
     "printf 'DIR\\n'",
     "printf 'OK\\n'",
     f"[ -d '{target}' ]",
   }
-  for index in range(1, len(relative.parts)):
-    prefix = relative.parts[:index]
-    path = checkout.joinpath(*prefix)
+  prefix_parts: list[str] = []
+  prefix_path = checkout
+  for index in range(prefix_count):
+    part = relative.parts[index]
+    prefix_parts.append(part)
+    prefix_path = prefix_path / part
+    prefix = "/".join(prefix_parts)
     try:
-      if not path.resolve().is_relative_to(checkout):
+      if not prefix_path.resolve().is_relative_to(checkout):
         return False
     except (OSError, RuntimeError):
       return False
-    expected.append(
-      f"[ -e '{path}' ] && [ ! -d '{path}' ] "
-      f"&& {{ printf 'FILE:%s\\n' '{'/'.join(prefix)}'; exit 0; }}"
+    expected_check = (
+      f"[ -e '{prefix_path}' ] && [ ! -d '{prefix_path}' ] "
+      f"&& {{ printf 'FILE:%s\\n' '{prefix}'; exit 0; }}"
     )
-    native_commands.update(
-      (
-        f"[ -e '{path}' ]",
-        f"[ ! -d '{path}' ]",
-        f"printf 'FILE:%s\\n' '{'/'.join(prefix)}'",
-      )
-    )
-  expected.extend(
-    [f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}", "printf 'OK\\n'"]
-  )
-  return checks == expected and (
-    command.strip() == expected[0].split(" && ", 1)[0]
-    or (allow_inner and command.strip() in native_commands)
-  )
+    if checks[index] != expected_check:
+      return False
+    if allow_inner and (
+      command_text == f"[ -e '{prefix_path}' ]"
+      or command_text == f"[ ! -d '{prefix_path}' ]"
+      or command_text == f"printf 'FILE:%s\\n' '{prefix}'"
+    ):
+      native_match = True
+  final_check = f"[ -d '{target}' ] && {{ printf 'DIR\\n'; exit 0; }}"
+  if checks[-2] != final_check or checks[-1] != "printf 'OK\\n'":
+    return False
+  return command_text == first_command or (allow_inner and native_match)
 
 
 def _platform_stop_process(line: str, command: str) -> bool:
