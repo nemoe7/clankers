@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -2303,16 +2304,31 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   assert PENDING_ACK_PUSH_REASON in pending_push.stdout
   assert "push-ran" not in pending_push.stdout
 
-  read = subprocess.run(
-    ["bash", "-c", 'source "$HOME/.bash_profile"; steer read'],
-    check=False,
-    cwd=outside,
-    env=env,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
+  server_store = cli.SqliteStore(database)
+  server_httpd = cli.create_http_server(
+    cli.SteeringApp(server_store), host="127.0.0.1", port=0
   )
-  assert read.returncode == 0, read.stderr
+  server_port = int(server_httpd.server_address[1])
+  cli._write_server_file(state_dir, f"http://127.0.0.1:{server_port}")
+  server_thread = threading.Thread(target=server_httpd.serve_forever, daemon=True)
+  server_thread.start()
+  try:
+    read = subprocess.run(
+      ["bash", "-c", 'source "$HOME/.bash_profile"; steer read'],
+      check=False,
+      cwd=outside,
+      env=env,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+    )
+    assert read.returncode == 0, read.stderr
+  finally:
+    server_httpd.shutdown()
+    server_httpd.server_close()
+    server_thread.join(timeout=1)
+    server_store.close()
+    (state_dir / "server.json").unlink(missing_ok=True)
   assert (project / "arena-state" / "state.sqlite3").is_file()
   assert not (outside / "arena-state").exists()
   assert not (tmp_path / "override").exists()
