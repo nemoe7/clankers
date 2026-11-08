@@ -145,6 +145,36 @@ def _append_answer_details_to_linked_tasks(
   return added
 
 
+def _append_acknowledged_answer_details_to_task(
+  tasks: TaskRepository,
+  reports: ReportRepository,
+  task_id: str,
+  report_ids: list[str],
+  now: str,
+) -> list[str]:
+  if not report_ids:
+    return []
+  queue = tasks.list_tasks()
+  task = next((item for item in queue if item.id == task_id), None)
+  if task is None:
+    return []
+  previous_length = len(task.details)
+  for report_id in dict.fromkeys(report_ids):
+    if report_id not in task.report_ids:
+      continue
+    report = reports.get_report(report_id)
+    if report is None:
+      continue
+    for answer in reports.list_report_answers(report_id):
+      if answer.status == "acked":
+        _append_unique_details(task, _answer_detail_lines(report, answer))
+  added = task.details[previous_length:]
+  if added:
+    task.modified_at = now
+    tasks.save_task_queue(queue)
+  return added
+
+
 DEFAULT_SURVEY_QUESTIONS: tuple[dict[str, Any], ...] = tuple(
   {
     "id": q["id"],
@@ -1026,6 +1056,11 @@ class TaskService:
     for op in commit_ops:
       op()
     self._tasks.save_task_queue(ordered)
+    task.details.extend(
+      _append_acknowledged_answer_details_to_task(
+        self._tasks, self._reports, task.id, task.report_ids, now
+      )
+    )
     return task
 
   def _copy_task(self, task: Task, **changes: Any) -> Task:
@@ -1338,6 +1373,7 @@ class TaskService:
     task_ids = list(target.task_ids)
     gate_names = list(target.gate_names)
     known_task_ids = {item.id for item in queue}
+    report_id_to_backfill: str | None = None
 
     if explicit_type == "gate":
       if cleaned not in gate_names:
@@ -1359,6 +1395,7 @@ class TaskService:
       validate_entity_id(cleaned, "Report or message link ID")
       if cleaned not in report_ids:
         report_ids.append(cleaned)
+      report_id_to_backfill = cleaned
     else:
       raise ValueError(
         f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
@@ -1404,6 +1441,18 @@ class TaskService:
     for op in commit_ops:
       op()
     self._tasks.save_task_queue(ordered)
+    if report_id_to_backfill is not None:
+      backfill_now = self._clock.now_iso()
+      added_details = _append_acknowledged_answer_details_to_task(
+        self._tasks,
+        self._reports,
+        updated.id,
+        [report_id_to_backfill],
+        backfill_now,
+      )
+      if added_details:
+        updated.details.extend(added_details)
+        updated.modified_at = backfill_now
     return updated
 
   @_transactional_task_write
@@ -1511,6 +1560,9 @@ class TaskService:
     if "commit_hash" in changes and not finishing:
       raise ValueError("A commit hash can only accompany phase completion")
     raw_links = changes.get("links")
+    report_links_requested = "report_ids" in changes or (
+      isinstance(raw_links, dict) and "report_ids" in raw_links
+    )
     merged_links = {
       "gate_names": list(
         changes.get(
@@ -1580,6 +1632,18 @@ class TaskService:
     for op in commit_ops:
       op()
     self._tasks.save_task_queue(ordered)
+    if report_links_requested and updated.report_ids:
+      backfill_now = self._clock.now_iso()
+      added_details = _append_acknowledged_answer_details_to_task(
+        self._tasks,
+        self._reports,
+        updated.id,
+        updated.report_ids,
+        backfill_now,
+      )
+      if added_details:
+        updated.details.extend(added_details)
+        updated.modified_at = backfill_now
     return updated
 
   def _load_queue_and_target(self, task_id: str) -> tuple[list[Task], Task]:
