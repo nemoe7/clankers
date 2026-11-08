@@ -428,12 +428,9 @@ export function messageMatchesQuery(message, query) {
 async function fetchMessagePage({ before = "", reset = false, preserve = false } = {}) {
   const state = store.getState();
   const key = messageQueryKey(state);
-  // A routine refresh must not invalidate a slower pagination request. Apply
-  // the latest changes immediately after the older page finishes instead.
-  if (!before && !reset && olderPageRequest?.key === key) {
-    olderPageRequest.refreshRequested = true;
-    return state.messages || [];
-  }
+  // Refresh the latest page now. Keep loaded history until the older-page retry completes.
+  const refreshDuringOlderPage = !before && !reset && olderPageRequest?.key === key;
+  if (refreshDuringOlderPage) olderPageRequest.refreshRequested = true;
   const epoch = ++messageEpoch;
   const previous = !preserve && (reset || loadedMessageKey !== key) ? [] : [...(state.messages || [])];
   if (reset || loadedMessageKey !== key) {
@@ -449,7 +446,7 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
     if (hiddenMessageCache && !state.showHidden && hiddenMessageCache.revision !== result.revision) hiddenMessageCache.dirty = true;
     let fresh = result.messages || [];
     let hasMore = result.has_more;
-    if (!before && previous.length) {
+    if (!before && previous.length && !refreshDuringOlderPage) {
       while (hasMore && (preserve
         ? !fresh.some((message) => message.id === previous[0].id)
         : fresh.length < previous.length)) {
@@ -460,9 +457,16 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
       }
     }
     const ids = new Set(fresh.map((item) => item.id));
+    const previousIds = new Set(previous.map((item) => item.id));
+    const latestById = new Map(fresh.map((item) => [item.id, item]));
     const merged = preserveConfirmedRepliesSeen(before
       ? [...fresh, ...previous.filter((item) => !ids.has(item.id))]
-      : fresh);
+      : refreshDuringOlderPage
+        ? [
+          ...previous.map((item) => latestById.get(item.id) || item),
+          ...fresh.filter((item) => !previousIds.has(item.id)),
+        ]
+        : fresh);
     const current = store.getState();
     if (!before) loadedMessageRevision = result.revision;
     if (result.pending_message_id && current.optimisticMessage?.requestId === options.requestId) {
