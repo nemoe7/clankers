@@ -3243,6 +3243,20 @@ def test_unsafe_mixed_route_syntax_is_blocked(line: str) -> None:
   assert pre.run_pipeline(pre.PreContext(line=line, command=line)).verdict == pre.BLOCK
 
 
+def test_mixed_shell_routing_block_is_not_a_violation(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Acknowledged", acked=True)
+  line = "pytest -q | cat"
+  code, out = _run("pre", "-l", line, "-c", line, "-s", "bash")
+  assert code == pre.BLOCK
+  assert out.splitlines()[0] == (
+    "Mixed shell blocked for auto detach. Use separate calls or explicit `steer run start`."
+  )
+  assert "VIOLATION:" not in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.pending_violation() is None
+  store.close()
+
+
 def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
   root = Path(__file__).resolve().parents[3]
   installer = (root / "skills/arena-steering/scripts/install.sh").read_text(
