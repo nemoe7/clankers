@@ -94,9 +94,9 @@ Three comment markers are scanned across `.html`, `.css`, `.svg`, `.js`, `.jsx`,
 | `RUN102` | Browser (`audit`, `board`, `measure`) | `error` | 12 | Target URL navigation timeout, missing board shot/spec file, or Chromium launch failure |
 | `RCP001` | Static (`lint`, `audit`, `collect`) | `error` | 14 | `nuurecipe: <slug>` references a `<slug>` with no matching `references/recipes/<slug>.md` |
 
-![Measure Rules SPC001-SPC002 and TYP001 Dark-Mode Example](examples/rule-num201-204.png)
+![Measure Rules SPC001-SPC002 and TYP001 Dark-Mode Example](examples/rule-spc001-typ001.png)
 
-![Density Rules SPC201-SPC203 and HRC102 Dark-Mode Example](examples/rule-num205-208.png)
+![Density Rules SPC201-SPC203 and HRC102 Dark-Mode Example](examples/rule-spc201-hrc102.png)
 
 ## Recipes (`12` Component Patterns)
 

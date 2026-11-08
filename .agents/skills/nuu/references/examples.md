@@ -72,7 +72,7 @@ Pass: immediate pending row rendered under a held slow-network route and mocked 
 
 Pass: update `[paths].doc` (`docs/design.md`) in the same change with its component table and linked boards (`DOC001`). Fail: leave a new component undocumented.
 
-![Clause 11](examples/new-pattern-entry-and-shot.png)
+![Clause 11](examples/design-doc-record.png)
 
 ## 12. Measure across house viewports before landing
 
@@ -90,7 +90,7 @@ Pass: `docs/design.md` entry, recipe, and all five house viewport screenshots in
 
 Pass: canonical `nonuu: SPC002` false-positive suppression, human-approved `nuu-deviation: <reason>` note, and `nuurecipe: modal-manager` tag surfaced by `nuu collect`. Fail: agent-invented `nuu-deviation:` without user approval or unknown `nuurecipe:` slug (`RCP001`).
 
-![Clause 14](examples/new-pattern-entry-and-shot.png)
+![Clause 14](examples/inline-markers.png)
 
 ## 15. Outside list markers
 
@@ -156,7 +156,7 @@ Pass: store UTC or an explicit numeric offset and localize the display (`HRC201`
 
 Pass: identify the goal, main flow, and states before visual polish, using realistic domain copy with zero `Lorem ipsum` (`HRC203`). Fail: unrouted chrome stuffed with placeholder copy.
 
-![Clause 25](examples/balance-and-focus.png)
+![Clause 25](examples/user-flow-to-ui.png)
 
 ## 26. Dark surfaces
 
@@ -204,12 +204,12 @@ Pass: inspect the real content in the selected typeface and loosen tracking when
 
 Pass: at all five house viewports, open the dialog and tooltip, verify visible headings, prose, and controls stay inside their clipping and viewport bounds, and paint a readable tooltip surface. Fail: inspect only the closed page, hide a heading under the top edge, or leave a transparent tooltip over mixed content. Reachable text in a scrollable modal body is not clipped.
 
-![Clause 33: Overflow and Clipping](examples/overflow-and-clipping.png)
+![Clause 33: Dialog Overlay Clipping](examples/dialog-overlay-clipping.png)
 
 ## Recipe and Audit-Rule Examples
 
 - **Offline bundled fonts (`recipes/offline-fonts.md`):**
-  ![Offline Fonts](examples/short-type-ramp.png)
+  ![Offline Fonts](examples/offline-fonts.png)
 - **Live dot (`recipes/live-dot.md`):**
   ![Live Dot](examples/live-dot.png)
 - **Fixed-slot loading (`recipes/loading-bar.md`):**
@@ -225,15 +225,15 @@ Pass: at all five house viewports, open the dialog and tooltip, verify visible h
 - **Relative timestamps (`recipes/relative-timestamps.md`):**
   ![Relative Timestamps](examples/relative-timestamps.png)
 - **Scroll edge fade (`recipes/scroll-edge-fade.md`):**
-  ![Scroll Edge Fade](examples/scrollbars.png)
+  ![Scroll Edge Fade](examples/scroll-edge-fade.png)
 - **Floating overlay scroll fade (`recipes/floating-overlay-scroll-fade.md`):**
-  ![Floating Overlay Scroll Fade](examples/overflow-and-clipping.png)
+  ![Floating Overlay Scroll Fade](examples/floating-overlay-scroll-fade.png)
 - **Scrollbars (`recipes/scrollbars.md`):**
   ![Scrollbars](examples/scrollbars.png)
 - **Overflow and anti-clipping (`recipes/overflow-and-clipping.md`):**
   ![Overflow and Clipping](examples/overflow-and-clipping.png)
 - **Table to cards (`recipes/table-to-cards.md`):**
-  ![Table to Cards](examples/three-named-breakpoints.png)
+  ![Table to Cards](examples/table-to-cards.png)
 - **Measure and density rules (`SPC001`–`HRC102`):**
-  ![SPC001-SPC002](examples/rule-num201-204.png)
-  ![SPC201-HRC102](examples/rule-num205-208.png)
+  ![SPC001-SPC002-TYP001](examples/rule-spc001-typ001.png)
+  ![SPC201-SPC203-HRC102](examples/rule-spc201-hrc102.png)
