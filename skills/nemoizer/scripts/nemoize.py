@@ -258,6 +258,7 @@ ADVISORY_RULE_IDS = {
   "HMN908",
   "HMN909",
   "HMN910",
+  "NMT300",
 }
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 4
@@ -443,6 +444,7 @@ RULE_DESCRIPTIONS = {
   "NMP101": "comment block has {count} lines (cap {cap})",
   "NMU100": 'label "{text}" carries "{word}" ({count} words, cap {cap})',
   "NMU200": "byte-unit divisor and label mismatch",
+  "NMT300": "unconditional real-time test wait",
   "NMO003": "missing Oxford comma",
   "NMO902": (
     '"the" density is {count}% (cap {cap}%); '
@@ -480,7 +482,11 @@ def describe_finding(row):
   return template
 
 
-TEST_RULE_IDS = {"output_text": "NMT100", "measurement": "NMT200"}
+TEST_RULE_IDS = {
+  "output_text": "NMT100",
+  "measurement": "NMT200",
+  "timing_wait": "NMT300",
+}
 RESERVED_RULE_IDS = {"HMN000"}
 KNOWN_RULE_IDS = {
   *RULE_IDS.values(),
@@ -2658,6 +2664,7 @@ MEASUREMENTS = {
   "poll_wait_seconds",
   "timeout_seconds",
 }
+REAL_WAIT_CALLS = {"sleep", "time.sleep", "asyncio.sleep"}
 CHANNELS = {"stdout", "stderr", "output", "out", "err"}
 WEB_CHANNELS = {
   "stdout",
@@ -2754,8 +2761,104 @@ function taintPass(node) {
 }
 for (let i = 0; i < 3; i++) taintPass(tree);
 const pairs = [];
+const waits = [];
 let testScope = false;
 const lines = text.split("\n");
+function containsNode(node, predicate) {
+  if (!node || typeof node !== 'object') return false;
+  if (predicate(node)) return true;
+  return Object.values(node).some(value => Array.isArray(value)
+    ? value.some(child => containsNode(child, predicate))
+    : value && typeof value === 'object' && containsNode(value, predicate));
+}
+function rootCallName(node) {
+  return node.type === 'CallExpression' ? shape(node.callee).split('.')[0] : '';
+}
+const fakeTimerMethods = new Set([
+  'useFakeTimers',
+  'advanceTimersByTime',
+  'advanceTimersToNextTimer',
+  'runAllTimers',
+  'runOnlyPendingTimers',
+  'clearAllTimers',
+]);
+function fakeTimerControl(node) {
+  if (node.type !== 'CallExpression') return false;
+  const name = shape(node.callee);
+  return fakeTimerMethods.has(name.split('.').pop()) ||
+    /^(?:sinon|clock)\.(?:install|tick)$/.test(name);
+}
+function hasTestDeclaration(node) {
+  return containsNode(node, child => ['test','it','specify'].includes(rootCallName(child)));
+}
+function hasSuiteFakeTimerControl(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (node.type === 'CallExpression' &&
+    ['test','it','specify','describe','suite'].includes(rootCallName(node))) return false;
+  if (fakeTimerControl(node)) return true;
+  return Object.values(node).some(value => Array.isArray(value)
+    ? value.some(child => hasSuiteFakeTimerControl(child))
+    : value && typeof value === 'object' && hasSuiteFakeTimerControl(value));
+}
+const fakeTimerScopes = [];
+function collectFakeTimerScopes(node) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'CallExpression') {
+    const root = rootCallName(node);
+    const callbacks = node.arguments.filter(arg =>
+      ['FunctionExpression','ArrowFunctionExpression'].includes(arg.type));
+    if (['test','it','specify'].includes(root)) {
+      callbacks.forEach(callback => {
+        if (containsNode(callback.body, fakeTimerControl)) {
+          fakeTimerScopes.push({start:callback.start, end:callback.end});
+        }
+      });
+    } else if (['describe','suite'].includes(root)) {
+      callbacks.forEach(callback => {
+        if (hasSuiteFakeTimerControl(callback.body)) {
+          fakeTimerScopes.push({start:callback.start, end:callback.end});
+        }
+      });
+    }
+  }
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) value.forEach(child => collectFakeTimerScopes(child));
+    else if (value && typeof value === 'object') collectFakeTimerScopes(value);
+  }
+}
+collectFakeTimerScopes(tree);
+const moduleFakeTimers = tree.body.some(statement =>
+  !hasTestDeclaration(statement) && containsNode(statement, fakeTimerControl));
+function fakeTimerControlled(node) {
+  return moduleFakeTimers || fakeTimerScopes.some(scope =>
+    scope.start <= node.start && node.end <= scope.end);
+}
+function timerCall(node) {
+  if (node?.type !== 'CallExpression') return false;
+  return ['sleep','timersPromises.setTimeout','timersPromises.sleep'].includes(shape(node.callee));
+}
+function promiseTimer(node) {
+  if (node?.type !== 'NewExpression' || shape(node.callee) !== 'Promise') return null;
+  let found = null;
+  containsNode(node, child => {
+    if (!found && child.type === 'CallExpression' && shape(child.callee) === 'setTimeout') {
+      found = child;
+    }
+    return Boolean(found);
+  });
+  return found;
+}
+function awaitedTimer(node) {
+  if (node.type !== 'AwaitExpression') return null;
+  if (timerCall(node.argument)) return node.argument;
+  return promiseTimer(node.argument);
+}
+function boundedPoll(node) {
+  if (node.type !== 'WhileStatement') return false;
+  const condition = text.slice(node.test.start, node.test.end);
+  return /(?:Date\.now|performance\.now|(?:time\.)?(?:monotonic|perf_counter))\s*\(/.test(condition) &&
+    /\b(?:deadline|timeout|timeout_at|end_time|expires_at)\b/i.test(condition);
+}
 function pair(left, right, node, operator) {
   for (const [actual, expected] of [[left,right],[right,left]]) {
     if (expected?.type === 'Literal' && ['string','number'].includes(typeof expected.value)) {
@@ -2773,8 +2876,16 @@ function checkIncludes(expr, node) {
     pair(expr.callee.object, expr.arguments[0], node, 'membership');
   }
 }
-function visit(node) {
+function visit(node, isBoundedPoll=false) {
   if (!node || typeof node !== 'object') return;
+  if (boundedPoll(node)) isBoundedPoll = true;
+  if (node.type === 'AwaitExpression') {
+    const delay = awaitedTimer(node);
+    if (delay && !isBoundedPoll && !fakeTimerControlled(delay)) {
+      const column = Array.from(lines[delay.loc.start.line - 1].slice(0, delay.loc.start.column)).length + 1;
+      waits.push({actual:shape(delay.callee), line:delay.loc.start.line, column});
+    }
+  }
   if (node.type === 'ImportDeclaration' && node.source.value === 'node:test') testScope = true;
   if (node.type === 'CallExpression') {
     const name = shape(node.callee);
@@ -2796,12 +2907,12 @@ function visit(node) {
     }
   }
   for (const value of Object.values(node)) {
-    if (Array.isArray(value)) value.forEach(visit);
-    else if (value && typeof value === 'object') visit(value);
+    if (Array.isArray(value)) value.forEach(child => visit(child, isBoundedPoll));
+    else if (value && typeof value === 'object') visit(value, isBoundedPoll);
   }
 }
 visit(tree);
-console.log(JSON.stringify({pairs, test_scope:testScope}));
+console.log(JSON.stringify({pairs, waits, test_scope:testScope}));
 """
 
 
@@ -2888,6 +2999,95 @@ def extract_prose_candidate(raw):
   return None
 
 
+def _has_bounded_poll_limit(condition):
+  names = {
+    node.id.lower() for node in ast.walk(condition) if isinstance(node, ast.Name)
+  }
+  clocks = {
+    shape(node.func).lower()
+    for node in ast.walk(condition)
+    if isinstance(node, ast.Call)
+  }
+  return bool(
+    clocks
+    & {"time.monotonic", "time.perf_counter", "time.time", "monotonic", "perf_counter"}
+  ) and bool(names & {"deadline", "timeout", "timeout_at", "end_time", "expires_at"})
+
+
+def _patches_real_wait(node):
+  if not isinstance(node, ast.Call):
+    return False
+  name = shape(node.func)
+  if not name.endswith(("patch", "patch.object", "setattr")):
+    return False
+  targets = {
+    child.value
+    for child in ast.walk(node)
+    if isinstance(child, ast.Constant) and isinstance(child.value, str)
+  }
+  if any(target in REAL_WAIT_CALLS or target.endswith(".sleep") for target in targets):
+    return True
+  return (
+    name.endswith(("patch.object", "setattr"))
+    and len(node.args) >= 2
+    and shape(node.args[0]) in {"time", "asyncio"}
+    and isinstance(node.args[1], ast.Constant)
+    and node.args[1].value == "sleep"
+  )
+
+
+def _python_waits(tree, lines):
+  parents = {
+    child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)
+  }
+
+  def enclosing(node, types):
+    parent = parents.get(node)
+    while parent:
+      if isinstance(parent, types):
+        return parent
+      parent = parents.get(parent)
+    return None
+
+  waits = []
+  for node in ast.walk(tree):
+    if not isinstance(node, ast.Call):
+      continue
+    actual = shape(node.func)
+    if actual not in REAL_WAIT_CALLS:
+      continue
+    if actual == "asyncio.sleep" and not enclosing(node, ast.Await):
+      continue
+    ancestor = parents.get(node)
+    bounded = False
+    fake_timed = False
+    while ancestor:
+      if isinstance(ancestor, ast.While) and _has_bounded_poll_limit(ancestor.test):
+        bounded = True
+      if isinstance(ancestor, (ast.With, ast.AsyncWith)) and any(
+        _patches_real_wait(item.context_expr) for item in ancestor.items
+      ):
+        fake_timed = True
+      if isinstance(
+        ancestor, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+      ) and any(_patches_real_wait(candidate) for candidate in ast.walk(ancestor)):
+        fake_timed = True
+      ancestor = parents.get(ancestor)
+    if bounded or fake_timed:
+      continue
+    waits.append(
+      {
+        "actual": actual,
+        "line": node.lineno,
+        "column": len(
+          lines[node.lineno - 1].encode("utf-8")[: node.col_offset].decode("utf-8")
+        )
+        + 1,
+      }
+    )
+  return waits
+
+
 def python_pairs(text):
   pairs = []
   lines = text.splitlines()
@@ -2969,7 +3169,7 @@ def python_pairs(text):
       walk_scope(child, active_taint)
 
   walk_scope(tree, module_tainted)
-  return {"pairs": pairs}
+  return {"pairs": pairs, "waits": _python_waits(tree, lines)}
 
 
 def output_channel(name, tainted=(), lang="py", web_taint=False):
@@ -3103,12 +3303,27 @@ def review_tests(targets):
           "status": "review",
         }
       )
+    for wait_finding in parsed.get("waits", ()):
+      code = TEST_RULE_IDS["timing_wait"]
+      if suppressed(code, file_ids | line_ids[wait_finding["line"] - 1]):
+        continue
+      findings.append(
+        {
+          "rule": code,
+          "category": "timing_wait",
+          "path": str(path),
+          "line": wait_finding["line"],
+          "column": wait_finding["column"],
+          "evidence": f"unconditional wait via {wait_finding['actual']}",
+          "status": "review",
+        }
+      )
   return {"findings": findings, "coverage": coverage, "errors": errors}
 
 
 def review_tests_main(argv=None):
   parser = argparse.ArgumentParser(
-    description="Review explicitly scoped test assertions."
+    description="Review explicitly scoped test assertions and waits."
   )
   parser.add_argument("targets", nargs="+")
   args = parser.parse_args(argv)

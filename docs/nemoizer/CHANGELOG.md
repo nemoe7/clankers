@@ -8,6 +8,14 @@ This log has no Unreleased section.
 
 ## [0.1.16]
 
+### Added
+
+- Add advisory NMT300 for test sleeps, excluding bounded polling, fake timers, and Playwright timeout helpers.
+
+### Changed
+
+- Document NMT200's zero-value exemption and add explicit coverage.
+
 ### Fixed
 
 - Reconfigure `markers.py` CLI output streams to UTF-8 on Windows consoles.
