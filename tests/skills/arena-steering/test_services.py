@@ -997,6 +997,18 @@ def test_task_age_priority_uses_creation_time_once_and_preserves_base() -> None:
   store.close()
 
 
+def test_task_age_priority_caps_at_p2() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  tasks = TaskService(store, store, clock=clock)
+  created = tasks.create_task("p2", "P2", size=1, priority="P2", details=["Work"])
+  clock.advance(hours=1)
+  aged = tasks.get_task(created.id)[0]
+  assert aged.priority == "P2"
+  assert aged.effective_priority == "P2"
+  store.close()
+
+
 def test_task_creation_time_migrates_from_modified_time(tmp_path) -> None:
   path = tmp_path / "legacy.sqlite3"
   clock = _ReportTestClock()

@@ -1748,7 +1748,9 @@ class TaskService:
     except (ValueError, TypeError):
       return
     if age >= timedelta(hours=1):
-      task.effective_priority = f"P{max(1, int(task.priority[1]) - 1)}"
+      priority_level = int(task.priority[1])
+      if priority_level > 1:
+        task.effective_priority = f"P{max(2, priority_level - 1)}"
 
   def _enforce_dependency_order(self, tasks: list[Task]) -> list[Task]:
     """Rank upcoming tasks while promoting prerequisites and preserving history."""
