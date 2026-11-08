@@ -5365,7 +5365,18 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   tasks.create_task("work", "Work", size=2, details=["First", "Second"])
   store.close()
   code, _, err = _run_cli(state_dir, "task", "mod", "work", "links", "msg", "ab1234")
-  assert code != 0 and "detail" in err
+  assert code == 1
+  expected_error = (
+    "Steer error: Adding a message link requires an added or deleted task detail. "
+    "Are you sure this message needs to be linked? "
+    "Does it hold any new evidence for completing the task?"
+  )
+  assert err.strip() == expected_error
+  store, _, tasks, _ = cli.open_services(state_dir)
+  unchanged = tasks.get_task("work")[0]
+  assert unchanged.msg_ids == []
+  assert unchanged.details == ["First", "Second"]
+  store.close()
   code, _, err = _run_cli(
     state_dir,
     "task",
