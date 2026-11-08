@@ -1705,7 +1705,7 @@ code.msg-id {
   align-items: center;
   padding: 0;
   border: 0;
-  border-radius: 3px;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -3403,7 +3403,7 @@ article#report.report img,
   }
 
   :is(.tab-btn, .composer-attachment-chip button,
-    .parent-id-button, .task-title):hover:not(:disabled) {
+    .task-title):hover:not(:disabled) {
     border-radius: 6px;
   }
 

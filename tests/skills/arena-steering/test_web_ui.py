@@ -7856,6 +7856,40 @@ def test_shared_ui_helpers_icons_and_classes(tmp_path: Path) -> None:
         )
         assert positions["parentRight"] <= positions["idLeft"] + 1
 
+        id_button = page.locator(
+          f'.message[data-msg-id="{second.id}"] .parent-id-button'
+        )
+        bubble = page.locator(f'.message[data-msg-id="{second.id}"] .message-bubble')
+        bubble_radius = bubble.evaluate("el => getComputedStyle(el).borderRadius")
+        idle = id_button.evaluate("""el => {
+          const style = getComputedStyle(el);
+          return {borderRadius: style.borderRadius, background: style.backgroundColor};
+        }""")
+        assert idle["borderRadius"] == bubble_radius, (idle, bubble_radius)
+        page.screenshot(path=str(tmp_path / "parent-id-chip-idle.png"))
+
+        id_button.hover()
+        page.wait_for_function(
+          """([selector, background]) =>
+            getComputedStyle(document.querySelector(selector)).backgroundColor !== background
+          """,
+          arg=[
+            f'.message[data-msg-id="{second.id}"] .parent-id-button',
+            idle["background"],
+          ],
+        )
+        hovered = id_button.evaluate("""el => {
+          const style = getComputedStyle(el);
+          return {borderRadius: style.borderRadius, background: style.backgroundColor};
+        }""")
+        assert hovered["borderRadius"] == idle["borderRadius"] == bubble_radius, (
+          idle,
+          hovered,
+          bubble_radius,
+        )
+        assert hovered["background"] != idle["background"], (idle, hovered)
+        page.screenshot(path=str(tmp_path / "parent-id-chip-hover.png"))
+
         for selector in ("#log-edited", "#log-newest"):
           assert page.locator(selector).evaluate(
             f"el => el.classList.contains('{SHARED_SCROLL_JUMP_CLASS}')"
