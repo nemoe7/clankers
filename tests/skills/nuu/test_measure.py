@@ -8,6 +8,7 @@ from pathlib import Path
 MEASURE = (
   Path(__file__).resolve().parents[3] / "skills" / "nuu" / "scripts" / "measure.py"
 )
+EXPECTED_NUU_RULE_COUNT = 49
 
 SHEET = {
   "size-12": "12px",
@@ -141,6 +142,9 @@ def test_nuu_loads_version_and_rule_descriptions_from_docs_and_skips_agents(
     (scripts_dir.parent / "pyproject.toml").read_text(encoding="utf-8")
   )
   assert nuu_mod.VERSION == pyproject["project"]["version"]
+  assert len(nuu_mod.KNOWN_NUU_RULES) == EXPECTED_NUU_RULE_COUNT
+  assert set(nuu_mod.DEFAULT_RULE_SEVERITIES) == nuu_mod.KNOWN_NUU_RULES
+  assert set(nuu_mod.DEFAULT_RULE_SEVERITIES.values()) <= {"error", "review"}
   for code in nuu_mod.KNOWN_NUU_RULES:
     assert code in nuu_mod.RULE_DESCRIPTIONS
     assert nuu_mod.RULE_DESCRIPTIONS[code]
