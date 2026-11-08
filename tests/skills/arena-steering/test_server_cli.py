@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import errno
 import io
 import json
 import os
@@ -16,6 +17,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -66,6 +68,9 @@ PR_VERIFICATION_ERROR = "did not verify"
 NO_CURRENT_TASK = "No current task"
 
 
+_REAL_HEALTHY_SERVER_URL = cli._healthy_server_url
+
+
 JOB_LOG_FALLBACK_TEXT = "job log text"
 
 
@@ -81,6 +86,28 @@ def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
   err = io.StringIO()
   code = cli_main(list(args), out=out, err=err)
   return code, out.getvalue(), err.getvalue()
+
+
+def _start_health_server(
+  payload: dict[str, object],
+) -> tuple[ThreadingHTTPServer, threading.Thread]:
+  class Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+      body = json.dumps(payload).encode("utf-8")
+      status = int(HTTPStatus.OK if self.path == "/health" else HTTPStatus.NOT_FOUND)
+      self.send_response(status)
+      self.send_header("Content-Type", "application/json")
+      self.send_header("Content-Length", str(len(body)))
+      self.end_headers()
+      self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+      return
+
+  httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+  thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+  thread.start()
+  return httpd, thread
 
 
 @pytest.mark.parametrize("command", ["read", "poll", "msg"])
@@ -4213,6 +4240,119 @@ def test_serve_binds_a_fixed_host_on_the_v1_port() -> None:
   assert cli.SERVE_PORT == 8000
   with pytest.raises(SystemExit):
     cli.main(["serve", "--host", "127.0.0.1"], out=io.StringIO(), err=io.StringIO())
+
+
+@pytest.mark.parametrize(
+  "args",
+  [
+    ("read",),
+    ("task",),
+    ("post-exit", "--rc", "0"),
+    ("survey", "--template"),
+  ],
+)
+def test_nonserve_cli_commands_fail_with_actionable_guidance_offline(
+  args: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.setattr(cli, "_healthy_server_url", lambda _state_dir: None)
+  state_dir = cli.resolve_state_dir()
+  code, _out, err = _run_cli(state_dir, *args)
+  assert code == 1
+  assert "Steering server is unavailable" in err
+  assert "steer serve" in err
+  assert not (state_dir / "state.sqlite3").exists()
+
+
+def test_version_and_serve_succeed_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+  monkeypatch.setattr(cli, "_healthy_server_url", lambda _state_dir: None)
+  state_dir = cli.resolve_state_dir()
+  code, out, err = _run_cli(state_dir, "--version")
+  assert code == 0 and out.startswith("steer ") and not err
+
+  class FakeServer:
+    server_address = ("0.0.0.0", cli.SERVE_PORT)
+
+    def serve_forever(self) -> None:
+      return
+
+    def server_close(self) -> None:
+      return
+
+  monkeypatch.setattr(
+    cli,
+    "create_http_server",
+    lambda _app, *, host, port: FakeServer(),
+  )
+  code, _out, err = _run_cli(state_dir, "serve")
+  assert code == 0 and not err
+
+
+def test_serve_reuses_healthy_server_without_identity_matching(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  import socket
+
+  health = {
+    "ok": True,
+    "version": "0.0.1",
+    "repo": "different-checkout",
+    "asset_version": "different-assets",
+    "survey": {},
+  }
+  listener, thread = _start_health_server(health)
+  monkeypatch.setattr(cli, "SERVE_PORT", listener.server_port)
+  monkeypatch.setattr(cli, "_healthy_server_url", _REAL_HEALTHY_SERVER_URL)
+  monkeypatch.setattr(
+    cli,
+    "create_http_server",
+    lambda *_args, **_kwargs: (_ for _ in ()).throw(
+      OSError(errno.EADDRINUSE, "Address already in use")
+    ),
+  )
+  state_dir = cli.resolve_state_dir()
+  try:
+    code, out, err = _run_cli(state_dir, "serve")
+    assert code == 0 and not err
+    assert "Reusing healthy Arena Steering server" in out
+    assert json.loads((state_dir / "server.json").read_text(encoding="utf-8")) == {
+      "host": cli.BIND_HOST,
+      "port": listener.server_port,
+    }
+    with socket.create_connection(("127.0.0.1", listener.server_port), timeout=1.0):
+      pass
+  finally:
+    listener.shutdown()
+    listener.server_close()
+    thread.join(timeout=5)
+
+
+def test_serve_leaves_unverified_listener_untouched(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  import socket
+
+  listener, thread = _start_health_server({"ok": True, "version": "not-enough"})
+  monkeypatch.setattr(cli, "SERVE_PORT", listener.server_port)
+  monkeypatch.setattr(cli, "_healthy_server_url", _REAL_HEALTHY_SERVER_URL)
+  monkeypatch.setattr(
+    cli,
+    "create_http_server",
+    lambda *_args, **_kwargs: (_ for _ in ()).throw(
+      OSError(errno.EADDRINUSE, "Address already in use")
+    ),
+  )
+  state_dir = cli.resolve_state_dir()
+  try:
+    code, _out, err = _run_cli(state_dir, "serve")
+    assert code == 1
+    assert "unverified listener" in err and "left untouched" in err
+    assert "steer serve" in err
+    with socket.create_connection(("127.0.0.1", listener.server_port), timeout=1.0):
+      pass
+  finally:
+    listener.shutdown()
+    listener.server_close()
+    thread.join(timeout=5)
 
 
 @pytest.mark.parametrize(
