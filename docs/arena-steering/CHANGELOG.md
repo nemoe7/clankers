@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Rebind active WebSockets to the new app after Python hot reload and notify clients of state changes.
+
 - Require final-decision labels on report questions and options, forbidding question strings and placeholder labels.
 
 - Decode child-process text pipes as strict UTF-8 and reconfigure CLI streams to UTF-8 on Windows.

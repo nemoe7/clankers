@@ -1668,12 +1668,17 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
     def log_message(self, format: str, *args: Any) -> None:
       return
 
+    def _current_app(self) -> SteeringApp:
+      server = getattr(self, "server", None)
+      return getattr(server, "_steering_app", app)
+
     def do_OPTIONS(self) -> None:
       self.send_response(int(HTTPStatus.NO_CONTENT))
       self._send_common_headers("text/plain; charset=utf-8", 0)
       self.end_headers()
 
     def do_GET(self) -> None:
+      app = self._current_app()
       parsed = urlparse(self.path)
       path = parsed.path.rstrip("/") or "/"
       if path == "/api/ws":
@@ -1724,6 +1729,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self.connection.sendall(bytes([0x80 | opcode]) + length + data)
 
     def ws_dispatch(self, value: Any) -> None:
+      app = self._current_app()
       if not isinstance(value, dict):
         raise TypeError("Expected an object")
       if value.get("type") == "pong":
@@ -1800,6 +1806,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self.end_headers()
       self.close_connection = True
       self.connection.settimeout(WS_TICK_SECONDS)
+      app = self._current_app()
       buffer = bytearray()
       message = bytearray()
       fragmented = False
@@ -1862,6 +1869,14 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
             if final:
               self.ws_dispatch(json.loads(message.decode("utf-8")))
               message.clear()
+          current_app = self._current_app()
+          if current_app is not app:
+            app = current_app
+            version = app.data_version()
+            ack_events, ack_snapshot = app.report_acked_events(ack_snapshot)
+            for ack_event in ack_events:
+              self.ws_send(1, json.dumps(ack_event).encode("utf-8"))
+            self.ws_send(1, b'{"type":"change"}')
           current = app.data_version()
           if current != version:
             version = current
@@ -1917,7 +1932,7 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       except (TypeError, ValueError) as exc:
         self._write_json(int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
         return
-      status, payload = app.dispatch(method, self.path, body)
+      status, payload = self._current_app().dispatch(method, self.path, body)
       self._write_json(status, payload)
 
     def _read_multipart_body(self, content_type: str) -> dict[str, Any]:
@@ -2030,7 +2045,9 @@ def reload_server_handler(server: ThreadingHTTPServer, app: SteeringApp) -> Stee
   after_reload = getattr(app, "_after_reload", None)
   if after_reload is not None:
     after_reload(new_app)
-  server.RequestHandlerClass = handler_fn(new_app)
+  new_handler = handler_fn(new_app)
+  server._steering_app = new_app  # type: ignore[attr-defined]
+  server.RequestHandlerClass = new_handler
   return new_app
 
 
@@ -2073,6 +2090,7 @@ def create_http_server(
 ) -> ThreadingHTTPServer:
   """Create a ThreadingHTTPServer bound to host:port for SteeringApp."""
   server = ThreadingHTTPServer((host, port), make_request_handler(app))
+  server._steering_app = app  # type: ignore[attr-defined]
   if not os.environ.get("PYTEST_CURRENT_TEST"):
     stop_event = threading.Event()
     server._hot_reload_stop = stop_event  # type: ignore[attr-defined]
