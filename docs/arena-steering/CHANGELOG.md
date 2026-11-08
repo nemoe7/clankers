@@ -52,6 +52,10 @@ This log has no Unreleased section.
 
 - Require an explicit task size whenever task details are added or removed.
 
+- Follow Steering's returned task order. Require `-z` and the 120-character cap for every task-detail change.
+
+- Use `functions.fetch_page` instead of the GitHub job page for log retrieval. Try it before reporting failure, fetch later chunks from the same URL, and never commit, publish, or quote signed URLs.
+
 - Suppress the mobile browser tap overlay across the v2 interface.
 
 - Align desktop Reports sidebars with the top of the report content.

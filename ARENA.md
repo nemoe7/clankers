@@ -14,7 +14,7 @@
 - Before pushing, ALWAYS check `origin/main`; if moved, rebase, then push `--force-with-lease`.
 - ALWAYS push verified commits after each task on public repos; allow small batches (<=3 commits) on private repos.
 - After each push, confirm `git ls-remote origin <branch>` = `git rev-parse HEAD`; report remote landing (subject + short hash). After sandbox reset: fetch, confirm HEAD = remote branch before edits.
-- ALWAYS run `steer --version` at every turn start and follow arena-steering's turn-start recipe for installation and server startup; read the inbox at every cadence point.
+- At every turn start, follow the [resume-turn recipe](.agents/skills/arena-steering/references/recipes/resume-turn.md) and read the inbox at every cadence point.
 - After any arena-steering source change, MUST rerun its installer from the repo root before the next CLI call or preview start.
 - NEVER stop or restart a running Steering preview server unless a health check fails or the user asks.
 - NEVER merge the PR; no authorization or instruction overrides this.
@@ -40,7 +40,7 @@
 
 - Session start: read bible; next action `10-4: ARENA.md loaded`; install; start preview; ask visibility.
 - Resumed/next turn: check preview (restart if needed); read missing-context paths in the bible; continue open task or poll.
-- Load `arena-steering` for inbox, reports, gates, and GitHub Actions job logs.
+- Follow the installed [arena-steering skill](.agents/skills/arena-steering/SKILL.md) for Steering procedures.
 - Bible ("bible" or "the bible", NEVER "bible files" or "required bible files"): ARENA.md, root AGENTS.md, and arena-steering SKILL.md, plus any nested AGENTS.md in a directory you work in (read in full via read_file).
 - MUST read required paths in the bible fully via read tool, NEVER Bash.
 - After mid-turn compaction/summary/context replacement, read missing-context paths in the bible end-to-end before other tools; resumed/next turns use their start sequence.
@@ -49,16 +49,16 @@
 - MUST batch required bible reads in one call; split only at harness output caps.
 - MUST finish required reads end-to-end (all continuations) before queued work/pending push.
 - Run `steer survey` immediately after initial visibility response, before first inbox poll, and after a preview restart or compaction/summary/context replacement, before queued work.
-- Each Markdown file under `references/` is supplementary: read/grep only needed files; no end-to-end read; gate/read-cadence mechanics live in `references/commands.md` and `references/cadence.md`. Installation template copies are supplementary too.
+- Each Markdown file under `references/` is supplementary; read only what a question needs. Use the installed skill's `references/cli.md` for commands and its `references/recipes/` for procedures. Installation template copies are supplementary too.
 - In saved context, state the start sequence and full missing-context bible reads before queued work; no verbatim ARENA.md copy required.
 - After bible changes (incl. rebase/`main` update), MUST read full diff from last-read version before next work; unavailable/unclear → read full file.
-- Before non-setup tools: finish initial setup, await visibility answer, start repo tooling installs (MUST include `pip install -e` on `nuu` when present) via `arena-preview run start` and any demo/presentation server via `start_process`, then first inbox call = `arena-preview poll`.
+- Before non-setup tools, finish initial setup and await visibility. Install repo tooling through the installed Steering skill (MUST include `pip install -e` on `nuu` when present); start demo servers via `start_process`, then use `steer poll` first.
 - First reply opens `10-4: ARENA.md loaded`; found later → next reply opens `10-4: ARENA.md loaded late (turn N)`.
 - Name the started preview; claim visibility only after user confirmation.
 
 ## General
 
-- Stderr read reminder = only read schedule; act on other stderr reminders as directed. When told to unpublish stale reports, run `steer report rm --stale`. Bash gate = repair, NEVER schedule. Mechanics: skill reference, Read cadence.
+- Stderr read reminder = only read schedule; act on other stderr reminders as directed. When told to unpublish stale reports, run `steer report rm --stale`. Bash gate = repair, NEVER schedule. Follow the installed skill for Steering mechanics.
 - Before the first start there is no inbox.
 - ALWAYS answer each delivered message substantively in its own `ack <id> <Markdown>` before chat; one answer/call; NEVER ack pending blindly.
 - Cite notes by ID, NEVER sequence/list position: first 6 chars in prose/tasks/reports/notes; extend on prefix collision.
@@ -68,14 +68,14 @@
 - NEVER silently restore ntfy.
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions and patterns.
-- MUST use `nemoizer` for all human-facing text (responses, reports, comments, docs), run every report over `nemoizer` before `arena-preview report publish`, falling back to ASD-STE100 and Humanizer when unavailable.
+- MUST use `nemoizer` for all human-facing text (responses, reports, comments, docs), run every report over `nemoizer` before `steer report pub`, falling back to ASD-STE100 and Humanizer when unavailable.
 - Comments/docs/responses MUST be terse, unambiguous; cut words, NEVER meaning; no walls/padding where lists/tables are faster; ≤4 sentences/paragraph; no storyline/narrative unless asked.
 - Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
 - Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
-- Break larger tasks into smaller ones, and NEVER combine tasks unless they share the exact same scope. ALWAYS take the smallest open task; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
+- Follow the task order returned by Steering.
 - Work while tasks remain; end when verified and stopped.
 - Before each push, run repo checks detached, NEVER inline; push only on pass; inline = skipped gate at any speed.
 - Read each gate's passed or failed line; a pipe that hides the verdict counts as skipping it. The wait scopes the next task.
@@ -104,7 +104,11 @@
 - MUST publish every unrelated finding in a fielded report with a suggested next action; fix only blocking ones.
 - Problem description, how-it-works question, or thinking aloud: deliver assessment, stop; implement only when asked.
 - Assessment/evaluation reports MUST include next-action: recommended, no-change, custom.
-- Establish expected contract with user, ask before implementing on deviating reasoning/material ambiguity (readings changing behavior/data/interfaces/scope/outcome), and ALWAYS report uncontracted shipped changes. Stop investigating when verification supports conclusion; alternatives only on failed verification/ambiguous evidence.
+- Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
+- Establish the expected contract with the user.
+- Ask before implementing on deviating reasoning or material ambiguity.
+- ALWAYS report uncontracted shipped changes.
+- Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - Ask ASAP via fielded reports (Reports tab); read answers at next steering read; affected work stops, independent work continues.
 - Carry every proposal and question in a fielded report, never in chat.
 - Use `ask_user` ONLY for: explicit tool request, unavailable preview (incl. failed publish), unconfirmed steering visibility, ntfy/"continue without steering", GitHub reconnect. NEVER when a report/new report can carry it.
@@ -135,7 +139,7 @@
 
 - Prefer several passes with a re-check after each.
 - ask_user batches only: label Q1, Q2, …, and state the total before the batch and before any addition.
-- Before final poll: state no unblocked tasks remain; identify blocked tasks in published reports. End every turn with final-Bash `arena-preview poll` unless `skip_poll` stamped; ALWAYS use Bash tool timeout 1800; NEVER wrap it in a shell timeout; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports. ALWAYS end every turn with `steer poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; ALWAYS use Bash tool timeout 1800; NEVER wrap it in a shell timeout; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Duplicated/garbled/disowned message: confirm reading in one line before acting; keep caused edits reversible until confirmed.
 - Preview inbox is truth for steering/acks; verify pending/completed there, not Arena chat. Repeats are resends: answer pending, restate done in one line, NEVER redo/widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck. Grep callers before editing; falsifiable hypotheses; one variable at a time; NEVER guess, arbitrary-fallback, or hide failures; revise disproven assumptions.
@@ -163,13 +167,13 @@
 - Keep unrelated changes in separate commits; NEVER use a merge commit to keep intermediate history.
 - Review the final commit list and diff before pushing.
 - Follow project convention first; else Conventional Commits: `<type>[optional scope]: <description>`, imperative, specific, lowercase after colon, no period, <=72 chars, no body, `!` = breaking. Types: `feat fix refactor perf style docs test build chore` (prefer history); reuse scopes, add only if none fits.
-- Reports/audits/preview state/inboxes/receipts live in Git-ignored workspace dirs outside transient caches; NEVER commit/push.
+- NEVER commit or push reports, audits, preview state, inboxes, or receipts.
 - NEVER cite session-local IDs (note/report/submission/task/session-minted) or local-only paths (ignored state/scratch or sandbox home) in repo files, commits, PRs, task details, or reports; strip on sight; cite CHANGELOG/repo path/commit instead.
 - All reports use the `arena-steering` skill, not diff-viewer commits; mark each finding's disposition where it is recorded.
 - `GH_TOKEN` can expire mid-turn, repo unchanged: `gh auth status` = invalid, push fails, `gh auth setup-git` won't help.
 - Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; NEVER end silently.
 - Prove recovery with `git ls-remote origin <branch>` before pushing again.
-- Update PR title/body via `arena-preview pr-update -n <pr> -t <title> -f <workspace-file>`; read GitHub Actions job logs via `arena-preview job-log -j <job-id>` (or `-r <run-id>`) + `fetch_page`.
+- Update PR title/body via `steer pr-update -n <pr> -t <title> -f <workspace-file>`; for job logs, follow the [job-log recipe](.agents/skills/arena-steering/references/recipes/job-logs.md).
 - **NEVER `-f body=@path`**; stage PR text in the workspace, NEVER /tmp. After every PATCH re-fetch title/body and diff against the staged file; a 200 is not proof.
 - PR title/body MUST match squashed timeline: features then fixes; no round headers.
 - NEVER mention the owner in public-facing material; it carries the change, not the people.
@@ -183,17 +187,16 @@
 
 - For Chromium work, use the [recipe](.agents/skills/arena-steering/references/recipes/chromium.md).
 - UI work: verify via screenshots from that pinned Chromium package; read rendered result before counting landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
-- Install repo tooling (deps, venvs) via `arena-preview run start` after the visibility question and before the first `poll` or `read` so the install runs detached without blocking a task; reserve `start_process` for the steering preview and demos/presentations.
+- Start repo-tooling installs with `steer run start -t <task> <name> -- <command>` after visibility and before the first `steer poll` or `steer read`; use `start_process` for the Steering preview and demos or presentations.
 - Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
-- Freeze = root tree only: delegate queued other-file tasks to idle allowlisted board workers first, else start worktrees (`arena-preview worktree start`) during root gates; NEVER wait read-only.
-- A >=10-second run is long; MUST use `arena-preview run start <name> -- <command>`, naming `<name>` after what the gate runs (NEVER generic `gate123`) and appending `-2`, `-3`, ... on retries.
+- Freeze = root tree only: delegate queued other-file tasks to idle allowlisted board workers first; otherwise use `steer worktree add` during root gates, NEVER wait read-only.
+- A >=10-second run is long; MUST use `steer run start -t <task> <name> -- <command>`, naming `<name>` after what the gate runs (NEVER generic `gate123`) and appending `-2`, `-3`, ... on retries.
 - NEVER sleep during a background gate.
 - Link each local gate to its task at run start; the live run owns the task's blocked state.
-- After blocking the sole task for its running gate, MUST run `arena-preview poll`.
+- After blocking the sole task for its running gate, MUST run `steer poll`.
 - NEVER call `get_process_output` to wait for a run.
 - NEVER spam `run logs` while a run is live; one diagnosis read, verdict on a later call.
-- NEVER wait for a gate with `arena-preview poll` unless only that gate's blocked task remains.
-- Keep working; next bash/`arena-preview` call prints verdict once (`run <name> done: exit N`), one status line/call until then.
+- NEVER wait for a gate with `steer poll` unless only that gate's blocked task remains.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.
 - Keep durable work in plain files; `bash` starts at repo root, so `cd` into it is redundant.

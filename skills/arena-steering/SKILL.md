@@ -55,6 +55,8 @@ steer task rm <id>
 - Create ordered task phases by repeating `-T` with `report`, `code`, `docs`, `ops`, or `misc`.
 - Finish phases on a clean tree using `steer task finish ID [-c FULL_COMMIT]`. Reports need a linked published report or answer, and code/docs need a unique pushed full commit.
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
+- Follow the task order returned by Steering.
+- Reassess task size with `-z` on every task-detail change, and keep each detail within 120 characters.
 - Block phases on unfinished dependencies or running gates. Non-report phases also wait on unanswered linked reports, except completed report-phase evidence.
 - When creating a task, omit `-p` unless the user states a priority.
 
