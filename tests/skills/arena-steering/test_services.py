@@ -1937,6 +1937,49 @@ def test_phase_evidence_is_required_unique_and_immutable() -> None:
   store.close()
 
 
+def test_entity_rename_preserves_report_source_and_message_parent_refs() -> None:
+  store = SqliteStore(":memory:")
+  reports = ReportService(store, store, messages=store)
+  tasks = TaskService(store, store, messages=store)
+  messages = MessageService(store, store, store, store)
+  reports.publish_report(
+    "source-report", "Source report", "Report body.", source_file="docs/source.md"
+  )
+  tasks.create_task("source-task", "Source task", size=3, details=["Review."])
+  parent = messages.send_message("Message parent", msg_id="dd0001")
+  child = messages.send_message(
+    "Child message",
+    msg_id="ee0001",
+    parent_refs=[
+      {"type": "task", "id": "source-task"},
+      {"type": "report", "id": "source-report"},
+      {"type": "message", "id": parent.id},
+    ],
+  )
+
+  tasks.rename_task("source-task", "renamed-task")
+  child_after_task_rename = store.get_message(child.id)
+  assert child_after_task_rename is not None
+  assert child_after_task_rename.parent_refs == [
+    {"type": "task", "id": "renamed-task"},
+    {"type": "report", "id": "source-report"},
+    {"type": "message", "id": parent.id},
+  ]
+  assert child_after_task_rename.parent_ids == [parent.id]
+
+  renamed_report = reports.rename_report("source-report", "renamed-report")
+  assert renamed_report.source_file == "docs/source.md"
+  child_after_report_rename = store.get_message(child.id)
+  assert child_after_report_rename is not None
+  assert child_after_report_rename.parent_refs == [
+    {"type": "task", "id": "renamed-task"},
+    {"type": "report", "id": "renamed-report"},
+    {"type": "message", "id": parent.id},
+  ]
+  assert child_after_report_rename.parent_ids == [parent.id]
+  store.close()
+
+
 def test_report_rename_preserves_finished_phase_evidence() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)

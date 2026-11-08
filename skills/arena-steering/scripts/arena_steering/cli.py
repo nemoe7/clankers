@@ -136,6 +136,7 @@ def open_services(
     store,
     on_answer_callback=messages.notify_new_work,
     on_ack_callback=messages.reset_gate_if_clear,
+    messages=store,
   )
   return store, messages, tasks, reports
 
