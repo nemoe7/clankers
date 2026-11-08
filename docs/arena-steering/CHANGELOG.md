@@ -14,6 +14,8 @@ This log has no Unreleased section.
 
 - Rebind active WebSockets to the new app after Python hot reload and notify clients of state changes.
 
+- Reuse a healthy Arena Steering server on port conflicts and leave unverified listeners untouched. Tell offline CLI users to run `steer serve`, except when they request `steer --version`.
+
 - Require final-decision labels on report questions and options, forbidding question strings and placeholder labels.
 
 - Decode child-process text pipes as strict UTF-8 and reconfigure CLI streams to UTF-8 on Windows.

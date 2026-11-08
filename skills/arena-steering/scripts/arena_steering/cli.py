@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import io
 import json
 import os
@@ -17,6 +18,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import UTC, datetime
+from http import HTTPStatus
 from pathlib import Path
 from typing import TextIO
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -155,6 +157,21 @@ def main(
   if args_list in (["--version"], ["-V"]):
     print(f"steer {__version__}", file=stdout)
     return 0
+
+  command = args_list[0] if args_list else ""
+  preflight_state_dir: Path | None = None
+  if command != "serve":
+    try:
+      preflight_state_dir = resolve_state_dir()
+      health_state_dir = preflight_state_dir
+    except (OSError, sqlite3.Error):
+      health_state_dir = pre_mod.repo_root() / "arena-state"
+    if _healthy_server_url(health_state_dir) is None:
+      print(
+        "Steering server is unavailable. Run `steer serve`, then retry.",
+        file=stderr,
+      )
+      return 1
 
   parser = argparse.ArgumentParser(
     prog="steer",
@@ -333,7 +350,7 @@ def main(
   if cmd == "post-exit":
     parsed = post_exit_p.parse_args(cmd_args)
     try:
-      return _run_post_exit(parsed, resolve_state_dir(), stdout)
+      return _run_post_exit(parsed, preflight_state_dir or resolve_state_dir(), stdout)
     except (OSError, sqlite3.Error, ValueError):
       return 0  # The exit hook must never change the completed line's status.
   group_parsers = {
@@ -346,9 +363,10 @@ def main(
     group_parsers[cmd].print_help(file=stdout)
     return 0
 
-  resolved_state_dir: Path | None = None
+  resolved_state_dir: Path | None = preflight_state_dir
   try:
-    resolved_state_dir = resolve_state_dir()
+    if resolved_state_dir is None:
+      resolved_state_dir = resolve_state_dir()
     if cmd == "pre" and not (resolved_state_dir / "state.sqlite3").is_file():
       parsed = pre_p.parse_args(cmd_args)
       return _pre_state_unavailable(
@@ -376,13 +394,32 @@ def main(
       serve_p.parse_args(cmd_args)
       _validate_serve_process_title(stdout)
       app = SteeringApp(store)
-      httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
+      try:
+        httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
+      except OSError as exc:
+        assert resolved_state_dir is not None
+        existing_url = _healthy_server_url(resolved_state_dir)
+        if existing_url is not None:
+          _write_server_file(resolved_state_dir, existing_url)
+          print(f"Reusing healthy Arena Steering server at {existing_url}", file=stdout)
+          return 0
+        if exc.errno == errno.EADDRINUSE:
+          print(
+            f"Port {SERVE_PORT} is occupied by an unverified listener; it was left "
+            "untouched. Verify it before stopping it, then retry `steer serve`.",
+            file=stderr,
+          )
+        else:
+          print(
+            f"Could not start the Steering server at {BIND_HOST}:{SERVE_PORT}: {exc}. "
+            "Fix the underlying issue and retry `steer serve`.",
+            file=stderr,
+          )
+        return 1
       port = int(httpd.server_address[1])
+      assert resolved_state_dir is not None
       server_file = resolved_state_dir / "server.json"
-      server_file.write_text(
-        json.dumps({"host": BIND_HOST, "port": port}, indent=2),
-        encoding="utf-8",
-      )
+      _write_server_file(resolved_state_dir, f"http://127.0.0.1:{port}")
       print(f"Steering server listening on http://{BIND_HOST}:{port}", file=stdout)
       try:
         httpd.serve_forever()
@@ -2058,6 +2095,53 @@ def _survey_server_url(state_dir: Path) -> str | None:
   if not port:
     return None
   return f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
+
+
+def _healthy_server_url(state_dir: Path) -> str | None:
+  """Return a local Arena Steering server URL after validating /health."""
+  candidates: list[str] = []
+  recorded = _survey_server_url(state_dir)
+  if recorded is not None:
+    hostname = urllib.parse.urlparse(recorded).hostname
+    if hostname in {"127.0.0.1", "localhost"}:
+      candidates.append(recorded)
+  fallback = f"http://127.0.0.1:{SERVE_PORT}"
+  if fallback not in candidates:
+    candidates.append(fallback)
+
+  opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+  for base_url in candidates:
+    request = urllib.request.Request(
+      f"{base_url}/health", headers={"Accept": "application/json"}
+    )
+    try:
+      with opener.open(request, timeout=1.0) as response:
+        if response.status != int(HTTPStatus.OK):
+          continue
+        payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+      continue
+    if (
+      isinstance(payload, dict)
+      and payload.get("ok") is True
+      and isinstance(payload.get("version"), str)
+      and isinstance(payload.get("asset_version"), str)
+      and isinstance(payload.get("survey"), dict)
+    ):
+      return base_url
+  return None
+
+
+def _write_server_file(state_dir: Path, base_url: str) -> None:
+  """Record a verified local server URL for survey submissions."""
+  parsed = urllib.parse.urlparse(base_url)
+  if parsed.scheme != "http" or parsed.port is None:
+    raise ValueError("A Steering server URL must have an HTTP port")
+  state_dir.mkdir(parents=True, exist_ok=True)
+  (state_dir / "server.json").write_text(
+    json.dumps({"host": BIND_HOST, "port": parsed.port}, indent=2),
+    encoding="utf-8",
+  )
 
 
 def _post_survey(url: str, payload: str) -> dict | None:
