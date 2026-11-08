@@ -57,9 +57,12 @@ steer task rm <id>
 - Finish phases on a clean tree using `steer task finish ID [-c FULL_COMMIT]`. Reports need a linked published report or answer, and code/docs need a unique pushed full commit.
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
 - Follow the task order returned by Steering.
+- Complete the next unblocked task returned by `steer poll` before unrelated task or report work.
 - Reassess task size with `-z` on every task-detail change, and keep each detail within 120 characters.
 - Block phases on unfinished dependencies or running gates. Non-report phases also wait on unanswered linked reports, except completed report-phase evidence.
 - When creating a task, omit `-p` unless the user states a priority.
+- Keep task details to concise current facts, not a chronological action log.
+- Update task details when their recorded facts change.
 
 ## Reports (`Reports`)
 
@@ -74,7 +77,7 @@ steer report rm <id|--stale>
 
 - Publish agent handoffs and cross-session specifications as unfielded Steering reports.
 - Every report field requires a statement `label` before its options (`- ( )`, `- (x)`, `- [ ]`, `- [x]`) or after `label: ___`.
-- Set each question label to the final decision subject and each option label to the chosen outcome.
+- Use concise, task-specific labels: decision subjects for questions and chosen outcomes for options.
 - NEVER use question text or generic labels (`Decision`, `Answer`, `Option`, `Approve`).
   - Wrong: `Decision: Answer`
   - Right: `The method we should use: Share one helper class between tabs.`
