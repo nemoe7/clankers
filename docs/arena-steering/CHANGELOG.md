@@ -19,6 +19,10 @@ This log has no Unreleased section.
 - Complete the next unblocked task returned by `steer poll` before unrelated task or report work.
 - Require a Bible clause with its file and line number in scheduled 10-minute checkpoint acknowledgements.
 
+### Fixed
+
+- Resolve `steer worktree` paths against the primary checkout when invoked from a linked worktree.
+
 ## [2.2.3]
 
 ### Added
