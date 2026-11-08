@@ -7311,6 +7311,165 @@ def test_external_ack_appears_live(tmp_path: Path, transport: str) -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
+@pytest.mark.parametrize("transport", ["websocket", "poll"])
+def test_task_link_and_ack_refresh_during_slow_pagination(
+  tmp_path: Path, transport: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  path = tmp_path / "state.sqlite3"
+  server_store = SqliteStore(path)
+  writer_store = SqliteStore(path)
+  app = SteeringApp(server_store, repo_name="Slow acknowledgement")
+  writer = SteeringApp(writer_store)
+  for index in range(25):
+    app.messages.send_message(
+      f"Older message {index}", msg_id=f"{index:06x}", blocking=False
+    )
+  target_id = "ab0123"
+  app.messages.send_message("Awaiting reply", msg_id=target_id, blocking=False)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        sockets = []
+        page.on("websocket", lambda socket: sockets.append(socket))
+        page.add_init_script("""(() => {
+          window.olderRequestHeld = false;
+          window.taskRefreshResponses = 0;
+          window.lastTaskRefreshAt = 0;
+          const taskRequestIds = new Set();
+          const isOlderPage = path => {
+            if (typeof path !== 'string' || !path.startsWith('/messages?')) return false;
+            return new URLSearchParams(path.split('?', 2)[1] || '').has('before');
+          };
+          const countTaskResponse = () => {
+            window.taskRefreshResponses += 1;
+            window.lastTaskRefreshAt = Date.now();
+          };
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = async (...args) => {
+            const path = String(args[0]);
+            if (isOlderPage(path) && !window.olderRequestHeld) {
+              window.olderRequestHeld = true;
+              await new Promise(resolve => { window.releaseOlder = resolve; });
+            }
+            const response = await originalFetch(...args);
+            if (path.startsWith('/tasks?')) {
+              const originalJson = response.json.bind(response);
+              response.json = async (...jsonArgs) => {
+                const payload = await originalJson(...jsonArgs);
+                countTaskResponse();
+                return payload;
+              };
+            }
+            return response;
+          };
+          const prototype = window.WebSocket?.prototype;
+          if (!prototype) return;
+          const originalSend = prototype.send;
+          prototype.send = function(data) {
+            let request;
+            try { request = JSON.parse(data); } catch {}
+            const path = request?.path;
+            if (request?.method === 'GET' && isOlderPage(path) && !window.olderRequestHeld) {
+              window.olderRequestHeld = true;
+              window.releaseOlder = () => originalSend.call(this, data);
+              return;
+            }
+            if (request?.method === 'GET' && path?.startsWith('/tasks?')) {
+              taskRequestIds.add(request.id);
+            }
+            return originalSend.call(this, data);
+          };
+          const originalAdd = prototype.addEventListener;
+          prototype.addEventListener = function(type, listener, options) {
+            if (type !== 'message' || typeof listener !== 'function') {
+              return originalAdd.call(this, type, listener, options);
+            }
+            return originalAdd.call(this, type, function(event) {
+              let response;
+              try { response = JSON.parse(event.data); } catch {}
+              const isTaskResponse = response?.type === 'response' && taskRequestIds.delete(response.id);
+              const result = listener.call(this, event);
+              if (isTaskResponse) countTaskResponse();
+              return result;
+            }, options);
+          };
+        })();""")
+        query = "?transport=poll" if transport == "poll" else ""
+        page.goto(f"http://127.0.0.1:{server.server_port}/{query}")
+        card = page.locator(f'.message[data-msg-id="{target_id}"]')
+        card.wait_for(state="visible")
+        page.locator("#load-older-messages").wait_for(state="visible")
+        page.wait_for_function(
+          "() => window.taskRefreshResponses > 0 && Date.now() - window.lastTaskRefreshAt > 300"
+        )
+        if transport == "websocket":
+          assert sockets, "the WebSocket transport must connect"
+        else:
+          assert not sockets, "the polling transport must not open a WebSocket"
+        baseline = page.evaluate("window.taskRefreshResponses")
+        page.locator("#load-older-messages").evaluate("element => element.click()")
+        page.wait_for_function("window.olderRequestHeld === true")
+
+        task_id = "slow-link-task"
+        ack_text = "Delayed network acknowledgement"
+        with writer_store.transaction():
+          writer.tasks.create_task(
+            task_id,
+            "Slow link task",
+            size=3,
+            details=["Track the acknowledgement"],
+            msg_ids=[target_id],
+          )
+          writer.messages.ack(target_id, ack_text)
+        assert writer.messages.get_message(target_id).acks == [ack_text]
+        page.wait_for_function(
+          "baseline => window.taskRefreshResponses > baseline",
+          arg=baseline,
+          timeout=10000,
+        )
+        page.evaluate(
+          "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )
+        chip = card.locator(
+          '.receipt-task-links .reply-parent-chip[data-reference-id="slow-link-task"]'
+        )
+        chip.wait_for(state="visible", timeout=5000)
+        card.locator(".reply").get_by_text(ack_text).wait_for(timeout=5000)
+        page.wait_for_function(
+          f"document.querySelector('.message[data-msg-id=\\\"{target_id}\\\"] .receipt-status')"
+          ".getAttribute('data-state-label') === 'Status: acked'"
+        )
+        assert page.evaluate("window.olderRequestHeld") is True
+
+        page.evaluate("window.releaseOlder?.()")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 26",
+          timeout=10000,
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    writer_store.close()
+    server_store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
 @pytest.mark.parametrize("motion", ["no-preference", "reduce"])
 def test_message_reference_highlights_bubble_not_row(
   tmp_path: Path, motion: str
