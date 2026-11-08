@@ -159,8 +159,9 @@ def main(
     return 0
 
   command = args_list[0] if args_list else ""
+  help_requested = any(arg in {"-h", "--help"} for arg in args_list)
   preflight_state_dir: Path | None = None
-  if command != "serve":
+  if command not in {"", "pre", "serve"} and not help_requested:
     try:
       preflight_state_dir = resolve_state_dir()
       health_state_dir = preflight_state_dir

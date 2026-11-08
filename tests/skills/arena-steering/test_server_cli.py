@@ -2999,31 +2999,40 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
   override = tmp_path / "override"
   entrypoint = scripts / "steer"
   env = {**os.environ, "ARENA_STATE_DIR": str(override)}
-  result = subprocess.run(
-    [sys.executable, str(entrypoint), "tasks"],
-    cwd=outside,
-    env=env,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    check=False,
+  health_server, health_thread = _start_health_server(
+    {"ok": True, "version": "test", "asset_version": "test", "survey": {}}
   )
-  assert result.returncode == 0, result.stderr
-  assert state_db.is_file()
-  assert not (state_dir / "steering-v2.sqlite3").exists()
-  assert not (outside / "arena-state").exists()
-  assert not override.exists()
-  rejected = subprocess.run(
-    [sys.executable, str(entrypoint), "--state-dir", str(override), "tasks"],
-    cwd=outside,
-    env=env,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    check=False,
-  )
-  assert rejected.returncode != 0
-  assert not override.exists()
+  cli._write_server_file(state_dir, f"http://127.0.0.1:{health_server.server_port}")
+  try:
+    result = subprocess.run(
+      [sys.executable, str(entrypoint), "tasks"],
+      cwd=outside,
+      env=env,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert state_db.is_file()
+    assert not (state_dir / "steering-v2.sqlite3").exists()
+    assert not (outside / "arena-state").exists()
+    assert not override.exists()
+    rejected = subprocess.run(
+      [sys.executable, str(entrypoint), "--state-dir", str(override), "tasks"],
+      cwd=outside,
+      env=env,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      check=False,
+    )
+    assert rejected.returncode != 0
+    assert not override.exists()
+  finally:
+    health_server.shutdown()
+    health_server.server_close()
+    health_thread.join(timeout=1)
 
 
 def test_paste_attachment_threshold_boundaries() -> None:
