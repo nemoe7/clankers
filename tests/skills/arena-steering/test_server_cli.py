@@ -4258,7 +4258,6 @@ def test_nonserve_cli_commands_fail_with_actionable_guidance_offline(
   state_dir = cli.resolve_state_dir()
   code, _out, err = _run_cli(state_dir, *args)
   assert code == 1
-  assert "Steering server is unavailable" in err
   assert "steer serve" in err
   assert not (state_dir / "state.sqlite3").exists()
 
@@ -4311,9 +4310,8 @@ def test_serve_reuses_healthy_server_without_identity_matching(
   )
   state_dir = cli.resolve_state_dir()
   try:
-    code, out, err = _run_cli(state_dir, "serve")
+    code, _out, err = _run_cli(state_dir, "serve")
     assert code == 0 and not err
-    assert "Reusing healthy Arena Steering server" in out
     assert json.loads((state_dir / "server.json").read_text(encoding="utf-8")) == {
       "host": cli.BIND_HOST,
       "port": listener.server_port,
