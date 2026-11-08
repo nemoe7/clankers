@@ -15,6 +15,8 @@ This log has no Unreleased section.
 - Document the required `steer ack -i` flags and one-call task creation and linking.
 - Cap age-based task promotion at P2 while preserving explicit P1 priorities.
 - Delay stale-report cleanup until 10 minutes after the last linked task finishes.
+- Keep task details to concise current facts, update them when facts change, and use concise, task-specific report labels.
+- Complete the next unblocked task returned by `steer poll` before unrelated task or report work.
 
 ## [2.2.3]
 
