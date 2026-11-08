@@ -2314,6 +2314,7 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
         page.locator("#tab-reports").click()
         page.locator("#report .mermaid-svg tspan").first.wait_for()
+        assert page.locator("#report .field-id-chip").count() == 0
         expected = {
           "#report": 16,
           "#report h1": 32,
@@ -2334,8 +2335,6 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
           "#report .code-block-header": 14,
           "#report pre > code": 14,
           "#report .field-label": 16,
-          "#report .field-id-chip": 12,
-          "#report .field-id-chip > code": 11,
           "#report .option-row": 16,
           "#report .field-text-input": 16,
           "#report .custom-text-input": 16,
@@ -2363,6 +2362,10 @@ def test_report_content_uses_next_nuu_type_step_without_resizing_chrome(
         page.screenshot(
           path=str(tmp_path / f"report-type-ramp-{width}.png"), full_page=True
         )
+        if width == 390:
+          page.locator("#report .field-card.question").nth(1).screenshot(
+            path=str(tmp_path / "report-field-card-390.png")
+          )
       finally:
         browser.close()
   finally:

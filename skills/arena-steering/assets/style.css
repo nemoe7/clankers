@@ -1726,8 +1726,7 @@ code.msg-id {
 }
 
 .reply-parent-chip,
-.composer-reply-chip,
-.field-id-chip {
+.composer-reply-chip {
   display: inline-flex;
   align-items: center;
   min-height: 0;
@@ -1748,8 +1747,7 @@ code.msg-id {
 
 .reply-parent-chip > code:not(.msg-id),
 .composer-reply-chip > code:not(.msg-id),
-#report .reply-parent-chip > code:not(.msg-id),
-#report .field-id-chip > code:not(.msg-id) {
+#report .reply-parent-chip > code:not(.msg-id) {
   font-size: 11px;
 }
 
@@ -2702,12 +2700,6 @@ article#report.report img,
 .field-label {
   font-weight: 700;
   color: hsl(var(--header-primary));
-}
-
-.field-id-chip {
-  flex: none;
-  white-space: nowrap;
-  cursor: default;
 }
 
 .options {
