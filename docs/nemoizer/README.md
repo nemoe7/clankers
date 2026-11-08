@@ -62,7 +62,7 @@ It does not execute or rewrite tests. Findings need manual review: exact executa
 
 ## Results and limits
 
-NMO901 (pick/select and repository/repo), NMO902 (`"the"` density), and STE901-STE910 are marked for manual review. Checks report them without failure. Explicit formatting can still rewrite NMO901 and NMO902.
+Checks report NMO901 (pick/select and repository/repo), NMO902 (`"the"` density), and STE901-STE910 for manual review without failing. Explicit formatting can still rewrite NMO901 and NMO902.
 
 | Mode | Result |
 | --- | --- |
