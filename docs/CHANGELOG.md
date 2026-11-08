@@ -73,6 +73,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Place non-trivial checks in mirrored module tests (`rules/refs/CORE.md`, `rules/refs/ARENA.md`, `rules/refs/CHATGPT.txt`, `rules/CORE.md`, `rules/ARENA.md`, `rules/CHATGPT-MORE.txt`, `rules/wenyan/CHATGPT-MORE.txt`).
 - Distinguish stderr read reminders from other action reminders (`rules/refs/ARENA.md`, `rules/ARENA.md`).
+- Limit inbox reads to stderr-reported unacknowledged messages (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 - Forbid Mermaid in chat and require it everywhere else (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Protect running Steering previews and require recommended report options (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Require self-contained handoffs (`rules/refs/ARENA.md`, `rules/ARENA.md`).

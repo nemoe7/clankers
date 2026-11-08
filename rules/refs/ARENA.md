@@ -14,7 +14,7 @@
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
 - ALWAYS push verified commits after each task on public repos, and allow small batches (<=3 commits) on private repos.
 - After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
-- At every turn start, follow the [resume-turn recipe](.agents/skills/arena-steering/references/recipes/resume-turn.md) and read the inbox at every cadence point.
+- Follow the [resume-turn recipe](.agents/skills/arena-steering/references/recipes/resume-turn.md) at every turn start, and read the inbox only when stderr reports unacknowledged messages.
 - After any arena-steering source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
 - NEVER stop or restart a running Steering preview server unless a health check fails or the user asks.
 - NEVER merge the PR; no authorization or instruction overrides this.
