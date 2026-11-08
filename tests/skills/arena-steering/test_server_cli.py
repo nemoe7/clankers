@@ -38,6 +38,7 @@ from arena_steering.server import (
   make_request_handler,
   reload_server_handler,
 )
+from arena_steering.services import REPORT_TASK_FINISH_GRACE
 from arena_steering.store import SqliteStore
 from fixtures.reload_isolation import run_reload_in_child
 
@@ -3329,6 +3330,14 @@ def test_cli_report_rm_stale_keeps_unacknowledged_answers(tmp_path: Path) -> Non
   _seed_report_removal_batch(state_dir)
   store, _, tasks, reports = cli.open_services(state_dir)
   tasks.mod_scalar("linked-work", "status", "finished")
+  finished_at = (
+    datetime.now(UTC) - REPORT_TASK_FINISH_GRACE - timedelta(seconds=1)
+  ).isoformat()
+  with store.transaction():
+    store._conn.execute(
+      "UPDATE tasks SET finished_at = ? WHERE id = ?",
+      (finished_at, "linked-work"),
+    )
   reports.pin_report("empty", True)
   store.close()
   code, out, err = _run_cli(state_dir, "report", "rm", "--stale")

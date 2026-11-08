@@ -140,7 +140,8 @@ class SqliteStore:
           report_ids_json TEXT NOT NULL DEFAULT '[]',
           deps_json TEXT NOT NULL DEFAULT '[]',
           modified_at TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT ''
+          created_at TEXT NOT NULL DEFAULT '',
+          finished_at TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS reports (
@@ -274,6 +275,13 @@ class SqliteStore:
           "ALTER TABLE tasks ADD COLUMN created_at TEXT NOT NULL DEFAULT ''"
         )
         self._conn.execute("UPDATE tasks SET created_at = modified_at")
+      if "finished_at" not in task_cols:
+        self._conn.execute(
+          "ALTER TABLE tasks ADD COLUMN finished_at TEXT NOT NULL DEFAULT ''"
+        )
+        self._conn.execute(
+          "UPDATE tasks SET finished_at = modified_at WHERE status = 'finished'"
+        )
       if "insertion_order" not in task_cols:
         self._conn.execute(
           "ALTER TABLE tasks ADD COLUMN insertion_order INTEGER CHECK (insertion_order >= 0)"
@@ -858,8 +866,9 @@ class SqliteStore:
           INSERT INTO tasks (
             position, priority, priority_explicit, size, insertion_order, id, title, type,
             types_json, phase_index, phase_evidence_json, status, scope, details_json,
-            links_json, msg_ids_json, report_ids_json, deps_json, modified_at, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            links_json, msg_ids_json, report_ids_json, deps_json, modified_at, created_at,
+            finished_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             index,
@@ -882,6 +891,7 @@ class SqliteStore:
             json.dumps(task.task_ids),
             task.modified_at,
             task.created_at,
+            task.finished_at,
           ),
         )
       kept_ids = {task.id for task in tasks}
@@ -1419,6 +1429,9 @@ class SqliteStore:
       "created_at": str(row["created_at"])
       if "created_at" in keys
       else str(row["modified_at"]),
+      "finished_at": str(row["finished_at"])
+      if "finished_at" in keys
+      else (str(row["modified_at"]) if status == "finished" else ""),
     }
     if isinstance(parsed_links, dict):
       return Task(**common, links=parsed_links)

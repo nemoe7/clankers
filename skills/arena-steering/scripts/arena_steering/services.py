@@ -62,6 +62,7 @@ def serialize_report_blocks(body: str) -> list[dict[str, Any]]:
 
 
 REPORT_IDLE_INTERVAL = timedelta(minutes=30)
+REPORT_TASK_FINISH_GRACE = timedelta(minutes=10)
 POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
@@ -1242,11 +1243,13 @@ class TaskService:
     phase_evidence = list(task.phase_evidence)
     phase_evidence[index] = evidence
     next_index = index + 1
+    finished = next_index == len(task.types)
     return self._copy_task(
       task,
-      status="finished" if next_index == len(task.types) else "upcoming",
+      status="finished" if finished else "upcoming",
       phase_index=next_index,
       phase_evidence=phase_evidence,
+      finished_at=self._clock.now_iso() if finished else task.finished_at,
     )
 
   @_transactional_task_write
@@ -1979,8 +1982,12 @@ class ReportService:
         continue
       tasks = linked.get(report.id, [])
       if tasks:
-        if all(task.status == "finished" for task in tasks):
-          stale.append(report)
+        if all(task.status == "finished" for task in tasks) and all(
+          task.finished_at for task in tasks
+        ):
+          latest_finish = max(_report_timestamp(task.finished_at) for task in tasks)
+          if now - latest_finish >= REPORT_TASK_FINISH_GRACE:
+            stale.append(report)
         continue
       if (
         report.ack_seen

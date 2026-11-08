@@ -1024,6 +1024,24 @@ def test_task_creation_time_migrates_from_modified_time(tmp_path) -> None:
   reopened.close()
 
 
+def test_task_finish_time_migrates_from_modified_time(tmp_path) -> None:
+  path = tmp_path / "legacy-finished.sqlite3"
+  clock = _ReportTestClock()
+  store = SqliteStore(path)
+  tasks = TaskService(store, store, clock=clock)
+  tasks.create_task("legacy", "Legacy", size=1, type="ops", details=["Work"])
+  tasks.finish_phase("legacy")
+  with store.transaction():
+    store._conn.execute("ALTER TABLE tasks DROP COLUMN finished_at")
+  store.close()
+
+  reopened = SqliteStore(path)
+  task = reopened.get_task("legacy")
+  assert task.status == "finished"
+  assert task.finished_at == task.modified_at
+  reopened.close()
+
+
 def test_report_publication_order_survives_republish_rename_and_sync() -> None:
   store = SqliteStore(":memory:")
   columns = {row["name"] for row in store._conn.execute("PRAGMA table_info(reports)")}
@@ -1162,7 +1180,14 @@ def test_report_pin_and_linked_task_staleness_survive_restart(tmp_path) -> None:
   clock.advance(hours=2)
   tasks.mod_scalar("first", "status", "finished")
   assert reports.list_reports(stale_only=True) == []
+  clock.advance(minutes=5)
   tasks.mod_scalar("second", "status", "finished")
+  finished_at = tasks.get_task("second")[0].finished_at
+  assert finished_at == clock.now_iso()
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(minutes=9, seconds=59)
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(seconds=2)
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "linked-report"
   ]
@@ -1171,6 +1196,7 @@ def test_report_pin_and_linked_task_staleness_survive_restart(tmp_path) -> None:
   assert reports.get_report("linked-report").pinned is True
   reports.rename_report("linked-report", "renamed-report")
   assert reports.get_report("renamed-report").pinned is True
+  assert tasks.get_task("second")[0].finished_at == finished_at
   assert reports.list_reports(stale_only=True) == []
   store.close()
 
@@ -1215,6 +1241,10 @@ def test_stale_report_removal_retains_a_pending_answer() -> None:
     report_ids=["answered-report"],
   )
   tasks.finish_phase("answer-work")
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(minutes=9, seconds=59)
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(seconds=2)
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "answered-report"
   ]
