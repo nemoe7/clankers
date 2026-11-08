@@ -1750,7 +1750,7 @@ class RouteGuard:
       return PreResult(
         [
           (
-            "VIOLATION: Mixed shell blocked for auto detach. "
+            "Mixed shell blocked for auto detach. "
             "Use separate calls or explicit `steer run start`."
           ),
           "For a detached command, use `steer run start <name> -- <remaining command>`.",
