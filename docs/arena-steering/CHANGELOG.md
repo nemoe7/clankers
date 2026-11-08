@@ -13,6 +13,7 @@ This log has no Unreleased section.
 ### Changed
 
 - Document the required `steer ack -i` flags and one-call task creation and linking.
+- Cap age-based task promotion at P2 while preserving explicit P1 priorities.
 
 ## [2.2.3]
 
