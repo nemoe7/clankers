@@ -311,6 +311,7 @@ class SteeringApp:
       store,
       on_answer_callback=self.messages.notify_new_work,
       on_ack_callback=self.messages.reset_gate_if_clear,
+      messages=store,
     )
     self.router = Router()
     self._register_routes()

@@ -876,6 +876,36 @@ def _transactional_task_write(method: Any) -> Any:
   return wrapped
 
 
+def _rewrite_message_parent_refs(
+  messages: MessageRepository | None,
+  parent_type: str,
+  old_id: str,
+  new_id: str,
+  now: str,
+) -> None:
+  if messages is None:
+    return
+  for message in messages.list_messages():
+    if not any(
+      ref["type"] == parent_type and ref["id"] == old_id for ref in message.parent_refs
+    ):
+      continue
+    parent_refs: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for ref in message.parent_refs:
+      ref_type = ref["type"]
+      ref_id = new_id if ref_type == parent_type and ref["id"] == old_id else ref["id"]
+      key = (ref_type, ref_id)
+      if key in seen:
+        continue
+      seen.add(key)
+      parent_refs.append({"type": ref_type, "id": ref_id})
+    if parent_refs != message.parent_refs:
+      message.parent_refs = parent_refs
+      message.modified_at = now
+      messages.save_message(message)
+
+
 class TaskService:
   """Manage the mutable task queue, dependency ordering, and derived blocking."""
 
@@ -1304,6 +1334,7 @@ class TaskService:
       updated_queue.append(item)
     ordered = self._enforce_dependency_order(updated_queue)
     self._tasks.save_task_queue(ordered)
+    _rewrite_message_parent_refs(self._messages, "task", old_task_id, new_task_id, now)
     return renamed
 
   @_transactional_task_write
@@ -1825,9 +1856,11 @@ class ReportService:
     id_gen: IdGenerator | None = None,
     on_answer_callback: Any | None = None,
     on_ack_callback: Any | None = None,
+    messages: MessageRepository | None = None,
   ) -> None:
     self._reports = reports
     self._tasks = tasks
+    self._messages = messages
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._on_answer = on_answer_callback
@@ -2152,6 +2185,7 @@ class ReportService:
       pub_at=existing.pub_at,
       last_viewed_at=existing.last_viewed_at,
       pinned=existing.pinned,
+      source_file=existing.source_file,
     )
     self._reports.rename_report_answers(old_report_id, new_report_id, now)
     self._reports.save_report(renamed)
@@ -2175,6 +2209,9 @@ class ReportService:
         changed = True
     if changed:
       self._tasks.save_task_queue(queue)
+    _rewrite_message_parent_refs(
+      self._messages, "report", old_report_id, new_report_id, now
+    )
     return self.get_report(new_report_id)
 
   @_transactional_task_write
