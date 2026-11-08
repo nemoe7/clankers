@@ -2863,6 +2863,38 @@ def test_cli_worktree_lifecycle_uses_native_git(tmp_path: Path, monkeypatch) -> 
   assert str(worktree_path) in out
   assert "branch refs/heads/feat/feat-one" in out
 
+  second_worktree_path = repo / ".worktrees" / "feat-two"
+  monkeypatch.chdir(worktree_path)
+  code, out, _ = _run_cli(
+    state_dir, "worktree", "add", "feat-two", "-b", "feat/feat-two"
+  )
+  assert code == 0
+  assert str(second_worktree_path) in out
+  assert (second_worktree_path / "README.md").is_file()
+  assert not (worktree_path / ".worktrees" / "feat-two").exists()
+
+  code, out, _ = _run_cli(state_dir, "worktree", "list")
+  assert code == 0
+  assert str(second_worktree_path) in out
+
+  (second_worktree_path / "README.md").write_text(
+    "readme from linked worktree\n", encoding="utf-8"
+  )
+  code, out, _ = _run_cli(state_dir, "worktree", "collect", "feat-two")
+  assert code == 0
+  added_lines = [
+    line
+    for line in out.splitlines()
+    if line.startswith("+") and not line.startswith("+++")
+  ]
+  assert added_lines == ["+readme from linked worktree"]
+  (second_worktree_path / "README.md").write_text("readme\n", encoding="utf-8")
+
+  code, out, err = _run_cli(state_dir, "worktree", "remove", "feat-two")
+  assert code == 0, err
+  assert not second_worktree_path.exists()
+
+  monkeypatch.chdir(repo)
   code, out, _ = _run_cli(state_dir, "worktree", "remove", "feat-one")
   assert code == 0
   assert "feat-one" in out

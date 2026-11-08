@@ -1499,6 +1499,18 @@ def _repo_root() -> Path:
   return Path(top) if top else Path.cwd()
 
 
+def _main_worktree_root() -> Path:
+  """Return the primary checkout root even when called from a linked worktree."""
+  worktrees = _run_git(["git", "worktree", "list", "--porcelain"])
+  for line in worktrees.splitlines():
+    if not line.startswith("worktree "):
+      continue
+    root = Path(line[len("worktree ") :]).resolve()
+    if root.is_dir() and (root / ".git").exists():
+      return root
+  return _repo_root()
+
+
 def _run_worktree(args: list[str], out: TextIO) -> int:
   if not args:
     raise ValueError("Usage: steer worktree <add|list|remove|prune|collect> ...")
@@ -1516,7 +1528,7 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     add_p.add_argument("-b", "--branch", default=None)
     parsed = add_p.parse_args(args[1:])
     name = _safe_local_name(parsed.name)
-    target = _repo_root() / ".worktrees" / name
+    target = _main_worktree_root() / ".worktrees" / name
     git_args = ["git", "worktree", "add"]
     if parsed.branch:
       git_args += ["-b", parsed.branch]
@@ -1528,7 +1540,7 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     if len(args) != 2:
       raise ValueError("Usage: steer worktree collect <name>")
     name = _safe_local_name(args[1])
-    target = _repo_root() / ".worktrees" / name
+    target = _main_worktree_root() / ".worktrees" / name
     if not target.is_dir():
       raise ValueError(f"No worktree at {target}")
     head = _run_git(["git", "-C", str(target), "rev-parse", "HEAD"]).strip()
@@ -1550,7 +1562,7 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     if len(args) != 2:
       raise ValueError("Usage: steer worktree remove <name>")
     name = _safe_local_name(args[1])
-    target = _repo_root() / ".worktrees" / name
+    target = _main_worktree_root() / ".worktrees" / name
     _run_git(["git", "worktree", "remove", str(target)])
     _run_git(["git", "worktree", "prune"])
     print(f"Removed worktree {name}", file=out)
