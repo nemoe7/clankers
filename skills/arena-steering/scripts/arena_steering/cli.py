@@ -1236,11 +1236,13 @@ def _schedule_instruction_check(
     listed = "\n".join(f"- `{home_relative(path)}`" for path in paths if path.is_file())
     messages.send_message(
       "10min bible check\n"
-      "if bible missing from context:\n"
+      "Try to recall a clause along with its file and line number\n"
+      "Ack this message with `<file>:<line no> <clause>`\n"
+      "If you cannot answer, the bible is not in context.\n"
+      "1. Use read_file for all books of the bible.\n"
+      "2. Answer the `steer survey`.\n"
+      "3. Ack this message with the template above.\n\n"
       f"{listed}\n"
-      "Read every listed path in full with read_file and follow its rules.\n"
-      "Answer the survey, ack this msg, and continue. "
-      "If no bible text was missing, only ack and continue.\n"
       "For the survey, use existing knowledge only. Run `steer survey` and read "
       "the image path it prints, in JSON order.\n"
       "Do not search, fetch, open other files, run code, or ask another system "

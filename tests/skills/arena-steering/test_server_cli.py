@@ -577,15 +577,36 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
   )
   assert f"`~/{v2_path}`" in checkpoint.body
   assert f"`~/{old_path}`" not in checkpoint.body
-  assert "if bible missing from context:" in checkpoint.body  # nonemo: NMT100
+  assert (
+    "Try to recall a clause along with its file and line number"  # nonemo: NMT100
+    in checkpoint.body
+  )
+  assert (
+    "Ack this message with `<file>:<line no> <clause>`"  # nonemo: NMT100
+    in checkpoint.body
+  )
+  assert (
+    "If you cannot answer, the bible is not in context."  # nonemo: NMT100
+    in checkpoint.body
+  )
+  assert (
+    "1. Use read_file for all books of the bible." in checkpoint.body  # nonemo: NMT100
+  )
+  assert "2. Answer the `steer survey`." in checkpoint.body  # nonemo: NMT100
+  assert "3. Ack this message with the template above.\n\n- " in checkpoint.body
+  assert "if bible missing from context:" not in checkpoint.body  # nonemo: NMT100
   survey_hint = "Run `steer survey` and read the image path it prints"
   assert survey_hint in checkpoint.body
-  assert "Guesses are allowed; use extremely low confidence" in checkpoint.body
-  assert "steer survey -i" not in checkpoint.body
-  assert "ack this msg" in checkpoint.body  # nonemo: NMT100
   assert (
-    "Read every listed path in full with read_file" in checkpoint.body  # nonemo: NMT100
+    "Do not search, fetch, open other files, run code, or ask another system for answers."  # nonemo: NMT100
+    in checkpoint.body
   )
+  assert "Guesses are allowed; use extremely low confidence" in checkpoint.body
+  assert (
+    "Use unknown with confidence 0 only if the whole question is unknown."  # nonemo: NMT100
+    in checkpoint.body
+  )
+  assert "steer survey -i" not in checkpoint.body
   store.close()
 
 
