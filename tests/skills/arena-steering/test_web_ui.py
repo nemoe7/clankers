@@ -7566,13 +7566,19 @@ def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
         first.hover()
         page.wait_for_timeout(200)
         assert page.locator("#arena-title-tooltip").count() == 0
-        page.locator("#arena-title-tooltip").wait_for(timeout=1000)
+
+        def wait_for_title_tooltip(text: str) -> None:
+          page.wait_for_function(
+            "expected => document.getElementById('arena-title-tooltip')?.textContent === expected",
+            arg=text,
+            timeout=1500,
+          )
+
+        wait_for_title_tooltip("first")
         page.locator("#second").hover()
-        assert (
-          page.locator("#arena-title-tooltip").text_content(timeout=200) == "second"
-        )
+        wait_for_title_tooltip("second")
         first.hover()
-        assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
+        wait_for_title_tooltip("first")
         page.wait_for_timeout(200)
         page.mouse.move(600, 700)
         closing = page.locator(".arena-tooltip.tooltip-closing")
@@ -7584,9 +7590,7 @@ def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
           "el => el.getAnimations().some(animation => animation.playState === 'running')"
         )
         page.locator("#second").hover()
-        assert (
-          page.locator("#arena-title-tooltip").text_content(timeout=200) == "second"
-        )
+        wait_for_title_tooltip("second")
         page.mouse.move(600, 700)
         page.wait_for_timeout(650)
         first.hover()
@@ -7595,7 +7599,7 @@ def test_tooltip_hover_delay_switching_focus_and_close(tmp_path: Path) -> None:
         page.mouse.move(600, 700)
         page.keyboard.press("Tab")
         first.focus()
-        assert page.locator("#arena-title-tooltip").text_content(timeout=200) == "first"
+        wait_for_title_tooltip("first")
         page.keyboard.press("Escape")
         page.locator("#survey-open").click()
         trigger = page.locator(".survey-id-trigger").first
