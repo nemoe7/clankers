@@ -102,6 +102,8 @@ A live server receives submissions. Without it, the CLI evaluates survey input l
 
 ## Detached runs and GitHub helpers
 
+Use `steer run start` for supported long-running jobs and task gates; keep persistent services on the platform `start_process` path.
+
 | Command | Output on success | Exit |
 | --- | --- | --- |
 | `steer run start -t TASK NAME -- COMMAND ...` | `Started run NAME (pid N)` and linked gate | 0 on launch, 1 on error |
