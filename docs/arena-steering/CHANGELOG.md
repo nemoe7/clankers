@@ -8,6 +8,7 @@ This log has no Unreleased section.
 
 ### Changed
 
+- `SKILL.md`, `references/cli.md`, `docs/arena-steering/README.md`: Use `steer run start` for supported long-running jobs and task gates, and keep persistent services on the platform's `start_process` path.
 - Remove field ID chips from report input cards.
 
 ## [2.2.4]

@@ -60,6 +60,7 @@ steer task rm <id>
 - Complete the next unblocked task returned by `steer poll` before unrelated task or report work.
 - Reassess task size with `-z` on every task-detail change, and keep each detail within 120 characters.
 - Block phases on unfinished dependencies or running gates. Non-report phases also wait on unanswered linked reports, except completed report-phase evidence.
+- Use `steer run start` for supported long-running jobs and task gates; keep persistent services on the platform `start_process` path.
 - When creating a task, omit `-p` unless the user states a priority.
 - Keep task details to concise current facts, not a chronological action log.
 - Update task details when their recorded facts change.

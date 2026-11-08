@@ -108,7 +108,7 @@ Blocking messages progress from `sent` to `seen` to `acked`, while non-blocking 
 
 Fielded reports define radio, checkbox, and text questions that submit typed hidden answer messages in the shared hex ID space. Only the latest unacknowledged answer on a report blocks the inbox, and its first acknowledgement appends missing `label: value` details to linked tasks. Unpinned reports turn stale once all linked tasks finish, or 30 minutes after the owner views an unlinked report's latest acknowledgement.
 
-Detached runs store logs and exit codes under `arena-state/runs/`. An active task-linked run blocks that task until the process exits, and dependent runs exit `125` if their prerequisite run fails. Worktrees live under `.worktrees/` at the repo root.
+Detached runs store logs and exit codes under `arena-state/runs/`. An active task-linked run blocks that task until the process exits, and dependent runs exit `125` if their prerequisite run fails. Use `steer run start` for supported long-running jobs and task gates, and keep persistent services on the platform's `start_process` path. Worktrees live under `.worktrees/` at the repo root.
 
 The [state backup contract](state-backup.md) describes planned userscript and container sync behavior, which remains unimplemented.
 
