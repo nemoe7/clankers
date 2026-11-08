@@ -46,13 +46,15 @@ Output is JSON with review candidates and per-file coverage.
 
 Native counters omit code spans and fences. They count ordinary pipe-table cells separately. Paragraph counts exclude headings, lists, quotes, and tables. Sentence counts join wrapped lines in ordinary prose blocks.
 
-## Test assertion review
+## Test review
 
 ```cmd
 python skills\nemoizer\scripts\nemoizer review-tests path\to\tests
 ```
 
-Default scans review selected output-text and fixed-measurement assertion shapes in discovered tests and recognized helpers. The checker uses Python syntax trees and an existing Acorn parser for JavaScript. The checker marks unavailable or unsupported parsing as not checked.
+Default scans review selected output-text and fixed-measurement assertions plus real-time sleeps in discovered tests and recognized helpers. Python AST and Acorn inspect selected test code. Unsupported or unavailable parsing stays not checked.
+
+NMT300 findings are advisory. The checker skips bounded polling, fake-timer-controlled tests, and Playwright's `wait_for_timeout` and `waitForTimeout` helpers. NMT200 excludes zero-valued measurements.
 
 Discovery uses pytest.ini, test names, and test declarations, without treating every imported production file as a test. `--test-helper` includes another helper.
 

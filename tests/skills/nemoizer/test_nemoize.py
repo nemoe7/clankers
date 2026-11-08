@@ -650,6 +650,94 @@ cls.assertEqual(panel.clientWidth, 320.5)
     assert not marker.exists()
 
 
+def test_nmt200_zero_measurements_are_exempt(tmp_path):
+  source = tmp_path / "test_measurements.py"
+  source.write_text(
+    "assert panel.width == 0\nassert panel.width == 0.0\nassert panel.width == 1\n",
+    encoding="utf-8",
+  )
+  reviewed = nemoize.review_tests([source])
+  assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 3)]
+
+
+def test_nmt300_detects_real_sleeps_and_exempts_bounded_polling(tmp_path):
+  source = tmp_path / "test_waits.py"
+  source.write_text(
+    "import asyncio\n"
+    "import time\n"
+    "from unittest import mock\n"
+    "from time import sleep\n"
+    "def test_real_sleep():\n"
+    "  time.sleep(0.01)\n"
+    "def test_imported_sleep():\n"
+    "  sleep(0.01)\n"
+    "async def test_async_sleep():\n"
+    "  await asyncio.sleep(0.01)\n"
+    "def test_bounded_poll():\n"
+    "  deadline = time.monotonic() + 1\n"
+    "  while not ready() and time.monotonic() < deadline:\n"
+    "    time.sleep(0.01)\n"
+    "def test_mocked_sleep(monkeypatch):\n"
+    "  monkeypatch.setattr(time, 'sleep', lambda _delay: None)\n"
+    "  time.sleep(0.01)\n"
+    "@mock.patch('time.sleep')\n"
+    "def test_decorated_patch(_sleep):\n"
+    "  time.sleep(0.01)\n"
+    "def test_browser_wait(page):\n"
+    "  page.wait_for_timeout(4000)\n",
+    encoding="utf-8",
+  )
+  reviewed = nemoize.review_tests([source])
+  assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [
+    ("NMT300", 6),
+    ("NMT300", 8),
+    ("NMT300", 10),
+  ]
+  result = run(str(source), cwd=tmp_path)
+  assert result.returncode == 0, result.stderr
+  assert "test_waits.py:6: [NMT300] (advisory)" in result.stdout
+
+
+def test_nmt300_javascript_exempts_fake_timers_and_bounded_polling(tmp_path):
+  source = tmp_path / "test_waits.cjs"
+  source.write_text(
+    'const { test } = require("node:test");\n'
+    'test("real delay", async () => {\n'
+    "  await new Promise((resolve) => setTimeout(resolve, 5));\n"
+    "});\n"
+    'test("real sleep", async () => {\n'
+    "  await sleep(5);\n"
+    "});\n"
+    'test("fake timer", async () => {\n'
+    "  vi.useFakeTimers();\n"
+    "  const pending = new Promise((resolve) => setTimeout(resolve, 5));\n"
+    "  vi.advanceTimersByTime(5);\n"
+    "  await pending;\n"
+    "});\n"
+    'test("bounded poll", async () => {\n'
+    "  const deadline = Date.now() + 50;\n"
+    "  while (!ready() && Date.now() < deadline) {\n"
+    "    await new Promise((resolve) => setTimeout(resolve, 5));\n"
+    "  }\n"
+    "});\n"
+    'describe("suite fake timer", () => {\n'
+    "  beforeEach(() => jest.useFakeTimers());\n"
+    '  test("inherited fake timer", async () => {\n'
+    "    await new Promise((resolve) => setTimeout(resolve, 5));\n"
+    "  });\n"
+    "});\n"
+    'test("browser wait", async () => {\n'
+    "  await page.waitForTimeout(4000);\n"
+    "});\n",
+    encoding="utf-8",
+  )
+  reviewed = nemoize.review_tests([source])
+  assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [
+    ("NMT300", 3),
+    ("NMT300", 6),
+  ]
+
+
 def test_ignore_prefixes_accept_windows_paths():
   class WindowsPath(PureWindowsPath):
     def resolve(self):
@@ -713,7 +801,13 @@ def test_prose_and_test_ids_have_separate_domains():
     "serial_comma": "NMO003",
     "the_density": "NMO902",
   }
-  assert nemoize.TEST_RULE_IDS == {"output_text": "NMT100", "measurement": "NMT200"}
+  assert nemoize.TEST_RULE_IDS == {
+    "output_text": "NMT100",
+    "measurement": "NMT200",
+    "timing_wait": "NMT300",
+  }
+  assert "NMT300" in nemoize.KNOWN_RULE_IDS
+  assert "NMT300" in nemoize.ADVISORY_RULE_IDS
   assert nemoize.RESERVED_RULE_IDS == {"HMN000"}
   assert "HMN000" in nemoize.KNOWN_RULE_IDS
   assert not (
