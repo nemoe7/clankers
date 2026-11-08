@@ -2677,11 +2677,20 @@ def test_existing_task_message_links_require_atomic_detail_change(
   app.messages.send_message("New work", msg_id="abc123", blocking=False)
   tasks = app.tasks
   tasks.create_task("work", "Work", size=2, details=["First", "Second"])
-  with pytest.raises(ValueError, match="detail"):
+  expected_error = (
+    "Adding a message link requires an added or deleted task detail. "
+    "Are you sure this message needs to be linked? "
+    "Does it hold any new evidence for completing the task?"
+  )
+  with pytest.raises(ValueError) as exc_info:
     tasks.mod_links_add("work", "abc123", link_type="msg")
-  with pytest.raises(ValueError, match="detail"):
+  assert str(exc_info.value) == expected_error
+  with pytest.raises(ValueError) as patch_exc:
     tasks.patch_task("work", {"msg_ids": ["abc123"], "details": ["Second", "First"]})
-  assert tasks.get_task("work")[0].msg_ids == []
+  assert str(patch_exc.value) == expected_error
+  unchanged = tasks.get_task("work")[0]
+  assert unchanged.msg_ids == []
+  assert unchanged.details == ["First", "Second"]
   linked = tasks.patch_task(
     "work", {"msg_ids": ["abc123"], "details": ["First"], "size": 2}
   )

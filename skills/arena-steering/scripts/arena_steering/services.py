@@ -1686,7 +1686,11 @@ class TaskService:
     previous: Task, updated: Task, added_msg_ids: list[str]
   ) -> None:
     if added_msg_ids and Counter(previous.details) == Counter(updated.details):
-      raise ValueError("Adding a message link requires an added or deleted task detail")
+      raise ValueError(
+        "Adding a message link requires an added or deleted task detail. "
+        "Are you sure this message needs to be linked? "
+        "Does it hold any new evidence for completing the task?"
+      )
 
   @staticmethod
   def _validate_detail_change_size(
