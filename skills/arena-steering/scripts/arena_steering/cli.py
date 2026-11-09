@@ -2216,8 +2216,18 @@ def _post_survey(url: str, payload: str) -> dict:
     method="POST",
   )
   opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-  with opener.open(request, timeout=5) as response:
-    response_body = json.loads(response.read().decode("utf-8"))
+  try:
+    with opener.open(request, timeout=5) as response:
+      response_body = json.loads(response.read().decode("utf-8"))
+  except urllib.error.HTTPError as exc:
+    try:
+      error_body = json.loads(exc.read())
+    except (ValueError, OSError):
+      raise exc
+    detail = error_body.get("error") if isinstance(error_body, dict) else None
+    if isinstance(detail, str) and detail.strip():
+      raise ValueError(f"{exc}: {detail}") from exc
+    raise
   if not isinstance(response_body, dict) or not isinstance(
     response_body.get("survey"), dict
   ):

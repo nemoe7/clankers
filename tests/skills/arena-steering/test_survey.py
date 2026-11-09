@@ -479,3 +479,59 @@ def test_field_by_field_hashed_matching_with_sequel_and_quantity_rules(
     ]
     is False
   )
+
+
+@pytest.mark.parametrize("from_file", [False, True])
+def test_cli_survey_displays_server_validation_error(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, from_file: bool
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+  http_server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=http_server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    cli._write_server_file(state_dir, f"http://127.0.0.1:{http_server.server_port}")
+    answers = survey.template()
+    answers[4]["answer"]["power_capacity_mw"]["value"] = None
+    payload = json.dumps(answers)
+    with pytest.raises(ValueError) as validation:
+      survey.loads(payload)
+    if from_file:
+      source = tmp_path / "answers.json"
+      source.write_text(payload, encoding="utf-8")
+      args = ["-f", str(source)]
+    else:
+      args = [payload]
+    code, out, err = _run_cli(state_dir, "survey", *args)
+    assert code == 1
+    assert out == ""
+    assert str(validation.value) in err
+    assert str(400) in err
+    assert app.messages.get_survey()["answers"] == {}
+  finally:
+    http_server.shutdown()
+    http_server.server_close()
+    thread.join(timeout=1)
+    store.close()
+
+
+@pytest.mark.parametrize(
+  "body", [b"", b"not json", b"\xff", b"[]", b"{}", b'{"error":null}', b'{"error":42}']
+)
+def test_survey_preserves_http_error_without_validation_detail(
+  monkeypatch: pytest.MonkeyPatch, body: bytes
+) -> None:
+  from unittest.mock import Mock
+  from urllib.error import HTTPError
+
+  failure = HTTPError(
+    "http://127.0.0.1/survey", 400, "Bad Request", {}, io.BytesIO(body)
+  )
+  opener = Mock()
+  opener.open.side_effect = failure
+  monkeypatch.setattr(cli.urllib.request, "build_opener", lambda *_args: opener)
+  with pytest.raises(HTTPError) as raised:
+    cli._post_survey("http://127.0.0.1", "[]")
+  assert raised.value is failure

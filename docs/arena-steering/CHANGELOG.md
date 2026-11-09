@@ -6,6 +6,10 @@ This log has no Unreleased section.
 
 ## [2.2.5]
 
+### Fixed
+
+- Show server validation details when survey submissions fail, retaining a nonzero CLI exit status.
+
 ### Security
 
 - Validate static path components before reads and fall back to a safe `Content-Type` before writing response headers.
