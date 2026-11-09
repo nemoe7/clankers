@@ -66,6 +66,7 @@ jobs:
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && github.event_name == 'pull_request' }}
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          VERSION_BASE: refs/remotes/origin/${{ github.event.repository.default_branch }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PR_BODY: ${{ github.event.pull_request.body }}
@@ -73,7 +74,7 @@ jobs:
         run: |
           set -eu
           printf '%s\n' "$PR_BODY" > "$PR_BODY_FILE"
-          python maintenance/pr/gate_pr.py --range "$PR_BASE..$PR_HEAD" --pr-title "$PR_TITLE" --body-file "$PR_BODY_FILE"
+          python maintenance/pr/gate_pr.py --range "$PR_BASE..$PR_HEAD" --version-base "$VERSION_BASE" --pr-title "$PR_TITLE" --body-file "$PR_BODY_FILE"
 
       - name: Select PR Plugin Validation
         id: plugin_changes
@@ -87,11 +88,12 @@ jobs:
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.plugin_changes.outputs.package == 'true' }}
         env:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          VERSION_BASE: refs/remotes/origin/${{ github.event.repository.default_branch }}
         run: |
           set -eu
           python maintenance/workflows/check_artifacts.py
           python maintenance/gpt_plugins/gate_gpt_plugins.py --self-check
-          git show "$PR_BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
+          git show "$VERSION_BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
           changed="$(git diff --name-only "$PR_BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills skills/nemoizer/SKILL.md skills/nemoizer/references skills/nemoizer/scripts)"
           if [ -n "$changed" ]; then
             python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
@@ -103,12 +105,12 @@ jobs:
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         env:
           EVENT_NAME: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          VERSION_BASE: refs/remotes/origin/${{ github.event.repository.default_branch }}
           PUSH_BEFORE: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -eu
-          if [ "$EVENT_NAME" = "pull_request" ]; then BASE="$PR_BASE"; else BASE="$PUSH_BEFORE"; fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then BASE="$VERSION_BASE"; else BASE="$PUSH_BEFORE"; fi
           python maintenance/pr/gate_pr.py --version-bumps "$BASE..$HEAD_SHA"
 
       - name: Update and Validate Repository

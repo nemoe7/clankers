@@ -109,3 +109,29 @@ def test_release_builds_verifies_and_publishes_every_package():
   assert "gpt-*.zip nemoizer.zip" in scripts[publish]
   for filename in (f"{name}.zip" for name in (gate.PLUGIN_NAME, *gate.EXPECTED_SKILLS)):
     assert fnmatch.fnmatchcase(filename, "gpt-*.zip") or filename == "nemoizer.zip"
+
+
+@pytest.mark.parametrize(
+  ("current", "accepted"),
+  [
+    ("1.10.31", False),
+    ("1.10.30", False),
+    ("1.10.32", True),
+    ("1.11.0", True),
+    ("2.0.0", True),
+    ("1.10.33", False),
+    ("1.12.0", False),
+    ("3.0.0", False),
+  ],
+)
+def test_plugin_version_requires_exactly_one_bump(
+  tmp_path, monkeypatch, current, accepted
+):
+  baseline = tmp_path / "default-plugin.json"
+  baseline.write_text(json.dumps({"version": "1.10.31"}), encoding="utf-8")
+  manifest = tmp_path / "plugin.json"
+  manifest.write_text(json.dumps({"version": current}), encoding="utf-8")
+  monkeypatch.setattr(gate, "MANIFEST", manifest)
+  errors = []
+  gate.check_version_bump(baseline, errors)
+  assert (not errors) is accepted

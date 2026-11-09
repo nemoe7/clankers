@@ -557,3 +557,26 @@ def test_ci_never_records_passes_after_dependency_install_fails():
   tests = next(step for step in steps if "--step test" in step.get("run", ""))
   assert "steps.dependencies.outcome == 'success'" in tests["if"]
   assert "steps.npm.outcome == 'success'" in tests["if"]
+
+
+def test_ci_versions_use_default_branch_for_stacked_prs_and_previous_default_head_for_pushes():
+  import yaml
+
+  root = Path(changed_paths.__file__).resolve().parents[2]
+  workflow = yaml.safe_load(
+    (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+  )
+  steps = {step.get("name"): step for step in workflow["jobs"]["check"]["steps"]}
+  default_ref = "refs/remotes/origin/${{ github.event.repository.default_branch }}"
+  for title in ("Check PR Contract", "Validate PR Plugins", "Check Module Versions"):
+    assert steps[title]["env"]["VERSION_BASE"] == default_ref
+  contract = steps["Check PR Contract"]["run"]
+  assert '--range "$PR_BASE..$PR_HEAD"' in contract
+  assert '--version-base "$VERSION_BASE"' in contract
+  plugins = steps["Validate PR Plugins"]["run"]
+  assert 'git show "$VERSION_BASE:gpt-plugins/plugin.json"' in plugins
+  assert 'git show "$PR_BASE:gpt-plugins/plugin.json"' not in plugins
+  versions = steps["Check Module Versions"]["run"]
+  assert 'BASE="$VERSION_BASE"' in versions
+  assert 'BASE="$PUSH_BEFORE"' in versions
+  assert 'BASE="$PR_BASE"' not in versions

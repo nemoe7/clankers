@@ -423,6 +423,7 @@ def check(
   pr_title: str | None,
   body_file: str | None,
   ste: bool,
+  version_base: str | None = None,
 ) -> list[Failure]:
   """Collect every contract failure for the given inputs."""
   failures: list[Failure] = []
@@ -432,7 +433,10 @@ def check(
       lines = message.splitlines()
       subjects.append(lines[0] if lines else message)
       failures.extend(validate_commit(message, where=f"commit {sha[:7]}"))
-    failures.extend(run_version_checks(revision_range))
+    version_range = revision_range
+    if version_base and (bounds := bump_range(revision_range)) is not None:
+      version_range = f"{version_base}..{bounds[1]}"
+    failures.extend(run_version_checks(version_range))
   if pr_title is not None:
     failures.extend(validate_subject(pr_title, "PR title"))
   if body_file is not None:
@@ -453,6 +457,10 @@ def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--range", dest="revision_range", help="commit range, BASE..HEAD")
   parser.add_argument("--pr-title", help="PR title to validate as a commit subject")
+  parser.add_argument(
+    "--version-base",
+    help="Version baseline for --range, without changing its commit selection",
+  )
   parser.add_argument("--body-file", help="file holding the complete PR body")
   parser.add_argument(
     "--version-bumps",
@@ -476,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments.pr_title,
     arguments.body_file,
     True,
+    version_base=arguments.version_base,
   )
   for failure in failures:
     print(f"::error::{failure}")

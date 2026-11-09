@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-09
+
+### Fixed
+
+#### maintenance
+
+- Check PR versions against the repo default branch, retaining exactly one version bump and the original PR commit range.
+
 ## 2026-11-07
 
 ### Removed

@@ -557,3 +557,42 @@ def test_git_pipe_rejects_invalid_utf8_and_main_reconfigures_streams(
     == 0
   )
   assert calls == [("utf-8", "replace"), ("utf-8", "replace")]
+
+
+def test_stacked_pr_versions_use_the_default_branch_without_widening_commit_scope(
+  monkeypatch,
+):
+  checked_commits = []
+  checked_versions = []
+
+  def commits(revision_range):
+    checked_commits.append(revision_range)
+    return []
+
+  monkeypatch.setattr(gate_pr, "commits_in_range", commits)
+  monkeypatch.setattr(
+    gate_pr, "run_version_checks", lambda bounds: checked_versions.append(bounds) or []
+  )
+  assert (
+    gate_pr.check(
+      "stack-base..head", None, None, False, version_base="refs/remotes/origin/trunk"
+    )
+    == []
+  )
+  assert checked_commits == ["stack-base..head"]
+  assert checked_versions == ["refs/remotes/origin/trunk..head"]
+
+
+def test_cli_forwards_the_version_baseline_without_changing_the_pr_range(monkeypatch):
+  seen = []
+  monkeypatch.setattr(gate_pr, "commits_in_range", lambda bounds: [])
+  monkeypatch.setattr(
+    gate_pr, "run_version_checks", lambda bounds: seen.append(bounds) or []
+  )
+  assert (
+    gate_pr.main(
+      ["--range", "stack..head", "--version-base", "refs/remotes/origin/main"]
+    )
+    == 0
+  )
+  assert seen == ["refs/remotes/origin/main..head"]
