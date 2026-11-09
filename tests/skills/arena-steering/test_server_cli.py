@@ -4213,10 +4213,12 @@ def test_annotated_report_rejects_bad_metadata_and_preserves_code_fences(
   store = SqliteStore(tmp_path / "report-validation.sqlite3")
   app = SteeringApp(store)
   legacy = "Question?\n- ( ) Old\n- ( ) Other\n"
-  status, _ = app.dispatch(
+  status, plain = app.dispatch(
     "POST", "/reports", {"id": "legacy-new", "title": "Legacy", "body": legacy}
   )
-  assert status == HTTPStatus.BAD_REQUEST
+  assert status == HTTPStatus.CREATED
+  assert plain["report"]["fields"] == []
+  assert plain["report"]["body"] == legacy
   mixed = (
     '<!-- question {"id":"choice","label":"Choice"} -->\nQuestion?\n'
     '- (x) A <!-- option {"label":"A"} -->\n'
@@ -4318,13 +4320,14 @@ def test_report_marker_override_and_verification_failure(
 
 
 def test_annotated_checkbox_labels_and_legacy_saved_report(tmp_path: Path) -> None:
-  from arena_steering.markdown_fields import parse_report_markdown
-  from arena_steering.models import Report
+  from arena_steering.models import Report, ReportField
 
   db = tmp_path / "old-report.sqlite3"
   store = SqliteStore(db)
   legacy = "Choice? {#choice}\n- ( ) Yes\n- ( ) No\n"
-  _, fields = parse_report_markdown(legacy)
+  fields = [
+    ReportField(id="choice", label="Choice?", type="choice", options=["Yes", "No"])
+  ]
   store.save_report(Report(id="old", title="Old", body=legacy, fields=fields))
   app = SteeringApp(store)
   status, read = app.dispatch("GET", "/reports/old", None)

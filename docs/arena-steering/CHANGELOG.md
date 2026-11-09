@@ -22,6 +22,7 @@ This log has no Unreleased section.
 - Remove the unused single-field report-draft reader.
 - Extend header tab targets through the header height, retain inner hover dimensions, and place report indicators above hover backgrounds.
 - Rename the shell step marker to `_steer_done` and remove retired command aliases from CLI guards.
+- Parse interactive report fields only from explicit annotations, leaving bare controls as Markdown and retaining saved field data.
 
 ### Security
 

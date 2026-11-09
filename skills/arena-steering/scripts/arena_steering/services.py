@@ -1880,8 +1880,6 @@ class ReportService:
     if not isinstance(source_file, str) or "\n" in source_file or "\r" in source_file:
       raise ValueError("Report source file must be a single-line path")
     _, fields = parse_report_markdown(body)
-    if any(not field.annotated for field in fields):
-      raise ValueError("Fielded reports require question and option comments")
     for field in fields:
       if field.type in {"choice", "checkbox"} and not field.recommended:
         raise ValueError(f"Report field {field.id!r} needs a preselected option")

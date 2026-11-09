@@ -29,19 +29,35 @@ from arena_steering.services import (
 from arena_steering.store import SqliteStore
 
 
+@pytest.mark.parametrize(
+  "markdown",
+  [
+    "Choice?\n- (x) Yes\n- ( ) No\n",
+    "Checks\n- [x] Unit tests\n- [ ] Lint\n",
+    "Summary note: ___\n",
+    '```markdown\n<!-- question {"id":"sample","label":"Sample"} -->\nSample: ___\n```\n',
+  ],
+)
+def test_unannotated_controls_remain_plain_markdown(markdown: str) -> None:
+  blocks, fields = parse_report_markdown(markdown)
+  assert fields == []
+  assert blocks == [("markdown", markdown.rstrip("\n"))]
+
+
 def test_parse_report_markdown_extracts_choice_checkbox_and_text_fields() -> None:
   md = """# Steering Report
 
+<!-- question {"id":"we-should-use-this-execution-mode","label":"We should use this execution mode"} -->
 We should use this execution mode
-- (x) Fast mode
-- ( ) Safe mode
-- ( ) custom: ___
+- (x) Fast mode <!-- option {"label":"Fast mode"} -->
+- ( ) Safe mode <!-- option {"label":"Safe mode"} -->
 
-<!-- checks-to-run -->
+<!-- question {"id":"checks-to-run","label":"We should run these checks"} -->
 We should run these checks
-- [x] Unit tests
-- [ ] Prose lint
+- [x] Unit tests <!-- option {"label":"Unit tests"} -->
+- [ ] Prose lint <!-- option {"label":"Prose lint"} -->
 
+<!-- question {"id":"summary-note","label":"Summary note"} -->
 Summary note: ___
 """
   blocks, fields = parse_report_markdown(md)
