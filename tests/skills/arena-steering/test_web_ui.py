@@ -708,7 +708,17 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)
-  app.messages.submit_survey(json.dumps(survey.template()))
+  answers = survey.template()
+  answers[2]["answer"].update(
+    {
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "organization": "Example & <Sons>",
+      "role": "Survey operator",
+    }
+  )
+  answers[2]["confidence"] = 0.35
+  app.messages.submit_survey(json.dumps(answers))
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -737,6 +747,12 @@ def test_survey_modal_keeps_tooltip_and_actions_in_view(
           ".survey-answer-tooltip"
         )
         first_tip.wait_for(state="visible")
+        assert first_tip.locator(".survey-answer-val").all_inner_texts() == [
+          "Ada",
+          "Lovelace",
+          "Example & <Sons>",
+          "Survey operator",
+        ]
         tip_bg = first_tip.evaluate("el => getComputedStyle(el).backgroundColor")
         assert tip_bg not in ("rgba(0, 0, 0, 0)", "transparent", "rgb(255, 255, 255)")
         assert first_tip.evaluate("el => getComputedStyle(el).animationName") in (

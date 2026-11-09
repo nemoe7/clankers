@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import threading
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -228,13 +229,31 @@ def test_cli_survey_posts_to_the_running_server(tmp_path: Path) -> None:
     (state_dir / "server.json").write_text(
       json.dumps({"host": "127.0.0.1", "port": port}), encoding="utf-8"
     )
+    answers = survey.template()
+    answers[2]["answer"].update(
+      {
+        "first_name": "Tíbo",
+        "last_name": "Reset",
+        "organization": "Example & <Sons>",
+        "role": "Survey operator",
+      }
+    )
+    answers[2]["confidence"] = 0.35
     out = io.StringIO()
     code = cli_main(
-      ["survey", json.dumps(survey.template())], out=out, err=io.StringIO()
+      ["survey", json.dumps(answers, ensure_ascii=False)],
+      out=out,
+      err=io.StringIO(),
     )
     assert code == 0
     assert out.getvalue().strip() == "survey ok"
-    assert len(app.messages.get_survey()["results"]) == 6
+    with urllib.request.urlopen(
+      f"http://127.0.0.1:{port}/survey", timeout=5
+    ) as response:
+      transported = json.loads(response.read().decode("utf-8"))["survey"]
+    assert json.loads(transported["answers"]["S2E5P"]) == answers[2]["answer"]
+    assert transported["results"][2]["answer"] == answers[2]["answer"]
+    assert len(transported["results"]) == 6
   finally:
     server.shutdown()
     server.server_close()
