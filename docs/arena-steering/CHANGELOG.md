@@ -24,6 +24,7 @@ This log has no Unreleased section.
 - Rename the shell step marker to `_steer_done` and remove retired command aliases from CLI guards.
 - Parse interactive report fields only from explicit annotations, leaving bare controls as Markdown and retaining saved field data.
 - Use abbreviated relative timestamps on mobile and full forms on desktop, updating on viewport changes and removing listeners on cleanup.
+- Bound report rendering to 128 recent entries. Drain HTTP and WebSocket operations before closing replaced stores, preserving memory stores and untracked pre-upgrade connections.
 
 ### Security
 

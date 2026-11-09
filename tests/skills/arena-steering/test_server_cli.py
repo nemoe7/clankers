@@ -2116,6 +2116,208 @@ def test_server_markdown_it_diff_and_report_summary_cache(tmp_path: Path) -> Non
   store.close()
 
 
+def test_report_render_cache_is_bounded_and_keeps_recent_hits(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  from arena_steering.models import Report
+
+  limit = 2
+  monkeypatch.setattr(server, "REPORT_RENDER_CACHE_LIMIT", limit, raising=False)
+  server._REPORT_RENDER_CACHE.clear()
+  rendered: list[str] = []
+
+  def render(body: str) -> list[dict[str, str]]:
+    rendered.append(body)
+    return [{"html": body}]
+
+  monkeypatch.setattr(server, "serialize_report_blocks", render)
+  reports = [
+    Report(id=f"cache-{index}", title="Cache", body=str(index))
+    for index in range(limit + 1)
+  ]
+  try:
+    for report in reports[:limit]:
+      server.SteeringApp._serialize_report(report)
+    server.SteeringApp._serialize_report(reports[0])
+    server.SteeringApp._serialize_report(reports[-1])
+    assert len(server._REPORT_RENDER_CACHE) == limit
+    assert reports[0].id in server._REPORT_RENDER_CACHE
+    assert reports[1].id not in server._REPORT_RENDER_CACHE
+    assert rendered == [report.body for report in reports]
+    server.SteeringApp._serialize_report(reports[1])
+    assert rendered[-1] == reports[1].body
+    reports[1].body = "Changed cache body"
+    refreshed = server.SteeringApp._serialize_report(reports[1])
+    assert refreshed["blocks"] == [{"html": reports[1].body}]
+    before = list(rendered)
+    summary = server.SteeringApp._serialize_report(reports[1], include_body=False)
+    assert "body" not in summary and "blocks" not in summary
+    assert rendered == before
+    reports[1].status = "dismissed"
+    server.SteeringApp._serialize_report(reports[1])
+    assert reports[1].id not in server._REPORT_RENDER_CACHE
+  finally:
+    server._REPORT_RENDER_CACHE.clear()
+
+
+def test_report_cache_hit_keeps_one_reload_generation(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  from collections import OrderedDict
+
+  from arena_steering.models import Report
+
+  report = Report(id="cache-generation", title="Cache generation", body="Cached body")
+  blocks = [{"html": report.body}]
+  replacement: OrderedDict[str, object] = OrderedDict()
+
+  class SwappingCache(OrderedDict):
+    def get(self, key: str) -> object:
+      value = super().get(key)
+      monkeypatch.setattr(server, "_REPORT_RENDER_CACHE", replacement)
+      monkeypatch.setattr(
+        server, "_REPORT_RENDER_CACHE_STATE", (threading.Lock(), replacement)
+      )
+      return value
+
+  previous = SwappingCache({report.id: (report.body, blocks)})
+  monkeypatch.setattr(server, "_REPORT_RENDER_CACHE", previous)
+  monkeypatch.setattr(
+    server, "_REPORT_RENDER_CACHE_STATE", (threading.Lock(), previous)
+  )
+  assert server.SteeringApp._serialize_report(report)["blocks"] is blocks
+  assert report.id not in replacement
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+@pytest.mark.parametrize("fail", [False, True])
+def test_reload_drains_http_requests_before_closing_old_store(
+  tmp_path: Path, request: pytest.FixtureRequest, method: str, fail: bool
+) -> None:
+  import urllib.request
+
+  if run_reload_in_child(request):
+    return
+  store = SqliteStore(tmp_path / "drain.sqlite3")
+  app = SteeringApp(store)
+  entered, release, closed = threading.Event(), threading.Event(), threading.Event()
+  original_close = store.close
+
+  def close() -> None:
+    original_close()
+    closed.set()
+
+  store.close = close
+  store.set_meta("drain_probe", "Original request completed")
+  failure = RuntimeError("Controlled request failure")
+
+  def slow(
+    _params: object, _query: object, _body: object
+  ) -> tuple[int, dict[str, str]]:
+    entered.set()
+    assert release.wait(timeout=10)
+    if fail:
+      raise failure
+    return HTTPStatus.OK, {"value": store.get_meta("drain_probe", "")}
+
+  app.router.add(method, "/slow", slow)
+  http = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=http.serve_forever, daemon=True)
+  thread.start()
+  reloaded = None
+
+  def fetch() -> dict[str, str]:
+    req = urllib.request.Request(
+      f"http://127.0.0.1:{http.server_port}/slow",
+      data=b"{}" if method == "POST" else None,
+      headers={"Content-Type": "application/json"},
+      method=method,
+    )
+    try:
+      response = urllib.request.urlopen(req, timeout=15)
+    except urllib.error.HTTPError as error:
+      response = error
+    with response:
+      return json.load(response)
+
+  try:
+    with ThreadPoolExecutor() as pool:
+      pending = pool.submit(fetch)
+      try:
+        assert entered.wait(timeout=5)
+        reloaded = reload_server_handler(http, app)
+        assert not closed.is_set()
+        assert store.get_meta("drain_probe")
+        with urllib.request.urlopen(
+          f"http://127.0.0.1:{http.server_port}/health", timeout=5
+        ) as response:
+          assert json.load(response)["ok"] is True
+      finally:
+        release.set()
+      result = pending.result(timeout=5)
+      if fail:
+        assert result["error"] == str(failure)
+      else:
+        assert result["value"] == reloaded.store.get_meta("drain_probe")
+      assert closed.wait(timeout=5)
+      with pytest.raises(sqlite3.ProgrammingError):
+        store.get_meta("drain_probe")
+  finally:
+    release.set()
+    http.shutdown()
+    http.server_close()
+    thread.join(timeout=5)
+    if reloaded is not None:
+      reloaded.store.close()
+    store.close()
+
+
+def test_reload_does_not_close_untracked_pre_upgrade_store(
+  tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+  from types import SimpleNamespace
+
+  if run_reload_in_child(request):
+    return
+  store = SqliteStore(tmp_path / "legacy-reload.sqlite3")
+  app = SteeringApp(store)
+  legacy = SimpleNamespace(
+    store=store,
+    assets_dir=app.assets_dir,
+    repo_name=app.repo_name,
+    messages=app.messages,
+    _asset_tracker=app._asset_tracker,
+  )
+  http = create_http_server(app, host="0.0.0.0", port=0)
+  reloaded = None
+  try:
+    reloaded = reload_server_handler(http, legacy)
+    assert reloaded.store is not store
+    store.set_meta("legacy", "Untracked requests may still use this store")
+    assert reloaded.store.get_meta("legacy") == store.get_meta("legacy")
+  finally:
+    http.server_close()
+    if reloaded is not None:
+      reloaded.store.close()
+    store.close()
+
+
+def test_reload_keeps_reused_memory_store_open(request: pytest.FixtureRequest) -> None:
+  if run_reload_in_child(request):
+    return
+  store = SqliteStore()
+  app = SteeringApp(store)
+  http = create_http_server(app, host="0.0.0.0", port=0)
+  try:
+    reloaded = reload_server_handler(http, app)
+    assert reloaded.store is store
+    store.set_meta("reused", "Memory store remains usable")
+    assert reloaded.store.get_meta("reused") == store.get_meta("reused")
+  finally:
+    http.server_close()
+    store.close()
+
+
 def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
   store = SqliteStore(state_dir / "state.sqlite3")
@@ -5529,7 +5731,7 @@ def test_running_demo_reset_survives_server_hot_reload(
     assert status == HTTPStatus.OK and body["reset"] is True
     assert reloaded.store.get_message("fa0005") is None
     assert reloaded.store.get_message("a00001") is not None
-    assert app.data_version() != old_version
+    assert reloaded.data_version() != old_version
     reloaded.store.close()
   finally:
     server.server_close()

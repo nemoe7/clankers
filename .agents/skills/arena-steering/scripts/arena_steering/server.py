@@ -20,7 +20,8 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from http import HTTPStatus
@@ -54,6 +55,7 @@ WS_TICK_SECONDS = 0.25
 WS_HEARTBEAT_SECONDS = 10.0
 WS_IDLE_SECONDS = 35.0
 WS_MAX_MESSAGE = 16 * 1024 * 1024
+REPORT_RENDER_CACHE_LIMIT = 128
 MERMAID_CACHE_LIMIT = 128
 MERMAID_SVG_LIMIT = 512_000
 MERMAID_SOURCE_LIMIT = 50_064
@@ -276,6 +278,9 @@ class SteeringApp:
     repo_name: str | None = None,
   ) -> None:
     self.store = store
+    self._request_lock = threading.Lock()
+    self._active_requests = 0
+    self._retired = False
     self._mermaid_cache: OrderedDict[str, str] = OrderedDict()
     self._mermaid_cache_dir = (
       Path(store.db_path).parent / "mermaid-cache"
@@ -320,6 +325,27 @@ class SteeringApp:
     self.router = Router()
     self._register_routes()
     self._maybe_reseed_demo(store)
+
+  def _begin_request(self) -> bool:
+    with self._request_lock:
+      if self._retired:
+        return False
+      self._active_requests += 1
+      return True
+
+  def _end_request(self) -> None:
+    with self._request_lock:
+      self._active_requests -= 1
+      if self._retired and not self._active_requests:
+        self.store.close()
+
+  def _retire_store(self) -> None:
+    with self._request_lock:
+      if self._retired:
+        return
+      self._retired = True
+      if not self._active_requests:
+        self.store.close()
 
   @staticmethod
   def _maybe_reseed_demo(store: SqliteStore) -> None:
@@ -1608,15 +1634,19 @@ class SteeringApp:
       ans["ack"] = "\n\n".join(ans.get("acks", []))
       ans["acks_html"] = [render_markdown(a, breaks=True) for a in ans.get("acks", [])]
       ans["ack_html"] = "\n".join(ans["acks_html"])
-    if getattr(report, "status", "") == "dismissed":
-      _REPORT_RENDER_CACHE.pop(report.id, None)
-    if not include_body:
-      payload.pop("body", None)
-      return payload
-    cached = _REPORT_RENDER_CACHE.get(report.id)
-    if cached is not None and cached[0] == report.body:
-      payload["blocks"] = cached[1]
-      return payload
+    cache_lock, cache = _REPORT_RENDER_CACHE_STATE
+    dismissed = getattr(report, "status", "") == "dismissed"
+    with cache_lock:
+      if dismissed:
+        cache.pop(report.id, None)
+      if not include_body:
+        payload.pop("body", None)
+        return payload
+      cached = cache.get(report.id)
+      if cached is not None and cached[0] == report.body:
+        cache.move_to_end(report.id)
+        payload["blocks"] = cached[1]
+        return payload
     blocks, _ = parse_report_markdown(report.body)
     serialized_blocks: list[dict[str, Any]] = []
     for btype, val in blocks:
@@ -1633,13 +1663,18 @@ class SteeringApp:
         )
       else:
         serialized_blocks.append({"type": "field", "field": val.to_dict()})
-    if getattr(report, "status", "") != "dismissed":
-      _REPORT_RENDER_CACHE[report.id] = (report.body, serialized_blocks)
+    if not dismissed:
+      with cache_lock:
+        cache[report.id] = (report.body, serialized_blocks)
+        cache.move_to_end(report.id)
+        while len(cache) > REPORT_RENDER_CACHE_LIMIT:
+          cache.popitem(last=False)
     payload["blocks"] = serialized_blocks
     return payload
 
 
-_REPORT_RENDER_CACHE: dict[str, tuple[str, list[dict[str, Any]]]] = {}
+_REPORT_RENDER_CACHE: OrderedDict[str, tuple[str, list[dict[str, Any]]]] = OrderedDict()
+_REPORT_RENDER_CACHE_STATE = (threading.Lock(), _REPORT_RENDER_CACHE)
 
 
 def file_signature(
@@ -1699,18 +1734,36 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
     def log_message(self, format: str, *args: Any) -> None:
       return
 
+    def _current_app(self) -> SteeringApp:
+      server = getattr(self, "server", None)
+      return getattr(server, "_steering_app", app)
+
+    @contextmanager
+    def _app_lease(self) -> Iterator[SteeringApp]:
+      while True:
+        current = self._current_app()
+        if current._begin_request():
+          break
+      try:
+        yield current
+      finally:
+        current._end_request()
+
     def do_OPTIONS(self) -> None:
       self.send_response(int(HTTPStatus.NO_CONTENT))
       self._send_common_headers("text/plain; charset=utf-8", 0)
       self.end_headers()
 
     def do_GET(self) -> None:
-      parsed = urlparse(self.path)
-      path = parsed.path.rstrip("/") or "/"
-      if path == "/api/ws":
+      if urlparse(self.path).path.rstrip("/") == "/api/ws":
         self._handle_websocket()
         return
-      route_path = path
+      with self._app_lease() as current:
+        self._handle_get(current)
+
+    def _handle_get(self, app: SteeringApp) -> None:
+      parsed = urlparse(self.path)
+      route_path = parsed.path.rstrip("/") or "/"
       if app.is_static_request(route_path):
         asset = app.resolve_asset(route_path)
         if asset is None:
@@ -1755,6 +1808,10 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self.connection.sendall(bytes([0x80 | opcode]) + length + data)
 
     def ws_dispatch(self, value: Any) -> None:
+      with self._app_lease() as current:
+        self._dispatch_websocket(current, value)
+
+    def _dispatch_websocket(self, app: SteeringApp, value: Any) -> None:
       if not isinstance(value, dict):
         raise TypeError("Expected an object")
       if value.get("type") == "pong":
@@ -1836,10 +1893,11 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       fragmented = False
       last_seen = last_heartbeat = time.monotonic()
       try:
-        version = app.data_version()
-        ack_snapshot = app.report_ack_snapshot()
-        asset_ver = app.asset_signature_hash()
-        restore_notice = app.store.get_meta("state_restore_notice", "")
+        with self._app_lease() as bound_app:
+          version = bound_app.data_version()
+          ack_snapshot = bound_app.report_ack_snapshot()
+          asset_ver = bound_app.asset_signature_hash()
+          restore_notice = bound_app.store.get_meta("state_restore_notice", "")
         self.ws_send(1, b'{"type":"change"}')
         while True:
           try:
@@ -1893,33 +1951,41 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
             if final:
               self.ws_dispatch(json.loads(message.decode("utf-8")))
               message.clear()
-          current = app.data_version()
-          if current != version:
-            version = current
-            ack_events, ack_snapshot = app.report_acked_events(ack_snapshot)
-            for ack_event in ack_events:
-              self.ws_send(1, json.dumps(ack_event).encode("utf-8"))
-            self.ws_send(1, b'{"type":"change"}')
-          current_notice = app.store.get_meta("state_restore_notice", "")
-          if current_notice and current_notice != restore_notice:
-            restore_notice = current_notice
-            self.ws_send(
-              1,
-              json.dumps({"type": "state_restored", "notice": current_notice}).encode(
-                "utf-8"
-              ),
-            )
-          current_assets = app.asset_signature_hash()
-          if current_assets != asset_ver:
-            asset_ver = current_assets
-            self.ws_send(1, b'{"type":"reload"}')
-          now = time.monotonic()
-          if now - last_seen > WS_IDLE_SECONDS:
-            self.ws_send(8, (1001).to_bytes(2, "big"))
-            return
-          if now - last_heartbeat >= WS_HEARTBEAT_SECONDS:
-            self.ws_send(1, b'{"type":"heartbeat"}')
-            last_heartbeat = now
+          with self._app_lease() as current_app:
+            if current_app is not bound_app:
+              bound_app = current_app
+              version = bound_app.data_version()
+              ack_events, ack_snapshot = bound_app.report_acked_events(ack_snapshot)
+              for ack_event in ack_events:
+                self.ws_send(1, json.dumps(ack_event).encode("utf-8"))
+              self.ws_send(1, b'{"type":"change"}')
+            current = bound_app.data_version()
+            if current != version:
+              version = current
+              ack_events, ack_snapshot = bound_app.report_acked_events(ack_snapshot)
+              for ack_event in ack_events:
+                self.ws_send(1, json.dumps(ack_event).encode("utf-8"))
+              self.ws_send(1, b'{"type":"change"}')
+            current_notice = bound_app.store.get_meta("state_restore_notice", "")
+            if current_notice and current_notice != restore_notice:
+              restore_notice = current_notice
+              self.ws_send(
+                1,
+                json.dumps({"type": "state_restored", "notice": current_notice}).encode(
+                  "utf-8"
+                ),
+              )
+            current_assets = bound_app.asset_signature_hash()
+            if current_assets != asset_ver:
+              asset_ver = current_assets
+              self.ws_send(1, b'{"type":"reload"}')
+            now = time.monotonic()
+            if now - last_seen > WS_IDLE_SECONDS:
+              self.ws_send(8, (1001).to_bytes(2, "big"))
+              return
+            if now - last_heartbeat >= WS_HEARTBEAT_SECONDS:
+              self.ws_send(1, b'{"type":"heartbeat"}')
+              last_heartbeat = now
       except (ValueError, TypeError) as error:
         code = 1007 if isinstance(error, UnicodeDecodeError) else 1002
         try:
@@ -1948,8 +2014,9 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       except (TypeError, ValueError) as exc:
         self._write_json(int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
         return
-      status, payload = app.dispatch(method, self.path, body)
-      self._write_json(status, payload)
+      with self._app_lease() as current:
+        status, payload = current.dispatch(method, self.path, body)
+        self._write_json(status, payload)
 
     def _read_multipart_body(self, content_type: str) -> dict[str, Any]:
       boundary_match = re.search(r"boundary=(?:\"([^\"]+)\"|([^;]+))", content_type)
@@ -2065,7 +2132,12 @@ def reload_server_handler(server: ThreadingHTTPServer, app: SteeringApp) -> Stee
   after_reload = getattr(app, "_after_reload", None)
   if after_reload is not None:
     after_reload(new_app)
-  server.RequestHandlerClass = handler_fn(new_app)
+  new_handler = handler_fn(new_app)
+  server._steering_app = new_app  # type: ignore[attr-defined]
+  server.RequestHandlerClass = new_handler
+  retire_store = getattr(app, "_retire_store", None)
+  if new_store is not app.store and retire_store is not None:
+    retire_store()
   return new_app
 
 
@@ -2108,6 +2180,7 @@ def create_http_server(
 ) -> ThreadingHTTPServer:
   """Create a ThreadingHTTPServer bound to host:port for SteeringApp."""
   server = ThreadingHTTPServer((host, port), make_request_handler(app))
+  server._steering_app = app  # type: ignore[attr-defined]
   if not os.environ.get("PYTEST_CURRENT_TEST"):
     stop_event = threading.Event()
     server._hot_reload_stop = stop_event  # type: ignore[attr-defined]
