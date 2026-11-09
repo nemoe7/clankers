@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Keep survey subtitle text inside the modal scroll area.
+
 - Open survey answers on touch taps and close them on repeat or outside taps.
 
 - Keep regular messages visible when revealing hidden history. Fetch only hidden messages between loaded history boundaries.

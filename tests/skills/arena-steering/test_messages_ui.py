@@ -3016,3 +3016,30 @@ def test_survey_answers_open_by_touch_and_close_on_outside_tap(tmp_path: Path):
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_survey_subtitle_stays_inside_scroll_clip(tmp_path: Path, width: int):
+  from arena_steering import survey
+
+  with composer_page(width) as page:
+    response = page.request.post(
+      page.url.split("?")[0] + "survey", data={"answers": survey.template()}
+    )
+    assert response.ok
+    page.locator("#survey-open").click()
+    page.locator(".survey-subtitle").wait_for()
+    page.screenshot(path=str(tmp_path / f"survey-subtitle-{width}.png"))
+    bounds = page.locator(".survey-subtitle").evaluate("""el => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const text = range.getBoundingClientRect();
+      const clip = el.closest('.modal-body').getBoundingClientRect();
+      return {top: text.top, bottom: text.bottom, clipTop: clip.top, clipBottom: clip.bottom};
+    }""")
+    assert bounds["top"] >= bounds["clipTop"]
+    assert bounds["bottom"] <= bounds["clipBottom"]
