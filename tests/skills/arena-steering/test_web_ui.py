@@ -6055,6 +6055,102 @@ def test_asset_reload_waits_for_quiet_period_while_state_updates(
     store.close()
 
 
+def test_timestamp_timer_tracks_viewport_and_cleans_up() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+import { mountRelativeTimers, relativeTime } from './skills/arena-steering/assets/timestamps.js';
+const now = Date.now();
+const stamp = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+const listeners = new Set();
+const timers = new Set();
+const media = {
+  matches: true,
+  addEventListener(type, callback) { assert.equal(type, 'change'); listeners.add(callback); },
+  removeEventListener(type, callback) { assert.equal(type, 'change'); listeners.delete(callback); },
+};
+globalThis.window = {
+  matchMedia: () => media,
+  setTimeout(callback) { timers.add(callback); return callback; },
+  clearTimeout(callback) { timers.delete(callback); },
+};
+const attrs = { 'data-timestamp': stamp, 'data-compact': 'true', 'data-state-label': 'Status: acked' };
+const node = {
+  textContent: '',
+  getAttribute(name) { return attrs[name] || null; },
+  setAttribute(name, value) { attrs[name] = value; },
+};
+const stop = mountRelativeTimers({ querySelectorAll: () => [node] });
+for (const compact of [true, false, true]) {
+  media.matches = compact;
+  for (const callback of listeners) callback();
+  const expected = relativeTime(stamp, { compact, now });
+  assert.equal(node.textContent, expected);
+  assert.equal(attrs['aria-label'], `${attrs['data-state-label']}, ${expected}`);
+  assert.equal(timers.size, 1);
+}
+assert.equal(listeners.size, 1);
+stop();
+assert.equal(timers.size, 0);
+assert.equal(listeners.size, 0);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=ROOT,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_relative_timestamps_follow_mobile_and_desktop_widths(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  message = app.messages.send_message("Responsive timestamp", blocking=False)
+  message.modified_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
+  store.save_message(message)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        stamp = page.locator(f'[data-msg-id="{message.id}"] .receipt-status')
+        stamp.wait_for()
+        for width in (1200, 390, 1200):
+          page.set_viewport_size({"width": width, "height": 700})
+          expected = stamp.evaluate("""async node => {
+            const { relativeTime } = await import('/static/assets/timestamps.js');
+            const relative = relativeTime(node.dataset.timestamp, {
+              compact: matchMedia('(max-width: 60em)').matches,
+            });
+            return node.dataset.prefix ? `${node.dataset.prefix} ${relative}` : relative;
+          }""")
+          playwright.expect(stamp).to_have_text(expected)
+          assert stamp.get_attribute("title") is None
+          page.screenshot(path=str(tmp_path / f"responsive-timestamp-{width}.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 def test_timestamp_timer_does_not_add_tooltips() -> None:
   script = r"""
 import assert from 'node:assert/strict';

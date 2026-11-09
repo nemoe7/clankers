@@ -93,7 +93,9 @@ export function mountRelativeTimers(root = document) {
     ...(root.matches?.(selector) ? [root] : []),
     ...root.querySelectorAll(selector),
   ];
+  const compactViewport = window.matchMedia?.("(max-width: 60em)");
   let timer = 0;
+  let disposed = false;
   const refresh = () => {
     const now = Date.now();
     let minDelay = Infinity;
@@ -107,7 +109,7 @@ export function mountRelativeTimers(root = document) {
       const includeSeconds =
         node.getAttribute("data-include-seconds") === "true";
       const nextText = relativeTime(stamp, {
-        compact: node.getAttribute("data-compact") === "true",
+        compact: Boolean(compactViewport?.matches),
         includeSeconds,
         now,
       });
@@ -126,12 +128,19 @@ export function mountRelativeTimers(root = document) {
     return minDelay;
   };
   const tick = () => {
+    if (disposed) return;
+    window.clearTimeout(timer);
     const delay = refresh();
     if (Number.isFinite(delay)) {
       timer = window.setTimeout(tick, delay);
     }
   };
   if (!nodes.length) return () => {};
+  compactViewport?.addEventListener("change", tick);
   tick();
-  return () => window.clearTimeout(timer);
+  return () => {
+    disposed = true;
+    compactViewport?.removeEventListener("change", tick);
+    window.clearTimeout(timer);
+  };
 }
