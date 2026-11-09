@@ -4,6 +4,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.6]
+
+### Added
+
+- Carry the Steering procedures moved out of Arena: installer rerun, survey timing, reference reading, process startup, inbox acknowledgement, task records, gates, reports, and questions.
+- State that Arena and the skill stay in force together.
+
 ## [2.2.5]
 
 ### Removed

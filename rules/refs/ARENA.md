@@ -10,7 +10,7 @@
 ## Setup
 
 - Use "bible" or "the bible", NEVER "bible files" or "required bible files", to mean ARENA.md, the root AGENTS.md, and the `arena-steering` SKILL.md, plus any nested AGENTS.md in a directory you work in (read in full via read_file).
-- Follow the [resume-turn recipe](.agents/skills/arena-steering/references/recipes/resume-turn.md) at every turn start, and read the inbox only when stderr reports unacknowledged messages.
+- Follow the [resume-turn recipe](.agents/skills/arena-steering/references/recipes/resume-turn.md) at every turn start.
 - Before first repo inspection, edit, or preview start—and on the first tool call after any session summary—MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file; read nested AGENTS.md files in full via read_file only when working in their directory; a session summary NEVER counts as full text in context.
 - At every stated read point, follow the bible definition and duties in the Setup section.
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
@@ -26,7 +26,6 @@
 - MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
 - After any change to a path in the bible, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear.
 - In saved context, state the applicable start sequence and the duty to read missing-context paths in the bible in full before queued work; no verbatim ARENA.md copy is required.
-- Each Markdown file under `references/` is supplementary; read only what a question needs. Use the installed skill's `references/cli.md` for commands and its `references/recipes/` for procedures. Installation template copies are supplementary too.
 
 ## Constitution
 
@@ -41,18 +40,16 @@
 
 ## Precedence
 
-- These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them; state the override in one line and follow it.
+- These rules and the `arena-steering` skill apply together. These rules outrank other skills and plugins. An explicit user instruction in chat outranks them; state the override in one line and follow it.
 - The user's explicit instructions override this file; confirm the override in one line.
 - Failure to comply with this file results in a negative rating.
 - In Arena, every `AGENTS.md` in the host repository stays in force beside this file; where any of them collides with this file, this file wins.
 
 ## Preview
 
-- After any arena-steering source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
-- NEVER stop or restart a running Steering preview server unless a health check fails or the user asks.
-- Run `steer survey` immediately after the initial visibility response and before the first inbox poll. Run it after a preview restart, compaction, summary, or context replacement before queued work.
-- Before the first non-setup tool call, finish initial setup and wait for the visibility answer. Install repo tooling through the installed Steering skill (MUST include `pip install -e` on `nuu` when present); start demo servers via `start_process`, then use `steer poll` first.
-- Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
+- Install repo tooling with `pip install -e` on `nuu` when present.
+- Start demo servers and presentations via `start_process`.
+- NEVER claim the live preview is visible before the user confirms it.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0.
 - Browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
@@ -61,63 +58,41 @@
 
 - For a corrected routine slip with no impact, give one short receipt line.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
-- Use the stderr read reminder only for the read schedule; act on other stderr reminders as directed. When stderr directs stale-report removal, run `steer report rm --stale`. The Bash gate is a repair, NEVER the schedule. Follow the installed skill for Steering mechanics.
-- Before the first start there is no inbox to poll, and a missing state file then is no failed read.
-- ALWAYS provide the substantive answer to each delivered message in its own `ack <id> <Markdown>` call before any chat follow-up.
-- One call carries one answer text, so acknowledge notes separately when the answers differ.
-- NEVER blindly acknowledge all pending notes.
-- Refer to a note by its ID, NEVER by its sequence number or list position: the first six characters in prose, task details, reports and notes. Extend the prefix when two notes share it.
-- A receipt means received, not implemented. MUST acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
-- Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
-- When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
+- When arena-steering is unavailable, acknowledge delivered messages in chat with literal `ACK:` and your interpretation.
 - If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
-- Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 
 ## Tasks and gates
 
-- NEVER block open or queued tasks while a rule-violation report waits for an answer; only a task linked to a report through `--report` waits on that report.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
-- Follow the task order returned by Steering.
 - Keep working while tasks remain; end the turn when the work is verified and stopped.
-- Task completion alone requires no report.
-- MUST update the task status and keep scope, progress, verification, and landed commit details complete in the task record with -A or --append so nothing is lost to compaction or workspace resets.
-- Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports. ALWAYS end every turn with `steer poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; ALWAYS use Bash tool timeout 1800; NEVER wrap it in a shell timeout; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
-- Start repo-tooling installs with `steer run start -t <task> <name> -- <command>` after visibility and before the first `steer poll` or `steer read`; use `start_process` for the Steering preview and demos or presentations.
-- Treat a run that takes 10 seconds or more as a long run; start it with `steer run start -t <task> <name> -- <command>`, use a descriptive run name, and append `-2`, `-3`, ... for retries after failure.
 - NEVER sleep while a gate runs in the background.
-- Link each local gate to its task when starting the run; the live run owns the task's blocked state.
-- After blocking the sole task for its running gate, MUST run `steer poll`.
 - NEVER call `get_process_output` to wait for a run.
-- NEVER run `steer poll` as a gate wait unless the sole remaining task is blocked for that gate.
 - Read the verdict line before any push.
 
 ## Reports and questions
 
 - Suggest an amendment only when an identified rule gap contributed.
-- For each fielded-report question, keep its relevant context, prompt, and controls on one vertical screen: put the question immediately after at most one short paragraph or three short bullets that contain only the facts needed to answer it; NEVER collect questions at the end of a long report.
-- Do not waive requested reports or reports required for assessments, questions, or blocked tasks.
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
-- MUST publish every unrelated finding in a fielded report with a suggested next action; fix only the ones that block the work.
+- Fix only the unrelated findings that block the work.
 - When the user describes a problem, asks how something works, or thinks out loud, MUST deliver the assessment: MUST report the findings and stop; NEVER implement until the user asks for the change.
-- For every assessment or evaluation report, MUST include a next-action field with a recommended option, a no-change option, and a custom response.
 - Ask before implementing on deviating reasoning or material ambiguity.
 - ALWAYS report uncontracted shipped changes.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - MUST ask questions as soon as they arise.
 - A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
-- Carry every proposal and question in a fielded report, never in chat.
-- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
-- Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before any work beyond setup, and the process tool's live-preview banner is not owner confirmation. The first successful start not yet confirmed in this session or after a branch change still needs a visibility question, including a start that repairs earlier failed reads; a later restart in the same session on the same branch does not.
+- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, or GitHub needs a reconnect. NEVER for a question the report path can carry.
+- Ask the visibility question alone.
+- Report a failed start and block on that question before work beyond setup.
+- The live-preview banner is not owner confirmation.
+- Ask on the first unconfirmed successful start in a session or branch, including a repair start.
+- A later restart in the same session on the same branch needs no visibility question.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
-- Every question with options carries a recommended answer, marked with `(x)` or `[x]` without writing `(recommended)` or `*` in the option text.
-- NEVER count a preselected option, a marked recommendation, or silence as an answer; an unanswered question stays unanswered.
-- NEVER end a turn with open tasks. Link a live local gate to its task; the run owns that task's blocked state without a report. Immediately publish a fielded report for other blocked tasks, naming each on one line. Continue independent work and poll when no unblocked work remains.
+- NEVER end a turn with open tasks. Link a live local gate to its task; the run owns that task's blocked state without a report.
 - NEVER use an assumption while material ambiguity remains.
 - For unavoidable assumptions without material ambiguity, MUST follow the assumption-reporting rule over blanket ask, no-assumption, or no-guess rules.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
-- For agent handoffs and cross-session specifications, follow the [handoff template](.agents/skills/arena-steering/references/handoff.md) and publish an unfielded Steering report.
 - Include all required context in each handoff. NEVER require access to the sender's state or local-only files.
 
 ## Communication
@@ -241,14 +216,12 @@
 - NEVER cite a session-local artifact or a local-only path in a repository file, commit, PR, task detail, or report: a preview note ID, a report or submission ID, a task ID, an ignored state or scratch path, a sandbox home path, or any other identifier minted for one session.
 - A session-local citation does not persist; ALWAYS strip one on sight.
 - Cite the durable record instead: the CHANGELOG entry, the repository-relative path, or the commit.
-- Publish all reports through the `arena-steering` skill in the shared preview; NEVER create local report commits for the native diff viewer.
+- NEVER create local report commits for the native diff viewer.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
 - MUST ask through `ask_user` immediately; NEVER end the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
 - Prove the recovery with `git ls-remote origin <branch>` before pushing again.
-- Update PR title/body through `steer pr-update -n <pr> -t <title> -f <workspace-file>`.
-- For GitHub Actions job logs, follow the [job-log recipe](.agents/skills/arena-steering/references/recipes/job-logs.md).
 - **NEVER `-f body=@path`**.
 - Stage PR text in the workspace, NEVER /tmp.
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.
@@ -259,10 +232,9 @@
 
 ## Workspace
 
-- For Chromium work, follow the [Chromium recipe](.agents/skills/arena-steering/references/recipes/chromium.md).
 - For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
 - Start each local background gate on a stable tree and do not edit its covered root files while it runs; a remote PR CI watch does not freeze the working tree.
-- The freeze covers the root tree only. With queued tasks that edit other files, delegate to idle allowlisted board workers first. Else start a worktree with `steer worktree add` while the root gate runs, and do not wait read-only.
+- The freeze covers the root tree only.
 - After one diagnosis, resume unblocked work and use a worktree if the gate freezes its files. Recheck logs only after meaningful progress, never just to wait.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
 - Keep durable work in plain files; `bash` starts at the repository root, so `cd` into it is redundant.

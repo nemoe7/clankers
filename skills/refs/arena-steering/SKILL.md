@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.2.5"
+  version: "2.2.6"
 ---
 
 # Arena Steering
@@ -19,6 +19,16 @@ At every turn start, follow [the v2 resume-turn recipe](references/recipes/resum
 NEVER stop or restart a running Steering preview server unless a health check fails or the user asks.
 For any browser work, follow [the Chromium recipe](references/recipes/chromium.md) as standard local tooling.
 For GitHub Actions logs, follow [the direct job-log recipe](references/recipes/job-logs.md).
+
+- After any arena-steering source file changes, MUST rerun the skill installer from the repository root before the next CLI call or preview-server start.
+- Run `steer survey` immediately after the initial visibility response and before the first inbox poll.
+- Run the survey after a preview restart and after a compaction bible read before queued work.
+- Read a `references/` file only when a question needs it, except that `references/cli.md` carries commands and `references/recipes/` carries procedures.
+- Installation template copies are supplementary.
+- Install repo tooling through the installed Steering skill.
+- Start repo-tooling installs with `steer run start -t <task> <name> -- <command>` after visibility and before the first `steer poll` or `steer read`.
+- Use `start_process` for the Steering preview.
+- After starting demo servers, use `steer poll` first.
 
 ## Messages (`Inbox`)
 
@@ -37,6 +47,24 @@ steer msg <id>
 - Use `steer ack -i -t -z -d` to create and link a task while acknowledging one message or report answer.
 - Link messages only when they change a task's scope or acceptance criteria.
 - Leave unrelated clarifications unlinked.
+- Run `steer read` when stderr reports pending items.
+- Act on other stderr reminders as directed.
+- When stderr directs stale-report removal, run `steer report rm --stale`.
+- Before the first start there is no inbox to poll, and a missing state file then is no failed read.
+- ALWAYS provide the substantive answer to each delivered message in its own `ack <id> <Markdown>` call before any chat follow-up.
+- One call carries one answer text, so acknowledge messages separately when the answers differ.
+- NEVER blindly acknowledge all pending messages.
+- Treat a receipt as received, not implemented.
+- Acknowledge a message in the same tool block as the read that surfaced it.
+- Acknowledge a message before starting any implementation that the acknowledgement announces.
+- Receipt work that outlives the tool block as in progress rather than waiting until it finishes.
+- Keep the receipt to one, two, or three lines naming the change and its commit once the change exists.
+- Use the preview inbox as the source of truth for Steering instructions and acknowledgement receipts.
+- Verify pending and completed work in the preview inbox instead of inferring it from Arena chat output.
+- Treat a repeated or identical message as a resend rather than a new instruction.
+- Answer whatever is still pending in a resend.
+- Restate completed work in one line when a message is resent.
+- NEVER treat a resend as authorization to redo finished work or widen scope.
 
 ## Tasks (`Tasks`)
 
@@ -67,6 +95,24 @@ steer task rm <id>
 - When creating a task, omit `-p` unless the user states a priority.
 - Keep task details to concise current facts about the task, not a chronological action log.
 - Update task details when the facts they record change.
+- Task completion alone requires no report.
+- Update task status and keep scope, progress, verification, and landed commit details complete with `-A` or `--append`.
+- Only a task linked to a report through `--report` waits on that report.
+- Treat a run that takes 10 seconds or more as a long run.
+- Start long runs with `steer run start -t <task> <name> -- <command>`.
+- Give each run a descriptive name.
+- Append `-2`, `-3`, ... to run names for retries after failure.
+- Link each local gate to its task when starting the run.
+- Let the live run own its task's blocked state.
+- After blocking the sole task for its running gate, MUST run `steer poll`.
+- NEVER run `steer poll` as a gate wait unless the sole remaining task is blocked for that gate.
+- Continue independent work and poll when no unblocked work remains.
+- Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports.
+- ALWAYS end every turn with `steer poll` on the final Bash call, unless the listing carries a `skip_poll` stamp.
+- Call `functions.bash` with `{"command":"steer poll","timeout":1800}` for the final poll.
+- NEVER wrap the final poll in a shell timeout.
+- MUST NOT substitute sleep for the final poll.
+- NEVER treat a bounded no-result poll as a successful wait.
 
 ## Reports (`Reports`)
 
@@ -80,6 +126,7 @@ steer report rm <id|--stale>
 ```
 
 - Publish agent handoffs and cross-session specifications as unfielded Steering reports.
+- For agent handoffs and cross-session specifications, follow the [handoff template](references/handoff.md).
 - Every report field requires a statement `label` before its options (`- ( )`, `- (x)`, `- [ ]`, `- [x]`) or after `label: ___`.
 - Use concise, task-specific labels: decision subjects for questions and chosen outcomes for options.
 - NEVER use question text or generic words such as Decision, Answer, Option, or Approve as labels.
@@ -91,5 +138,19 @@ steer report rm <id|--stale>
 - Radio (`choice`) and checkbox (`checkbox`) fields automatically render a built-in `"Something else..."` free-form input in the web UI.
 - After the first answer, a report body change requires `steer report rm <id>` before republishing the same ID. Removal keeps old answers in the inbox, detaches task links, and preserves task details.
 - Apply user-approved formatting-only changes to the working source without republishing an answered report or requesting another approval.
+- Publish all reports through the `arena-steering` skill in the shared preview.
+- Carry every proposal and question in a fielded report, NEVER in chat.
+- Use a new report for a follow-up to a report that already has answers.
+- Do not waive requested reports or reports required for assessments, questions, or blocked tasks.
+- Publish every unrelated finding in a fielded report with a suggested next action.
+- Keep each fielded-report question, its context, and its controls on one vertical screen.
+- Put the question after at most one short paragraph or three short bullets of facts needed to answer it.
+- NEVER collect questions at the end of a long report.
+- Mark a recommended answer for every question with options using `(x)` or `[x]`.
+- NEVER write `(recommended)` or `*` in option text.
+- NEVER count silence as an answer.
+- Treat an unanswered question as unanswered.
+- Include a next-action field in every assessment or evaluation report.
+- Give the next-action field a recommended option and a no-change option.
 
 Before publishing reports, check `steer tasks` for related upcoming tasks and name their titles and scopes without IDs.

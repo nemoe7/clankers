@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Keep comments and docstrings rare and factual, limited to non-obvious external constraints and business invariants.
+- Move Steering procedures from Arena into the skill and keep both in force together.
 - Require the squash skill for refs-to-live rule amendments.
 - Group Arena clauses by domain and place the bible definition before its first reference.
 
@@ -21,6 +22,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Remove the retired ntfy restoration rule and both retired question-tool channel cases.
+- Remove the Steering installer, lifecycle, survey, inbox, task, gate, report, and preview procedures that the skill now carries.
 
 ### Fixed
 
