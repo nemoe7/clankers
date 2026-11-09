@@ -876,7 +876,6 @@ class SqliteStore:
         if task.insertion_order in assigned_orders:
           raise ValueError("Duplicate Task.insertion_order in queue")
         assigned_orders.add(task.insertion_order)
-      self._conn.execute("DELETE FROM tasks")
       for index, task in enumerate(tasks):
         task.details = list(dict.fromkeys(line.strip() for line in task.details))
         row = previous.get(task.id)
@@ -885,47 +884,51 @@ class SqliteStore:
             "tasks", task.id, task.modified_at
           )
         elif (
-          int(row["position"]) != index
-          or json.loads(row["details_json"] or "[]") != task.details
-          or self._row_to_task(row).to_dict() != task.to_dict()
+          int(row["position"]) == index
+          and json.loads(row["details_json"] or "[]") == task.details
+          and self._row_to_task(row).to_dict() == task.to_dict()
         ):
+          continue
+        else:
           task.modified_at = _advance_stamp(str(row["modified_at"]), task.modified_at)
-        self._conn.execute(
-          """
-          INSERT INTO tasks (
-            position, priority, priority_explicit, size, insertion_order, id, title, type,
-            types_json, phase_index, phase_evidence_json, status, scope, details_json,
-            links_json, msg_ids_json, report_ids_json, deps_json, modified_at, created_at,
-            finished_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          """,
-          (
-            index,
-            task.priority,
-            int(task.priority_explicit),
-            task.size,
-            task.insertion_order,
-            task.id,
-            task.title,
-            task.type,
-            json.dumps(task.types),
-            task.phase_index,
-            json.dumps(task.phase_evidence),
-            task.status,
-            task.scope,
-            json.dumps(task.details),
-            json.dumps(task.links),
-            json.dumps(task.msg_ids),
-            json.dumps(task.report_ids),
-            json.dumps(task.task_ids),
-            task.modified_at,
-            task.created_at,
-            task.finished_at,
-          ),
-        )
+        values = {
+          "position": index,
+          "priority": task.priority,
+          "priority_explicit": int(task.priority_explicit),
+          "size": task.size,
+          "insertion_order": task.insertion_order,
+          "id": task.id,
+          "title": task.title,
+          "type": task.type,
+          "types_json": json.dumps(task.types),
+          "phase_index": task.phase_index,
+          "phase_evidence_json": json.dumps(task.phase_evidence),
+          "status": task.status,
+          "scope": task.scope,
+          "details_json": json.dumps(task.details),
+          "links_json": json.dumps(task.links),
+          "msg_ids_json": json.dumps(task.msg_ids),
+          "report_ids_json": json.dumps(task.report_ids),
+          "deps_json": json.dumps(task.task_ids),
+          "modified_at": task.modified_at,
+          "created_at": task.created_at,
+          "finished_at": task.finished_at,
+        }
+        if row is None:
+          columns = ", ".join(values)
+          parameters = ", ".join(f":{column}" for column in values)
+          self._conn.execute(
+            f"INSERT INTO tasks ({columns}) VALUES ({parameters})", values
+          )
+        else:
+          assignments = ", ".join(
+            f"{column} = :{column}" for column in values if column != "id"
+          )
+          self._conn.execute(f"UPDATE tasks SET {assignments} WHERE id = :id", values)
       kept_ids = {task.id for task in tasks}
       for task_id, row in previous.items():
         if task_id not in kept_ids:
+          self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
           self._stamp_deleted_row("tasks", task_id, str(row["modified_at"]))
     return list(tasks)
 

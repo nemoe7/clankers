@@ -18,6 +18,7 @@ This log has no Unreleased section.
 - Resume through current-task discovery, with conditional bible reads and survey submission.
 - Skip repeated schema setup on current databases, rechecking schema changes, migration revisions, and legacy task states.
 - Correct the survey CLI reference for success output, live-server requirements, memory-only results, and question/template output.
+- Update only changed task rows, preserving unchanged sync revisions, queue order, and deletion tombstones.
 
 ### Security
 

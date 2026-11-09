@@ -127,6 +127,56 @@ def test_schema_setup_cache_invalidates_safely(
   cached.close()
 
 
+@pytest.mark.parametrize("change", ["none", "edit", "reorder", "remove"])
+def test_task_queue_only_versions_changed_rows(change: str) -> None:
+  store = SqliteStore()
+  try:
+    tasks = [
+      Task(id=f"task-{index}", title=f"Task {index}", size=1) for index in range(3)
+    ]
+    store.save_task_queue(tasks)
+    cursor = store.state_stamp()
+    if change == "edit":
+      tasks[0].title = "Edited task"
+      expected_changed = {tasks[0].id}
+    elif change == "reorder":
+      tasks[0], tasks[1] = tasks[1], tasks[0]
+      expected_changed = {tasks[0].id, tasks[1].id}
+    else:
+      expected_changed = set()
+    removed = tasks.pop() if change == "remove" else None
+    store.save_task_queue(tasks)
+    delta = store.export_rows(since=cursor)
+    assert {row["id"] for row in delta["tasks"]} == expected_changed
+    assert [row["id"] for row in delta["deleted"]["tasks"]] == (
+      [removed.id] if removed else []
+    )
+    assert [task.id for task in store.list_tasks()] == [task.id for task in tasks]
+    if change == "none":
+      assert store.state_stamp() == cursor
+  finally:
+    store.close()
+
+
+def test_duplicate_new_task_ids_roll_back_queue_changes() -> None:
+  import sqlite3
+
+  store = SqliteStore()
+  try:
+    original = Task(id="existing", title="Existing task", size=1)
+    store.save_task_queue([original])
+    cursor = store.state_stamp()
+    duplicates = [
+      Task(id="duplicate", title="Duplicate task", size=1) for _ in range(2)
+    ]
+    with pytest.raises(sqlite3.IntegrityError):
+      store.save_task_queue([original, *duplicates])
+    assert [task.id for task in store.list_tasks()] == [original.id]
+    assert store.state_stamp() == cursor
+  finally:
+    store.close()
+
+
 def test_package_exposes_current_semver_version() -> None:
   assert __version__ == EXPECTED_INITIAL_VERSION
 
