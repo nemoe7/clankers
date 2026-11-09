@@ -33,12 +33,6 @@ function readDrafts() {
   }
 }
 
-function readDraft(reportId, fieldId) {
-  const drafts = readDrafts();
-  const key = `${reportId}:${fieldId}`;
-  return Object.hasOwn(drafts, key) ? drafts[key] : undefined;
-}
-
 function writeDrafts(reportId, values) {
   try {
     const drafts = readDrafts();
