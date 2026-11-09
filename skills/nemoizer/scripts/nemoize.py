@@ -259,6 +259,7 @@ ADVISORY_RULE_IDS = {
   "HMN909",
   "HMN910",
   "NMT300",
+  "NMT400",
 }
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 4
@@ -486,6 +487,7 @@ TEST_RULE_IDS = {
   "output_text": "NMT100",
   "measurement": "NMT200",
   "timing_wait": "NMT300",
+  "numeric_setting": "NMT400",
 }
 RESERVED_RULE_IDS = {"HMN000"}
 KNOWN_RULE_IDS = {
@@ -3355,6 +3357,205 @@ def javascript_pairs(text):
   return json.loads(result.stdout)
 
 
+def numeric_setting_findings(path, text):
+  """Review direct numeric copies of statically resolved production settings."""
+  tree = ast.parse(text)
+  root = next(
+    (
+      parent
+      for parent in path.resolve().parents
+      if (parent / ".git").exists() or (parent / "pyproject.toml").exists()
+    ),
+    path.resolve().parent,
+  )
+  bindings = {}
+  sources = {}
+
+  def source(module, level=0):
+    parts = module.split(".") if module else []
+    base = path.resolve().parent
+    if level:
+      for _ in range(level - 1):
+        base = base.parent
+      candidates = [base.joinpath(*parts).with_suffix(".py")]
+    else:
+      candidates = [
+        parent.joinpath(*parts).with_suffix(".py")
+        for parent in path.resolve().parents
+        if parent.is_relative_to(root)
+      ]
+    found = {
+      candidate.resolve()
+      for candidate in candidates
+      if candidate.is_file()
+      and candidate.resolve().is_relative_to(root)
+      and not any(
+        part in {"tests", "test", ".venv"} for part in candidate.relative_to(root).parts
+      )
+    }
+    return next(iter(found)) if len(found) == 1 else None
+
+  for node in tree.body:
+    if isinstance(node, ast.Import):
+      for alias in node.names:
+        if resolved := source(alias.name):
+          bindings[alias.asname or alias.name] = (resolved, None)
+    elif isinstance(node, ast.ImportFrom) and (
+      resolved := source(node.module, node.level)
+    ):
+      for alias in node.names:
+        bindings[alias.asname or alias.name] = (resolved, alias.name)
+  for node in tree.body:
+    if isinstance(
+      node,
+      (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef),
+    ):
+      continue
+    for child in ast.walk(node):
+      if isinstance(child, ast.Name) and child.id in bindings:
+        bindings.pop(child.id)
+  for resolved, _ in bindings.values():
+    if resolved in sources:
+      continue
+    try:
+      parsed = ast.parse(resolved.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeError):
+      sources[resolved] = {}
+      continue
+    settings = {}
+    writes = {}
+    for node in ast.walk(parsed):
+      if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+        writes[node.id] = writes.get(node.id, 0) + 1
+    for node in parsed.body:
+      targets = (
+        node.targets
+        if isinstance(node, ast.Assign)
+        else ([node.target] if isinstance(node, ast.AnnAssign) else [])
+      )
+      for target in targets:
+        if not isinstance(target, ast.Name) or not target.id.isupper():
+          continue
+        if re.search(
+          r"(?:SCHEMA|STATUS|EXIT|PERMISSION|FRAME|DIGEST|MODE|INDEX|VERSION)",
+          target.id,
+        ):
+          continue
+        value = getattr(node, "value", None)
+        if isinstance(value, ast.UnaryOp) and isinstance(
+          value.op, (ast.USub, ast.UAdd)
+        ):
+          value = value.operand
+        if (
+          isinstance(value, ast.Constant)
+          and type(value.value) in (int, float)
+          and writes[target.id] == 1
+        ):
+          settings[target.id] = node.lineno
+    sources[resolved] = settings
+  findings = []
+  for function in ast.walk(tree):
+    if not isinstance(
+      function, (ast.FunctionDef, ast.AsyncFunctionDef)
+    ) or not function.name.startswith("test_"):
+      continue
+    if (
+      function.args.args
+      or function.args.posonlyargs
+      or function.args.kwonlyargs
+      or function.args.vararg
+      or function.args.kwarg
+      or function.decorator_list
+    ):
+      continue
+    nodes = list(_iter_scope_nodes(function))
+    shadowed = {
+      node.id
+      for node in nodes
+      if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
+    }
+    shadowed.update(
+      arg.arg for arg in ast.walk(function.args) if isinstance(arg, ast.arg)
+    )
+    for node in nodes:
+      if isinstance(node, (ast.Import, ast.ImportFrom)):
+        shadowed.update(
+          alias.asname or alias.name.split(".")[0] for alias in node.names
+        )
+      if isinstance(node, ast.Call):
+        for argument in [*node.args, *(kw.value for kw in node.keywords)]:
+          shadowed.update(
+            child.id for child in ast.walk(argument) if isinstance(child, ast.Name)
+          )
+        if isinstance(node.func, ast.Attribute):
+          shadowed.update(
+            child.id
+            for child in ast.walk(node.func.value)
+            if isinstance(child, ast.Name)
+          )
+      if isinstance(node, ast.Attribute) and isinstance(node.ctx, (ast.Store, ast.Del)):
+        shadowed.update(
+          child.id for child in ast.walk(node.value) if isinstance(child, ast.Name)
+        )
+    for node in nodes:
+      if not isinstance(node, ast.Assert) or not isinstance(node.test, ast.Compare):
+        continue
+      comparison = node.test
+      if len(comparison.ops) != 1 or not isinstance(comparison.ops[0], ast.Eq):
+        continue
+      for actual, expected in (
+        (comparison.left, comparison.comparators[0]),
+        (comparison.comparators[0], comparison.left),
+      ):
+        literal = (
+          expected.operand
+          if isinstance(expected, ast.UnaryOp)
+          and isinstance(expected.op, (ast.USub, ast.UAdd))
+          else expected
+        )
+        if not isinstance(literal, ast.Constant) or type(literal.value) not in (
+          int,
+          float,
+        ):
+          continue
+        name = (
+          actual.id
+          if isinstance(actual, ast.Name)
+          else (
+            actual.value.id
+            if isinstance(actual, ast.Attribute) and isinstance(actual.value, ast.Name)
+            else None
+          )
+        )
+        if name not in bindings or name in shadowed:
+          continue
+        resolved, imported = bindings[name]
+        setting = (
+          imported
+          if isinstance(actual, ast.Name)
+          else actual.attr
+          if imported is None
+          else None
+        )
+        line = sources[resolved].get(setting)
+        if line is None:
+          continue
+        findings.append(
+          {
+            "rule": TEST_RULE_IDS["numeric_setting"],
+            "category": "numeric_setting",
+            "path": str(path),
+            "line": node.lineno,
+            "column": node.col_offset + 1,
+            "source_path": str(resolved),
+            "source_line": line,
+            "evidence": f"copied numeric setting {setting} from {resolved}:{line}",
+            "status": "manual_review",
+          }
+        )
+  return findings
+
+
 def review_tests(targets):
   findings, coverage, errors, visited = [], [], [], set()
   for path in walk(targets, []):
@@ -3404,6 +3605,10 @@ def review_tests(targets):
     row["status"] = "checked"
     with file_scope(path, text):
       file_ids, line_ids, _ = exclusions(path, text.splitlines())
+    if path.suffix.lower() == ".py":
+      for finding in numeric_setting_findings(path, text):
+        if not suppressed(finding["rule"], file_ids | line_ids[finding["line"] - 1]):
+          findings.append(finding)
     for pair in parsed["pairs"]:
       role = category(pair)
       if role is None:
@@ -3454,7 +3659,11 @@ def review_tests_main(argv=None):
   except ValueError as error:
     parser.error(str(error))
   print(json.dumps(result))
-  return 2 if result["errors"] else int(bool(result["findings"]))
+  return (
+    2
+    if result["errors"]
+    else int(any(row.get("status") != "manual_review" for row in result["findings"]))
+  )
 
 
 def is_test_file(path, text, helpers):
@@ -3786,6 +3995,7 @@ def main(argv=None):
         row["rule"],
         row["evidence"],
         test_lines[row["line"] - 1] if 0 < row["line"] <= len(test_lines) else None,
+        status=row.get("status"),
       )
     )
   for row in result["coverage"]:

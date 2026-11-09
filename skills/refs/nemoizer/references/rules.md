@@ -899,3 +899,17 @@ time.sleep(0.1)
 To fix this issue, replace the fixed delay with a condition-based wait, bounded polling, or a fake timer.
 
 Rationale: Real-time sleeps add latency and can make tests depend on scheduling.
+
+## `NMT400` - Copied numeric production setting
+
+Tags: `tests`, `numeric-settings`, `advisory`
+
+Aliases: `numeric-setting-copy`
+
+This advisory reports numeric literals compared directly with statically resolved Python production settings and cites the source declaration.
+Resolution covers direct module and constant imports from local Python files, without executing source code.
+Unresolved imports, computed settings, reassigned settings, parameterized tests, fixture arguments, shadowing, and possible local mutations remain outside coverage.
+Protocol-related setting names and external modules remain excluded.
+The rule does not rewrite assertions, loosen exact dimensions, or block validation.
+
+Rationale: Source citations distinguish copied defaults from explicit input contracts.

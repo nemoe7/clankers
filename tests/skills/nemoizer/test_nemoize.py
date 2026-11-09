@@ -922,6 +922,7 @@ def test_prose_and_test_ids_have_separate_domains():
     "output_text": "NMT100",
     "measurement": "NMT200",
     "timing_wait": "NMT300",
+    "numeric_setting": "NMT400",
   }
   assert "NMT300" in nemoize.KNOWN_RULE_IDS
   assert "NMT300" in nemoize.ADVISORY_RULE_IDS
@@ -2524,3 +2525,61 @@ def test_nmt200_module_defaults_are_not_explicit_test_inputs(
   reviewed = nemoize.review_tests([source])
   assert not reviewed["errors"]
   assert [row["rule"] for row in reviewed["findings"]] == ["NMT200"]
+
+
+@pytest.mark.parametrize(
+  ("setup", "expression", "expected"),
+  [
+    ("", "settings.LIMIT == 42", True),
+    ("", "42 == settings.LIMIT", True),
+    ("", "settings.NEGATIVE == -2", True),
+    ("", "LIMIT == 42", True),
+    ("settings.LIMIT = 42", "settings.LIMIT == 42", False),
+    ("monkeypatch.setattr(settings, 'LIMIT', 42)", "settings.LIMIT == 42", False),
+    ("settings = object()", "settings.LIMIT == 42", False),
+    ("import other as settings", "settings.LIMIT == 42", False),
+    ("", "settings.SCHEMA_VERSION == 1", False),
+    ("", "settings.COMPUTED == 42", False),
+    ("", "settings.MUTABLE == 42", False),
+    ("", "result == settings.LIMIT", False),
+    ("", "result == 42", False),
+  ],
+)
+def test_source_numeric_advisory_boundary(tmp_path, setup, expression, expected):
+  (tmp_path / "pyproject.toml").write_text("", encoding="utf-8")
+  (tmp_path / "settings.py").write_text(
+    "LIMIT = 42\nNEGATIVE = -2\nSCHEMA_VERSION = 1\n"
+    "COMPUTED = int('42')\nMUTABLE = 42\nMUTABLE = 43\n",
+    encoding="utf-8",
+  )
+  source = tmp_path / "test_numeric.py"
+  source.write_text(
+    "import settings\nfrom settings import LIMIT\n\ndef test_setting():\n"
+    + (f"  {setup}\n" if setup else "")
+    + f"  assert {expression}\n",
+    encoding="utf-8",
+  )
+  findings = nemoize.review_tests([source])["findings"]
+  numeric = [row for row in findings if row["category"] == "numeric_setting"]
+  assert bool(numeric) == expected
+  if expected:
+    assert numeric[0]["status"] == "manual_review"
+    assert numeric[0]["source_path"] == str(tmp_path / "settings.py")
+    assert numeric[0]["source_line"] > 0
+    assert "settings.py:" in numeric[0]["evidence"]
+    result = run(str(source), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "(advisory)" in result.stdout
+
+
+@pytest.mark.parametrize("prefix", ["settings = object()\n", ""])
+def test_source_numeric_advisory_skips_uncertain_scope(tmp_path, prefix):
+  (tmp_path / "settings.py").write_text("LIMIT = 42\n", encoding="utf-8")
+  source = tmp_path / "test_numeric.py"
+  source.write_text(
+    "import settings\n"
+    + prefix
+    + "def test_setting(settings=None):\n  assert settings.LIMIT == 42\n",
+    encoding="utf-8",
+  )
+  assert not nemoize.numeric_setting_findings(source, source.read_text())

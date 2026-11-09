@@ -10,6 +10,8 @@ This log has no Unreleased section.
 
 ### Added
 
+- Add advisory NMT400 for direct numeric copies of statically resolved Python production settings, with source citations and conservative mutation exclusions.
+
 - Add advisory NMT300 for test sleeps, excluding bounded polling, fake timers, and Playwright timeout helpers.
 
 ### Changed
