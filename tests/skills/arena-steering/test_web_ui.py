@@ -1883,9 +1883,12 @@ def test_blocked_bash_dismissal_is_immediate_and_recovers(
       page.evaluate(
         """fail => {
         const original = window.fetch.bind(window);
+        let released = false;
         window.fetch = async (...args) => {
           if (String(args[0]).startsWith('/blocked-bash/') && args[1]?.method === 'DELETE') {
-            await new Promise(resolve => { window.releaseDismiss = resolve; });
+            if (!released) await new Promise(resolve => {
+              window.releaseDismiss = () => { released = true; resolve(); };
+            });
             if (fail) return new Response(JSON.stringify({error:'offline'}), {
               status:503, headers:{'content-type':'application/json'}
             });
@@ -2488,7 +2491,7 @@ def test_floating_controls_keep_neutral_shape_on_hover(tmp_path: Path) -> None:
           button = page.evaluate_handle(
             """([name, index]) => {
               const button = document.createElement('button');
-              button.className = name;
+              button.className = `scroll-jump-btn ${name}`;
               button.textContent = name;
               Object.assign(button.style, { position: 'fixed', left: '250px',
                 top: `${120 + index * 80}px`, bottom: 'auto', transition: 'none' });

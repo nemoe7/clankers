@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Correct retry and hover setup in browser regression tests.
+
 - Omit acknowledgement instructions from violations without an inbox message.
 
 - Load message history through referenced IDs before scrolling to them.
