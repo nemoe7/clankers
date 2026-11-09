@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Continue work when polling directs it.
+
 - Increase keyboard focus contrast and keep the ring inside the control.
 
 - Preserve words in table code while allowing horizontal scrolling.
