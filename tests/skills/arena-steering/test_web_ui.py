@@ -3075,6 +3075,13 @@ def test_touch_tap_overlay_is_disabled_without_hiding_keyboard_focus(
           .map(el => getComputedStyle(el).webkitTapHighlightColor)""")
         assert colors == ["rgba(0, 0, 0, 0)"] * 3
         page.keyboard.press("Tab")
+        tab = page.locator(":focus-visible").first
+        ring = tab.evaluate("""el => {
+          const style = getComputedStyle(el);
+          return {color: style.outlineColor, offset: style.outlineOffset};
+        }""")
+        assert ring["color"] == "rgb(229, 187, 139)"
+        assert ring["offset"] == "-2px"
         page.locator("#tap-probe").focus()
         assert page.locator("#tap-probe").evaluate(
           "el => el.matches(':focus-visible') && parseFloat(getComputedStyle(el).outlineWidth) > 0"

@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Increase keyboard focus contrast and keep the ring inside the control.
+
 - Preserve words in table code while allowing horizontal scrolling.
 
 - Keep recently viewed reports out of stale cleanup for five minutes after the last view signal.
