@@ -430,52 +430,26 @@ def test_sqlite_store_crud_for_messages_tasks_reports_and_meta(tmp_path: Path) -
   store.close()
 
 
-def test_legacy_report_answers_are_not_migrated(tmp_path: Path) -> None:
-  import json
-  import sqlite3
-
-  path = tmp_path / "legacy-answers.sqlite3"
+def test_report_answers_use_current_message_storage(tmp_path: Path) -> None:
+  path = tmp_path / "answers.sqlite3"
   store = SqliteStore(path)
-  store.save_report(
-    Report(
-      id="legacy",
-      title="Legacy",
-      body="",
-      status="answered",
-      modified_at="2026-01-01T00:00:00Z",
-    )
-  )
+  report = Report(id="decision", title="Decision", body="")
+  answer = ReportAnswer(id="ee1001", report_id=report.id, values={"choice": "A"})
+  store.save_report(report)
+  store.save_report_answer(answer)
+  snapshot = store.export_rows()
+  assert "answers_json" not in snapshot["reports"][0]
+  assert any(row["id"] == answer.id for row in snapshot["messages"])
   store.close()
-  old_answer = ReportAnswer(
-    id="ee1001",
-    report_id="legacy",
-    values={"choice": "A"},
-    modified_at="2026-01-01T00:00:00Z",
-  )
-  with sqlite3.connect(path) as db:
-    db.execute(
-      "UPDATE reports SET answers_json = ? WHERE id = 'legacy'",
-      (json.dumps([old_answer.to_dict()]),),
-    )
-    db.execute(
-      "INSERT INTO meta(key, value) VALUES (?, ?)",
-      ("report_answers:legacy", json.dumps([old_answer.to_dict()])),
-    )
-
   reopened = SqliteStore(path)
-  legacy = reopened.get_report("legacy")
-  assert legacy.answers == []
-  assert reopened.list_report_answers() == []
-  assert reopened.get_message(old_answer.id) is None
-  reopened.save_report(legacy)
-  snapshot = reopened.export_rows()
-  assert json.loads(snapshot["reports"][0]["answers_json"]) == [old_answer.to_dict()]
-  target = SqliteStore(":memory:")
-  target.merge_rows(snapshot)
-  assert target.get_report("legacy").answers == []
-  assert target.get_message(old_answer.id) is None
-  reopened.close()
-  target.close()
+  target = SqliteStore()
+  try:
+    assert reopened.get_report(report.id).answers == [answer]
+    target.merge_rows(snapshot)
+    assert target.get_report(report.id).answers == [answer]
+  finally:
+    reopened.close()
+    target.close()
 
 
 def test_concurrent_first_store_opens(tmp_path: Path) -> None:
@@ -648,124 +622,6 @@ def test_message_write_stamps_keep_pages_and_sync_stable_on_collision() -> None:
     store.close()
 
 
-def test_legacy_message_order_migrates_to_write_stamps(tmp_path: Path) -> None:
-  import sqlite3
-
-  path = tmp_path / "legacy-order.sqlite3"
-  with sqlite3.connect(path) as conn:
-    conn.execute(
-      """CREATE TABLE messages (
-        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL,
-        body TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0,
-        blocking INTEGER NOT NULL DEFAULT 1,
-        attachments_json TEXT NOT NULL DEFAULT '[]',
-        parent_ids_json TEXT NOT NULL DEFAULT '[]',
-        status TEXT NOT NULL DEFAULT 'sent', acks_json TEXT NOT NULL DEFAULT '[]',
-        replies_seen INTEGER NOT NULL DEFAULT 0, modified_at TEXT NOT NULL,
-        message_type TEXT NOT NULL DEFAULT 'message',
-        violation_type TEXT NOT NULL DEFAULT '',
-        violation_clause_file TEXT NOT NULL DEFAULT '',
-        answer_json TEXT NOT NULL DEFAULT '{}'
-      )"""
-    )
-    conn.executemany(
-      "INSERT INTO messages (id, body, modified_at) VALUES (?, ?, ?)",
-      [
-        ("fe0001", "First", "2026-01-03T00:00:00Z"),
-        ("0a0001", "Second", "2026-01-01T00:00:00Z"),
-      ],
-    )
-  store = SqliteStore(path)
-  rows = store.export_rows()["messages"]
-  assert [msg.id for msg in store.list_messages()] == ["fe0001", "0a0001"]
-  assert all("seq" not in row and row["written_at"] for row in rows)
-  assert rows[0]["written_at"] < rows[1]["written_at"]
-  old_snapshot = [
-    {key: value for key, value in row.items() if key != "written_at"} for row in rows
-  ]
-  restored = SqliteStore()
-  restored.merge_rows({"messages": old_snapshot})
-  assert [msg.id for msg in restored.list_messages()] == ["fe0001", "0a0001"]
-  restored.close()
-  store.save_message(
-    Message(id="aa0003", body="Third", modified_at="2025-01-01T00:00:00Z")
-  )
-  assert [msg.id for msg in store.list_messages()] == ["fe0001", "0a0001", "aa0003"]
-  store.close()
-  reopened = SqliteStore(path)
-  assert [msg.id for msg in reopened.list_messages()] == ["fe0001", "0a0001", "aa0003"]
-  reopened.close()
-
-
-def test_reply_seen_migration_marks_legacy_replies_unseen(tmp_path):
-  import sqlite3
-
-  path = tmp_path / "legacy.sqlite3"
-  conn = sqlite3.connect(path)
-  conn.execute(
-    """CREATE TABLE messages (
-      seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, body TEXT NOT NULL,
-      hidden INTEGER NOT NULL DEFAULT 0, blocking INTEGER NOT NULL DEFAULT 1,
-      attachments_json TEXT NOT NULL DEFAULT '[]', parent_ids_json TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL DEFAULT 'sent', acks_json TEXT NOT NULL DEFAULT '[]', modified_at TEXT NOT NULL
-    )"""
-  )
-  conn.execute(
-    "INSERT INTO messages (id, body, status, acks_json, modified_at) VALUES (?, ?, ?, ?, ?)",
-    ("aa1234", "Legacy", "acked", '[ "Prior reply" ]', "2026-01-01T00:00:00Z"),
-  )
-  conn.commit()
-  conn.close()
-  store = SqliteStore(path)
-  message = store.get_message("aa1234")
-  assert message is not None and message.acks == ["Prior reply"]
-  assert not message.replies_seen
-  assert store.mark_replies_seen("aa1234", message.replies_revision)
-  store.close()
-
-
-def test_legacy_task_without_answer_snapshots_remains_readable(tmp_path):
-  import sqlite3
-
-  path = tmp_path / "legacy-tasks.sqlite3"
-  conn = sqlite3.connect(path)
-  conn.execute(
-    """CREATE TABLE tasks (
-    position INTEGER NOT NULL, id TEXT PRIMARY KEY,
-    title TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL, scope TEXT NOT NULL,
-    details_json TEXT NOT NULL DEFAULT '[]', links_json TEXT NOT NULL DEFAULT '',
-    msg_ids_json TEXT NOT NULL DEFAULT '[]', report_ids_json TEXT NOT NULL DEFAULT '[]',
-    deps_json TEXT NOT NULL DEFAULT '[]', modified_at TEXT NOT NULL
-  )""".replace("seq INTEGER PRIMARY KEY AUTOINCREMENT, ", "")
-  )
-  conn.execute(
-    "INSERT INTO tasks (position, id, title, type, status, scope, details_json, modified_at) "
-    "VALUES (0, ?, ?, ?, ?, ?, ?, ?)",
-    (
-      "legacy",
-      "Old task",
-      "code",
-      "upcoming",
-      "",
-      '["A detail"]',
-      "2026-01-01T00:00:00Z",
-    ),
-  )
-  conn.commit()
-  conn.close()
-  store = SqliteStore(path)
-  with store.transaction():
-    store._conn.execute("UPDATE tasks SET size=3 WHERE id='legacy'")
-  task = store.get_task("legacy")
-  assert task is not None and task.details == ["A detail"]
-  assert "answer_snapshots" not in task.to_dict()
-  store.save_task_queue([task])
-  store.close()
-  reopened = SqliteStore(path)
-  assert reopened.get_task("legacy").details == ["A detail"]
-  reopened.close()
-
-
 def test_old_task_answer_snapshots_are_not_migrated(tmp_path):
   import sqlite3
 
@@ -825,37 +681,12 @@ def test_nested_store_transaction_rolls_back_only_inner_changes():
   store.close()
 
 
-def test_report_pin_migrates_and_survives_state_merge(tmp_path: Path) -> None:
-  import sqlite3
-
-  path = tmp_path / "legacy-report.sqlite3"
-  conn = sqlite3.connect(path)
-  conn.execute(
-    """CREATE TABLE reports (
-      seq INTEGER PRIMARY KEY AUTOINCREMENT,
-      id TEXT UNIQUE NOT NULL,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
-      fields_json TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL DEFAULT 'published',
-      answers_json TEXT NOT NULL DEFAULT '[]',
-      seen INTEGER NOT NULL DEFAULT 0,
-      ack_seen INTEGER NOT NULL DEFAULT 0,
-      modified_at TEXT NOT NULL
-    )"""
-  )
-  conn.execute(
-    "INSERT INTO reports (id, title, body, modified_at) VALUES (?, ?, ?, ?)",
-    ("old-report", "Old report", "# Old", "2026-01-01T00:00:00Z"),
-  )
-  conn.commit()
-  conn.close()
-
+def test_current_report_pin_survives_state_merge(tmp_path: Path) -> None:
+  path = tmp_path / "current-report.sqlite3"
   source = SqliteStore(path)
+  source.save_report(Report(id="old-report", title="Report", body="# Report"))
   report = source.get_report("old-report")
   assert report is not None
-  assert report.updated_at == "2026-01-01T00:00:00Z"
-  assert report.pub_at
   assert "seq" not in source.export_rows()["reports"][0]
   assert report.last_viewed_at == "" and report.pinned is False
   assert report.source_file == ""
@@ -877,102 +708,8 @@ def test_report_pin_migrates_and_survives_state_merge(tmp_path: Path) -> None:
   target.close()
 
 
-def test_legacy_in_progress_tasks_convert_without_reordering_and_sync(
-  tmp_path: Path,
-) -> None:
-  path = tmp_path / "legacy-progress.sqlite3"
-  store = SqliteStore(path)
-  original = [
-    Task(
-      size=3,
-      id="first",
-      title="First",
-      details=["Do work"],
-      modified_at="2025-01-01T00:00:00Z",
-    ),
-    Task(
-      size=3,
-      id="second",
-      title="Second",
-      details=["Do work"],
-      modified_at="2025-01-01T00:00:00Z",
-    ),
-    Task(
-      size=3,
-      id="third",
-      title="Third",
-      status="finished",
-      details=["Do work"],
-      modified_at="2025-01-01T00:00:00Z",
-    ),
-  ]
-  store.save_task_queue(original)
-  with store.transaction():
-    store._conn.execute(
-      "UPDATE tasks SET status = 'in_progress' WHERE id IN ('first', 'second')"
-    )
-  snapshot = store.export_rows()
-  cursor = store.state_stamp()
-  store.close()
-
-  upgraded = SqliteStore(path)
-  tasks = upgraded.list_tasks()
-  assert [task.id for task in tasks] == ["first", "second", "third"]
-  assert [task.status for task in tasks] == ["upcoming", "upcoming", "finished"]
-  changed = upgraded.export_rows(since=cursor)["tasks"]
-  assert {row["id"] for row in changed} == {"first", "second"}
-  assert all(row["status"] == "upcoming" for row in changed)
-  previous = {row["id"]: row["modified_at"] for row in snapshot["tasks"]}
-  assert all(row["modified_at"] > previous[row["id"]] for row in changed)
-  assert [row["status"] for row in upgraded.export_rows()["tasks"]] == [
-    "upcoming",
-    "upcoming",
-    "finished",
-  ]
-  peer = SqliteStore()
-  peer.merge_rows(snapshot)
-  with peer.transaction():
-    for row in snapshot["tasks"]:
-      if row["status"] == "in_progress":
-        peer._conn.execute(
-          "UPDATE tasks SET status = ?, modified_at = ? WHERE id = ?",
-          (row["status"], row["modified_at"], row["id"]),
-        )
-  assert set(peer.merge_rows({"tasks": changed})["updated"]) == {"first", "second"}
-  assert [task.status for task in peer.list_tasks()] == [
-    "upcoming",
-    "upcoming",
-    "finished",
-  ]
-  peer.close()
-  upgraded.close()
-
-
-@pytest.mark.parametrize("legacy_status", ["in_progress", "blocked"])
-def test_merging_legacy_task_status_normalizes_the_stored_row(
-  legacy_status: str,
-) -> None:
-  source = SqliteStore()
-  source.save_task_queue([Task(size=3, id="work", title="Work", details=["Do work"])])
-  snapshot = source.export_rows()
-  snapshot["tasks"][0]["status"] = legacy_status
-  with source.transaction():
-    source._conn.execute(
-      "UPDATE tasks SET status = ? WHERE id = 'work'", (legacy_status,)
-    )
-  target = SqliteStore()
-  target.merge_rows(snapshot)
-  assert target.list_tasks()[0].status == "upcoming"
-  normalized = target.export_rows()["tasks"][0]
-  assert normalized["status"] == "upcoming"
-  assert normalized["modified_at"] > snapshot["tasks"][0]["modified_at"]
-  assert source.merge_rows({"tasks": [normalized]})["updated"] == ["work"]
-  assert source.export_rows()["tasks"][0]["status"] == "upcoming"
-  source.close()
-  target.close()
-
-
-def test_merging_unknown_task_status_is_atomic() -> None:
+@pytest.mark.parametrize("status", ["other", "in_progress", "blocked"])
+def test_merging_unsupported_task_status_is_atomic(status: str) -> None:
   source = SqliteStore()
   source.save_task_queue(
     [
@@ -981,57 +718,13 @@ def test_merging_unknown_task_status_is_atomic() -> None:
     ]
   )
   snapshot = source.export_rows()
-  snapshot["tasks"][1]["status"] = "other"
+  snapshot["tasks"][1]["status"] = status
   target = SqliteStore()
   with pytest.raises(ValueError, match="Invalid Task.status"):
     target.merge_rows(snapshot)
   assert target.list_tasks() == []
   source.close()
   target.close()
-
-
-def test_legacy_blocked_tasks_keep_derived_blocking_after_upgrade(
-  tmp_path: Path,
-) -> None:
-  import sqlite3
-
-  from arena_steering.services import ReportService, TaskService
-
-  path = tmp_path / "legacy-blocked.sqlite3"
-  store = SqliteStore(path)
-  reports = ReportService(store, store)
-  tasks = TaskService(store, store)
-  reports.publish_report(
-    "decision",
-    "Decision",
-    (
-      '<!-- question {"id": "choice", "label": "Choice?"} -->\n'
-      "Choice?\n"
-      '- (x) Yes <!-- option {"label": "Yes"} -->\n'
-    ),
-  )
-  tasks.create_task(
-    "linked", "Linked", size=3, details=["Review"], report_ids=["decision"]
-  )
-  tasks.create_task("standalone", "Standalone", size=3, details=["Review"])
-  store.close()
-  with sqlite3.connect(path) as conn:
-    conn.execute("UPDATE tasks SET status = 'blocked'")
-
-  store = SqliteStore(path)
-  tasks = TaskService(store, store)
-  reports = ReportService(store, store)
-  linked, blocked = tasks.get_task("linked")
-  assert linked.status == "upcoming" and blocked
-  standalone, blocked = tasks.get_task("standalone")
-  assert standalone.status == "upcoming" and not blocked
-  restored = SqliteStore(":memory:")
-  restored.merge_rows(store.export_rows())
-  assert all(task.status == "upcoming" for task in restored.list_tasks())
-  reports.submit_answer("decision", {"choice": "Yes"}, answer_id="ab9999")
-  assert tasks.get_task("linked")[1] is False
-  restored.close()
-  store.close()
 
 
 def test_state_deletions_survive_restart_and_later_edits_win(tmp_path: Path) -> None:
@@ -1145,60 +838,6 @@ def test_local_recreation_after_a_delete_uses_a_later_stamp() -> None:
   store.close()
 
 
-def test_existing_v2_state_versions_migrate_without_losing_rows(tmp_path: Path) -> None:
-  import sqlite3
-
-  path = tmp_path / "v2-before-deletions.sqlite3"
-  store = SqliteStore(path)
-  store.save_message(Message(id="ab1100", body="Keep me"))
-  cursor = store.state_stamp()
-  store.close()
-  with sqlite3.connect(path) as connection:
-    versions = connection.execute(
-      "SELECT table_name, row_id, revision_us FROM state_row_versions"
-    ).fetchall()
-    for (name,) in connection.execute(
-      "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE '%_state_%'"
-    ).fetchall():
-      connection.execute(f'DROP TRIGGER "{name}"')
-    connection.execute("DROP TABLE state_row_versions")
-    connection.execute(
-      "CREATE TABLE state_row_versions (table_name TEXT NOT NULL, row_id TEXT NOT NULL, "
-      "revision_us INTEGER NOT NULL, PRIMARY KEY (table_name, row_id)) WITHOUT ROWID"
-    )
-    connection.executemany("INSERT INTO state_row_versions VALUES (?, ?, ?)", versions)
-
-  store = SqliteStore(path)
-  assert [row["id"] for row in store.export_rows()["messages"]] == ["ab1100"]
-  with store.transaction():
-    store._conn.execute("DELETE FROM messages WHERE id = ?", ("ab1100",))
-  changed = store.export_rows(since=cursor)
-  assert [row["id"] for row in changed["deleted"]["messages"]] == ["ab1100"]
-  store.close()
-
-
-def test_partial_tombstone_upgrade_replaces_stale_state_triggers(
-  tmp_path: Path,
-) -> None:
-  import sqlite3
-
-  path = tmp_path / "partly-upgraded.sqlite3"
-  store = SqliteStore(path)
-  store.save_message(Message(id="ab1200", body="Existing"))
-  store.close()
-  with sqlite3.connect(path) as connection:
-    connection.execute("DROP TRIGGER messages_state_insert")
-    connection.execute(
-      "CREATE TRIGGER messages_state_insert AFTER INSERT ON messages "
-      "BEGIN INSERT INTO state_row_versions VALUES ('messages', NEW.id, 1); END"
-    )
-
-  store = SqliteStore(path)
-  store.save_message(Message(id="ab1201", body="After upgrade"))
-  assert {row["id"] for row in store.export_rows()["messages"]} == {"ab1200", "ab1201"}
-  store.close()
-
-
 def test_message_revision_tracks_only_message_changes() -> None:
   store = SqliteStore()
   try:
@@ -1218,3 +857,41 @@ def test_message_revision_tracks_only_message_changes() -> None:
     assert store.message_revision() > updated
   finally:
     store.close()
+
+
+def test_fresh_schema_needs_no_column_upgrades(tmp_path, monkeypatch):
+  import sqlite3
+
+  statements = []
+  connect = sqlite3.connect
+
+  def traced_connect(*args, **kwargs):
+    connection = connect(*args, **kwargs)
+    connection.set_trace_callback(statements.append)
+    return connection
+
+  monkeypatch.setattr(sqlite3, "connect", traced_connect)
+  store = SqliteStore(tmp_path / "fresh.sqlite3")
+  try:
+    assert not any("ALTER TABLE" in sql.upper() for sql in statements)
+    assert not any("TABLE_INFO" in sql.upper() for sql in statements)
+    message = Message(id="fed123", body="Current schema")
+    store.save_message(message)
+    assert store.get_message(message.id).body == message.body
+  finally:
+    store.close()
+
+
+def test_older_schema_is_not_upgraded(tmp_path):
+  import sqlite3
+
+  path = tmp_path / "unsupported.sqlite3"
+  with sqlite3.connect(path) as connection:
+    connection.execute(
+      "CREATE TABLE messages (id TEXT PRIMARY KEY, body TEXT, modified_at TEXT)"
+    )
+  with pytest.raises(sqlite3.OperationalError):
+    SqliteStore(path)
+  with sqlite3.connect(path) as connection:
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(messages)")}
+  assert columns == {"id", "body", "modified_at"}

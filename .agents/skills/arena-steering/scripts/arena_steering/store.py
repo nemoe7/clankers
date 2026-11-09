@@ -30,8 +30,7 @@ from .models import (
 )
 
 STATE_TABLES = ("messages", "tasks", "reports")
-SCHEMA_REVISION = 1  # Bump when schema setup or migrations change.
-LEGACY_TASK_STATUSES = frozenset({"in_progress", "blocked"})
+SCHEMA_REVISION = 3  # Bump when current schema setup changes.
 _STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
@@ -109,11 +108,7 @@ class SqliteStore:
           "SELECT value FROM meta WHERE key = 'schema_ready'"
         ).fetchone()
         if ready is not None and ready[0] == f"{SCHEMA_REVISION}:{schema_version}":
-          legacy = self._conn.execute(
-            "SELECT 1 FROM tasks WHERE status IN ('in_progress', 'blocked') LIMIT 1"
-          ).fetchone()
-          if legacy is None:
-            return
+          return
       self._conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS messages (
@@ -132,6 +127,7 @@ class SqliteStore:
           message_type TEXT NOT NULL DEFAULT 'message',
           violation_type TEXT NOT NULL DEFAULT '',
           violation_clause_file TEXT NOT NULL DEFAULT '',
+          quiz_json TEXT NOT NULL DEFAULT '{}',
           answer_json TEXT NOT NULL DEFAULT '{}'
         );
 
@@ -155,7 +151,8 @@ class SqliteStore:
           report_ids_json TEXT NOT NULL DEFAULT '[]',
           deps_json TEXT NOT NULL DEFAULT '[]',
           modified_at TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT ''
+          created_at TEXT NOT NULL DEFAULT '',
+          finished_at TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS reports (
@@ -164,7 +161,6 @@ class SqliteStore:
           body TEXT NOT NULL,
           fields_json TEXT NOT NULL DEFAULT '[]',
           status TEXT NOT NULL DEFAULT 'published',
-          answers_json TEXT NOT NULL DEFAULT '[]',
           seen INTEGER NOT NULL DEFAULT 0,
           ack_seen INTEGER NOT NULL DEFAULT 0,
           ack_seen_at TEXT NOT NULL DEFAULT '',
@@ -196,54 +192,6 @@ class SqliteStore:
         """
       )
       self._conn.execute("BEGIN IMMEDIATE")
-      message_cols = {
-        row["name"]
-        for row in self._conn.execute("PRAGMA table_info(messages)").fetchall()
-      }
-      if "parent_ids_json" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN parent_ids_json TEXT NOT NULL DEFAULT '[]'"
-        )
-      if "parent_refs_json" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN parent_refs_json TEXT NOT NULL DEFAULT '[]'"
-        )
-      if "replies_seen" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN replies_seen INTEGER NOT NULL DEFAULT 0"
-        )
-      if "message_type" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'message'"
-        )
-      if "quiz_json" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN quiz_json TEXT NOT NULL DEFAULT '{}'"
-        )
-      if "answer_json" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN answer_json TEXT NOT NULL DEFAULT '{}'"
-        )
-      if "violation_type" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN violation_type TEXT NOT NULL DEFAULT ''"
-        )
-      if "violation_clause_file" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN violation_clause_file TEXT NOT NULL DEFAULT ''"
-        )
-      if "written_at" not in message_cols:
-        self._conn.execute(
-          "ALTER TABLE messages ADD COLUMN written_at TEXT NOT NULL DEFAULT ''"
-        )
-        last = ""
-        for row in self._conn.execute(
-          "SELECT id, modified_at FROM messages ORDER BY seq"
-        ).fetchall():
-          last = _message_write_stamp(last, str(row["modified_at"]))
-          self._conn.execute(
-            "UPDATE messages SET written_at = ? WHERE id = ?", (last, row["id"])
-          )
       self._conn.execute(
         "CREATE INDEX IF NOT EXISTS messages_written_at ON messages(written_at, id)"
       )
@@ -251,107 +199,10 @@ class SqliteStore:
         "CREATE INDEX IF NOT EXISTS messages_report_answer "
         "ON messages(message_type, json_extract(answer_json, '$.report_id'))"
       )
-      task_cols = {
-        row["name"] for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
-      }
-      if "links_json" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN links_json TEXT NOT NULL DEFAULT ''"
-        )
-      if "types_json" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN types_json TEXT NOT NULL DEFAULT '[]'"
-        )
-      if "phase_index" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN phase_index INTEGER NOT NULL DEFAULT 0"
-        )
-      if "phase_evidence_json" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN phase_evidence_json TEXT NOT NULL DEFAULT '[]'"
-        )
-      if "priority" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'P3' "
-          "CHECK (priority IN ('P1','P2','P3','P4','P5'))"
-        )
-      if "priority_explicit" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN priority_explicit INTEGER NOT NULL DEFAULT 0 "
-          "CHECK (priority_explicit IN (0,1))"
-        )
-        self._conn.execute(
-          "UPDATE tasks SET priority_explicit = 1 WHERE priority != 'P3'"
-        )
-      if "size" not in task_cols:
-        # Existing work needs individual estimates. Never guess a legacy size.
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN size INTEGER CHECK (size IN (1,2,3,5,8,13,21,34))"
-        )
-      if "created_at" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN created_at TEXT NOT NULL DEFAULT ''"
-        )
-        self._conn.execute("UPDATE tasks SET created_at = modified_at")
-      if "insertion_order" not in task_cols:
-        self._conn.execute(
-          "ALTER TABLE tasks ADD COLUMN insertion_order INTEGER CHECK (insertion_order >= 0)"
-        )
-        self._conn.execute(
-          "UPDATE tasks SET insertion_order = position WHERE insertion_order IS NULL"
-        )
-      cols = {
-        row["name"]
-        for row in self._conn.execute("PRAGMA table_info(reports)").fetchall()
-      }
-      if "seen" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN seen INTEGER NOT NULL DEFAULT 0"
-        )
-      if "ack_seen" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN ack_seen INTEGER NOT NULL DEFAULT 0"
-        )
-      if "ack_seen_at" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN ack_seen_at TEXT NOT NULL DEFAULT ''"
-        )
-      if "updated_at" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
-        )
-      if "last_viewed_at" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN last_viewed_at TEXT NOT NULL DEFAULT ''"
-        )
-      if "pinned" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
-        )
-      if "source_file" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN source_file TEXT NOT NULL DEFAULT ''"
-        )
-      if "pub_at" not in cols:
-        self._conn.execute(
-          "ALTER TABLE reports ADD COLUMN pub_at TEXT NOT NULL DEFAULT ''"
-        )
-        self._conn.execute(
-          "UPDATE reports SET pub_at = COALESCE(NULLIF(updated_at, ''), modified_at)"
-        )
       self._conn.execute(
         "CREATE INDEX IF NOT EXISTS reports_pub_at ON reports(pub_at, id)"
       )
       self._init_state_tracking()
-      now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-      legacy = self._conn.execute(
-        "SELECT id, modified_at FROM tasks WHERE status IN ('in_progress', 'blocked')"
-      ).fetchall()
-      for row in legacy:
-        self._conn.execute(
-          "UPDATE tasks SET status = 'upcoming', modified_at = ? WHERE id = ?",
-          (_advance_stamp(str(row["modified_at"]), now), row["id"]),
-        )
       schema_version = self._conn.execute("PRAGMA schema_version").fetchone()[0]
       self._conn.execute(
         "INSERT INTO meta (key, value) VALUES ('schema_ready', ?) "
@@ -370,14 +221,6 @@ class SqliteStore:
       "(table_name TEXT NOT NULL, row_id TEXT NOT NULL, revision_us INTEGER NOT NULL, "
       "deleted_at TEXT NOT NULL DEFAULT '', PRIMARY KEY (table_name, row_id)) WITHOUT ROWID"
     )
-    version_columns = {
-      row["name"] for row in self._conn.execute("PRAGMA table_info(state_row_versions)")
-    }
-    upgrading = "deleted_at" not in version_columns
-    if upgrading:
-      self._conn.execute(
-        "ALTER TABLE state_row_versions ADD COLUMN deleted_at TEXT NOT NULL DEFAULT ''"
-      )
     if (
       self._conn.execute("SELECT 1 FROM state_clock WHERE singleton = 1").fetchone()
       is None
@@ -399,16 +242,6 @@ class SqliteStore:
       "CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) * 1000"
     )
     for table in STATE_TABLES:
-      for action in ("insert", "update", "delete"):
-        name = f"{table}_state_{action}"
-        trigger = self._conn.execute(
-          "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", (name,)
-        ).fetchone()
-        # A prior column upgrade can leave three-value triggers behind.
-        if trigger is not None and (
-          upgrading or "deleted_at" not in str(trigger["sql"])
-        ):
-          self._conn.execute(f"DROP TRIGGER {name}")
       for action in ("INSERT", "UPDATE"):
         self._conn.execute(
           f"""
@@ -1067,15 +900,13 @@ class SqliteStore:
           report.modified_at or datetime.now(UTC).isoformat(),
         )
       fields_json = json.dumps([item.to_dict() for item in report.fields])
-      # The compatibility column is not authoritative and old answers are not migrated.
-      answers_json = "[]"
       if existing is None:
         self._conn.execute(
           """
           INSERT INTO reports (
-            id, title, body, fields_json, status, answers_json, seen, ack_seen, ack_seen_at,
+            id, title, body, fields_json, status, seen, ack_seen, ack_seen_at,
             modified_at, updated_at, pub_at, last_viewed_at, pinned, source_file
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             report.id,
@@ -1083,7 +914,6 @@ class SqliteStore:
             report.body,
             fields_json,
             report.status,
-            answers_json,
             int(report.seen),
             int(report.ack_seen),
             report.ack_seen_at,
@@ -1327,15 +1157,7 @@ class SqliteStore:
               data["modified_at"] = _advance_stamp(incoming_stamp, now)
           if table == "tasks" and "status" in data:
             status = data["status"]
-            if isinstance(status, str) and status in LEGACY_TASK_STATUSES:
-              data["status"] = "upcoming"
-              now = (
-                datetime.now(UTC)
-                .isoformat(timespec="microseconds")
-                .replace("+00:00", "Z")
-              )
-              data["modified_at"] = _advance_stamp(incoming_stamp, now)
-            elif status not in TASK_STATUSES:
+            if status not in TASK_STATUSES:
               raise ValueError(f"Invalid Task.status: {status!r}")
           if current is None:
             names = ",".join(data)
@@ -1424,8 +1246,6 @@ class SqliteStore:
 
   @staticmethod
   def _row_to_message(row: sqlite3.Row) -> Message:
-    keys = row.keys()
-    parent_ids_json = row["parent_ids_json"] if "parent_ids_json" in keys else "[]"
     message_class = ClauseQuiz if row["message_type"] == "clause_quiz" else Message
     return message_class(
       id=str(row["id"]),
@@ -1436,32 +1256,25 @@ class SqliteStore:
         Attachment.from_dict(item)
         for item in json.loads(row["attachments_json"] or "[]")
       ],
-      parent_ids=[str(item) for item in json.loads(parent_ids_json or "[]")],
-      parent_refs=json.loads(row["parent_refs_json"] or "[]")
-      if "parent_refs_json" in keys
-      else [],
+      parent_ids=[str(item) for item in json.loads(row["parent_ids_json"] or "[]")],
+      parent_refs=json.loads(row["parent_refs_json"] or "[]"),
       status=str(row["status"]),
       acks=[str(item) for item in json.loads(row["acks_json"] or "[]")],
-      replies_seen=bool(row["replies_seen"]) if "replies_seen" in keys else False,
+      replies_seen=bool(row["replies_seen"]),
       modified_at=str(row["modified_at"]),
-      type=str(row["message_type"]) if "message_type" in keys else "message",
-      violation_type=str(row["violation_type"]) if "violation_type" in keys else "",
-      violation_clause_file=str(row["violation_clause_file"])
-      if "violation_clause_file" in keys
-      else "",
-      quiz_data=json.loads(row["quiz_json"] or "{}") if "quiz_json" in keys else {},
-      answer_data=json.loads(row["answer_json"] or "{}")
-      if "answer_json" in keys
-      else {},
+      type=str(row["message_type"]),
+      violation_type=str(row["violation_type"]),
+      violation_clause_file=str(row["violation_clause_file"]),
+      quiz_data=json.loads(row["quiz_json"] or "{}"),
+      answer_data=json.loads(row["answer_json"] or "{}"),
     )
 
   @staticmethod
   def _row_to_task(row: sqlite3.Row) -> Task:
-    keys = row.keys()
-    status = "upcoming" if row["status"] in LEGACY_TASK_STATUSES else str(row["status"])
-    raw_links = row["links_json"] if "links_json" in keys else ""
+    status = str(row["status"])
+    raw_links = row["links_json"]
     parsed_links = json.loads(raw_links) if raw_links else None
-    raw_types = json.loads(row["types_json"] or "[]") if "types_json" in keys else []
+    raw_types = json.loads(row["types_json"] or "[]")
     common = {
       "id": str(row["id"]),
       "title": str(row["title"]),
@@ -1475,25 +1288,14 @@ class SqliteStore:
       "scope": str(row["scope"]),
       "details": [str(item) for item in json.loads(row["details_json"] or "[]")],
       "priority": row["priority"],
-      "priority_explicit": bool(row["priority_explicit"])
-      if "priority_explicit" in keys
-      else row["priority"] != "P3",
+      "priority_explicit": bool(row["priority_explicit"]),
       "size": row["size"],
       "insertion_order": row["insertion_order"],
       "allow_long_details": True,
       "modified_at": str(row["modified_at"]),
-      "created_at": str(row["created_at"])
-      if "created_at" in keys
-      else str(row["modified_at"]),
+      "created_at": str(row["created_at"]),
     }
-    if isinstance(parsed_links, dict):
-      return Task(**common, links=parsed_links)
-    return Task(
-      **common,
-      msg_ids=[str(item) for item in json.loads(row["msg_ids_json"] or "[]")],
-      report_ids=[str(item) for item in json.loads(row["report_ids_json"] or "[]")],
-      task_ids=[str(item) for item in json.loads(row["deps_json"] or "[]")],
-    )
+    return Task(**common, links=parsed_links)
 
   def _row_to_report(self, row: sqlite3.Row) -> Report:
     return Report(
@@ -1505,13 +1307,13 @@ class SqliteStore:
       ],
       status=str(row["status"]),
       answers=self.list_report_answers(str(row["id"])),
-      seen=bool(dict(row).get("seen", 0)),
-      ack_seen=bool(dict(row).get("ack_seen", 0)),
-      ack_seen_at=str(dict(row).get("ack_seen_at", "")),
+      seen=bool(row["seen"]),
+      ack_seen=bool(row["ack_seen"]),
+      ack_seen_at=str(row["ack_seen_at"]),
       modified_at=str(row["modified_at"]),
-      updated_at=str(dict(row).get("updated_at", "")),
+      updated_at=str(row["updated_at"]),
       pub_at=str(row["pub_at"]),
-      last_viewed_at=str(dict(row).get("last_viewed_at", "")),
-      pinned=bool(dict(row).get("pinned", 0)),
-      source_file=str(dict(row).get("source_file", "")),
+      last_viewed_at=str(row["last_viewed_at"]),
+      pinned=bool(row["pinned"]),
+      source_file=str(row["source_file"]),
     )

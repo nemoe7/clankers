@@ -1064,9 +1064,7 @@ def test_tasks_view_uses_first_unblocked_upcoming_task(tmp_path: Path) -> None:
     "blocked", "Blocked", size=3, details=["Wait"], report_ids=["decision"]
   )
   app.tasks.create_task("ready", "Ready", size=3, details=["Work"])
-  app.tasks.create_task("legacy", "Legacy", size=3, details=["Work"])
-  with store.transaction():
-    store._conn.execute("UPDATE tasks SET status = 'in_progress' WHERE id = 'legacy'")
+  app.tasks.create_task("later", "Later", size=3, details=["Work"])
   code, payload = app.dispatch("GET", "/tasks")
   assert code == HTTPStatus.OK
   script = """
@@ -1081,9 +1079,9 @@ renderTasksView(container, { tasks: JSON.parse(process.argv[1]) });
 const current = container.innerHTML.split('id="tasks-current"')[1].split('id="tasks-upcoming"')[0];
 const upcoming = container.innerHTML.split('id="tasks-upcoming"')[1].split('id="tasks-finished"')[0];
 assert.match(current, /data-task-id="ready"/);
-assert.doesNotMatch(current, /data-task-id="blocked"|data-task-id="legacy"/);
+assert.doesNotMatch(current, /data-task-id="blocked"|data-task-id="later"/);
 assert.match(upcoming, /data-task-id="blocked"/);
-assert.match(upcoming, /data-task-id="legacy"/);
+assert.match(upcoming, /data-task-id="later"/);
 """
   result = subprocess.run(
     [

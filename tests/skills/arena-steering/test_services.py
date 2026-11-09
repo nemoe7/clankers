@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import sqlite3
 import subprocess
 import threading
 from datetime import UTC, datetime, timedelta
@@ -1053,39 +1052,6 @@ def test_task_age_priority_caps_at_p2() -> None:
   store.close()
 
 
-def test_task_creation_time_migrates_from_modified_time(tmp_path) -> None:
-  path = tmp_path / "legacy.sqlite3"
-  clock = _ReportTestClock()
-  store = SqliteStore(path)
-  task = TaskService(store, store, clock=clock).create_task(
-    "legacy", "Legacy", size=1, details=["Work"]
-  )
-  with store.transaction():
-    store._conn.execute("ALTER TABLE tasks DROP COLUMN created_at")
-  store.close()
-  reopened = SqliteStore(path)
-  assert reopened.get_task("legacy").created_at == task.modified_at
-  reopened.close()
-
-
-def test_task_finish_time_migrates_from_modified_time(tmp_path) -> None:
-  path = tmp_path / "legacy-finished.sqlite3"
-  clock = _ReportTestClock()
-  store = SqliteStore(path)
-  tasks = TaskService(store, store, clock=clock)
-  tasks.create_task("legacy", "Legacy", size=1, type="ops", details=["Work"])
-  tasks.finish_phase("legacy")
-  with store.transaction():
-    store._conn.execute("ALTER TABLE tasks DROP COLUMN finished_at")
-  store.close()
-
-  reopened = SqliteStore(path)
-  task = reopened.get_task("legacy")
-  assert task.status == "finished"
-  assert task.finished_at == task.modified_at
-  reopened.close()
-
-
 def test_report_publication_order_survives_republish_rename_and_sync() -> None:
   store = SqliteStore(":memory:")
   columns = {row["name"] for row in store._conn.execute("PRAGMA table_info(reports)")}
@@ -1774,35 +1740,6 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   store.close()
 
 
-def test_old_priority_override_survives_migration_and_later_links(
-  tmp_path: Path,
-) -> None:
-  db = tmp_path / "legacy.sqlite3"
-  store = SqliteStore(db)
-  tasks = TaskService(store, store)
-  tasks.create_task(
-    "old-override", "Old override", size=2, priority="P4", details=["Inspect."]
-  )
-  tasks.create_task(
-    "old-default", "Old default", size=2, priority="P3", details=["Inspect."]
-  )
-  store.close()
-
-  with sqlite3.connect(db) as conn:
-    conn.execute("ALTER TABLE tasks DROP COLUMN priority_explicit")
-
-  reopened = SqliteStore(db)
-  tasks = TaskService(reopened, reopened, messages=reopened)
-  assert tasks.get_task("old-override")[0].priority_explicit
-  assert not tasks.get_task("old-default")[0].priority_explicit
-  SteeringApp(reopened).messages.send_message(
-    "See attached file", attachments=_attachments(), msg_id="ab1024"
-  )
-  tasks.mod_links_add("old-override", "ab1024", link_type="msg", size=2)
-  assert tasks.get_task("old-override")[0].priority == "P4"
-  reopened.close()
-
-
 def test_long_missing_attachment_path_is_kept_without_truncation() -> None:
   store = SqliteStore(":memory:")
   app = SteeringApp(store)
@@ -1874,33 +1811,6 @@ def test_ordered_phases_survive_model_store_and_sync(tmp_path: Path) -> None:
   assert old.types == ["docs"]
   assert old.phase_index == 1
   legacy.close()
-
-
-def test_existing_task_table_migrates_to_single_phase(tmp_path: Path) -> None:
-  database = tmp_path / "old.sqlite3"
-  with sqlite3.connect(database) as conn:
-    conn.execute(
-      "CREATE TABLE tasks (position INTEGER NOT NULL, id TEXT PRIMARY KEY, "
-      "title TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL, scope TEXT NOT NULL, "
-      "details_json TEXT NOT NULL DEFAULT '[]', links_json TEXT NOT NULL DEFAULT '', "
-      "msg_ids_json TEXT NOT NULL DEFAULT '[]', report_ids_json TEXT NOT NULL DEFAULT '[]', "
-      "deps_json TEXT NOT NULL DEFAULT '[]', modified_at TEXT NOT NULL)"
-    )
-    conn.execute(
-      "INSERT INTO tasks (position, id, title, type, status, scope, details_json, modified_at) "
-      "VALUES (0, 'old', 'Old task', 'code', 'upcoming', '', '[\"Review\"]', '2026-11-01T00:00:00Z')"
-    )
-  store = SqliteStore(database)
-  with store.transaction():
-    store._conn.execute("UPDATE tasks SET size=3 WHERE id='old'")
-  assert store.get_task("old").types == ["code"]
-  assert store.get_task("old").phase_index == 0
-  store.save_task_queue(store.list_tasks())
-  assert store.get_task("old").phase_evidence == [None]
-  store.close()
-  reopened = SqliteStore(database)
-  assert reopened.get_task("old").types == ["code"]
-  reopened.close()
 
 
 def test_report_then_code_advances_without_waiting_for_its_old_report() -> None:
@@ -2576,32 +2486,6 @@ def test_new_insertion_order_never_reuses_deleted_high_water_mark(
   assert newest.insertion_order > removed.insertion_order
   assert [task.id for task, _ in tasks.list_tasks()] == ["first", "newest"]
   reopened.close()
-
-
-def test_old_database_requires_individual_estimates_instead_of_a_generic_size(
-  tmp_path: Path,
-) -> None:
-  path = tmp_path / "legacy.sqlite3"
-  with sqlite3.connect(path) as conn:
-    conn.execute(
-      "CREATE TABLE tasks (position INTEGER NOT NULL, id TEXT PRIMARY KEY, "
-      "title TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL, scope TEXT NOT NULL, "
-      "details_json TEXT NOT NULL DEFAULT '[]', msg_ids_json TEXT NOT NULL DEFAULT '[]', "
-      "report_ids_json TEXT NOT NULL DEFAULT '[]', deps_json TEXT NOT NULL DEFAULT '[]', "
-      "modified_at TEXT NOT NULL)"
-    )
-    conn.execute(
-      "INSERT INTO tasks (position, id, title, type, status, scope, modified_at) "
-      "VALUES (7, 'legacy', 'Legacy', 'ops', 'upcoming', '', '2026-11-01T00:00:00Z')"
-    )
-  store = SqliteStore(path)
-  with pytest.raises(ValueError, match="size|estimate"):
-    store.get_task("legacy")
-  with store.transaction():
-    store._conn.execute("UPDATE tasks SET size=5 WHERE id='legacy'")
-  assert (store.get_task("legacy").priority, store.get_task("legacy").size) == ("P3", 5)
-  assert store.get_task("legacy").insertion_order == 7
-  store.close()
 
 
 def test_api_requires_size_and_rejects_position_mutation() -> None:

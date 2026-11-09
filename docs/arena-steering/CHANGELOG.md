@@ -6,6 +6,10 @@ This log has no Unreleased section.
 
 ## [2.2.5]
 
+### Removed
+
+- Remove database column upgrades, backfills, retired task-status normalization, and missing-column read fallbacks. Support fresh and current-schema databases only.
+
 ### Fixed
 
 - Stack report timestamps, report-ID chips, titles, and linked task chips on separate rows.
