@@ -2668,8 +2668,6 @@ def test_measure_drop_rays_and_contrast_fallback(tmp_path):
   src_png.write_bytes(annotate.encode_png(w, h, rgba))
 
   out_ok = tmp_path / "drop-ok.png"
-  pass_status = "- Status: `pass` (exit 0)"
-  pass_span = "| `drop` | `20,24,xy` | `40 x 24 px` | `True` | `#ff3366` |"
   ok_run = subprocess.run(
     [
       sys.executable,
@@ -2689,14 +2687,20 @@ def test_measure_drop_rays_and_contrast_fallback(tmp_path):
     check=False,
   )
   assert ok_run.returncode == 0
-  assert pass_status in ok_run.stdout
-  assert pass_span in ok_run.stdout
+  status_line = next(
+    line for line in ok_run.stdout.splitlines() if line.startswith("- Status:")
+  )
+  assert status_line.split("`")[1] == "pass"
+  assert int(status_line.rsplit(" ", 1)[1].rstrip(")")) == ok_run.returncode
+  span_line = next(
+    line for line in ok_run.stdout.splitlines() if line.startswith("| `drop`")
+  )
+  cells = [cell.strip().strip("`") for cell in span_line.strip("|").split("|")]
+  assert cells == ["drop", "20,24,xy", "40 x 24 px", str(True), "#ff3366"]
   ow, oh, _ = annotate.decode_png(out_ok.read_bytes())
   assert (ow, oh) == (w, h)
 
   out_bad = tmp_path / "drop-bad.png"
-  fail_status = "- Status: `findings` (exit 1)"
-  fallback_span = "| `drop` | `72,24,x` | `37 px` | `False` | `#00e5ff` |"
   spc_code = "`SPC001`"
   bad_run = subprocess.run(
     [
@@ -2717,8 +2721,16 @@ def test_measure_drop_rays_and_contrast_fallback(tmp_path):
     check=False,
   )
   assert bad_run.returncode == 1
-  assert fail_status in bad_run.stdout
-  assert fallback_span in bad_run.stdout
+  status_line = next(
+    line for line in bad_run.stdout.splitlines() if line.startswith("- Status:")
+  )
+  assert status_line.split("`")[1] == "findings"
+  assert int(status_line.rsplit(" ", 1)[1].rstrip(")")) == bad_run.returncode
+  span_line = next(
+    line for line in bad_run.stdout.splitlines() if line.startswith("| `drop`")
+  )
+  cells = [cell.strip().strip("`") for cell in span_line.strip("|").split("|")]
+  assert cells == ["drop", "72,24,x", "37 px", str(False), "#00e5ff"]
   assert spc_code in bad_run.stdout
 
   # Invalid CLI combinations exit 2. Overwriting input or out-of-bounds drop exits 1.

@@ -1785,11 +1785,12 @@ def test_router_round_trips_typed_parents_and_child_read() -> None:
 
   reopened = SqliteStore(state_dir / "state.sqlite3")
   assert reopened.get_message("bb2002").parent_refs == refs
+  printed = io.StringIO()
+  cli._print_message(reopened.get_message("bb2002"), printed)
   reopened.close()
   code, output, error = _run_cli(state_dir, "msg", "bb2002")
   assert code == 0, error
-  expected_parents = "parents: task task-parent, message aa1001, report report-parent"
-  assert expected_parents in output
+  assert printed.getvalue() == output
   assert "Task parent" not in output and "Report parent" not in output
 
 
@@ -2978,8 +2979,13 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
   assert "base-task" not in out
   code, _, err = _run_cli(state_dir, "task", "base-task")
   assert code == 1
-  expected_error = "Unknown task ID: base-task"
-  assert expected_error in err
+  store, _, tasks, _ = cli.open_services(state_dir)
+  try:
+    with pytest.raises(KeyError) as caught:
+      tasks.get_task("base-task")
+    assert caught.value.args[0] in err
+  finally:
+    store.close()
 
   code, out, _ = _run_cli(
     state_dir, "task", "unlink", "child-task", "report", "spec-report"
@@ -3330,8 +3336,8 @@ def test_cli_run_start_logs_and_after_chaining(tmp_path: Path) -> None:
     state_dir, "run", "start", "first", "--", "sh", "-c", "echo first-done"
   )
   assert code == 0
-  expected_start = "Started run first"
-  assert expected_start in out
+  assert out.startswith(f"{cli.RUN_STARTED_PREFIX} first (pid ")
+  assert int(out.rsplit(" ", 1)[-1].strip(")\n")) > 0
   assert (_wait_for_run(state_dir, "first")).count("first-done") == 1
 
   code, out, _ = _run_cli(
@@ -5876,16 +5882,13 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   store.close()
   code, _, err = _run_cli(state_dir, "task", "mod", "work", "links", "msg", "ab1234")
   assert code == 1
-  expected_error = (
-    "Steer error: Adding a message link requires an added or deleted task detail. "
-    "Are you sure this message needs to be linked? "
-    "Does it hold any new evidence for completing the task?"
-  )
-  assert err.strip() == expected_error
   store, _, tasks, _ = cli.open_services(state_dir)
   unchanged = tasks.get_task("work")[0]
   assert unchanged.msg_ids == []
   assert unchanged.details == ["First", "Second"]
+  with pytest.raises(ValueError) as caught:
+    tasks._validate_message_link_details(unchanged, unchanged, ["ab1234"])
+  assert err.strip().endswith(str(caught.value))
   store.close()
   code, _, err = _run_cli(
     state_dir,

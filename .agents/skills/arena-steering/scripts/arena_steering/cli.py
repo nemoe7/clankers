@@ -55,6 +55,8 @@ from .services import (
 )
 from .store import SqliteStore
 
+RUN_STARTED_PREFIX = "Started run"
+
 Task = task_cli.Task
 _extract_size_flag = task_cli._extract_size_flag
 _parse_task_size_value = task_cli._parse_task_size_value
@@ -1467,7 +1469,7 @@ def _start_locked_run(
   except OSError:
     proc.terminate()
     raise
-  print(f"Started run {name} (pid {proc.pid})", file=out)
+  print(f"{RUN_STARTED_PREFIX} {name} (pid {proc.pid})", file=out)
   return 0
 
 

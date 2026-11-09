@@ -2583,3 +2583,84 @@ def test_source_numeric_advisory_skips_uncertain_scope(tmp_path, prefix):
     encoding="utf-8",
   )
   assert not nemoize.numeric_setting_findings(source, source.read_text())
+
+
+@pytest.mark.parametrize("language", ["py", "js"])
+def test_local_prose_aliases_preserve_input_and_scope(language):
+  source = (
+    """
+TEXT = "Production text stays valid"
+async def test_alias():
+  expected = "Copied output prose here"
+  alias = expected
+  assert alias in result.stdout
+  supplied = "User supplied input prose"
+  await client.post("/messages", json={"body": supplied})
+  assert supplied in result.stdout
+  expected = module.EXPECTED_TEXT
+  assert expected in result.stdout
+  assert TEXT in result.stdout
+"""
+    if language == "py"
+    else """
+const TEXT = "Production text stays valid";
+test('aliases', async () => {
+  let expected = "Copied output prose here";
+  const alias = expected;
+  assert.ok(result.stdout.includes(alias));
+  const supplied = "User supplied input prose";
+  await client.post('/messages', {body: supplied});
+  assert.ok(result.stdout.includes(supplied));
+  expected = module.EXPECTED_TEXT;
+  assert.ok(result.stdout.includes(expected));
+  assert.ok(result.stdout.includes(TEXT));
+});
+"""
+  )
+  parsed = (
+    nemoize.python_pairs(source)
+    if language == "py"
+    else nemoize.javascript_pairs(source)
+  )
+  found = [pair for pair in parsed["pairs"] if nemoize.category(pair) == "output_text"]
+  assert [pair["value"] for pair in found] == ["Copied output prose here"]
+
+
+@pytest.mark.parametrize("language", ["py", "js"])
+def test_local_aliases_do_not_cross_helper_or_parameter_scopes(language):
+  source = (
+    """
+def helper():
+  expected = "Helper prose is not tracked"
+  assert expected in result.stdout
+def test_shadow(expected):
+  assert expected in result.stdout
+  local = "Locally copied output prose"
+  def nested(local):
+    assert local in result.stdout
+  local = module.EXPECTED_TEXT
+  assert local in result.stdout
+"""
+    if language == "py"
+    else """
+function helper() {
+  const expected = "Helper prose is not tracked";
+  assert.ok(result.stdout.includes(expected));
+}
+test('shadow', (expected) => {
+  assert.ok(result.stdout.includes(expected));
+  let local = "Locally copied output prose";
+  function nested(local) { assert.ok(result.stdout.includes(local)); }
+  local = module.EXPECTED_TEXT;
+  assert.ok(result.stdout.includes(local));
+});
+"""
+  )
+  parsed = (
+    nemoize.python_pairs(source)
+    if language == "py"
+    else nemoize.javascript_pairs(source)
+  )
+  assert not [
+    pair for pair in parsed["pairs"] if nemoize.category(pair) == "output_text"
+  ]

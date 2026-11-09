@@ -2762,8 +2762,13 @@ for (let i = 0; i < 3; i++) taintPass(tree);
 const pairs = [];
 let testScope = false;
 const lines = text.split("\n");
+const LOCAL_SCOPE = Symbol('local test scope');
+const testCallbacks = new WeakSet();
 function pair(left, right, node, operator, explicit) {
-  for (const [actual, expected] of [[left,right],[right,left]]) {
+  for (let [actual, expected] of [[left,right],[right,left]]) {
+    if (expected?.type === 'Identifier' && explicit.get(LOCAL_SCOPE) &&
+        typeof explicit.get(expected.name) === 'string')
+      expected = {type:'Literal', value:explicit.get(expected.name)};
     if (expected?.type === 'Literal' && ['string','number'].includes(typeof expected.value)) {
       const column = Array.from(lines[node.loc.start.line - 1].slice(0, node.loc.start.column)).length + 1;
       const actShape = shape(actual);
@@ -2781,8 +2786,11 @@ function checkIncludes(expr, node, explicit) {
   }
 }
 function recordInput(name, value, explicit) {
+  if (value?.type === 'Identifier' && explicit.get(LOCAL_SCOPE) &&
+      typeof explicit.get(value.name) === 'string')
+    value = {type:'Literal', value:explicit.get(value.name)};
   for (const key of explicit.keys()) {
-    if (key === name || key.startsWith(name + '.')) explicit.delete(key);
+    if (typeof key === 'string' && (key === name || key.startsWith(name + '.'))) explicit.delete(key);
   }
   if (value?.type === 'Literal' && ['string','number'].includes(typeof value.value))
     explicit.set(name, value.value);
@@ -2790,7 +2798,7 @@ function recordInput(name, value, explicit) {
 function visit(node, explicit=new Map()) {
   if (!node || typeof node !== 'object') return;
   if (['FunctionDeclaration','FunctionExpression','ArrowFunctionExpression'].includes(node.type))
-    explicit = new Map();
+    explicit = new Map([[LOCAL_SCOPE, testCallbacks.has(node) || /^test_/.test(node.id?.name || '')]]);
   if (node.type === 'IfStatement') {
     visit(node.test, new Map(explicit));
     visit(node.consequent, new Map(explicit));
@@ -2807,8 +2815,25 @@ function visit(node, explicit=new Map()) {
   if (node.type === 'AssignmentExpression')
     recordInput(shape(node.left), node.operator === '=' ? node.right : null, explicit);
   if (node.type === 'UpdateExpression') recordInput(shape(node.argument), null, explicit);
-  if (node.type === 'ExpressionStatement' && node.expression?.type === 'CallExpression') {
-    const call = node.expression;
+  if (node.type === 'ExpressionStatement' &&
+      (node.expression?.type === 'CallExpression' ||
+       (node.expression?.type === 'AwaitExpression' && node.expression.argument?.type === 'CallExpression'))) {
+    const call = node.expression.type === 'AwaitExpression' ? node.expression.argument : node.expression;
+    const callName = shape(call.callee);
+    if (!callName.startsWith('assert') && !callName.startsWith('expect')) {
+      const used = new Set();
+      function inputNames(item) {
+        if (!item || typeof item !== 'object') return;
+        if (item.type === 'Identifier' && typeof explicit.get(item.name) === 'string')
+          used.add(explicit.get(item.name));
+        for (const value of Object.values(item)) {
+          if (Array.isArray(value)) value.forEach(inputNames);
+          else if (value && typeof value === 'object') inputNames(value);
+        }
+      }
+      call.arguments.forEach(inputNames);
+      for (const [key, value] of explicit) if (typeof key === 'string' && used.has(value)) explicit.delete(key);
+    }
     const setter = /^(.*\.)?set_([A-Za-z_][A-Za-z_0-9]*)$/.exec(shape(call.callee));
     if (setter && call.arguments.length === 1)
       recordInput((setter[1] || '') + setter[2], call.arguments[0], explicit);
@@ -2817,8 +2842,14 @@ function visit(node, explicit=new Map()) {
   if (node.type === 'CallExpression') {
     const name = shape(node.callee);
     if (name === 'require' && node.arguments[0]?.value === 'node:test') testScope = true;
-    if (['test','it','describe','suite'].includes(name) && node.arguments.some(arg =>
-      ['FunctionExpression','ArrowFunctionExpression'].includes(arg.type))) testScope = true;
+    if (['test','it','describe','suite'].includes(name)) {
+      for (const arg of node.arguments) {
+        if (['FunctionExpression','ArrowFunctionExpression'].includes(arg.type)) {
+          testScope = true;
+          testCallbacks.add(arg);
+        }
+      }
+    }
     if (['assert.equal','assert.strictEqual','assert.deepEqual',
       'assert.deepStrictEqual','assert.notEqual','assert.notStrictEqual'].includes(name)) {
       pair(node.arguments[0], node.arguments[1], node, 'equality', explicit);
@@ -2956,8 +2987,14 @@ def python_pairs(text):
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
   }
 
+  local_scope = object()
+
   def pair(left, right, node, operator, tainted, explicit):
     for actual, expected in ((left, right), (right, left)):
+      if isinstance(expected, ast.Name) and explicit.get(local_scope):
+        value = explicit.get(expected.id)
+        if isinstance(value, (str, bytes)):
+          expected = ast.Constant(value=value)
       if isinstance(expected, ast.Constant) and type(expected.value) in (
         str,
         bytes,
@@ -3001,10 +3038,15 @@ def python_pairs(text):
           target = setter[0] + "." + target
         targets = [target]
         value = call.args[0]
+    if isinstance(value, ast.Name) and explicit.get(local_scope):
+      resolved = explicit.get(value.id)
+      value = (
+        ast.Constant(value=resolved) if isinstance(resolved, (str, bytes)) else value
+      )
     for target in targets:
       name = target if isinstance(target, str) else shape(target)
       for key in list(explicit):
-        if key == name or key.startswith(name + "."):
+        if isinstance(key, str) and (key == name or key.startswith(name + ".")):
           explicit.pop(key)
       if isinstance(value, ast.Constant) and type(value.value) is not bool:
         explicit[name] = value.value
@@ -3014,7 +3056,11 @@ def python_pairs(text):
       explicit = {}
     for child in ast.iter_child_nodes(scope_node):
       if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        walk_scope(child, active_taint | func_taint.get(id(child), set()), {})
+        walk_scope(
+          child,
+          active_taint | func_taint.get(id(child), set()),
+          {local_scope: child.name.startswith("test_")},
+        )
         continue
       if isinstance(
         child,
@@ -3044,6 +3090,24 @@ def python_pairs(text):
                 walk_scope(handler, active_taint, {})
         explicit.clear()
         continue
+      expression = getattr(child, "value", None)
+      if isinstance(expression, ast.Await):
+        expression = expression.value
+      if isinstance(child, (ast.Expr, ast.Assign, ast.AnnAssign)) and isinstance(
+        expression, ast.Call
+      ):
+        call = expression
+        if not shape(call.func).rsplit(".", 1)[-1].startswith("assert"):
+          used = {
+            explicit[name.id]
+            for arg in [*call.args, *(kw.value for kw in call.keywords)]
+            for name in ast.walk(arg)
+            if isinstance(name, ast.Name)
+            and isinstance(explicit.get(name.id), (str, bytes))
+          }
+          for key in list(explicit):
+            if isinstance(key, str) and explicit[key] in used:
+              explicit.pop(key)
       record_input(child, explicit)
       if isinstance(child, ast.Assert):
         for expression in ast.walk(child.test):
