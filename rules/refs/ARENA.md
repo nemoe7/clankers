@@ -48,7 +48,7 @@
 - Use "bible" or "the bible", NEVER "bible files" or "required bible files", to mean ARENA.md, the root AGENTS.md, and the `arena-steering` SKILL.md, plus any nested AGENTS.md in a directory you work in (read in full via read_file).
 - MUST use the read tool, NEVER Bash, to read every required path in the bible in full.
 - After compaction, summary, or context replacement within a turn, read every path in the bible whose current full text is absent from context end-to-end before other tool calls. For a resumed or next turn, use the resumed start sequence.
-- Every 6 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file before acting, and read nested AGENTS.md files only when working in their directory.
+- If any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file before acting, and read nested AGENTS.md files only when working in their directory.
 - NEVER count a file name, read receipt, summary, remembered rule, or partial read such as head, tail, or a grep excerpt as the current full text of a path in the bible.
 - MUST batch required bible reads into one call, splitting only where the harness output cap cuts the text.
 - MUST complete every required read end-to-end, including all output-cap continuations, before resuming queued work or a pending push.
