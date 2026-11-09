@@ -16,7 +16,7 @@ Test apt：prefer red→最小 green→不改行为 refactor→recheck。测 pub
 Planning 时问：SOLID 或 YAGNI/KISS/DRY 孰主，从其答。
 MUST 仅在 nemoe7 repos 行此 code-style rules。
 FORMAT（nemoe7 only；他 repo 依惯例）：2-space；Ruff（E501 120，local gates 先行 `ruff format`）：项目宜用 `pyproject.toml` 则用之，否则用 `ruff.toml`；markdownlint 默认+MD060，MD013 off。
-Comments（code/config）只在 method 复杂时加。
+Comments/docstrings 须少且事实准确，只解释非显然外部约束或业务不变量；ALWAYS use the established contract as comments。
 DOCS: 非所求，无 storyline/narrative。
 DOCS: 开门见山，不铺垫，不收尾。
 DOCS: 代码、差异、文件内容与工具输出只引路径与行号，不复述。

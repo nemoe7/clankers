@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Keep comments and docstrings rare and factual, limited to non-obvious external constraints and business invariants.
 - Require the squash skill for refs-to-live rule amendments.
 - Group Arena clauses by domain and place the bible definition before its first reference.
 
