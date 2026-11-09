@@ -2967,3 +2967,52 @@ def test_hidden_reveal_keeps_new_regular_messages(tmp_path: Path, width: int):
     assert new.is_visible() and latest.is_visible()
     page.get_by_role("button", name="Hide hidden messages", exact=True).click()
     assert new.is_visible() and latest.is_visible()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_survey_answers_open_by_touch_and_close_on_outside_tap(tmp_path: Path):
+  from arena_steering import survey
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.submit_survey(survey.template())
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(
+          viewport={"width": 390, "height": 800},
+          is_mobile=True,
+          has_touch=True,
+          reduced_motion="reduce",
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator("#survey-open").tap()
+        trigger = page.locator(".survey-id-trigger").first
+        trigger.tap()
+        tip = page.locator(".survey-answer-tooltip").first
+        assert tip.is_visible()
+        assert tip.locator(".survey-answer-row").count() > 0
+        page.screenshot(path=str(tmp_path / "survey-touch-answer.png"))
+        trigger.tap()
+        assert tip.is_hidden()
+        trigger.tap()
+        assert tip.is_visible()
+        page.get_by_role("heading", name="Survey Verification").tap()
+        assert tip.is_hidden()
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Open survey answers on touch taps and close them on repeat or outside taps.
+
 - Keep regular messages visible when revealing hidden history. Fetch only hidden messages between loaded history boundaries.
 
 - Join browser-fixture HTTP request threads before closing SQLite stores. Leave production request handling unchanged.

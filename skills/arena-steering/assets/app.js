@@ -1791,7 +1791,12 @@ function tooltipTarget(node) {
   return null;
 }
 
+let tooltipPointerType = "mouse";
+for (const name of ["pointerdown", "pointermove"]) {
+  document.addEventListener(name, event => { tooltipPointerType = event.pointerType; });
+}
 document.addEventListener("mouseover", (event) => {
+  if (tooltipPointerType === "touch") return;
   const match = tooltipTarget(event.target);
   if (match) requestTooltip(match.target, match.kind);
   else if (activeTooltip && !activeTooltip.target.contains(event.target)) hideTitleTooltip();
@@ -1809,7 +1814,17 @@ document.addEventListener("focusin", (event) => {
   if (match) requestTooltip(match.target, match.kind, true);
 });
 document.addEventListener("focusout", () => hideTitleTooltip());
-document.addEventListener("click", () => hideTitleTooltip(), true);
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest?.(".survey-id-trigger");
+  const target = trigger?.closest(".survey-id-wrap");
+  if (target?.querySelector(".survey-answer-tooltip")) {
+    const wasOpen = activeTooltip?.target === target;
+    hideTitleTooltip();
+    if (!wasOpen) requestTooltip(target, "survey", true);
+    return;
+  }
+  hideTitleTooltip();
+}, true);
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideTitleTooltip(); });
 window.addEventListener("resize", hideTitleTooltip);
 document.addEventListener("scroll", hideTitleTooltip, true);
