@@ -128,6 +128,7 @@ class Message:
   violation_type: str = ""
   violation_clause_file: str = ""
   answer_data: dict[str, Any] = field(default_factory=dict)
+  quiz_data: dict[str, Any] = field(default_factory=dict)
 
   def __post_init__(self) -> None:
     validate_hex_id(self.id, "Message.id")
@@ -179,7 +180,7 @@ class Message:
       raise ValueError("Message.acks must be a list of non-empty Markdown strings")
     self.acks = list(self.acks)
     self.modified_at = str(self.modified_at or "")
-    if self.type not in {"message", "report_answer"}:
+    if self.type not in {"message", "report_answer", "clause_quiz"}:
       raise ValueError(f"Invalid Message.type: {self.type!r}")
     if not isinstance(self.violation_type, str):
       raise TypeError("Message.violation_type must be text")
@@ -281,11 +282,13 @@ class Message:
       "violation_type": self.violation_type,
       "violation_clause_file": self.violation_clause_file,
       "answer_data": dict(self.answer_data),
+      "quiz_data": dict(self.quiz_data),
     }
 
   @classmethod
   def from_dict(cls, data: dict[str, Any]) -> Message:
-    return cls(
+    message_class = ClauseQuiz if data.get("type") == "clause_quiz" else cls
+    return message_class(
       id=str(data["id"]),
       body=str(data.get("body", "")),
       hidden=bool(data.get("hidden", False)),
@@ -301,7 +304,36 @@ class Message:
       violation_type=data.get("violation_type", ""),
       violation_clause_file=data.get("violation_clause_file", ""),
       answer_data=dict(data.get("answer_data", {})),
+      quiz_data=dict(data.get("quiz_data", {})),
     )
+
+
+@dataclass(slots=True)
+class ClauseQuiz(Message):
+  type: str = "clause_quiz"
+
+  def __post_init__(self) -> None:
+    Message.__post_init__(self)
+    if not self.hidden or not self.blocking:
+      raise ValueError("Clause quizzes must be hidden and blocking")
+    if set(self.quiz_data) != {"file", "line", "digest"}:
+      raise ValueError("Clause quiz needs a file, line, and digest")
+    if not isinstance(self.quiz_data["file"], str) or not self.quiz_data["file"]:
+      raise ValueError("Clause quiz file must be text")
+    line = self.quiz_data["line"]
+    if isinstance(line, bool) or not isinstance(line, int) or line < 1:
+      raise ValueError("Clause quiz line must be a positive integer")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(self.quiz_data["digest"])):
+      raise ValueError("Clause quiz digest must be SHA-256")
+
+  def validate_ack(self, reply: str) -> None:
+    citation = f"{self.quiz_data['file']}:{self.quiz_data['line']} "
+    text = reply.strip()
+    if not text.startswith(citation):
+      raise ValueError("Recall the selected file and line with its exact clause")
+    digest = hashlib.sha256(text[len(citation) :].encode("utf-8")).hexdigest()
+    if digest != self.quiz_data["digest"]:
+      raise ValueError("The recalled clause does not match the selected clause")
 
 
 @dataclass(slots=True, init=False)

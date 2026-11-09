@@ -3882,12 +3882,11 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   for path in (root / "ARENA.md", root / "AGENTS.md", skill):
     assert f"`~/{path.relative_to(root.parent).as_posix()}`" in due[0].body
   assert f"`~/{old_skill.relative_to(root.parent).as_posix()}`" not in due[0].body
-  assert "Try to recall a clause along with its file and line number" in due[0].body
-  assert "Ack this message with `<file>:<line no> <clause>`" in due[0].body
-  assert "If you cannot answer, the bible is not in context." in due[0].body
-  assert "1. Use read_file for all books of the bible." in due[0].body
+  citation = f"{due[0].quiz_data['file']}:{due[0].quiz_data['line']}"
+  assert f"Ack this message with `{citation} <clause>`." in due[0].body
+  assert "1. Use read_file for all books of the bible in full." in due[0].body
   assert "2. Answer the `steer survey`." in due[0].body
-  assert "3. Ack this message with the template above.\n\n- " in due[0].body
+  assert f"3. Retry the ack with `{citation} <clause>`.\n\n- " in due[0].body
   assert "if bible missing from context:" not in due[0].body
   assert "For the survey, use existing knowledge only." not in due[0].body
   assert "read the image path it prints, in JSON order." not in due[0].body
@@ -3917,7 +3916,7 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   )
   store.close()
 
-  assert _run("ack", due[0].id, "Read in full; text already in context")[0] == 0
+  assert _run("ack", due[0].id, f"{citation} Read the full file.")[0] == 0
   store, messages, _, _ = cli.open_services(_isolate_state)
   store.set_meta(
     "read_set_last_at", (datetime.now(UTC) - timedelta(minutes=11)).isoformat()
@@ -3990,7 +3989,10 @@ def test_instruction_checkpoints_fire_at_ten_minutes_and_honor_legacy_pending(
     assert len(messages.pending_ids()) == 1
     checkpoint = messages.list_messages(include_hidden=True)[0]
     assert checkpoint.body.startswith(cli.READ_SET_MESSAGE_MARKER)
-    messages.ack(checkpoint.id, "Read")
+    selected = checkpoint.quiz_data
+    path = pre.repo_root() / selected["file"]
+    clause = dict(cli._clause_lines(path))[selected["line"]]
+    messages.ack(checkpoint.id, f"{selected['file']}:{selected['line']} {clause}")
     messages.send_message(
       "15min bible check\nLegacy pending", hidden=True, blocking=True
     )

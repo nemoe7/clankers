@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -24,6 +25,7 @@ from .models import (
   MESSAGE_ID_RE,
   TASK_DETAIL_MAX_LEN,
   Attachment,
+  ClauseQuiz,
   Message,
   Report,
   ReportAnswer,
@@ -288,7 +290,9 @@ class MessageService:
           or f"{int(time.time() * 1000)}.bin"
         )
         prefix = f"{msg_id}-"
-        target_name = base_name if base_name.startswith(prefix) else f"{prefix}{base_name}"
+        target_name = (
+          base_name if base_name.startswith(prefix) else f"{prefix}{base_name}"
+        )
         dest = unique_upload_target(uploads_root, target_name, reserved=reserved)
         reserved.add(dest)
         src_resolved.replace(dest)
@@ -376,6 +380,26 @@ class MessageService:
       self._cond.notify_all()
     return message
 
+  def send_clause_quiz(
+    self, body: str, file: str, line: int, clause: str
+  ) -> ClauseQuiz:
+    quiz = ClauseQuiz(
+      id=self._unique_hex_id(),
+      body=body,
+      hidden=True,
+      blocking=True,
+      modified_at=self._clock.now_iso(),
+      quiz_data={
+        "file": file,
+        "line": line,
+        "digest": hashlib.sha256(clause.encode("utf-8")).hexdigest(),
+      },
+    )
+    with self._cond:
+      self._messages.save_message(quiz)
+      self._cond.notify_all()
+    return quiz
+
   def get_message(self, msg_id: str) -> Message:
     validate_hex_id(msg_id, "Message.id")
     msg = self._messages.get_message(msg_id)
@@ -435,7 +459,7 @@ class MessageService:
 
   def has_pending_deliverables(self) -> bool:
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-      if msg.type == "message" and (msg.status == "sent" or msg.requires_ack):
+      if msg.type != "report_answer" and (msg.status == "sent" or msg.requires_ack):
         return True
     return bool(self._latest_pending_answers())
 
@@ -445,7 +469,7 @@ class MessageService:
     now = self._clock.now_iso()
     delivered_messages: list[Message] = []
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-      if msg.type != "message":
+      if msg.type == "report_answer":
         continue
       if mark_seen and msg.status == "sent":
         msg = self._messages.mark_message_seen(msg.id, now)
@@ -506,7 +530,7 @@ class MessageService:
       for message in self._messages.list_messages(
         unread_only=False, include_hidden=True
       )
-      if message.type == "message" and message.requires_ack
+      if message.type != "report_answer" and message.requires_ack
     ]
     ids.extend(answer.id for answer in self._latest_pending_answers())
     return ids
@@ -792,7 +816,7 @@ class MessageService:
     candidates: list[str] = [
       msg.id
       for msg in self._messages.list_messages(unread_only=True, include_hidden=True)
-      if msg.type == "message" and msg.requires_ack
+      if msg.type != "report_answer" and msg.requires_ack
     ]
     candidates.extend(answer.id for answer in self._latest_pending_answers())
     if not candidates:
@@ -1024,9 +1048,7 @@ class TaskService:
     attached = False
     commit_ops: list[Callable[[], None]] = []
     uploads_root = (
-      self._uploads_dir.resolve(strict=False)
-      if self._uploads_dir is not None
-      else None
+      self._uploads_dir.resolve(strict=False) if self._uploads_dir is not None else None
     )
     reserved: set[Path] = set()
 
@@ -1042,8 +1064,8 @@ class TaskService:
         dest: Path | None = src
         if uploads_root is not None and src is not None:
           src_resolved = src.resolve(strict=False)
-          in_uploads = (
-            src_resolved != uploads_root and src_resolved.is_relative_to(uploads_root)
+          in_uploads = src_resolved != uploads_root and src_resolved.is_relative_to(
+            uploads_root
           )
           if in_uploads:
             task_folder = uploads_root / task.id
@@ -1110,9 +1132,7 @@ class TaskService:
     return self._copy_task(task, details=details), commit_ops
 
   @staticmethod
-  def _reserve_task_file(
-    task_folder: Path, filename: str, reserved: set[Path]
-  ) -> Path:
+  def _reserve_task_file(task_folder: Path, filename: str, reserved: set[Path]) -> Path:
     candidate = task_folder / filename
     if not candidate.exists() and candidate not in reserved:
       reserved.add(candidate)

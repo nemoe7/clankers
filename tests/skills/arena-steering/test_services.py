@@ -469,6 +469,34 @@ def test_message_service_lifecycle_and_acks() -> None:
   store.close()
 
 
+def test_clause_quiz_rejects_wrong_ack_without_changing_pending_state() -> None:
+  store = SqliteStore()
+  messages = MessageService(store, store, store, store)
+  clause = "Keep the selected clause unchanged."
+  path, line = "ARENA.md", 86
+  quiz = messages.send_clause_quiz("Recall the selected clause", path, line, clause)
+  delivered = messages.read_pending()["messages"]
+  assert [item.id for item in delivered] == [quiz.id]
+  assert messages.pending_ids() == [quiz.id]
+  before = store.get_message(quiz.id).to_dict()
+  for reply in (
+    f"{path}:{line}",
+    f"AGENTS.md:{line} {clause}",
+    f"{path}:{line + 1} {clause}",
+    f"{path}:{line} Wrong clause",
+  ):
+    with pytest.raises(ValueError):
+      messages.ack(quiz.id, reply)
+    assert store.get_message(quiz.id).to_dict() == before
+    assert messages.pending_ids() == [quiz.id]
+  reply = f"{path}:{line} {clause}"
+  kind, acked = messages.ack(None, reply)
+  assert kind == "message"
+  assert acked.acks == [reply]
+  assert messages.pending_ids() == []
+  store.close()
+
+
 def test_message_service_stores_parent_ids_for_multi_message_replies() -> None:
   store = SqliteStore(":memory:")
   svc = MessageService(store, store, store, store)

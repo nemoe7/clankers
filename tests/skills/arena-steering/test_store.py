@@ -21,6 +21,43 @@ from arena_steering.store import SqliteStore
 EXPECTED_INITIAL_VERSION = "2.2.3"
 
 
+def test_clause_quiz_survives_restart_model_and_snapshot_round_trips(
+  tmp_path: Path,
+) -> None:
+  from arena_steering.models import ClauseQuiz
+  from arena_steering.services import MessageService
+
+  path = tmp_path / "quiz.sqlite3"
+  store = SqliteStore(path)
+  messages = MessageService(store, store, store, store)
+  clause = "Preserve the original selected clause."
+  quiz = messages.send_clause_quiz("Recall a clause", "AGENTS.md", 12, clause)
+  snapshot = store.export_rows()
+  store.close()
+  store = SqliteStore(path)
+  peer = SqliteStore()
+  try:
+    restored = store.get_message(quiz.id)
+    assert isinstance(restored, ClauseQuiz)
+    assert isinstance(Message.from_dict(restored.to_dict()), ClauseQuiz)
+    peer.merge_rows(snapshot)
+    merged = peer.get_message(quiz.id)
+    assert isinstance(merged, ClauseQuiz)
+    for target in (store, peer):
+      before = target.get_message(quiz.id).to_dict()
+      with pytest.raises(ValueError):
+        target.append_message_ack(
+          quiz.id, "AGENTS.md:12 Wrong clause", quiz.modified_at
+        )
+      assert target.get_message(quiz.id).to_dict() == before
+      reply = f"AGENTS.md:12 {clause}"
+      acked = target.append_message_ack(quiz.id, reply, quiz.modified_at)
+      assert acked.acks == [reply]
+  finally:
+    peer.close()
+    store.close()
+
+
 @pytest.mark.parametrize("external", [False, True])
 def test_data_version_ignores_poll_heartbeat_churn(
   tmp_path: Path, external: bool

@@ -703,6 +703,54 @@ def test_cli_version_flags() -> None:
   assert out.getvalue().strip() == f"steer {__version__}"
 
 
+def test_clause_quiz_selection_excludes_markdown_structure(tmp_path: Path) -> None:
+  path = tmp_path / "book.md"
+  path.write_text(
+    "---\nname: sample\n---\n# Header\n\n- Keep this clause.\n"
+    "```text\n- Ignore fenced text.\n```\n"
+    "~~~\nIgnore this too.\n~~~\n"
+    "## Another header\n1. Keep the numbered clause.\n\nSetext header\n===\n\n    Ignore indented code.\n",
+    encoding="utf-8",
+  )
+  assert cli._clause_lines(path) == [
+    (6, "Keep this clause."),
+    (14, "Keep the numbered clause."),
+  ]
+
+
+def test_clause_quiz_randomizes_book_then_line(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  books = ["ARENA.md", "AGENTS.md", ".agents/skills/arena-steering/SKILL.md"]
+  for name in books:
+    path = tmp_path / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# Header\n- First clause.\n- Second clause.\n", encoding="utf-8")
+  monkeypatch.setattr(cli.pre_mod, "repo_root", lambda: tmp_path)
+  choices = []
+
+  def choose(items):
+    choices.append(len(items))
+    return items[-1]
+
+  monkeypatch.setattr(cli.secrets, "choice", choose)
+  store = SqliteStore()
+  try:
+    messages = cli.MessageService(store, store, store, store)
+    moment = datetime.now(UTC)
+    store.set_meta(cli.READ_SET_LAST_META, (moment - timedelta(minutes=11)).isoformat())
+    cli._schedule_instruction_check("echo ready", messages, store, moment=moment)
+    quiz = messages.list_messages()[0]
+    assert choices == [len(books), 2]
+    assert quiz.quiz_data["file"] == books[-1]
+    assert quiz.quiz_data["line"] == 3
+    assert messages.has_pending_deliverables()
+    messages.ack(quiz.id, f"{books[-1]}:3 Second clause.")
+    assert not messages.has_pending_deliverables()
+  finally:
+    store.close()
+
+
 def test_v2_bible_lists_only_its_installed_skill_stub(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -737,12 +785,13 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
     if msg.body.startswith(cli.READ_SET_MESSAGE_MARKER)
   )
   lines = checkpoint.body.splitlines()
-  assert lines[0] == cli.READ_SET_MESSAGE_MARKER
-  assert not lines[0].startswith("10min")
-  assert "<file>:<line no>" in lines[1]
-  assert lines[3].startswith("1.") and "read_file" in lines[3]
-  assert lines[4].startswith("2.") and "steer survey" in lines[4]
-  assert lines[5].startswith("3.") and "Ack" in lines[5]
+  citation = f"{checkpoint.quiz_data['file']}:{checkpoint.quiz_data['line']}"
+  assert lines[0] == f"{cli.READ_SET_MESSAGE_MARKER} {citation}"
+  assert citation in lines[1]
+  assert citation in lines[2]
+  assert lines[5].startswith("1.") and "read_file" in lines[5]
+  assert lines[6].startswith("2.") and "steer survey" in lines[6]
+  assert lines[7].startswith("3.") and "Retry" in lines[7]
   assert f"`~/{v2_path}`" in checkpoint.body
   assert f"`~/{old_path}`" not in checkpoint.body
   assert checkpoint.body.endswith(f"`~/{v2_path}`")

@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import secrets
 import shlex
 import sqlite3
 import subprocess
@@ -20,6 +21,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from markdown_it import MarkdownIt
 
 from . import __version__, git_safety
 from . import pre as pre_mod
@@ -1149,7 +1152,30 @@ def _pre_state_unavailable(
 
 READ_SET_LAST_META = "read_set_last_at"
 READ_SET_INTERVAL_SECONDS = 10 * 60
-READ_SET_MESSAGE_MARKER = "if bible missing from context:"
+READ_SET_MESSAGE_MARKER = "Bible recall quiz:"
+
+
+def _clause_lines(path: Path) -> list[tuple[int, str]]:
+  lines = path.read_text(encoding="utf-8").splitlines()
+  parsed_lines = list(lines)
+  if lines and lines[0].strip() == "---":
+    for index, text in enumerate(lines):
+      parsed_lines[index] = ""
+      if index and text.strip() in {"---", "..."}:
+        break
+  tokens = MarkdownIt("commonmark").enable("table").parse("\n".join(parsed_lines))
+  clauses = []
+  for index, token in enumerate(tokens):
+    if token.type != "paragraph_open":
+      continue
+    inline = tokens[index + 1]
+    if inline.map is None:
+      continue
+    for offset in range(*inline.map):
+      clause = re.sub(r"^(?:[-+*]|[0-9]+[.)])\s+", "", lines[offset].strip())
+      if clause:
+        clauses.append((offset + 1, clause))
+  return clauses
 
 
 def _schedule_instruction_check(
@@ -1191,7 +1217,9 @@ def _schedule_instruction_check(
     if any(
       item.hidden
       and item.requires_ack
-      and item.body.startswith((READ_SET_MESSAGE_MARKER, "15min bible check"))
+      and item.body.startswith(
+        (READ_SET_MESSAGE_MARKER, "Try to recall a clause", "15min bible check")
+      )
       for item in messages.list_messages()
     ):
       return
@@ -1202,14 +1230,27 @@ def _schedule_instruction_check(
       root / ".agents/skills/arena-steering/SKILL.md",
     ]
     listed = "\n".join(f"- `{home_relative(path)}`" for path in paths if path.is_file())
-    messages.send_message(
-      f"{READ_SET_MESSAGE_MARKER}\n"
-      f"{listed}\n"
-      "Read every listed path in full with read_file and follow its rules.\n"
-      "Answer the survey, ack this msg, and continue. "
-      "If no bible text was missing, only ack and continue.",
-      hidden=True,
-      blocking=True,
+    books = [(path, _clause_lines(path)) for path in paths if path.is_file()]
+    books = [(path, clauses) for path, clauses in books if clauses]
+    if not books:
+      return
+    path, clauses = secrets.choice(books)
+    number, clause = secrets.choice(clauses)
+    file = path.relative_to(root).as_posix()
+    citation = f"{file}:{number}"
+    messages.send_clause_quiz(
+      f"{READ_SET_MESSAGE_MARKER} {citation}\n"
+      f"Without opening files first, recall the clause at {citation}.\n"
+      f"Ack this message with `{citation} <clause>`.\n"
+      "Use the exact clause text, without its leading Markdown list marker.\n"
+      "If you cannot recall the clause or your answer is rejected:\n"
+      "1. Use read_file for all books of the bible in full.\n"
+      "2. Answer the `steer survey`.\n"
+      f"3. Retry the ack with `{citation} <clause>`.\n\n"
+      f"{listed}",
+      file,
+      number,
+      clause,
     )
     store.set_meta(READ_SET_LAST_META, now.isoformat())
 

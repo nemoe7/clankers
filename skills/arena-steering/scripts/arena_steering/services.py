@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -24,6 +25,7 @@ from .models import (
   MESSAGE_ID_RE,
   TASK_DETAIL_MAX_LEN,
   Attachment,
+  ClauseQuiz,
   Message,
   Report,
   ReportAnswer,
@@ -427,6 +429,26 @@ class MessageService:
       self._cond.notify_all()
     return message
 
+  def send_clause_quiz(
+    self, body: str, file: str, line: int, clause: str
+  ) -> ClauseQuiz:
+    quiz = ClauseQuiz(
+      id=self._unique_hex_id(),
+      body=body,
+      hidden=True,
+      blocking=True,
+      modified_at=self._clock.now_iso(),
+      quiz_data={
+        "file": file,
+        "line": line,
+        "digest": hashlib.sha256(clause.encode("utf-8")).hexdigest(),
+      },
+    )
+    with self._cond:
+      self._messages.save_message(quiz)
+      self._cond.notify_all()
+    return quiz
+
   def get_message(self, msg_id: str) -> Message:
     validate_hex_id(msg_id, "Message.id")
     msg = self._messages.get_message(msg_id)
@@ -486,7 +508,7 @@ class MessageService:
 
   def has_pending_deliverables(self) -> bool:
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-      if msg.type == "message" and (msg.status == "sent" or msg.requires_ack):
+      if msg.type != "report_answer" and (msg.status == "sent" or msg.requires_ack):
         return True
     return bool(self._latest_pending_answers())
 
@@ -496,7 +518,7 @@ class MessageService:
     now = self._clock.now_iso()
     delivered_messages: list[Message] = []
     for msg in self._messages.list_messages(unread_only=True, include_hidden=True):
-      if msg.type != "message":
+      if msg.type == "report_answer":
         continue
       if mark_seen and msg.status == "sent":
         msg = self._messages.mark_message_seen(msg.id, now)
@@ -557,7 +579,7 @@ class MessageService:
       for message in self._messages.list_messages(
         unread_only=False, include_hidden=True
       )
-      if message.type == "message" and message.requires_ack
+      if message.type != "report_answer" and message.requires_ack
     ]
     ids.extend(answer.id for answer in self._latest_pending_answers())
     return ids
@@ -843,7 +865,7 @@ class MessageService:
     candidates: list[str] = [
       msg.id
       for msg in self._messages.list_messages(unread_only=True, include_hidden=True)
-      if msg.type == "message" and msg.requires_ack
+      if msg.type != "report_answer" and msg.requires_ack
     ]
     candidates.extend(answer.id for answer in self._latest_pending_answers())
     if not candidates:

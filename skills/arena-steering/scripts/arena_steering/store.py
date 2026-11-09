@@ -21,6 +21,7 @@ from .models import (
   TASK_SIZES,
   TASK_STATUSES,
   Attachment,
+  ClauseQuiz,
   Message,
   Report,
   ReportAnswer,
@@ -29,7 +30,7 @@ from .models import (
 )
 
 STATE_TABLES = ("messages", "tasks", "reports")
-SCHEMA_REVISION = 1  # Bump when schema setup or migrations change.
+SCHEMA_REVISION = 2  # Bump when schema setup or migrations change.
 LEGACY_TASK_STATUSES = frozenset({"in_progress", "blocked"})
 _STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -215,6 +216,10 @@ class SqliteStore:
       if "message_type" not in message_cols:
         self._conn.execute(
           "ALTER TABLE messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'message'"
+        )
+      if "quiz_json" not in message_cols:
+        self._conn.execute(
+          "ALTER TABLE messages ADD COLUMN quiz_json TEXT NOT NULL DEFAULT '{}'"
         )
       if "answer_json" not in message_cols:
         self._conn.execute(
@@ -676,8 +681,8 @@ class SqliteStore:
           INSERT INTO messages (
             id, written_at, body, hidden, blocking, attachments_json, parent_ids_json,
             parent_refs_json, status, acks_json, modified_at, message_type, violation_type,
-            violation_clause_file, answer_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            violation_clause_file, answer_json, quiz_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
           (
             message.id,
@@ -695,6 +700,7 @@ class SqliteStore:
             message.violation_type,
             message.violation_clause_file,
             json.dumps(message.answer_data),
+            json.dumps(message.quiz_data),
           ),
         )
       else:
@@ -714,7 +720,8 @@ class SqliteStore:
               message_type = ?,
               violation_type = ?,
               violation_clause_file = ?,
-              answer_json = ?
+              answer_json = ?,
+              quiz_json = ?
           WHERE id = ?
           """,
           (
@@ -732,6 +739,7 @@ class SqliteStore:
             message.violation_type,
             message.violation_clause_file,
             json.dumps(message.answer_data),
+            json.dumps(message.quiz_data),
             message.id,
           ),
         )
@@ -775,6 +783,8 @@ class SqliteStore:
       if row is None:
         raise KeyError(f"Unknown message ID: {msg_id}")
       message = self._row_to_message(row)
+      if isinstance(message, ClauseQuiz):
+        message.validate_ack(reply)
       message.acks.append(reply)
       now = _advance_stamp(message.modified_at, now)
       self._conn.execute(
@@ -1404,7 +1414,8 @@ class SqliteStore:
   def _row_to_message(row: sqlite3.Row) -> Message:
     keys = row.keys()
     parent_ids_json = row["parent_ids_json"] if "parent_ids_json" in keys else "[]"
-    return Message(
+    message_class = ClauseQuiz if row["message_type"] == "clause_quiz" else Message
+    return message_class(
       id=str(row["id"]),
       body=str(row["body"]),
       hidden=bool(row["hidden"]),
@@ -1426,6 +1437,7 @@ class SqliteStore:
       violation_clause_file=str(row["violation_clause_file"])
       if "violation_clause_file" in keys
       else "",
+      quiz_data=json.loads(row["quiz_json"] or "{}") if "quiz_json" in keys else {},
       answer_data=json.loads(row["answer_json"] or "{}")
       if "answer_json" in keys
       else {},
