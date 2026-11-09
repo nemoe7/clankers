@@ -573,39 +573,18 @@ def test_v2_bible_lists_only_its_installed_skill_stub(
   checkpoint = next(
     msg
     for msg in messages.list_messages(unread_only=False, include_hidden=True)
-    if msg.body.startswith("10min bible check")
+    if msg.body.startswith(cli.READ_SET_MESSAGE_MARKER)
   )
+  lines = checkpoint.body.splitlines()
+  assert lines[0] == cli.READ_SET_MESSAGE_MARKER
+  assert not lines[0].startswith("10min")
+  assert "<file>:<line no>" in lines[1]
+  assert lines[3].startswith("1.") and "read_file" in lines[3]
+  assert lines[4].startswith("2.") and "steer survey" in lines[4]
+  assert lines[5].startswith("3.") and "Ack" in lines[5]
   assert f"`~/{v2_path}`" in checkpoint.body
   assert f"`~/{old_path}`" not in checkpoint.body
-  assert (
-    "Try to recall a clause along with its file and line number"  # nonemo: NMT100
-    in checkpoint.body
-  )
-  assert (
-    "Ack this message with `<file>:<line no> <clause>`"  # nonemo: NMT100
-    in checkpoint.body
-  )
-  assert (
-    "If you cannot answer, the bible is not in context."  # nonemo: NMT100
-    in checkpoint.body
-  )
-  assert (
-    "1. Use read_file for all books of the bible." in checkpoint.body  # nonemo: NMT100
-  )
-  assert "2. Answer the `steer survey`." in checkpoint.body  # nonemo: NMT100
-  assert "3. Ack this message with the template above.\n\n- " in checkpoint.body
-  assert "if bible missing from context:" not in checkpoint.body  # nonemo: NMT100
-  survey_hint = "Run `steer survey` and read the image path it prints"
-  assert survey_hint in checkpoint.body
-  assert (
-    "Do not search, fetch, open other files, run code, or ask another system for answers."  # nonemo: NMT100
-    in checkpoint.body
-  )
-  assert "Guesses are allowed; use extremely low confidence" in checkpoint.body
-  assert (
-    "Use unknown with confidence 0 only if the whole question is unknown."  # nonemo: NMT100
-    in checkpoint.body
-  )
+  assert checkpoint.body.endswith(f"`~/{v2_path}`")
   assert "steer survey -i" not in checkpoint.body
   store.close()
 

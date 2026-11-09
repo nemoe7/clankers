@@ -87,25 +87,41 @@ def test_deterministic_boolean_checks_accept_true_and_unknown() -> None:
   assert by_id["V1S0N"]["correct"] is None
 
 
-def test_cli_survey_smallest_image_and_submission(
+def test_cli_survey_prints_guidance_and_requires_live_server(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
   state_dir = tmp_path / "arena-state"
   monkeypatch.setattr(survey, "smallest_image", lambda: "image.png")
+  monkeypatch.setattr(
+    cli, "_healthy_server_url", lambda _state_dir: "http://127.0.0.1:8000"
+  )
   code, out, _err = _run_cli(state_dir, "survey")
   assert code == 0
-  image_question = "Read image.png. Can you view images?"
-  assert image_question in out
+  lines = out.splitlines()
+  assert lines[0] == cli.SURVEY_ANSWER_GUIDANCE
+  assert lines[1] == ""
+  expected_questions = []
+  for question in survey.SPEC["questions"]:
+    prompt = question["question"]
+    if question["id"] == "V1S0N":
+      prompt = prompt.replace("{path}", "image.png")
+    expected_questions.append(f"- {question['id']}: {prompt}")
+  assert lines[2:7] == expected_questions
+  assert lines[7] == ""
+  assert lines[8] == "Submission template:"
+  assert len(lines) == 10
+  assert json.loads(lines[9]) == survey.template()
+  assert "Survey: pending=" not in out
+  assert "(unanswered)" not in out
+  assert " -> " not in "\n".join(lines[2:7])
   with pytest.raises(SystemExit):
     _run_cli(state_dir, "survey", "-i")
 
-  payload = json.dumps(survey.template())
-  code2, _out2, _err2 = _run_cli(state_dir, "survey", payload)
-  assert code2 == 0
-
-  code3, out3, _err3 = _run_cli(state_dir, "survey")
-  assert code3 == 0
-  assert "R3S0N" in out3
+  monkeypatch.setattr(cli, "_healthy_server_url", lambda _state_dir: None)
+  code, out, err = _run_cli(state_dir, "survey", json.dumps(survey.template()))
+  assert code == 1
+  assert out == ""
+  assert "steer serve" in err
 
 
 def test_survey_rejects_ungraded_submissions_without_changing_results(
@@ -217,7 +233,7 @@ def test_cli_survey_posts_to_the_running_server(tmp_path: Path) -> None:
       ["survey", json.dumps(survey.template())], out=out, err=io.StringIO()
     )
     assert code == 0
-    assert "survey-source=server" in out.getvalue()
+    assert out.getvalue().strip() == "survey ok"
     assert len(app.messages.get_survey()["results"]) == 6
   finally:
     server.shutdown()
@@ -226,9 +242,14 @@ def test_cli_survey_posts_to_the_running_server(tmp_path: Path) -> None:
 
 
 def test_cli_survey_does_not_offer_interrupt_flag(
-  tmp_path: Path, capsys: pytest.CaptureFixture[str]
+  tmp_path: Path,
+  capsys: pytest.CaptureFixture[str],
+  monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   state_dir = tmp_path / "arena-state"
+  monkeypatch.setattr(
+    cli, "_healthy_server_url", lambda _state_dir: "http://127.0.0.1:8000"
+  )
   with pytest.raises(SystemExit) as help_exit:
     _run_cli(state_dir, "survey", "--help")
   assert help_exit.value.code == 0

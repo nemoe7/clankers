@@ -3840,7 +3840,8 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   store, messages, _, _ = cli.open_services(_isolate_state)
   due = [msg for msg in messages.list_messages() if msg.hidden and msg.requires_ack]
   assert len(due) == 1
-  assert "10min bible check" in due[0].body
+  assert due[0].body.startswith(cli.READ_SET_MESSAGE_MARKER)
+  assert "10min bible check" not in due[0].body
   for path in (root / "ARENA.md", root / "AGENTS.md", skill):
     assert f"`~/{path.relative_to(root.parent).as_posix()}`" in due[0].body
   assert f"`~/{old_skill.relative_to(root.parent).as_posix()}`" not in due[0].body
@@ -3851,19 +3852,16 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   assert "2. Answer the `steer survey`." in due[0].body
   assert "3. Ack this message with the template above.\n\n- " in due[0].body
   assert "if bible missing from context:" not in due[0].body
-  assert "For the survey, use existing knowledge only." in due[0].body
-  assert "read the image path it prints, in JSON order." in due[0].body
+  assert "For the survey, use existing knowledge only." not in due[0].body
+  assert "read the image path it prints, in JSON order." not in due[0].body
   assert (
     "Do not search, fetch, open other files, run code, or ask another system for answers."
-    in due[0].body
+    not in due[0].body
   )
-  assert (
-    "Give your best effort. Guesses are allowed; use extremely low confidence "
-    "when very unsure. Boolean answers need true or false."
-  ) in due[0].body
+  assert "Guesses are allowed; use extremely low confidence" not in due[0].body
   assert (
     "Use unknown with confidence 0 only if the whole question is unknown."
-    in due[0].body
+    not in due[0].body
   )
   assert messages.pending_ids() == [due[0].id]
   store.close()
@@ -3871,7 +3869,13 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert (
-    len([msg for msg in messages.list_messages() if "10min bible check" in msg.body])
+    len(
+      [
+        msg
+        for msg in messages.list_messages()
+        if msg.body.startswith(cli.READ_SET_MESSAGE_MARKER)
+      ]
+    )
     == 1
   )
   store.close()
@@ -3885,7 +3889,13 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   _run("pre", "-l", "printf ok", "-c", "printf ok", "-s", "bash")
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert (
-    len([msg for msg in messages.list_messages() if "10min bible check" in msg.body])
+    len(
+      [
+        msg
+        for msg in messages.list_messages()
+        if msg.body.startswith(cli.READ_SET_MESSAGE_MARKER)
+      ]
+    )
     == 2
   )
   store.close()
@@ -3914,7 +3924,13 @@ def test_concurrent_instruction_ticks_only_mint_one_checkpoint(
   assert all(code == 0 for code, _ in results)
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert (
-    len([msg for msg in messages.list_messages() if "10min bible check" in msg.body])
+    len(
+      [
+        msg
+        for msg in messages.list_messages()
+        if msg.body.startswith(cli.READ_SET_MESSAGE_MARKER)
+      ]
+    )
     == 1
   )
   store.close()
@@ -3936,7 +3952,7 @@ def test_instruction_checkpoints_fire_at_ten_minutes_and_honor_legacy_pending(
     )
     assert len(messages.pending_ids()) == 1
     checkpoint = messages.list_messages(include_hidden=True)[0]
-    assert checkpoint.body.startswith("10min bible check")
+    assert checkpoint.body.startswith(cli.READ_SET_MESSAGE_MARKER)
     messages.ack(checkpoint.id, "Read")
     messages.send_message(
       "15min bible check\nLegacy pending", hidden=True, blocking=True
