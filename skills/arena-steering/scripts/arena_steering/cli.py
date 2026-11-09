@@ -759,7 +759,8 @@ def _run_pr_update(parsed: argparse.Namespace, store: SqliteStore, out: TextIO) 
       with_bible_read(
         "VIOLATION: Cited session-local ID in PR data. "
         "If name clash `steer ren OLD_ID NEW_ID` and retry."
-        "\nLocations:\n  " + "\n  ".join(hits)
+        "\nLocations:\n  " + "\n  ".join(hits),
+        ack=False,
       )
     )
   endpoint = f"repos/{{owner}}/{{repo}}/pulls/{parsed.number}"
@@ -1253,7 +1254,14 @@ def _run_pre(
     )
   for message in result.messages:
     print(
-      with_bible_read(message) if message.startswith("VIOLATION:") else message,
+      with_bible_read(
+        message,
+        ack=bool(
+          ctx.shell and result.blocked_by in {"live-run-logs", "inbox-pipe", "sleep"}
+        ),
+      )
+      if message.startswith("VIOLATION:")
+      else message,
       file=out,
     )
   if (

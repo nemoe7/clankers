@@ -89,11 +89,14 @@ def _validate_new_entity_id(value: str, label: str) -> None:
     raise ValueError(f"{label} ID must be at most {ENTITY_ID_MAX_LEN} characters")
 
 
-def with_bible_read(body: str) -> str:
-  """Append the acknowledgement and conditional full-bible reminder to a true violation."""
+def with_bible_read(body: str, *, ack: bool = True) -> str:
   root = pre_mod.repo_root()
   paths = ", ".join(home_relative(root / relative) for relative in _BIBLE_PATHS)
-  return f"{body}\n{VIOLATION_ACK}\n{BIBLE_READ.format(paths=paths)}"
+  guidance = [body]
+  if ack:
+    guidance.append(VIOLATION_ACK)
+  guidance.append(BIBLE_READ.format(paths=paths))
+  return "\n".join(guidance)
 
 
 def _validate_ack_markdown(markdown: str, target_id: str) -> str:

@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Omit acknowledgement instructions from violations without an inbox message.
+
 - Load message history through referenced IDs before scrolling to them.
 
 - Continue work when polling directs it.

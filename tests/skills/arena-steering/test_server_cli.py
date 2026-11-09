@@ -38,7 +38,7 @@ from arena_steering.server import (
   make_request_handler,
   reload_server_handler,
 )
-from arena_steering.services import BIBLE_READ, REPORT_TASK_FINISH_GRACE
+from arena_steering.services import BIBLE_READ, REPORT_TASK_FINISH_GRACE, VIOLATION_ACK
 from arena_steering.store import SqliteStore
 from fixtures.reload_isolation import run_reload_in_child
 
@@ -4927,6 +4927,7 @@ def test_cli_pr_update_blocks_session_local_ids(
   assert code == 1
   assert "VIOLATION: Cited session-local ID in PR data." in err  # nonemo: NMT100
   assert "steer ren OLD_ID NEW_ID" in err
+  assert VIOLATION_ACK not in err
   assert f"{location}:1: {token}" in err
   assert BIBLE_READ.split("{paths}")[0].strip() in err
 

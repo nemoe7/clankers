@@ -1271,6 +1271,10 @@ def test_other_immediate_violations_show_conditional_bible_guidance(
   assert notice in out
   assert BIBLE_READ_PREFIX in out
   assert ".agents/skills/arena-steering/SKILL.md" in out
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  flag = messages.pending_violation()
+  assert (VIOLATION_ACK in out) == (flag is not None)
+  store.close()
 
 
 def test_sleep_during_live_run_names_it_and_shows_bible_guidance(
