@@ -20,6 +20,7 @@ This log has no Unreleased section.
 - Correct the survey CLI reference for success output, live-server requirements, memory-only results, and question/template output.
 - Update only changed task rows, preserving unchanged sync revisions, queue order, and deletion tombstones.
 - Remove the unused single-field report-draft reader.
+- Extend header tab targets through the header height, retain inner hover dimensions, and place report indicators above hover backgrounds.
 
 ### Security
 

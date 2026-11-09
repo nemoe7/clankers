@@ -4189,6 +4189,13 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
             label.selectNodeContents(tab.firstChild);
             const text = label.getBoundingClientRect();
             const bounds = tab.getBoundingClientRect();
+            const hover = getComputedStyle(tab, '::before');
+            const sampleTab = tab.cloneNode(true);
+            sampleTab.removeAttribute('id');
+            sampleTab.style.cssText = 'position:fixed;height:auto;width:auto';
+            document.body.append(sampleTab);
+            const naturalHeight = sampleTab.getBoundingClientRect().height;
+            sampleTab.remove();
             const pip = tab.querySelector('#report-pip').getBoundingClientRect();
             const question = tab.querySelector('#report-needs-answer').getBoundingClientRect();
             const dotSample = document.createElement('span');
@@ -4224,10 +4231,24 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
               questionHeight: question.height,
               tabTop: bounds.top,
               tabBottom: bounds.bottom,
+              naturalHeight,
+              hoverHeight: parseFloat(hover.height),
+              hoverTop: bounds.top + tab.clientTop + parseFloat(hover.top) - parseFloat(hover.height) / 2,
+              headerTop: document.querySelector('.topbar').getBoundingClientRect().top,
+              headerBottom: document.querySelector('.topbar').getBoundingClientRect().bottom,
+              topHit: document.elementFromPoint(bounds.x + bounds.width / 2, bounds.top + 1)?.closest('button') === tab,
+              bottomHit: document.elementFromPoint(
+                bounds.x + bounds.width / 2, bounds.bottom - 1)?.closest('button') === tab,
               pipBottom: pip.bottom,
               pipOffsetRight: bounds.right - pip.right,
             };
           }""")
+          assert geometry["topHit"] and geometry["bottomHit"]
+          assert geometry["tabTop"] == geometry["headerTop"]
+          assert geometry["headerBottom"] - geometry["tabBottom"] <= 1
+          assert abs(geometry["hoverHeight"] - geometry["naturalHeight"]) < 1
+          assert geometry["questionBottom"] < geometry["hoverTop"]
+          assert geometry["pipBottom"] < geometry["hoverTop"]
           assert abs(geometry["textCenter"] - geometry["tabCenter"]) < 1
           assert geometry["pipWidth"] == geometry["pickerDotWidth"]
           assert geometry["pipHeight"] == geometry["pickerDotHeight"]
