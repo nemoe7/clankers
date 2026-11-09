@@ -16,6 +16,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Document measurement property, static-key, and pixel-string coverage, with explicit-input exemptions.
+
 - Document NMT200's zero-value exemption and add explicit coverage.
 - Require explicit user authorization for every new suppression, and reuse production output values in assertion guidance.
 
