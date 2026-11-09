@@ -2805,3 +2805,40 @@ def test_skip_poll_health_cancel_and_explicit_arming() -> None:
     assert not app.messages.skip_poll_armed()
   finally:
     store.close()
+
+
+def test_hidden_window_returns_only_hidden_rows_between_loaded_messages():
+  store = SqliteStore()
+  app = SteeringApp(store)
+  try:
+    for msg_id, hidden in [
+      ("000001", True),
+      ("000002", False),
+      ("000003", True),
+      ("000004", False),
+      ("000005", True),
+    ]:
+      app.messages.send_message(
+        "Window sample", msg_id=msg_id, hidden=hidden, blocking=False
+      )
+    status, result = app.dispatch("GET", "/messages/hidden?first=000002&last=000004")
+    assert status == 200
+    assert [row["id"] for row in result["messages"]] == ["000003"]
+    assert all(row["hidden"] for row in result["messages"])
+    assert result["order"] == ["000002", "000003", "000004"]
+    assert (
+      app.dispatch("GET", "/messages/hidden?first=000002&last=000004&q=absent")[1][
+        "messages"
+      ]
+      == []
+    )
+    for path in [
+      "/messages/hidden",
+      "/messages/hidden?first=000002",
+      "/messages/hidden?first=ffffff&last=000004",
+      "/messages/hidden?first=000004&last=000002",
+    ]:
+      assert app.dispatch("GET", path)[0] == 400
+    assert len(store.list_messages(include_hidden=False)) == 2
+  finally:
+    store.close()

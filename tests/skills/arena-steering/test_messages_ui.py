@@ -2140,6 +2140,7 @@ def test_hidden_toggle_retains_visible_cards_during_fetch(tmp_path: Path) -> Non
     app.messages.send_message(
       f"Hidden message {index}", msg_id=f"{index + 1:06x}", hidden=True, blocking=False
     )
+  app.messages.send_message("Latest visible message", msg_id="cccccc", blocking=False)
   server = create_http_server(app, host="127.0.0.1", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -2154,8 +2155,7 @@ def test_hidden_toggle_retains_visible_cards_during_fetch(tmp_path: Path) -> Non
       page.add_init_script("""(() => {
         const original = window.fetch.bind(window);
         window.fetch = async (...args) => {
-          if (!window.hiddenFetchStarted && String(args[0]).includes('/messages?') &&
-              String(args[0]).includes('hidden=1')) {
+          if (!window.hiddenFetchStarted && String(args[0]).includes('/messages/hidden?')) {
             window.hiddenFetchStarted = true;
             await new Promise(resolve => { window.releaseHidden = resolve; });
           }
@@ -2907,3 +2907,63 @@ def test_timestamps_use_regular_proportional_one(tmp_path: Path, width: int) -> 
     }""")
     assert regular < tabular
     page.screenshot(path=str(tmp_path / f"timestamp-tabular-{width}.png"))
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_hidden_reveal_keeps_new_regular_messages(tmp_path: Path, width: int):
+  with composer_page(width) as page:
+    page.locator("#msg").fill("Original regular message")
+    page.locator("#send").click()
+    page.get_by_text("Original regular message", exact=True).wait_for()
+    page.request.post(
+      page.url.split("?")[0] + "messages",
+      data={
+        "id": "abc123",
+        "body": "Hidden window sample",
+        "hidden": True,
+        "blocking": False,
+      },
+    )
+    page.locator("#msg").fill("Latest regular message")
+    page.locator("#send").click()
+    latest = page.get_by_text("Latest regular message", exact=True)
+    latest.wait_for()
+    page.get_by_role("button", name="Show hidden messages", exact=True).click()
+    page.get_by_text("Hidden window sample", exact=True).wait_for()
+    page.get_by_role("button", name="Hide hidden messages", exact=True).click()
+    page.locator("#msg").fill("New regular message")
+    page.locator("#send").click()
+    new = page.get_by_text("New regular message", exact=True)
+    new.wait_for()
+    page.evaluate("""() => {
+      const original = window.fetch.bind(window);
+      window.toggleRequests = [];
+      window.fetch = async (...args) => {
+        const url = String(args[0]);
+        if (url.includes('/messages')) {
+          window.toggleRequests.push(url);
+          if (url.includes('/messages/hidden?')) {
+            window.hiddenHeld = true;
+            await new Promise(resolve => { window.releaseHidden = resolve; });
+          }
+        }
+        return original(...args);
+      };
+    }""")
+    page.get_by_role("button", name="Show hidden messages", exact=True).click()
+    page.wait_for_function("window.hiddenHeld === true")
+    assert new.is_visible() and latest.is_visible()
+    assert page.get_by_text("Original regular message", exact=True).is_visible()
+    assert all(
+      "/messages/hidden?" in url for url in page.evaluate("window.toggleRequests")
+    )
+    page.screenshot(path=str(tmp_path / f"hidden-reveal-pending-{width}.png"))
+    page.evaluate("window.releaseHidden()")
+    page.get_by_text("Hidden window sample", exact=True).wait_for()
+    assert new.is_visible() and latest.is_visible()
+    page.get_by_role("button", name="Hide hidden messages", exact=True).click()
+    assert new.is_visible() and latest.is_visible()

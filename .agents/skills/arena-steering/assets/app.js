@@ -806,20 +806,34 @@ const handlers = {
     const query = (state.searchQuery || "").trim();
     historyCache = null;
     searchBase = null;
-    messageEpoch += 1;
+    const epoch = ++messageEpoch;
     if (!nextHidden) {
-      hiddenMessageCache = { query, messages: state.messages || [], hasMore: state.messagesHasMore, revision: loadedMessageRevision, dirty: Boolean(state.messagesLoading || messageRequests) || loadedMessageRevision == null };
-      const visible = (state.messages || []).filter((message) => !message.hidden);
+      const visible = (state.messages || []).filter(message => !message.hidden);
       store.setState({ showHidden: false, messages: visible, messagesLoading: false });
       loadedMessageKey = messageQueryKey(store.getState());
-      if (!visible.length && state.messagesHasMore) await fetchMessagePage({ reset: true });
       return;
     }
-    const cached = hiddenMessageCache?.query === query ? hiddenMessageCache : null;
-    if (cached) loadedMessageRevision = cached.revision;
-    store.setState({ showHidden: true, ...(cached ? { messages: cached.messages, messagesHasMore: cached.hasMore, messagesLoading: false } : {}) });
+    store.setState({ showHidden: true, messagesLoading: false });
     loadedMessageKey = messageQueryKey(store.getState());
-    if (!cached || cached.dirty || messageRequests) await fetchMessagePage({ reset: true, preserve: true });
+    const messages = state.messages || [];
+    if (!messages.length) return;
+    try {
+      const result = await api.hiddenMessageWindow(messages[0].id, messages[messages.length - 1].id, query);
+      if (epoch !== messageEpoch || !store.getState().showHidden) return;
+      const current = store.getState().messages || [];
+      const byId = new Map(current.map(message => [message.id, message]));
+      for (const message of preserveConfirmedRepliesSeen(result.messages)) byId.set(message.id, message);
+      const order = new Map((result.order || []).map((id, index) => [id, index]));
+      const merged = [...byId.values()].sort((a, b) => {
+        if (order.has(a.id) && order.has(b.id)) return order.get(a.id) - order.get(b.id);
+        if (order.has(a.id)) return -1;
+        if (order.has(b.id)) return 1;
+        return current.indexOf(a) - current.indexOf(b);
+      });
+      store.setState({ messages: merged, messagesError: "" });
+    } catch (error) {
+      if (epoch === messageEpoch) store.setState({ messagesError: error.message });
+    }
   },
   onSearchChange(query) {
     const state = store.getState();

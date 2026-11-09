@@ -418,6 +418,39 @@ class SqliteStore:
       ).fetchone()
     return int(row[0])
 
+  def hidden_message_window(
+    self, first: str, last: str, query: str = ""
+  ) -> tuple[list[Message], int, list[str]]:
+    with self.transaction():
+      bounds = []
+      for msg_id in (first, last):
+        row = self._conn.execute(
+          "SELECT written_at, id FROM messages WHERE id = ?", (msg_id,)
+        ).fetchone()
+        if row is None:
+          raise ValueError("Loaded message window boundary is missing")
+        bounds.append((str(row["written_at"]), str(row["id"])))
+      if bounds[0] > bounds[1]:
+        raise ValueError("Loaded message window boundaries are reversed")
+      rows = self._conn.execute(
+        """SELECT * FROM messages WHERE hidden = 1
+        AND (written_at, id) >= (?, ?) AND (written_at, id) <= (?, ?)
+        AND (? = '' OR instr(casefold(id), ?) > 0 OR instr(casefold(body), ?) > 0
+          OR EXISTS (SELECT 1 FROM json_each(parent_ids_json) WHERE instr(casefold(value), ?) > 0)
+          OR EXISTS (SELECT 1 FROM json_each(acks_json) WHERE instr(casefold(value), ?) > 0))
+        ORDER BY written_at, id""",
+        (*bounds[0], *bounds[1], *([query.casefold()] * 5)),
+      ).fetchall()
+      order = [
+        str(row["id"])
+        for row in self._conn.execute(
+          "SELECT id FROM messages WHERE (written_at, id) >= (?, ?) "
+          "AND (written_at, id) <= (?, ?) ORDER BY written_at, id",
+          (*bounds[0], *bounds[1]),
+        )
+      ]
+      return [self._row_to_message(row) for row in rows], self.message_revision(), order
+
   def list_message_page(
     self,
     *,

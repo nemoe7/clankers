@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Keep regular messages visible when revealing hidden history. Fetch only hidden messages between loaded history boundaries.
+
 - Join browser-fixture HTTP request threads before closing SQLite stores. Leave production request handling unchanged.
 
 - Stack report timestamps, report-ID chips, titles, and linked task chips on separate rows.

@@ -299,6 +299,11 @@ export const api = {
     if (requestId) q.set("request_id", requestId);
     return requestJson("GET", `/messages?${q.toString()}`);
   },
+  hiddenMessageWindow(first, last, query = "") {
+    const q = new URLSearchParams({ first, last });
+    if (query) q.set("q", query);
+    return requestJson("GET", `/messages/hidden?${q.toString()}`);
+  },
   getMessage(id) {
     return requestJson("GET", `/messages/${encodeURIComponent(id)}`);
   },

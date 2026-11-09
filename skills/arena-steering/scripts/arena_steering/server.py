@@ -389,6 +389,7 @@ class SteeringApp:
       "POST", "/messages/with-file", self._handle_create_message_with_file
     )
     self.router.add("POST", "/uploads", self._handle_upload_file)
+    self.router.add("GET", "/messages/hidden", self._handle_hidden_message_window)
     self.router.add("GET", "/messages/{id}", self._handle_get_message)
     self.router.add("POST", "/messages/{id}/ack", self._handle_ack_message)
     self.router.add("POST", "/messages/{id}/replies-seen", self._handle_replies_seen)
@@ -1301,6 +1302,22 @@ class SteeringApp:
     if svg is None:
       raise KeyError("Mermaid cache entry not found")
     return (int(HTTPStatus.OK), {"svg": svg})
+
+  def _handle_hidden_message_window(
+    self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    first = (query.get("first") or [""])[0]
+    last = (query.get("last") or [""])[0]
+    if not first or not last:
+      raise ValueError("Both loaded message window boundaries are required")
+    items, revision, order = self.store.hidden_message_window(
+      first, last, (query.get("q") or [""])[0].strip()
+    )
+    return int(HTTPStatus.OK), {
+      "messages": [self._serialize_message(item) for item in items],
+      "revision": revision,
+      "order": order,
+    }
 
   def _handle_list_messages(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any
