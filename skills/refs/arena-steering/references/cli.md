@@ -92,13 +92,13 @@ Should the rule forbid direct pushes?
 
 | Command | Output on success | Exit |
 | --- | --- | --- |
-| `steer survey` | Pending state, checked time, questions with image path, answers, and JSON template | 0 on inspection, 1 on error |
+| `steer survey` | Answer guidance, questions with the image path, and a JSON submission template | 0 on inspection, 1 on error |
 | `steer survey --template` | JSON template | 0 on template, 1 on error |
-| `steer survey -f FILE` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
-| `steer survey 'JSON_ARRAY'` | `Submitted N survey answer(s) at UTC_TIME` | 0 on submission, 1 on error |
+| `steer survey -f FILE` | `survey ok` | 0 on submission, 1 on error |
+| `steer survey 'JSON_ARRAY'` | `survey ok` | 0 on submission, 1 on error |
 | `steer skills` | Skill name, source, path, and description | 0 on list, 1 on error |
 
-A live server receives submissions. Without it, the CLI evaluates survey input locally. `unknown` with confidence zero represents a wholly unknown answer.
+Survey submissions require a running server and fail without one. Results stay in server memory, not local files or SQLite. Bare survey prints questions and a template, not the running server's submitted answers. `unknown` with confidence zero represents a wholly unknown answer.
 
 ## Detached runs and GitHub helpers
 

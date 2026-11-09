@@ -17,6 +17,7 @@ This log has no Unreleased section.
 - Ignore polling heartbeat timestamp changes in WebSocket refresh detection, retaining poll start, stop, and content updates.
 - Resume through current-task discovery, with conditional bible reads and survey submission.
 - Skip repeated schema setup on current databases, rechecking schema changes, migration revisions, and legacy task states.
+- Correct the survey CLI reference for success output, live-server requirements, memory-only results, and question/template output.
 
 ### Security
 
