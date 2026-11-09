@@ -11,6 +11,7 @@ This log has no Unreleased section.
 - Show server validation details when survey submissions fail, retaining a nonzero CLI exit status.
 - Sort finished tasks by completion time, newest first, in the CLI and browser.
 - Wrap inline code with cloned pill edges, preserving code blocks and report table styles.
+- Keep the report picker and answer-history divider outside both scrolling containers.
 
 ### Security
 

@@ -381,6 +381,7 @@ export function renderReportsView(container, state, handlers) {
         <div id="report-picker" class="report-picker scroll-panel" role="region" aria-label="Published reports">
           ${pickerItemsHtml}
         </div>
+        ${answersHtml ? '<hr class="report-rail-divider">' : ""}
         ${answersHtml}
       </aside>
 

@@ -2515,12 +2515,18 @@ article#report.report img,
   font-weight: inherit;
 }
 
+.report-rail-divider {
+  flex: none;
+  align-self: stretch;
+  margin: 4px 0 0;
+  border: 0;
+  border-top: 1px solid hsl(var(--border-faint));
+}
+
 #report-ack-history {
   min-height: 0;
   max-height: 320px;
-  margin-top: 4px;
   padding-top: 8px;
-  border-top: 1px solid hsl(var(--border-faint));
   overflow-y: auto;
 }
 

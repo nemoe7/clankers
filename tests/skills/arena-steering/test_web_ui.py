@@ -4362,6 +4362,15 @@ def test_long_report_acknowledgements_do_not_hide_the_report_picker(
         picker = page.locator("#report-picker")
         picker.locator('[data-report-id="long-ack"]').click()
         page.locator("#report-ack-history").wait_for(state="visible")
+        divider = page.locator("#report-picker + .report-rail-divider")
+        assert divider.count() == 1
+        divider_before = divider.bounding_box()
+        assert (
+          page.locator("#report-ack-history").evaluate(
+            "element => getComputedStyle(element).borderTopStyle"
+          )
+          == "none"
+        )
         geometry = picker.evaluate("""element => {
           const rail = element.closest('#report-rail');
           const ack = rail.querySelector('#report-ack-history');
@@ -4416,6 +4425,7 @@ def test_long_report_acknowledgements_do_not_hide_the_report_picker(
             getComputedStyle(document.querySelector('#report-ack-history')).maskImage,
           ]""")
           assert masks[0] == masks[1], masks
+        assert divider.bounding_box() == divider_before
         page.screenshot(path=str(tmp_path / f"report-switch-long-ack-{width}.png"))
         assert geometry["rowHeight"] > 0, geometry
         assert geometry["height"] >= geometry["rowHeight"], geometry
