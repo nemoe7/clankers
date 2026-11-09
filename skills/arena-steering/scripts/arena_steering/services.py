@@ -65,6 +65,7 @@ def serialize_report_blocks(body: str) -> list[dict[str, Any]]:
 
 REPORT_IDLE_INTERVAL = timedelta(minutes=30)
 REPORT_TASK_FINISH_GRACE = timedelta(minutes=10)
+REPORT_VIEW_GRACE = timedelta(minutes=5)
 POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
@@ -2041,7 +2042,10 @@ class ReportService:
     now = _report_timestamp(self._clock.now_iso())
     stale = []
     for report in all_reports:
-      if report.pinned:
+      if report.pinned or (
+        report.last_viewed_at
+        and now - _report_timestamp(report.last_viewed_at) < REPORT_VIEW_GRACE
+      ):
         continue
       tasks = linked.get(report.id, [])
       if tasks:

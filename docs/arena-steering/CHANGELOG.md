@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Keep recently viewed reports out of stale cleanup for five minutes after the last view signal.
+
 - Keep survey subtitle text inside the modal scroll area.
 
 - Open survey answers on touch taps and close them on repeat or outside taps.

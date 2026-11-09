@@ -1117,6 +1117,8 @@ def test_unlinked_report_staleness_starts_when_ack_is_seen() -> None:
   assert reports.mark_ack_seen("idle-report").ack_seen_at == seen_at
   assert reports.list_reports(stale_only=True) == []
   clock.advance(seconds=1)
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(minutes=4, seconds=59)
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "idle-report"
   ]
@@ -2842,3 +2844,101 @@ def test_hidden_window_returns_only_hidden_rows_between_loaded_messages():
     assert len(store.list_messages(include_hidden=False)) == 2
   finally:
     store.close()
+
+
+def test_recently_viewed_report_resists_stale_cleanup_for_five_minutes() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  reports.publish_report(
+    "read-now",
+    "Read now",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
+    '- ( ) No <!-- option {"label":"No"} -->\n',
+  )
+  answer = reports.submit_answer("read-now", {"pick": "Yes"}, answer_id="aa1010")
+  reports.ack_answer("read-now", answer.id, "Noted")
+  reports.mark_ack_seen("read-now")
+  clock.advance(minutes=30)
+  assert reports.list_reports(stale_only=True)
+  reports.mark_seen("read-now")
+  clock.advance(minutes=4, seconds=59)
+  assert reports.remove_report("--stale") == []
+  reports.mark_seen("read-now")
+  clock.advance(minutes=4, seconds=59)
+  assert reports.remove_report("--stale") == []
+  clock.advance(seconds=1)
+  assert reports.remove_report("--stale") == ["read-now"]
+  store.close()
+
+
+def test_recent_view_preserves_explicit_removal() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  reports.publish_report("read-now", "Read now", "# Read now")
+  reports.mark_seen("read-now")
+  assert reports.remove_report("read-now") == ["read-now"]
+  store.close()
+
+
+def test_concurrent_view_precedes_stale_cleanup(tmp_path: Path) -> None:
+  from concurrent.futures import ThreadPoolExecutor
+
+  path = tmp_path / "views.sqlite3"
+  first, second = SqliteStore(path), SqliteStore(path)
+  clock = _ReportTestClock()
+  viewer, cleaner = (
+    ReportService(first, first, clock=clock),
+    ReportService(second, second, clock=clock),
+  )
+  viewer.publish_report(
+    "read-now",
+    "Read now",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
+    '- ( ) No <!-- option {"label":"No"} -->\n',
+  )
+  answer = viewer.submit_answer("read-now", {"pick": "Yes"}, answer_id="aa1011")
+  viewer.ack_answer("read-now", answer.id, "Noted")
+  viewer.mark_ack_seen("read-now")
+  clock.advance(minutes=30)
+  with ThreadPoolExecutor(max_workers=1) as pool:
+    with first.transaction():
+      viewer.mark_seen("read-now")
+      cleanup = pool.submit(cleaner.remove_report, "--stale")
+    assert cleanup.result(timeout=5) == []
+  assert cleaner.get_report("read-now").id == "read-now"
+  first.close()
+  second.close()
+
+
+def test_multiple_viewers_refresh_same_report_lease(tmp_path: Path) -> None:
+  path = tmp_path / "two-tabs.sqlite3"
+  first, second = SqliteStore(path), SqliteStore(path)
+  clock = _ReportTestClock()
+  tab_one, tab_two = (
+    ReportService(first, first, clock=clock),
+    ReportService(second, second, clock=clock),
+  )
+  tab_one.publish_report(
+    "read-now",
+    "Read now",
+    '<!-- question {"id":"pick","label":"Pick"} -->\n'
+    'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
+    '- ( ) No <!-- option {"label":"No"} -->\n',
+  )
+  answer = tab_one.submit_answer("read-now", {"pick": "Yes"}, answer_id="aa1012")
+  tab_one.ack_answer("read-now", answer.id, "Noted")
+  tab_one.mark_ack_seen("read-now")
+  clock.advance(minutes=30)
+  tab_one.mark_seen("read-now")
+  clock.advance(minutes=4)
+  tab_two.mark_seen("read-now")
+  clock.advance(minutes=4)
+  assert tab_one.remove_report("--stale") == []
+  clock.advance(minutes=1)
+  assert tab_two.remove_report("--stale") == ["read-now"]
+  first.close()
+  second.close()

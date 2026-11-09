@@ -812,3 +812,47 @@ def test_fixture_server_close_waits_for_pending_sqlite_request() -> None:
     store.close()
   assert closed.is_set() and read_finished.is_set()
   assert not client.is_alive() and not closer.is_alive()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_report_views_from_two_browser_tabs_refresh_the_same_lease(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "views.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report("read-now", "Read now", "# Read now")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        first = browser.new_page()
+        second = browser.new_page()
+        for page in (first, second):
+          page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+          with page.expect_response(
+            lambda response: (
+              "/reports/read-now/seen" in response.url
+              and response.request.method == "POST"
+            )
+          ) as viewed:
+            page.locator("#tab-reports").click()
+          assert viewed.value.ok
+        assert store.get_report("read-now").last_viewed_at
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
