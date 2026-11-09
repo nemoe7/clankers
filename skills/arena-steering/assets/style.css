@@ -666,11 +666,6 @@ code.msg-id[data-state="bad"],
   background: hsl(var(--text-tertiary));
 }
 
-time[datetime],
-[data-timestamp] {
-  font-variant-numeric: tabular-nums;
-}
-
 #connection-dot[data-state="ok"] { background: var(--connection-ok); }
 #connection-dot[data-state="polling"] { background: var(--connection-polling); }
 #connection-dot[data-state="idle"] { background: var(--connection-idle); }

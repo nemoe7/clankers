@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Use regular proportional numerals in timestamps without changing relative-time formatting.
+
 - Expose the armed Skip Poll state, allow cancellation, and retain its browser indicator until consumption or cancellation. Remove survey-triggered arming.
 
 - Send hidden nonblocking run verdict notices at completion without requiring an active poll, retaining one notice per run.

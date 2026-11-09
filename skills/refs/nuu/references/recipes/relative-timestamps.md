@@ -1,6 +1,6 @@
 # Recipe: Relative timestamps
 
-Format relative timestamps with the singular, plural, and abbreviated forms below. Omit seconds (`< 1` minute -> `just now` / `now`) unless second-level resolution is explicitly requested. Use `font-variant-numeric: tabular-nums` so live updates keep stable width without requiring `var(--font-mono)`. Raw ISO or UTC timestamps trigger `HRC201` and `HRC202` unless marked `nonuu` on intentional log surfaces.
+Format relative timestamps with the singular, plural, and abbreviated forms below. Omit seconds (`< 1` minute -> `just now` / `now`) unless second-level resolution is explicitly requested. Raw ISO or UTC timestamps trigger `HRC201` and `HRC202` unless marked `nonuu` on intentional log surfaces.
 
 Keep stored, synced, and DOM timestamps in UTC or with numeric offsets. Sort by epoch milliseconds, and localize only display text. Update DOM text only when changed. Schedule the next timer for the next unit boundary so minute-or-older stamps stop ticking every second.
 

@@ -2879,3 +2879,31 @@ def test_skip_poll_armed_indicator_persists_and_cancels(
       == idle
     )
     page.screenshot(path=str(tmp_path / f"skip-canceled-{width}.png"))
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [390, 1200])
+def test_timestamps_use_regular_proportional_one(tmp_path: Path, width: int) -> None:
+  with composer_page(width) as page:
+    page.locator("#msg").fill("Timestamp numeral sample")
+    page.locator("#send").click()
+    stamp = page.locator("#history .message time[datetime]").first
+    stamp.wait_for()
+    stamp.evaluate("el => { el.textContent = '1 minute ago'; }")
+    page.screenshot(path=str(tmp_path / f"timestamp-regular-{width}.png"))
+    assert stamp.evaluate("el => getComputedStyle(el).fontVariantNumeric") == "normal"
+    assert "mono" not in stamp.evaluate("el => getComputedStyle(el).fontFamily").lower()
+    regular = stamp.evaluate("""el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      return range.getBoundingClientRect().width;
+    }""")
+    stamp.evaluate("el => { el.style.fontVariantNumeric = 'tabular-nums'; }")
+    tabular = stamp.evaluate("""el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      return range.getBoundingClientRect().width;
+    }""")
+    assert regular < tabular
+    page.screenshot(path=str(tmp_path / f"timestamp-tabular-{width}.png"))

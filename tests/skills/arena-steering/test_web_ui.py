@@ -3386,7 +3386,7 @@ def test_v2_nuu_recipe_conformance_surfaces(tmp_path: Path) -> None:
         assert "×" not in page.locator("#image-modal-close").inner_text()
         assert page.locator("#image-modal-close svg.lucide-x").count() == 1
 
-        # 2. Relative timestamps render proportional tabular-nums without tooltips (8781cc5f).
+        # 2. Relative timestamps render regular proportional numerals without tooltips.
         stamp_info = page.locator("#history .message time[datetime]").first.evaluate(
           """el => {
             const cs = getComputedStyle(el);
@@ -3398,7 +3398,7 @@ def test_v2_nuu_recipe_conformance_surfaces(tmp_path: Path) -> None:
           }"""
         )
         assert stamp_info["title"] is None, stamp_info
-        assert stamp_info["tabular"] == "tabular-nums", stamp_info
+        assert stamp_info["tabular"] == "normal", stamp_info
         assert "mono" not in stamp_info["family"], stamp_info
 
         # 3. Scroll-edge-fade tokens match 24px / 32px stops.
