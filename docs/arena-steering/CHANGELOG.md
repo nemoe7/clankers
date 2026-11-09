@@ -6,6 +6,10 @@ This log has no Unreleased section.
 
 ## [2.2.5]
 
+### Security
+
+- Validate static path components before reads and fall back to a safe `Content-Type` before writing response headers.
+
 ### Changed
 
 - `SKILL.md`: Link messages only when they change a task's scope or acceptance criteria, and leave unrelated clarifications unlinked.

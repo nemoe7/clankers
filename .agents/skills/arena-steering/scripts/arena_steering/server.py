@@ -105,6 +105,11 @@ MIME_OVERRIDES = {
   ".md": "text/markdown; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
 }
+HTTP_CONTENT_TYPE_RE = re.compile(
+  r"[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+"
+  r"(?:; charset=[A-Za-z0-9._-]+)?"
+)
+STATIC_PATH_PART_RE = re.compile(r'[^/\\<>:"|?*\x00-\x1f\x7f]+')
 
 REPORT_IMAGE_EXTS = frozenset({".gif", ".png", ".jpg", ".jpeg", ".webp", ".svg"})
 REPORT_STATIC_EXTS = REPORT_IMAGE_EXTS | frozenset({".md", ".txt"})
@@ -633,13 +638,24 @@ class SteeringApp:
 
   @staticmethod
   def _resolve_under(root: Path, rel_path: str) -> Path | None:
-    if not rel_path:
+    if not isinstance(rel_path, str) or not rel_path:
+      return None
+    parts = rel_path.split("/")
+    if any(
+      part in {"", ".", ".."} or not STATIC_PATH_PART_RE.fullmatch(part)
+      for part in parts
+    ):
+      return None
+    safe_parts = [os.path.basename(part) for part in parts]
+    if safe_parts != parts:
       return None
     root_resolved = root.resolve()
-    candidate = (root_resolved / rel_path).resolve()
-    if candidate.is_relative_to(root_resolved) and candidate.is_file():
-      return candidate
-    return None
+    candidate = root_resolved.joinpath(*safe_parts).resolve()
+    try:
+      candidate.relative_to(root_resolved)
+    except ValueError:
+      return None
+    return candidate if candidate.is_file() else None
 
   def _resolve_state_file(self, directory_name: str, rel_path: str) -> Path | None:
     db_path = getattr(self.store, "db_path", "")
@@ -1999,6 +2015,10 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
       self.wfile.write(encoded)
 
     def _send_common_headers(self, content_type: str, length: int) -> None:
+      if not isinstance(content_type, str) or not HTTP_CONTENT_TYPE_RE.fullmatch(
+        content_type
+      ):
+        content_type = "application/octet-stream"
       self.send_header("Content-Type", content_type)
       self.send_header("Content-Length", str(length))
       self.send_header("Cache-Control", "no-store")

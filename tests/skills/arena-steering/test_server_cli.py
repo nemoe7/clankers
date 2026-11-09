@@ -1698,7 +1698,27 @@ def test_resolve_asset_serves_static_contract_paths(tmp_path: Path) -> None:
   assert app.resolve_asset("/static/assets/../secret.css") is None
   assert app.resolve_asset("/static/reports/../state.sqlite3") is None
   assert app.resolve_asset("/static/uploads/../reports/board.png") is None
+  assert app.resolve_asset("/static/assets/..\\secret.css") is None
+  assert app.resolve_asset("/static/assets/bad\nname.css") is None
   store.close()
+
+
+def test_common_headers_reject_response_splitting(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  httpd = server.create_http_server(app, host="127.0.0.1", port=0)
+  handler = object.__new__(httpd.RequestHandlerClass)
+  handler.path = "/"
+  headers: list[tuple[str, str]] = []
+  handler.send_header = lambda name, value: headers.append((name, value))
+  try:
+    handler._send_common_headers("text/plain\r\nX-Injected: yes", 0)
+    assert headers[0] == ("Content-Type", "application/octet-stream")
+    assert all(name != "X-Injected" for name, _value in headers)
+    assert all("\r" not in value and "\n" not in value for _name, value in headers)
+  finally:
+    httpd.server_close()
+    store.close()
 
 
 def test_http_static_paths_do_not_collide_with_report_routes(tmp_path: Path) -> None:
