@@ -8,6 +8,10 @@ This log has no Unreleased section.
 
 ## [1.13.14]
 
+### Fixed
+
+- Send exact Wake up drafts through the shared composer-action lookup without requiring the obsolete editor wrapper. Never click Stop generating.
+
 ### Changed
 
 - Load startup survey question text from `skills/arena-steering/references/survey-questions.txt` in Arena prompt fill and align startup survey instructions with `steer survey`.

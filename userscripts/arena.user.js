@@ -4556,10 +4556,9 @@
         if (String(editor.innerText || "") === "wake up") logEvent("auto-wake", "filled");
       }
       if (String(editor.innerText || "") !== "wake up" || autoWakeSentFor === location.href) return null;
-      var box = editor.closest(".editor-content");
-      var root = box && box.parentElement;
-      var button = root && root.querySelector('button[aria-label="Send message"]');
-      if (!button || button.disabled || button.getAttribute("aria-disabled") === "true" ||
+      var button = findComposerActionButton(document);
+      if (!button || !isSendMessageLabel(button.getAttribute("aria-label")) ||
+          button.disabled || button.getAttribute("aria-disabled") === "true" ||
           !renderedNode(button)) return null;
       return { button: button, url: location.href };
     }

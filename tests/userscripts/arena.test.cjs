@@ -430,6 +430,7 @@ runBundle("arena");
     let next = 0;
     let clicks = 0;
     let captcha = false;
+    let generating = false;
     let present = true;
     let alerts = [];
     let roots = [];
@@ -469,20 +470,21 @@ runBundle("arena");
     const errorBanner = { hidden: false, getClientRects() { return this.hidden ? [] : [{}]; } };
     const button = {
       disabled: false, hidden: false, ariaDisabled: null,
-      getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
+      getAttribute(name) {
+        if (name === "aria-label") return "Send message";
+        if (name === "data-perf-target") return "send";
+        return name === "aria-disabled" ? this.ariaDisabled : null;
+      },
       getClientRects() { return this.hidden ? [] : [{}]; },
       click() { clicks += 1; },
     };
-    const box = { parentElement: { querySelector(selector) {
-      return selector === 'button[aria-label="Send message"]' ? button : null;
-    } } };
     const editor = {
       innerText: "wake up", hidden: false, ariaDisabled: null,
       focus() {},
       get textContent() { return this.innerText; },
       getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
       getClientRects() { return this.hidden ? [] : [{}]; },
-      closest(selector) { return selector === ".editor-content" ? box : null; },
+      closest() { return null; },
     };
     const emit = (name, event = {}) => {
       for (const callback of [...(listeners.get(name) || [])]) callback(event);
@@ -506,6 +508,7 @@ runBundle("arena");
           return null;
         },
         querySelectorAll(selector) {
+          if (selector === "button[aria-label]" || selector === "button") return generating ? [{ getAttribute() { return "Stop generating"; } }, button] : [button];
           if (selector === "[data-agent-transcript-message]") return roots;
           if (selector.includes("border-red-500")) return alerts;
           return captcha && selector.includes("recaptcha-v2") ? [{ getAttribute() { return null; } }] : [];
@@ -536,6 +539,10 @@ runBundle("arena");
     vm.runInNewContext(source, context);
     assert.equal(timers.size, 1, "default On schedules the matching draft");
     assert.ok([...timers.values()].every(timer => timer.ms >= 0 && timer.ms <= 5000));
+    generating = true;
+    fire(); flush();
+    assert.equal(clicks, 0, "never click Stop generating for auto-wake");
+    generating = false;
     fire(); fire();
     assert.equal(timers.size, 1, "mutations do not schedule duplicate sends");
     for (const text of ["wake upwake up", "Wake up", " wake up", "wake up ", "wake up\n", "other"]) {

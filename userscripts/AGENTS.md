@@ -31,3 +31,5 @@
 - Coalesce concurrent `syncPreviewBoard` runs per preview origin (`syncPreviewBoardInFlightByBase` with one trailing `syncPreviewBoardQueuedByBase` rerun) and concurrent `/v1/board/files` downloads per SHA-256 (`boardFileFetchInFlightBySha`), omit non-material heartbeat counters (`calls_since_message`, `agent_seen_at`, `agent_call_ended_at`) from `boardMaterialSignature`, and invoke `checkStateHook()` immediately on `clankers:preview-ready` so startup state mismatches offer backups without waiting for `STATE_WATCH_MS`.
 - Prepend `*` with a trailing space in `desiredTitle` only when a report in `ownReports` is both unseen (`!report.seen_at`) and waiting on answers (`reportWaitingOnSubmission`), while keeping `shouldAutoSyncBoard` active until the report is answered.
 - Run `node --test tests/userscripts/arena.test.cjs tests/userscripts/chatgpt.test.cjs` via `steer run start` before pushing `userscripts/` changes.
+
+- Use the shared composer-action lookup for automatic Wake up submission, not an `.editor-content` ancestor. Require a Send message label.
