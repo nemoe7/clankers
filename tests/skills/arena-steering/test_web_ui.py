@@ -8242,3 +8242,60 @@ def test_v2_nuu_recipe_conformance_surfaces(tmp_path: Path) -> None:
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("query", ["?transport=poll", ""])
+def test_finished_tasks_render_newest_completion_first(
+  tmp_path: Path, query: str
+) -> None:
+  from arena_steering.models import Task
+
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  task_ids = ["earlier", "latest"]
+  store.save_task_queue(
+    [
+      Task(
+        task_id,
+        task_id,
+        size=1,
+        type="ops",
+        status="finished",
+        details=["Done"],
+        finished_at=f"2026-11-09T0{index + 1}:00:00Z",
+      )
+      for index, task_id in enumerate(task_ids)
+    ]
+  )
+  app = SteeringApp(store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.goto(f"http://127.0.0.1:{server.server_port}/{query}")
+        page.locator("#tab-tasks").click()
+        titles = page.locator("#tasks-finished-body .task-title")
+        titles.first.wait_for()
+        assert titles.evaluate_all("els => els.map(el => el.dataset.parentId)") == list(
+          reversed(task_ids)
+        )
+        page.screenshot(path=str(tmp_path / "finished-order.png"))
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

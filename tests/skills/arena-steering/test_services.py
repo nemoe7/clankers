@@ -2468,20 +2468,50 @@ def test_priority_then_size_then_insertion_order_with_dependency_precedence() ->
   store.close()
 
 
-def test_finished_history_keeps_its_existing_order_when_active_rank_changes() -> None:
-  store = SqliteStore(":memory:")
-  tasks = TaskService(store, store)
+@pytest.mark.parametrize(
+  "finish_order", [("done-first", "done-second"), ("done-second", "done-first")]
+)
+@pytest.mark.parametrize("completion_spacing", [0, 1])
+def test_finished_history_is_newest_first_when_active_rank_changes(
+  tmp_path: Path,
+  monkeypatch: pytest.MonkeyPatch,
+  finish_order: tuple[str, str],
+  completion_spacing: int,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  clock = _ReportTestClock()
+  tasks = TaskService(store, store, clock=clock)
   tasks.create_task("done-first", "First", size=13, type="ops", details=["Ship."])
-  tasks.finish_phase("done-first")
   tasks.create_task("done-second", "Second", size=1, type="ops", details=["Ship."])
-  tasks.finish_phase("done-second")
+  for task_id in finish_order:
+    clock.advance(minutes=completion_spacing)
+    tasks.finish_phase(task_id)
+  clock.advance(minutes=1)
+  tasks.patch_task(finish_order[0], {"title": "Edited after completion"})
   tasks.create_task("active", "Active", size=21, priority="P5", details=["Build."])
   tasks.patch_task("active", {"priority": "P1", "size": 1})
-  assert [task.id for task, _ in tasks.list_tasks(include_finished=True)] == [
-    "active",
-    "done-first",
-    "done-second",
-  ]
+  expected_history = (
+    list(reversed(finish_order))
+    if completion_spacing
+    else ["done-first", "done-second"]
+  )
+  expected = ["active", *expected_history]
+  assert [task.id for task, _ in tasks.list_tasks(include_finished=True)] == expected
+  app = SteeringApp(store)
+  status, payload = app.dispatch("GET", "/tasks")
+  assert status == HTTPStatus.OK
+  assert [task["id"] for task in payload["tasks"]] == expected
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: state_dir)
+  monkeypatch.setattr(
+    cli, "_healthy_server_url", lambda _state_dir: "http://127.0.0.1:8000"
+  )
+  out = io.StringIO()
+  err = io.StringIO()
+  assert cli.main(["tasks", "--finished"], out=out, err=err) == 0, err.getvalue()
+  assert [
+    line.split(" - ", 1)[0] for line in out.getvalue().splitlines()
+  ] == expected_history
   store.close()
 
 

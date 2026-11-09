@@ -9,6 +9,7 @@ This log has no Unreleased section.
 ### Fixed
 
 - Show server validation details when survey submissions fail, retaining a nonzero CLI exit status.
+- Sort finished tasks by completion time, newest first, in the CLI and browser.
 
 ### Security
 

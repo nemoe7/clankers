@@ -1817,6 +1817,7 @@ class TaskService:
         task.insertion_order if task.insertion_order is not None else len(tasks)
       ),
     )
+    finished.sort(key=lambda task: task.finished_at, reverse=True)
     visited: dict[str, int] = {}
     ordered: list[Task] = []
 
