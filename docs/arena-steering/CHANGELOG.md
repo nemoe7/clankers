@@ -34,6 +34,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Separate HTTP/WebSocket transport and task CLI commands into modules. Group browser tests by view and transport, preserving public entry points.
+
 - `SKILL.md`: Link messages only when they change a task's scope or acceptance criteria, and leave unrelated clarifications unlinked.
 - `SKILL.md`, `references/cli.md`, `docs/arena-steering/README.md`: Use `steer run start` for supported long-running jobs and task gates, and keep persistent services on the platform's `start_process` path.
 - Remove field ID chips from report input cards.
