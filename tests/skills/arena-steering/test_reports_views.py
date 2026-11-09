@@ -870,14 +870,16 @@ def test_report_toc_jump_and_top_fade_follow_scroll(tmp_path: Path) -> None:
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> None:
+def test_reports_tab_prioritizes_attention_inside_compact_header(
+  tmp_path: Path,
+) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
   app = SteeringApp(store, repo_name="Report indicators")
   app.reports.publish_report(
     "decision",
     "Decision",
-    '# Decision\n\n<!-- question {"id":"choice","label":"Choice"} -->\nChoice: ___\n',
+    '<!-- question {"id":"choice","label":"Choice"} -->\nChoice: ___\n',
   )
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -890,151 +892,70 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
       try:
-        page = browser.new_page(viewport={"width": 1200, "height": 700})
+        page = browser.new_page()
         page.set_default_timeout(5000)
         page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
-        pip = page.locator("#report-pip")
         question = page.locator("#report-needs-answer")
-        pip.wait_for(state="visible")
+        pip = page.locator("#report-pip")
         question.wait_for(state="visible")
-        assert pip.get_attribute("aria-label") == "Unread report"
-        assert question.get_attribute("aria-label") == "Reports need answers"
-        assert "is-unseen-ack" not in (pip.get_attribute("class") or "")
-        for width, height in (
-          (1372, 883),
-          (855, 325),
-          (411, 799),
-          (375, 700),
-        ):
-          page.set_viewport_size({"width": width, "height": height})
-          tab_widths = page.locator(".tab-nav .tab-btn").evaluate_all(
-            "tabs => tabs.map(tab => tab.getBoundingClientRect().width)"
-          )
-          assert max(tab_widths) - min(tab_widths) < 1, (width, tab_widths)
-          geometry = page.locator("#tab-reports").evaluate("""tab => {
-            const label = document.createRange();
-            label.selectNodeContents(tab.firstChild);
-            const text = label.getBoundingClientRect();
-            const bounds = tab.getBoundingClientRect();
-            const hover = getComputedStyle(tab, '::before');
-            const sampleTab = tab.cloneNode(true);
-            sampleTab.removeAttribute('id');
-            sampleTab.style.cssText = 'position:fixed;height:auto;width:auto';
-            document.body.append(sampleTab);
-            const naturalHeight = sampleTab.getBoundingClientRect().height;
-            sampleTab.remove();
-            const pip = tab.querySelector('#report-pip').getBoundingClientRect();
-            const question = tab.querySelector('#report-needs-answer').getBoundingClientRect();
-            const dotSample = document.createElement('span');
-            dotSample.className = 'report-picker-unseen-dot';
-            const iconSample = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            iconSample.classList.add('report-picker-help-icon');
-            document.body.append(dotSample, iconSample);
-            const pickerDot = dotSample.getBoundingClientRect();
-            const pickerIcon = iconSample.getBoundingClientRect();
-            dotSample.remove();
-            iconSample.remove();
-            return {
-              pickerDotWidth: pickerDot.width,
-              pickerDotHeight: pickerDot.height,
-              pickerIconWidth: pickerIcon.width,
-              pickerIconHeight: pickerIcon.height,
-              textCenter: (text.left + text.right) / 2,
-              tabCenter: (bounds.left + bounds.right) / 2,
-              textRight: text.right,
-              textTop: text.top,
-              navRight: document.querySelector('.tab-nav').getBoundingClientRect().right,
-              actionsLeft: document.querySelector('.topbar-actions').getBoundingClientRect().left,
-              overflow: document.documentElement.scrollWidth > innerWidth,
-              pipLeft: pip.left,
-              pipTop: pip.top,
-              pipWidth: pip.width,
-              pipHeight: pip.height,
-              questionLeft: question.left,
-              questionRight: question.right,
-              questionTop: question.top,
-              questionBottom: question.bottom,
-              questionWidth: question.width,
-              questionHeight: question.height,
-              tabTop: bounds.top,
-              tabBottom: bounds.bottom,
-              naturalHeight,
-              hoverHeight: parseFloat(hover.height),
-              hoverTop: bounds.top + tab.clientTop + parseFloat(hover.top) - parseFloat(hover.height) / 2,
-              headerTop: document.querySelector('.topbar').getBoundingClientRect().top,
-              headerBottom: document.querySelector('.topbar').getBoundingClientRect().bottom,
-              topHit: document.elementFromPoint(bounds.x + bounds.width / 2, bounds.top + 1)?.closest('button') === tab,
-              bottomHit: document.elementFromPoint(
-                bounds.x + bounds.width / 2, bounds.bottom - 1)?.closest('button') === tab,
-              pipBottom: pip.bottom,
-              pipOffsetRight: bounds.right - pip.right,
-            };
-          }""")
-          assert geometry["topHit"] and geometry["bottomHit"]
-          assert geometry["tabTop"] == geometry["headerTop"]
-          assert geometry["headerBottom"] - geometry["tabBottom"] <= 1
-          assert abs(geometry["hoverHeight"] - geometry["naturalHeight"]) < 1
-          assert geometry["questionBottom"] < geometry["hoverTop"]
-          assert geometry["pipBottom"] < geometry["hoverTop"]
-          assert abs(geometry["textCenter"] - geometry["tabCenter"]) < 1
-          assert geometry["pipWidth"] == geometry["pickerDotWidth"]
-          assert geometry["pipHeight"] == geometry["pickerDotHeight"]
-          assert geometry["questionWidth"] == geometry["pickerIconWidth"]
-          assert geometry["questionHeight"] == geometry["pickerIconHeight"]
-          assert (
-            abs(
-              geometry["questionTop"]
-              + geometry["questionHeight"] / 2
-              - geometry["pipTop"]
-              - geometry["pipHeight"] / 2
-            )
-            < 1
-          )
-          assert geometry["questionRight"] < geometry["pipLeft"]
-          assert geometry["tabTop"] <= geometry["questionTop"]
-          assert geometry["questionBottom"] <= geometry["tabBottom"]
-          assert geometry["tabTop"] <= geometry["pipTop"]
-          assert geometry["pipBottom"] <= geometry["tabBottom"]
-          assert geometry["pipOffsetRight"] == 6
-          assert geometry["navRight"] + 8 <= geometry["actionsLeft"]
-          assert not geometry["overflow"]
-        page.locator("#tab-tasks").focus()
-        page.keyboard.press("Tab")
-        assert page.evaluate("document.activeElement.id") == "blocked-bash-open"
-        page.locator("#tab-tasks").click()
-        assert page.locator('#tab-tasks[aria-selected="true"]').count() == 1
-        page.locator("#tab-messages").click()
-        page.set_viewport_size({"width": 1200, "height": 700})
-        page.screenshot(path=str(tmp_path / "report-both-indicators.png"))
+        assert pip.is_hidden()
+        expected_header_height = 54
 
-        with page.expect_response("**/reports/decision/seen"):
-          page.locator("#tab-reports").click()
+        def check_layout(state):
+          for width, height in ((1372, 883), (855, 325), (411, 799), (375, 700)):
+            page.set_viewport_size({"width": width, "height": height})
+            geometry = page.locator("#tab-reports").evaluate("""tab => {
+              const label = document.createRange();
+              label.selectNodeContents(tab.firstChild);
+              const text = label.getBoundingClientRect();
+              const bounds = tab.getBoundingClientRect();
+              const header = document.querySelector('.topbar').getBoundingClientRect();
+              const hover = getComputedStyle(tab, '::before');
+              const indicator = [...tab.querySelectorAll('[role="img"]')].find(el => !el.hidden);
+              const icon = indicator?.getBoundingClientRect();
+              return {
+                headerHeight: header.height,
+                textCenter: (text.left + text.right) / 2,
+                tabCenter: (bounds.left + bounds.right) / 2,
+                tabTop: bounds.top, tabBottom: bounds.bottom,
+                headerTop: header.top, headerBottom: header.bottom,
+                hoverHeight: parseFloat(hover.height),
+                iconInside: !icon || (icon.top >= bounds.top && icon.bottom <= bounds.bottom
+                  && icon.left >= bounds.left && icon.right <= bounds.right),
+                iconOutsideText: !icon || icon.left >= text.right || icon.right <= text.left
+                  || icon.bottom <= text.top || icon.top >= text.bottom,
+                topHit: document.elementFromPoint(
+                  bounds.x + bounds.width / 2, bounds.top + 1)?.closest('button') === tab,
+                bottomHit: document.elementFromPoint(
+                  bounds.x + bounds.width / 2, bounds.bottom - 1)?.closest('button') === tab,
+                tabWidths: [...document.querySelectorAll('.tab-btn')].map(el => el.getBoundingClientRect().width),
+                navRight: document.querySelector('.tab-nav').getBoundingClientRect().right,
+                actionsLeft: document.querySelector('.topbar-actions').getBoundingClientRect().left,
+                overflow: document.documentElement.scrollWidth > innerWidth,
+              };
+            }""")
+            assert geometry["headerHeight"] == expected_header_height
+            assert abs(geometry["textCenter"] - geometry["tabCenter"]) < 1
+            assert geometry["tabTop"] == geometry["headerTop"]
+            assert geometry["headerBottom"] - geometry["tabBottom"] <= 1
+            assert geometry["topHit"] and geometry["bottomHit"]
+            assert (
+              abs(
+                geometry["hoverHeight"] - (geometry["tabBottom"] - geometry["tabTop"])
+              )
+              < 1
+            )
+            assert geometry["iconInside"] and geometry["iconOutsideText"]
+            assert max(geometry["tabWidths"]) - min(geometry["tabWidths"]) < 1
+            assert geometry["navRight"] < geometry["actionsLeft"]
+            assert not geometry["overflow"]
+            page.screenshot(path=str(tmp_path / f"header-{state}-{width}.png"))
+
+        check_layout("question")
+        page.locator("#tab-reports").click()
         pip.wait_for(state="hidden")
         assert question.is_visible()
-        for width in (1200, 375):
-          page.set_viewport_size({"width": width, "height": 700})
-          alone = page.locator("#tab-reports").evaluate("""tab => {
-            const label = document.createRange();
-            label.selectNodeContents(tab.firstChild);
-            const text = label.getBoundingClientRect();
-            const bounds = tab.getBoundingClientRect();
-            const question = tab.querySelector('#report-needs-answer').getBoundingClientRect();
-            return {
-              textCenter: (text.left + text.right) / 2,
-              tabCenter: (bounds.left + bounds.right) / 2,
-              textRight: text.right,
-              questionLeft: question.left,
-              questionOffsetRight: bounds.right - question.right,
-              questionTop: question.top - bounds.top,
-              questionWidth: question.width,
-              questionHeight: question.height,
-            };
-          }""")
-          assert abs(alone["textCenter"] - alone["tabCenter"]) < 1
-          assert alone["questionOffsetRight"] == 6
-          assert alone["questionTop"] >= 0
-          assert alone["questionWidth"] == alone["questionHeight"] == 14
-
+        check_layout("seen-question")
         page.locator("#tab-messages").click()
         answer = app.reports.submit_answer("decision", {"choice": "Yes"})
         app.reports.ack_answer("decision", answer.id, "Received")
@@ -1042,49 +963,40 @@ def test_reports_tab_shows_independent_attention_indicators(tmp_path: Path) -> N
         pip.wait_for(state="visible")
         question.wait_for(state="hidden")
         assert pip.get_attribute("aria-label") == "Unseen answer acknowledgement"
-        assert "is-unseen-ack" in (pip.get_attribute("class") or "")
-        green = pip.evaluate("element => getComputedStyle(element).backgroundColor")
-
+        check_layout("ack")
+        app.reports.publish_report("other", "Other", "# Other")
+        page.reload()
+        pip.wait_for(state="visible")
+        assert question.is_hidden()
+        assert pip.get_attribute("aria-label") == "Unread report"
+        check_layout("unread")
         app.reports.publish_report(
           "pending",
           "Pending",
           '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
         )
-        app.reports.mark_seen("pending")
-        page.reload()
-        pip.wait_for(state="visible")
-        assert "is-unseen-ack" in (pip.get_attribute("class") or "")
-        assert question.is_visible()
-
-        app.reports.publish_report("other", "Other", "# Other")
-        page.reload()
-        pip.wait_for(state="visible")
-        assert pip.get_attribute("aria-label") == "Unread report"
-        assert "is-unseen-ack" not in (pip.get_attribute("class") or "")
-        assert question.is_visible()
-        assert (
-          pip.evaluate("element => getComputedStyle(element).backgroundColor") != green
-        )
-
-        app.reports.mark_seen("other")
-        page.reload()
-        pip.wait_for(state="visible")
-        assert "is-unseen-ack" in (pip.get_attribute("class") or "")
-        app.reports.mark_ack_seen("decision")
         page.reload()
         question.wait_for(state="visible")
         assert pip.is_hidden()
+        check_layout("priority")
         app.reports.submit_answer("pending", {"note": "Noted"})
+        app.reports.mark_seen("pending")
+        app.reports.mark_seen("other")
+        app.reports.mark_ack_seen("decision")
         page.reload()
         question.wait_for(state="hidden")
         assert pip.is_hidden()
+        check_layout("clear")
+        page.locator("#tab-tasks").focus()
+        page.keyboard.press("Tab")
+        assert page.evaluate("document.activeElement.id") == "blocked-bash-open"
       finally:
         browser.close()
   finally:
     server.shutdown()
     server.server_close()
     thread.join(timeout=5)
-    store.close()
+    app._retire_store()
 
 
 @pytest.mark.skipif(

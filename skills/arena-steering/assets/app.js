@@ -1096,15 +1096,15 @@ function renderApp(state) {
     const answers = report.answers || [];
     return answers[answers.length - 1]?.status === "acked" && !report.ack_seen;
   });
+  const needsAnswer = activeReports.some(reportNeedsAnswer);
   const reportQuestion = document.getElementById("report-needs-answer");
   if (reportQuestion) {
-    reportQuestion.hidden = !activeReports.some(reportNeedsAnswer);
-    reportQuestion.classList.toggle("is-alone", !hasUnreadReport && !hasUnseenAck);
+    reportQuestion.hidden = !needsAnswer;
   }
 
   const reportPip = document.getElementById("report-pip");
   if (reportPip) {
-    reportPip.hidden = !hasUnreadReport && !hasUnseenAck;
+    reportPip.hidden = needsAnswer || (!hasUnreadReport && !hasUnseenAck);
     reportPip.classList.toggle("is-unseen-ack", !hasUnreadReport && hasUnseenAck);
     const label = hasUnreadReport
       ? "Unread report"

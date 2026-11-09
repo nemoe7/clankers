@@ -602,7 +602,8 @@ code.msg-id[data-state="bad"],
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
-  --tab-rail: 16px;
+  --tab-rail: 0px;
+  height: 54px;
   padding: var(--tab-rail) 5vw;
   background-color: hsl(var(--surface-secondary));
   border-bottom: 1px solid hsl(var(--border-faint));
@@ -1073,10 +1074,9 @@ mark.search-hit {
   content: "";
   position: absolute;
   z-index: -1;
-  inset: 50% 0 auto;
-  height: calc(1lh + 2 * (var(--tab-padding-block) + 1px));
-  transform: translateY(-50%);
-  border-radius: 6px;
+  inset: -1px;
+  height: auto;
+  border-radius: 0;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1092,7 +1092,7 @@ mark.search-hit {
 #report-pip,
 .tab-pip {
   position: absolute;
-  top: 5px;
+  top: 6.5px;
   right: 5px;
   display: inline-block;
   width: 7px;
@@ -1101,26 +1101,18 @@ mark.search-hit {
   background-color: var(--accent);
 }
 
-#report-pip {
-  top: 4.5px;
-}
-
 #report-pip.is-unseen-ack {
   background-color: hsl(var(--interactive-positive));
 }
 
 #report-needs-answer {
   position: absolute;
-  top: 1px;
-  right: 17px;
+  top: 3px;
+  right: 5px;
   display: inline-flex;
   width: 14px;
   height: 14px;
   color: var(--accent);
-}
-
-#report-needs-answer.is-alone {
-  right: 5px;
 }
 
 .btn {

@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Set a compact header with full-height tab hover targets. Center tab labels and show the question indicator before unseen report dots.
+
 - Reject superseded browser refreshes instead of combining new task links with stale message receipts. Preserve consistency across transports.
 
 - Schedule random book-and-clause recall quizzes. Validate the citation and exact clause before storing replies, retaining pending quizzes after rejection.
