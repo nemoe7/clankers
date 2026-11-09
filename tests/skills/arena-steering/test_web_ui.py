@@ -8300,3 +8300,69 @@ def test_finished_tasks_render_newest_completion_first(
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_inline_code_wraps_without_changing_blocks_or_tables(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store, repo_name="Inline code wrapping")
+  token = "long_path_segment/" * 20
+  markdown = f"`{token}`\n\n```text\n{token}\n```\n\n| Value |\n| --- |\n| Cell |\n"
+  app.messages.send_message(markdown, msg_id="aa0001", blocking=False)
+  app.reports.publish_report("code-wrapping", "Code wrapping", markdown)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        for tab, container in (("messages", ".message-text"), ("reports", "#report")):
+          if tab == "reports":
+            page.locator("#tab-reports").click()
+          inline = page.locator(f"{container} p > code").first
+          inline.wait_for()
+          page.screenshot(path=str(tmp_path / f"inline-code-{tab}.png"))
+          metrics = inline.evaluate("""element => {
+            const style = getComputedStyle(element);
+            const fragments = [...element.getClientRects()];
+            return {
+              wrap: style.overflowWrap,
+              decoration: style.boxDecorationBreak,
+              fragmentCount: fragments.length,
+              contained: fragments.every(rect => rect.left >= 0 &&
+                rect.right <= document.documentElement.clientWidth),
+            };
+          }""")
+          assert metrics["wrap"] == "anywhere", metrics
+          assert metrics["decoration"] == "clone", metrics
+          assert metrics["fragmentCount"] > 1, metrics
+          assert metrics["contained"], metrics
+          assert (
+            page.locator(f"{container} pre > code").first.evaluate(
+              "element => getComputedStyle(element).boxDecorationBreak"
+            )
+            != "clone"
+          )
+          assert (
+            page.locator(f"{container} td").first.evaluate(
+              "element => getComputedStyle(element).overflowWrap"
+            )
+            == "normal"
+          )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
