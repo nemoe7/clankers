@@ -6745,8 +6745,14 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
     assert violation.hidden and violation.blocking
     assert violation.violation_type == flag["reason"]
     assert violation.violation_clause_file == flag["clause_file"]
-    assert "Cited: " + flag["msg"] in violation.body
-    assert BIBLE_READ == "If full bible missing, use read_file for {paths}"
+    assert violation.body.splitlines()[:3] == [
+      "VIOLATION: Bash",
+      "Cited: " + flag["msg"],
+      "Book: ARENA.md",
+    ]
+    assert BIBLE_READ == (
+      "If cannot recall clause from memory, use read_file for {paths} and answer the `steer survey`"
+    )
     assert violation.body.endswith(with_bible_read("").strip())
     root = Path(__file__).resolve().parents[3]
     for relative in (
@@ -6812,10 +6818,29 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       if message.violation_type == "current-task-violation"
     )
     assert task["task"]["id"] in task_flag.body
+    assert task_flag.body.splitlines()[0] == "VIOLATION: Current task"
     app.dispatch(
       "POST", f"/messages/{task_flag.id}/ack", {"markdown": "Read the clause."}
     )
     assert app.dispatch("GET", "/health")[1]["agent_interrupt_pending"] is False
+
+    status, result = app.dispatch(
+      "POST", "/agent-interrupt", {"tab": "tasks", "reason": "missing-details"}
+    )
+    assert status == HTTPStatus.OK and result["agent_interrupt_pending"] is True
+    missing_details_flag = next(
+      message
+      for message in app.messages.list_messages()
+      if message.violation_type == "missing-details"
+    )
+    assert (
+      missing_details_flag.body.splitlines()[0] == "VIOLATION: Task missing details"
+    )
+    assert not any(
+      line.startswith(("Cited:", "Book:"))
+      for line in missing_details_flag.body.splitlines()
+    )
+    app.messages.ack(missing_details_flag.id, "Read the clause.")
 
     app.reports.publish_report("review", "Review", "Report body.")
     status, result = app.dispatch(
@@ -6830,6 +6855,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       if message.violation_type == "format-violation"
     )
     assert "review" in report_flag.body
+    assert report_flag.body.splitlines()[0] == "VIOLATION: Format"
     status, _ = app.dispatch(
       "POST",
       "/agent-interrupt",
