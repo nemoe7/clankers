@@ -58,6 +58,13 @@ HISTORICAL_PAGE_SIZE = 10
 MESSAGE_PAGE_MIN = 5
 MESSAGE_PAGE_MAX = 50
 PR_CHECK_ANCESTRY_FOLLOWUP = ("steer", "post-exit", "--rc", "0", "--check-ancestry")
+SURVEY_ANSWER_GUIDANCE = (
+  "Use existing knowledge only; do not search or fetch, open unrelated files, run "
+  "code, or ask another system for answers. Make a best-effort guess for each "
+  "question, including a blind guess; use very low confidence when unsure. Use "
+  "`true` or `false` for Boolean fields, and use `unknown` with confidence `0` "
+  "only when the whole question is unknown. Read image paths in JSON order."
+)
 
 
 def _snippet_words(text: str, max_words: int = 6) -> str:
@@ -1142,6 +1149,7 @@ def _pre_state_unavailable(
 
 READ_SET_LAST_META = "read_set_last_at"
 READ_SET_INTERVAL_SECONDS = 10 * 60
+READ_SET_MESSAGE_MARKER = "if bible missing from context:"
 
 
 def _schedule_instruction_check(
@@ -1185,7 +1193,7 @@ def _schedule_instruction_check(
     if any(
       item.hidden
       and item.requires_ack
-      and item.body.startswith(("10min bible check", "15min bible check"))
+      and item.body.startswith((READ_SET_MESSAGE_MARKER, "15min bible check"))
       for item in messages.list_messages()
     ):
       return
@@ -1197,19 +1205,11 @@ def _schedule_instruction_check(
     ]
     listed = "\n".join(f"- `{home_relative(path)}`" for path in paths if path.is_file())
     messages.send_message(
-      "10min bible check\n"
-      "if bible missing from context:\n"
+      f"{READ_SET_MESSAGE_MARKER}\n"
       f"{listed}\n"
       "Read every listed path in full with read_file and follow its rules.\n"
       "Answer the survey, ack this msg, and continue. "
-      "If no bible text was missing, only ack and continue.\n"
-      "For the survey, use existing knowledge only. Run `steer survey` and read "
-      "the image path it prints, in JSON order.\n"
-      "Do not search, fetch, open other files, run code, or ask another system "
-      "for answers.\n"
-      "Give your best effort. Guesses are allowed; use extremely low confidence "
-      "when very unsure. Boolean answers need true or false.\n"
-      "Use unknown with confidence 0 only if the whole question is unknown.",
+      "If no bible text was missing, only ack and continue.",
       hidden=True,
       blocking=True,
     )
@@ -2060,7 +2060,7 @@ def _survey_server_url(state_dir: Path) -> str | None:
   return f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
 
 
-def _post_survey(url: str, payload: str) -> dict | None:
+def _post_survey(url: str, payload: str) -> dict:
   """Submit survey answers to the running server so its memory holds them."""
   # The HTTP layer takes objects only, so array submissions travel under "answers".
   try:
@@ -2075,30 +2075,19 @@ def _post_survey(url: str, payload: str) -> dict | None:
     method="POST",
   )
   opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-  try:
-    with opener.open(request, timeout=5) as response:
-      body = json.loads(response.read().decode("utf-8"))
-  except (urllib.error.URLError, OSError, ValueError):
-    return None
-  survey = body.get("survey") if isinstance(body, dict) else None
-  return survey if isinstance(survey, dict) else None
+  with opener.open(request, timeout=5) as response:
+    response_body = json.loads(response.read().decode("utf-8"))
+  if not isinstance(response_body, dict) or not isinstance(
+    response_body.get("survey"), dict
+  ):
+    raise TypeError("Invalid survey response")
+  return response_body["survey"]
 
 
-def _submit_survey(
-  payload: str,
-  messages: MessageService,
-  state_dir: Path,
-  out: TextIO,
-) -> dict:
-  """Send answers to the live server, or grade them locally when none runs."""
-  url = _survey_server_url(state_dir)
-  survey = _post_survey(url, payload) if url else None
-  if survey is not None:
-    print("survey-source=server", file=out)
-    return survey
-  if url:
-    print("survey-source=local", file=out)
-  return messages.submit_survey(payload)
+def _submit_survey(payload: str, state_dir: Path) -> None:
+  """Submit answers to the server and never persist them locally."""
+  url = _survey_server_url(state_dir) or f"http://127.0.0.1:{SERVE_PORT}"
+  _post_survey(url, payload)
 
 
 def _run_survey(
@@ -2117,34 +2106,27 @@ def _run_survey(
   state_dir = state_dir or resolve_state_dir()
   if getattr(parsed, "file", None):
     payload = Path(parsed.file).read_text(encoding="utf-8")
-    survey = _submit_survey(payload, messages, state_dir, out)
-    print(
-      f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
-      file=out,
-    )
+    _submit_survey(payload, state_dir)
+    print("survey ok", file=out)
     return 0
   entries: list[str] = list(parsed.entries or [])
   if entries:
     if len(entries) != 1:
       raise ValueError("Survey submission must be a JSON array")
-    survey = _submit_survey(entries[0], messages, state_dir, out)
-    print(
-      f"Submitted {len(survey['results'])} survey answer(s) at {survey['checked_at']}",
-      file=out,
-    )
+    _submit_survey(entries[0], state_dir)
+    print("survey ok", file=out)
     return 0
   survey = messages.get_survey()
-  print(
-    f"Survey: pending={survey['pending']} checked_at={survey['checked_at'] or 'never'}",
-    file=out,
-  )
+  print(SURVEY_ANSWER_GUIDANCE, file=out)
+  print(file=out)
   for q in survey["questions"]:
     qid = q["id"]
-    ans = survey["answers"].get(qid, "(unanswered)")
+    ans = survey["answers"].get(qid)
     prompt = q["prompt"]
     if qid == "V1S0N":
       prompt = prompt.replace("{path}", survey_mod.smallest_image())
-    print(f"- {qid}: {prompt} -> {ans}", file=out)
+    answer_suffix = f" -> {ans}" if ans is not None else ""
+    print(f"- {qid}: {prompt}{answer_suffix}", file=out)
   print("\nSubmission template:", file=out)
-  print(json.dumps(survey_mod.template(), indent=2), file=out)
+  print(json.dumps(survey_mod.template(), separators=(",", ":")), file=out)
   return 0
