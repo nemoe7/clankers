@@ -63,6 +63,7 @@ and the new one.
 
 ## Ignore markers
 
+- NEVER add a # nonemo suppression without explicit user authorization.
 - Use `nonemo: <id>` to suppress only the named rule on that line.
 - For file scope, place `nonemo: <id>` or `nemoizer: key=value` in the first three lines with no avoided word before the marker.
 - Use any comment syntax for `nonemo: <id>`; the scanner reads text, not syntax.

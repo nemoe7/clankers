@@ -39,6 +39,7 @@ python3 skills/nemoizer/scripts/nemoize.py --format .
 
 Do not rewrite exclusion markers or the rotation table; apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
 
+- NEVER add # nonemo without explicit user authorization.
 - Use `nonemo: <id>` to suppress only that rule on the line.
 - For file scope, place `nonemo: <id>` or `nemoizer: key=value` in the first three lines with no avoided word before the marker.
 - Use any comment syntax for `nonemo: <id>`; scanning reads text, not syntax.
