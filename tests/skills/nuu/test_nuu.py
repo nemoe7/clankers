@@ -22,6 +22,39 @@ def _chromium_ready() -> str | None:
     return None
 
 
+@pytest.mark.parametrize("tree", ["live", "refs"])
+def test_relative_timestamp_recipe_updates_without_hover_titles(tree):
+  chromium = _chromium_ready()
+  if not chromium:
+    pytest.skip("Chromium is unavailable")
+  from playwright.sync_api import sync_playwright
+
+  root = SCRIPT.parent.parent
+  if tree == "refs":
+    root = root.parent / "refs" / root.name
+  recipe = (root / "references/recipes/relative-timestamps.md").read_text(
+    encoding="utf-8"
+  )
+  script = recipe.split("```js\n", 1)[1].split("```", 1)[0]
+  with sync_playwright() as runner:
+    browser = runner.chromium.launch(executable_path=chromium, args=["--no-sandbox"])
+    try:
+      page = browser.new_page()
+      page.set_content(
+        '<time datetime="2026-11-09T00:00:00Z" data-compact="true">Waiting</time>'
+      )
+      page.add_script_tag(content=script)
+      page.evaluate("window.disposeTimers = mountRelativeTimers()")
+      stamp = page.locator("time")
+      assert stamp.inner_text() == stamp.evaluate(
+        "element => relativeTime(element.dateTime, {compact: true})"
+      )
+      assert stamp.get_attribute("title") is None
+      page.evaluate("window.disposeTimers()")
+    finally:
+      browser.close()
+
+
 def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   root = tmp_path / "product"
   root.mkdir()

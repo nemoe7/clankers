@@ -16,6 +16,7 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Remove timestamp hover-title requirements and the sample title assignment, retaining relative text and boundary timers.
 - **Annotation and board specs**: Require TOML inputs and preserve configurable HTML/JavaScript icon-table extraction through `[icons].file` and `table`.
 - **Visual examples (`references/examples.md`, `references/nuu.md`)**: Regenerate 48 PNGs and the motion GIF with dark-mode `Pass`/`Fail` pairs. Rename rule images and correct example links.
 
