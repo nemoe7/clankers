@@ -3376,6 +3376,42 @@ def test_cli_run_start_logs_and_after_chaining(tmp_path: Path) -> None:
   assert "exit 125" in never_log
 
 
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_detached_run_delivers_hidden_verdict_without_poll(
+  tmp_path: Path, exit_code: int
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  code, _, err = _run_cli(
+    state_dir,
+    "run",
+    "start",
+    "completion",
+    "--",
+    sys.executable,
+    "-c",
+    f"raise SystemExit({exit_code})",
+  )
+  assert code == 0, err
+  assert f"exit {exit_code}" in _wait_for_run(state_dir, "completion")
+  store, messages, _, _ = cli.open_services(state_dir)
+  try:
+    notices = messages.list_messages(unread_only=True, include_hidden=True)
+    assert len(notices) == 1
+    notice = notices[0]
+    record = json.loads((state_dir / "runs" / "completion.json").read_text())
+    run_id = Path(record["exit_path"]).stem
+    cli._notify_run_completion(state_dir, "completion", run_id, exit_code)
+    assert len(messages.list_messages(unread_only=True, include_hidden=True)) == 1
+    assert notice.hidden and not notice.blocking
+    assert notice.body == f"Run completion completed with exit code {exit_code}."
+    assert messages.list_messages(unread_only=True, include_hidden=False) == []
+    code, out, err = _run_cli(state_dir, "read")
+    assert (code, err) == (0, "") and notice.body in out
+    assert not messages.list_messages(unread_only=True, include_hidden=True)
+  finally:
+    store.close()
+
+
 def test_cli_run_pr_checks_uses_detached_gh_watch(tmp_path: Path, monkeypatch) -> None:
   import arena_steering.cli as cli_module
 

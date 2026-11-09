@@ -1455,6 +1455,23 @@ def _start_detached_run(
     )
 
 
+def _notify_run_completion(
+  state_dir: Path, name: str, run_id: str, exit_code: int
+) -> None:
+  """Persist one hidden nonblocking notice per completed run."""
+  store, messages, _, _ = open_services(state_dir)
+  try:
+    messages.send_message(
+      f"Run {name} completed with exit code {exit_code}.",
+      hidden=True,
+      blocking=False,
+      request_id=f"run-completion:{run_id}",
+      fingerprint=f"{name}:{exit_code}",
+    )
+  finally:
+    store.close()
+
+
 def _start_locked_run(
   runs: Path,
   name: str,
@@ -1484,6 +1501,15 @@ def _start_locked_run(
   write_exit = (
     f'printf "%s\\n" "$status" > {temp_exit_file} && mv {temp_exit_file} {exit_file}'
   )
+  notify_script = (
+    "import sys; from pathlib import Path; "
+    f"sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r}); "
+    "from arena_steering.cli import _notify_run_completion; "
+    f"_notify_run_completion(Path({str(runs.parent)!r}), {name!r}, "
+    f"{exit_path.stem!r}, int(sys.argv[1]))"
+  )
+  notify = shlex.join([sys.executable, "-c", notify_script]) + ' "$status"'
+  finish = f"{notify} || true; {write_exit}"
   script_lines: list[str] = []
   if dependency:
     dep_exit = shlex.quote(dependency["exit_path"])
@@ -1491,13 +1517,13 @@ def _start_locked_run(
     script_lines.append(
       f'if [ "$(cat {dep_exit})" != "0" ]; then '
       f'echo "dependency {after} did not pass"; '
-      f"status=125; {write_exit}; exit 125; fi"
+      f"status=125; {finish}; exit 125; fi"
     )
   script_lines.append(f"( {shlex.join(command)} )")
   script_lines.append("status=$?")
   if on_finish:
     script_lines.append(f"( {shlex.join(on_finish)} ) || true")
-  script_lines.append(write_exit)
+  script_lines.append(finish)
   log_handle = log_path.open("ab")
   try:
     proc = subprocess.Popen(
