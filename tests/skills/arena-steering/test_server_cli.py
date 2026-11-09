@@ -241,7 +241,10 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
 
     code, out, err = _run_cli(state_dir, "poll")
     assert (code, err) == (0, "")
-    assert out == "DO NOT END TURN, CONTINUE TASK: First task | first | docs\n"
+    assert out == (
+      "ENDING TURN NOW IS A VIOLATION. IF BIBLE IS ABSENT READ ALL BOOKS "
+      "AND ANSWER SURVEY THEN CONTINUE THIS OPEN TASK: First task | first | docs\n"
+    )
     assert store.get_meta("skip_poll") == "1"  # Ready work outranks Skip poll.
     app.messages.consume_skip_poll()
     assert app.dispatch("GET", "/poll?timeout=0") == (
@@ -312,7 +315,10 @@ def test_cli_poll_ignores_blocked_tasks_after_gate_finishes(
     assert _run_cli(state_dir, "read")[0] == 0
     assert _run_cli(state_dir, "poll") == (
       0,
-      "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n",
+      (
+        "ENDING TURN NOW IS A VIOLATION. IF BIBLE IS ABSENT READ ALL BOOKS "
+        "AND ANSWER SURVEY THEN CONTINUE THIS OPEN TASK: Gate task | gate-task | docs\n"
+      ),
       "",
     )
   finally:
@@ -375,7 +381,10 @@ def test_cli_poll_delivers_inbox_before_ready_task(tmp_path: Path) -> None:
     assert (code, err) == (0, "")
     assert out.startswith("Inbox ")
     assert message_body in out
-    assert "DO NOT END TURN, CONTINUE TASK:" not in out
+    assert (
+      "ENDING TURN NOW IS A VIOLATION. IF BIBLE IS ABSENT READ ALL BOOKS "
+      "AND ANSWER SURVEY THEN CONTINUE THIS OPEN TASK:"
+    ) not in out
   finally:
     store.close()
 

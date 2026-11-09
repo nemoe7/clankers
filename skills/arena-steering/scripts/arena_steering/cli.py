@@ -526,7 +526,9 @@ def main(
         delivered["messages"] or delivered["report_answers"]
       ):
         print(
-          f"DO NOT END TURN, CONTINUE TASK: {task.title} | {task.id} | {task.type}",
+          "ENDING TURN NOW IS A VIOLATION. IF BIBLE IS ABSENT READ ALL BOOKS "
+          "AND ANSWER SURVEY THEN CONTINUE THIS OPEN TASK: "
+          f"{task.title} | {task.id} | {task.type}",
           file=stdout,
         )
       messages.reset_gate_if_clear()

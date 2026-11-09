@@ -60,6 +60,8 @@ This log has no Unreleased section.
 
 ### Changed
 
+- Clarify the poll warning when a task remains open.
+
 - Separate HTTP/WebSocket transport and task CLI commands into modules. Group browser tests by view and transport, preserving public entry points.
 
 - `SKILL.md`: Link messages only when they change a task's scope or acceptance criteria, and leave unrelated clarifications unlinked.
