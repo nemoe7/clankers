@@ -300,6 +300,16 @@ def test_cli_poll_ignores_blocked_tasks_after_gate_finishes(
       )
     ]
     assert not app.tasks.get_task("gate-task")[1]
+    code, out, err = _run_cli(state_dir, "poll")
+    assert code == 0 and err == ""
+    assert "Run verify completed with exit code 0." in out  # nonemo: NMT100
+    completion = next(
+      message
+      for message in app.messages.list_messages(include_hidden=True)
+      if message.body == "Run verify completed with exit code 0."
+    )
+    assert completion.hidden and not completion.blocking
+    assert _run_cli(state_dir, "read")[0] == 0
     assert _run_cli(state_dir, "poll") == (
       0,
       "DO NOT END TURN, CONTINUE TASK: Gate task | gate-task | docs\n",
@@ -464,6 +474,18 @@ def test_cli_poll_delivers_unlinked_verdict_before_armed_skip(
       (0, f"run background done: exit {exit_code}\nDO NOT END TURN. POLL AGAIN.\n", "")
     ]
     assert store.get_meta("skip_poll") == "1"
+    messages = app.messages.list_messages(unread_only=True, include_hidden=True)
+    assert len(messages) == 1
+    completion = messages[0]
+    assert completion.hidden is True
+    assert completion.blocking is False
+    assert (
+      "background" in completion.body and f"exit code {exit_code}" in completion.body
+    )
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, err) == (0, "") and completion.body in out
+    assert store.get_meta("skip_poll") == "1"
+    _run_cli(state_dir, "read")  # Clear the fast-repeat guard.
     assert _run_cli(state_dir, "poll") == (0, "User skipped poll. End turn.\n", "")
     assert store.get_meta("skip_poll") == "0"
   finally:
@@ -478,6 +500,7 @@ def test_cli_poll_reports_each_new_run_started_during_the_wait(
   runs = state_dir / "runs"
   runs.mkdir(parents=True)
   store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
   original_poll = cli.MessageService.poll
 
   def short_poll(self, timeout_seconds=0.0, **kwargs):
@@ -509,8 +532,146 @@ def test_cli_poll_reports_each_new_run_started_during_the_wait(
         "",
       )
     ]
+    messages = app.messages.list_messages(unread_only=True, include_hidden=True)
+    assert {message.body for message in messages} == {
+      "Run alpha completed with exit code 0.",
+      "Run beta completed with exit code 7.",
+    }
+    assert all(message.hidden and not message.blocking for message in messages)
   finally:
     thread.join(timeout=2)
+    store.close()
+
+
+def test_cli_poll_reports_runs_completed_after_poll_callback(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  first_exit = runs / f"alpha-{'a' * 32}.exit"
+  second_exit = runs / f"beta-{'b' * 32}.exit"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+
+  def poll_with_late_run(self, timeout_seconds=0.0, **kwargs):
+    finished_run = kwargs["finished_run"]
+    assert callable(finished_run)
+    first_exit.write_text("0", encoding="utf-8")
+    verdicts = finished_run()
+    second_exit.write_text("7", encoding="utf-8")
+    return {
+      "messages": [],
+      "report_answers": [],
+      "run_verdicts": verdicts,
+      "status": "run_finished",
+      "next_task": None,
+    }
+
+  monkeypatch.setattr(cli.MessageService, "poll", poll_with_late_run)
+  try:
+    code, out, err = _run_cli(state_dir, "poll")
+    assert (code, err) == (0, "")
+    assert out == (
+      "run alpha done: exit 0\nrun beta done: exit 7\nDO NOT END TURN. POLL AGAIN.\n"
+    )
+    messages = app.messages.list_messages(unread_only=True, include_hidden=True)
+    assert {message.body for message in messages} == {
+      "Run alpha completed with exit code 0.",
+      "Run beta completed with exit code 7.",
+    }
+    assert all(message.hidden and not message.blocking for message in messages)
+  finally:
+    store.close()
+
+
+def test_pre_flags_second_live_run_log_read_in_a_mixed_line() -> None:
+  run_id = "background-abc.exit"
+  result = pre.run_pipeline(
+    pre.PreContext(
+      line=(
+        "printf before; steer run logs background; printf between; "
+        "steer run logs background"
+      ),
+      command="printf before",
+      active_runs=("background",),
+      active_run_ids=(("background", run_id),),
+    )
+  )
+  assert result.verdict == pre.BLOCK
+  assert result.blocked_by == "live-run-logs"
+  notice = " ".join(result.messages)
+  assert "Create a worktree associated with the next upcoming task" in notice
+  assert "steer worktree add <name>" in notice
+  assert "ARENA.md:192" in notice
+  assert "The live run will send its verdict in the inbox." in notice
+
+
+def test_cli_tracks_live_run_log_reads_until_each_run_finishes(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  record_path = runs / "background.json"
+  first_exit = runs / "background-a.exit"
+  second_exit = runs / "background-b.exit"
+  record_path.write_text(json.dumps({"exit_path": str(first_exit)}), encoding="utf-8")
+  store = SqliteStore(state_dir / "state.sqlite3")
+  app = SteeringApp(store)
+
+  def pre_line(line: str, command: str | None = None) -> tuple[int, str, str]:
+    return _run_cli(
+      state_dir,
+      "pre",
+      "-l",
+      line,
+      "-c",
+      command or line,
+      "-s",
+      "bash",
+    )
+
+  try:
+    code, out, err = pre_line("steer run logs background")
+    assert code == pre.CONTINUE, (out, err)
+    assert json.loads(store.get_meta("live_run_log_reads", "[]") or "[]") == [
+      first_exit.name
+    ]
+    assert pre_line("printf intervening work")[0] == pre.CONTINUE
+
+    mixed_line = "printf before; steer run logs background"
+    code, out, err = pre_line(mixed_line, "printf before")
+    assert code == pre.BLOCK, (out, err)
+    assert "VIOLATION: Repeated read of live-run logs." in out  # nonemo: NMT100
+    assert (
+      "Create a worktree associated with the next upcoming task"  # nonemo: NMT100
+      in out
+    )
+    assert "steer worktree add <name>" in out
+    assert "ARENA.md:192" in out
+    assert "The live run will send its verdict in the inbox." in out  # nonemo: NMT100
+    flags = [
+      message
+      for message in app.messages.list_messages(unread_only=True, include_hidden=True)
+      if message.violation_type == "live-run-log-repeat"
+    ]
+    assert len(flags) == 1 and flags[0].hidden and flags[0].blocking
+
+    first_exit.write_text("0", encoding="utf-8")
+    record_path.write_text(
+      json.dumps({"exit_path": str(second_exit)}), encoding="utf-8"
+    )
+    code, out, err = pre_line("steer run logs background")
+    assert code == pre.CONTINUE, (out, err)
+    assert json.loads(store.get_meta("live_run_log_reads", "[]") or "[]") == [
+      second_exit.name
+    ]
+    assert pre_line("steer run logs background")[0] == pre.BLOCK
+
+    second_exit.write_text("0", encoding="utf-8")
+    code, out, err = pre_line("steer run logs background")
+    assert code == pre.CONTINUE, (out, err)
+    assert json.loads(store.get_meta("live_run_log_reads", "[]") or "[]") == []
+  finally:
     store.close()
 
 

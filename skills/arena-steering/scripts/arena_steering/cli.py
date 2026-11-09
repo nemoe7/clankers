@@ -487,10 +487,21 @@ def main(
         finished_run=run_watcher.finished,
       )
       messages.record_poll_duration(time.monotonic() - started)
+      verdicts = [
+        *delivered.get("run_verdicts", []),
+        *run_watcher.finished(),
+      ]
       if delivered["messages"] or delivered["report_answers"]:
         _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
-      if verdicts := delivered.get("run_verdicts", []):
-        for name, exit_code in verdicts:
+      if verdicts:
+        for name, exit_code, run_id in verdicts:
+          messages.send_message(
+            f"Run {name} completed with exit code {exit_code}.",
+            hidden=True,
+            blocking=False,
+            request_id=f"run-completion:{run_id}",
+            fingerprint=f"{name}:{exit_code}",
+          )
           print(f"run {name} done: exit {exit_code}", file=stdout)
         print("DO NOT END TURN. POLL AGAIN.", file=stdout)
         messages.request_poll_followup()
@@ -1106,6 +1117,9 @@ def _safe_local_name(name: str) -> str:
   return cleaned
 
 
+LIVE_RUN_LOG_READS_META = "live_run_log_reads"
+
+
 def _call_count(store: SqliteStore) -> int:
   """Read how many shell lines ran since the inbox was last read."""
   raw = store.get_meta(pre_mod.CALL_COUNT_META, "0") or "0"
@@ -1364,6 +1378,23 @@ def _run_pre(
         | report_ids
       )
     )
+  run_status = FileGateStatus(Path(store.db_path).parent)
+  active_run_ids = run_status.running_run_ids()
+  active_run_id_set = {run_id for _name, run_id in active_run_ids}
+  raw_seen_run_log_ids = store.get_meta(LIVE_RUN_LOG_READS_META, "[]") or "[]"
+  try:
+    stored_run_log_ids = json.loads(raw_seen_run_log_ids)
+  except json.JSONDecodeError:
+    stored_run_log_ids = []
+  if not isinstance(stored_run_log_ids, list):
+    stored_run_log_ids = []
+  seen_live_run_log_ids = tuple(
+    sorted(
+      run_id
+      for run_id in stored_run_log_ids
+      if isinstance(run_id, str) and run_id in active_run_id_set
+    )
+  )
   ctx = pre_mod.PreContext(
     line=str(parsed.line or ""),
     command=str(parsed.command_text or ""),
@@ -1371,7 +1402,9 @@ def _run_pre(
     done=tuple(str(parsed.done or "").split()),
     pending_ids=pending_ids,
     call_count=count,
-    active_runs=FileGateStatus(Path(store.db_path).parent).running_names(),
+    active_runs=tuple(name for name, _run_id in active_run_ids),
+    active_run_ids=active_run_ids,
+    seen_live_run_log_ids=seen_live_run_log_ids,
     routed=routed,
     cwd=Path.cwd(),
     checkout_root=pre_mod.repo_root(),
@@ -1379,6 +1412,13 @@ def _run_pre(
     renamable_ids=renamable_ids,
   )
   result = pre_mod.run_pipeline(ctx)
+  updated_run_log_ids = set(seen_live_run_log_ids)
+  if result.verdict == pre_mod.CONTINUE:
+    updated_run_log_ids.update(pre_mod.live_run_log_read_ids(ctx))
+  updated_run_log_ids.intersection_update(active_run_id_set)
+  serialized_run_log_ids = json.dumps(sorted(updated_run_log_ids))
+  if serialized_run_log_ids != raw_seen_run_log_ids:
+    store.set_meta(LIVE_RUN_LOG_READS_META, serialized_run_log_ids)
   if result.verdict == pre_mod.BLOCK and parsed.shell:
     _audit_blocked_bash(
       Path(store.db_path).parent,
@@ -1405,6 +1445,7 @@ def _run_pre(
     )
     print(f"Violation flag: {flag.id}", file=out)
   flag_reasons = {
+    "live-run-logs": ("live-run-log-repeat", pre_mod.LIVE_RUN_LOG_VIOLATION),
     "inbox-pipe": ("bash-inbox-pipe", "VIOLATION: Inbox piped."),
     "sleep": (
       "bash-sleep",

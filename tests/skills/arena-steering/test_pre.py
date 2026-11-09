@@ -1269,7 +1269,11 @@ def test_sleep_during_live_run_names_it_and_shows_bible_guidance(
   _isolate_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
   _seed(_isolate_state, "Ready", acked=True)
-  monkeypatch.setattr(cli.FileGateStatus, "running_names", lambda _self: ["verify"])
+  monkeypatch.setattr(
+    cli.FileGateStatus,
+    "running_run_ids",
+    lambda _self: (("verify", "verify.exit"),),
+  )
   line = "sleep 1"
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK
@@ -3679,6 +3683,28 @@ def test_network_destination_and_port_warnings_remain_deferred() -> None:
     assert not any(
       "proxy" in text.lower() or "port" in text.lower() for text in result.messages
     )
+
+
+def test_live_run_log_guard_blocks_second_read_in_mixed_line() -> None:
+  run_id = "background-a.exit"
+  result = pre.run_pipeline(
+    pre.PreContext(
+      line=(
+        "printf before; steer run logs background; "
+        "printf between; steer run logs background"
+      ),
+      command="printf before",
+      active_run_ids=(("background", run_id),),
+      done=("live-run-logs",),
+    )
+  )
+  assert result.verdict == pre.BLOCK
+  assert result.blocked_by == "live-run-logs"
+  text = " ".join(result.messages)
+  assert "Create a worktree associated with the next upcoming task" in text
+  assert "steer worktree add <name>" in text
+  assert "ARENA.md:192" in text
+  assert "The live run will send its verdict in the inbox." in text
 
 
 @pytest.mark.parametrize(
