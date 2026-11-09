@@ -2067,6 +2067,12 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
     },
   )
   msg_id = created["message"]["id"]
+  _, wrapping = app.dispatch(
+    "POST",
+    "/messages/with-file",
+    {"body": "Wrap attached files.", "attachments": [uploaded_text["attachment"]] * 5},
+  )
+  wrapping_id = wrapping["message"]["id"]
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -2131,6 +2137,21 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
         viewer.wait_for(state="visible")
         page.locator("#image-modal-close").click()
         viewer.wait_for(state="hidden")
+        wrapping_card = page.locator(f'.message[data-msg-id="{wrapping_id}"]')
+        files = wrapping_card.locator(".message-attachment-file")
+        assert files.count() == 5
+        layout = files.evaluate_all("""elements => elements.map(element => {
+          const rect = element.getBoundingClientRect();
+          const parent = element.closest('.message-attachments').getBoundingClientRect();
+          return { x: rect.x, y: rect.y, right: rect.right, parentRight: parent.right };
+        })""")
+        assert layout[0]["y"] == layout[1]["y"], layout
+        assert layout[0]["x"] < layout[1]["x"], layout
+        assert all(item["right"] <= item["parentRight"] for item in layout), layout
+        if width == 390:
+          assert layout[-1]["y"] > layout[0]["y"], layout
+        else:
+          assert all(item["y"] == layout[0]["y"] for item in layout), layout
         page.screenshot(path=str(tmp_path / f"attachment-{width}.png"))
       finally:
         browser.close()

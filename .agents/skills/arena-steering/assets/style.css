@@ -1508,6 +1508,10 @@ select,
   margin-bottom: 8px;
 }
 
+.message-attachments > .receipt-file {
+  width: 100%;
+}
+
 .message-text {
   font-size: 16px;
   overflow-wrap: anywhere;
