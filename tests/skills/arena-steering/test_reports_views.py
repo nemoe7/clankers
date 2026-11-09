@@ -1740,7 +1740,14 @@ def test_report_header_tracks_linked_tasks_without_duplicate_title(
           chip_box,
         )
         stamp_box = report.locator("#report-status time").bounding_box()
-        assert stamp_box and abs(stamp_box["y"] - id_box["y"]) < id_box["height"]
+        assert stamp_box and stamp_box["y"] + stamp_box["height"] <= id_box["y"]
+        id_chip = report.locator('button[data-parent-id="decision"]')
+        assert (
+          id_chip.evaluate("el => parseFloat(getComputedStyle(el).borderTopWidth)") > 0
+        )
+        assert (
+          id_chip.evaluate("el => parseFloat(getComputedStyle(el).borderRadius)") > 0
+        )
         assert report.locator(".report-task-links").inner_text().startswith("Task:")
         page.screenshot(path=str(tmp_path / f"report-linked-task-{width}.png"))
         chip.click()

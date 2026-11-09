@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Stack report timestamps, report-ID chips, titles, and linked task chips on separate rows.
+
 - Use regular proportional numerals in timestamps without changing relative-time formatting.
 
 - Expose the armed Skip Poll state, allow cancellation, and retain its browser indicator until consumption or cancellation. Remove survey-triggered arming.

@@ -222,8 +222,8 @@ export function renderReportsView(container, state, handlers) {
     : "";
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
-      <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
       <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
+      <button type="button" class="parent-id-button reply-parent-chip" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
     </div>
   `;
   let insertedStatus = false;
