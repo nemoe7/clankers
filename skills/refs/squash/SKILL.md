@@ -17,7 +17,7 @@ description: >
 license: MIT. LICENSE.txt has complete terms
 metadata:
   argument-hint: "[tokens|words|chars|bytes] [target]"
-  version: "0.1.0"
+  version: "0.1.1"
   baseline: >-
     Unsquashed original of `SKILL.md` in this directory. Amend this file first,
     then squash it into `SKILL.md` and re-measure that file against its budget
@@ -96,9 +96,10 @@ Merge items that share a subject into one sentence or one bullet.
 1. Measure the input in every governing unit and record the numbers.
 2. Read for meaning, and list the load-bearing points to check against later.
 3. Pass over the text making only safe reductions.
-4. Re-measure. Keep the pass when nothing was lost and no budget regressed; otherwise discard it.
-5. Repeat, targeting whichever unit is still over, until every target is met or a pass yields nothing safe.
-6. Verify the result against the list from step 2, then report before, after, and the percentage saved.
+4. Compare available linter output with a manual pass and select the shortest faithful words or phrases.
+5. Re-measure. Keep the pass when nothing was lost and no budget regressed; otherwise discard it.
+6. Repeat, targeting whichever unit is still over, until every target is met or a pass yields nothing safe.
+7. Verify the result against the list from step 2, then report before, after, and the percentage saved.
 
 Keep each pass small enough to review.
 

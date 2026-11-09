@@ -16,7 +16,7 @@ description: >
 license: MIT. LICENSE.txt has complete terms
 metadata:
   argument-hint: "[tokens|words|chars|bytes] [target]"
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Squash
@@ -86,9 +86,10 @@ Merge items sharing a subject into one sentence or bullet.
 1. Measure the input in every governing unit and record the numbers.
 2. Read for meaning. List the load-bearing points to check later.
 3. Pass over the text making only safe reductions.
-4. Re-measure. Keep the pass when nothing was lost and no budget regressed. Otherwise discard it.
-5. Repeat, targeting whichever unit is still over, until every target is met or a pass yields nothing.
-6. Check against the step 2 list, then report before, after, and percentage.
+4. Compare available linter output with a manual pass; select shortest faithful words or phrases.
+5. Re-measure. Keep the pass when nothing was lost and no budget regressed. Otherwise discard it.
+6. Repeat, targeting whichever unit is still over, until every target is met or a pass yields nothing.
+7. Check against the step 2 list, then report before, after, and percentage.
 
 Keep each pass small enough to review.
 
