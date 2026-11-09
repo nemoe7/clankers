@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Expose the armed Skip Poll state, allow cancellation, and retain its browser indicator until consumption or cancellation. Remove survey-triggered arming.
+
 - Send hidden nonblocking run verdict notices at completion without requiring an active poll, retaining one notice per run.
 
 - Restore compact header spacing and rounded inner hover backgrounds while retaining full-height tab click targets. Center labels and prioritize question indicators before unseen dots.

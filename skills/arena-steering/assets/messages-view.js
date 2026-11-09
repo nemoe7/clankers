@@ -321,6 +321,10 @@ export function renderMessagesView(container, state, handlers) {
     ? state.composerAttachments.filter(item => !sentAttachmentIds.has(item.id))
     : [];
   const composerExpanded = Boolean(state.composerExpanded);
+  const skipPollArmed = Boolean(state.skipPollArmed);
+  const skipPollLabel = skipPollArmed
+    ? "Skip is armed. Press to cancel it."
+    : "Ask the agent to end its wait now";
   const skipPollGood = Date.now() < skipPollFeedbackUntil;
   const skipPollBad = skipPollFailure && Date.now() < skipPollFailure.until;
 
@@ -457,12 +461,13 @@ export function renderMessagesView(container, state, handlers) {
             />
             <button
               id="skip-poll"
+              data-armed="${skipPollArmed}"
               class="icon-button quiet-btn"
               type="button"
               ${skipPollGood ? 'data-state="good"' : skipPollBad ? 'data-state="bad"' : ""}
               ${skipPollPending ? 'disabled aria-busy="true"' : ""}
-              aria-label="${skipPollBad ? escapeHtml(skipPollFailure.message) : "Ask the agent to end its wait now"}"
-              title="${skipPollBad ? escapeHtml(skipPollFailure.message) : "Ask the agent to end its wait now"}"
+              aria-label="${escapeHtml(skipPollBad ? skipPollFailure.message : skipPollLabel)}"
+              title="${escapeHtml(skipPollBad ? skipPollFailure.message : skipPollLabel)}"
             >
               ${skipPollGood ? CHECK_SVG : SKIP_FORWARD_SVG}
             </button>
@@ -809,7 +814,7 @@ export function renderMessagesView(container, state, handlers) {
     skipBtn.setAttribute("aria-busy", "true");
     let error = null;
     try {
-      await handlers.onSkipPoll?.();
+      await (skipPollArmed ? handlers.onCancelSkipPoll?.() : handlers.onSkipPoll?.());
     } catch (cause) {
       error = cause;
     }
@@ -838,8 +843,11 @@ export function renderMessagesView(container, state, handlers) {
         skipPollFailure = null;
         delete curBtn.dataset.state;
         curBtn.innerHTML = SKIP_FORWARD_SVG;
-        curBtn.title = "Ask the agent to end its wait now";
-        curBtn.setAttribute("aria-label", "Ask the agent to end its wait now");
+        const label = curBtn.dataset.armed === "true"
+          ? "Skip is armed. Press to cancel it."
+          : "Ask the agent to end its wait now";
+        curBtn.title = label;
+        curBtn.setAttribute("aria-label", label);
       }
     }, 1000);
   });

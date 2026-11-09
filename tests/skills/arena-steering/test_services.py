@@ -2900,3 +2900,24 @@ def test_task_detail_changes_require_explicit_size(tmp_path: Path) -> None:
   assert unchanged.title == "Renamed"
   tasks.mod_links_add("work", "doc", link_type="report")
   store.close()
+
+
+def test_skip_poll_health_cancel_and_explicit_arming() -> None:
+  store = SqliteStore()
+  app = SteeringApp(store)
+  try:
+    assert app.dispatch("GET", "/health")[1]["skip_poll"] is False
+    assert app.dispatch("POST", "/poll/skip")[1] == {"skip_poll": True}
+    assert app.messages.skip_poll_armed()
+    assert app.dispatch("GET", "/health")[1]["skip_poll"] is True
+    assert app.dispatch("DELETE", "/poll/skip") == (200, {"skip_poll": False})
+    assert not app.messages.skip_poll_armed()
+    assert app.messages.poll(timeout_seconds=0.01)["status"] == "timeout"
+    app.messages.trigger_skip_poll()
+    assert app.messages.consume_skip_poll()
+    assert not app.messages.skip_poll_armed()
+    app.messages.trigger_bible_check(True)
+    assert app.messages.get_survey()["pending"]
+    assert not app.messages.skip_poll_armed()
+  finally:
+    store.close()

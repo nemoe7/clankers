@@ -160,6 +160,9 @@ function applyConnection(requestId, health, error = false) {
     turn_ended_at: health.turn_ended_at,
   };
   store.getState().connection = connection;
+  if (!error && store.getState().skipPollArmed !== Boolean(health.skip_poll)) {
+    store.setState({ skipPollArmed: Boolean(health.skip_poll) });
+  }
   paintConnection(document.getElementById("view-messages"), connection);
 }
 
@@ -788,7 +791,14 @@ const handlers = {
     store.setState({ replyParentRefs: next });
   },
   async onSkipPoll() {
-    await api.skipPoll();
+    const result = await api.skipPoll();
+    appliedHealthRequestId = ++healthRequestId;
+    store.setState({ skipPollArmed: result.skip_poll });
+  },
+  async onCancelSkipPoll() {
+    const result = await api.cancelSkipPoll();
+    appliedHealthRequestId = ++healthRequestId;
+    store.setState({ skipPollArmed: result.skip_poll });
   },
   async onToggleHidden() {
     const state = store.getState();

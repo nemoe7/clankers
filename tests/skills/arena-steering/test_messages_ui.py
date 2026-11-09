@@ -775,7 +775,10 @@ def test_skip_poll_feedback_is_immediate_and_recovers(
       const original = window.fetch.bind(window);
       window.fetch = async (...args) => {
         if (String(args[0]) === '/poll/skip' && args[1]?.method === 'POST') {
-          await new Promise(resolve => { window.releaseSkip = resolve; });
+          if (!window.skipRequestHeld) {
+            window.skipRequestHeld = true;
+            await new Promise(resolve => { window.releaseSkip = resolve; });
+          }
           if (fail) return new Response(JSON.stringify({error:'offline'}), {
             status:503, headers:{'content-type':'application/json'}
           });
@@ -2826,3 +2829,53 @@ def test_composer_paste_unnamed_templates_and_dynamic_lost_ui(tmp_path: Path) ->
     server.server_close()
     thread.join(timeout=5)
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("width", [1200, 390])
+def test_skip_poll_armed_indicator_persists_and_cancels(
+  tmp_path: Path, width: int
+) -> None:
+  with composer_page(width) as page:
+    button = page.locator("#skip-poll")
+    page.mouse.move(0, 0)
+    page.wait_for_function(
+      "document.querySelector('#skip-poll')?.dataset.armed === 'false'"
+    )
+    idle = button.evaluate(
+      "el => { const s = getComputedStyle(el); return [s.color, s.backgroundColor]; }"
+    )
+    button.click()
+    page.mouse.move(0, 0)
+    page.wait_for_function(
+      "document.querySelector('#skip-poll')?.dataset.armed === 'true'"
+    )
+    page.wait_for_function("!document.querySelector('#skip-poll')?.dataset.state")
+    assert button.get_attribute("aria-label") == "Skip is armed. Press to cancel it."
+    armed = button.evaluate(
+      "el => { const s = getComputedStyle(el); return [s.color, s.backgroundColor]; }"
+    )
+    assert armed[0] != idle[0] and armed[1] != idle[1]
+    page.screenshot(path=str(tmp_path / f"skip-armed-{width}.png"))
+    button.click()
+    page.mouse.move(0, 0)
+    page.wait_for_function(
+      "document.querySelector('#skip-poll')?.dataset.armed === 'false'"
+    )
+    page.wait_for_function("!document.querySelector('#skip-poll')?.dataset.state")
+    assert button.get_attribute("aria-label") == "Ask the agent to end its wait now"
+    page.wait_for_function(
+      "expected => { const s = getComputedStyle(document.querySelector('#skip-poll')); "
+      "return s.color === expected[0] && s.backgroundColor === expected[1]; }",
+      arg=idle,
+    )
+    assert (
+      button.evaluate(
+        "el => { const s = getComputedStyle(el); return [s.color, s.backgroundColor]; }"
+      )
+      == idle
+    )
+    page.screenshot(path=str(tmp_path / f"skip-canceled-{width}.png"))

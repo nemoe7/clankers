@@ -394,6 +394,7 @@ class SteeringApp:
     self.router.add("POST", "/messages/{id}/replies-seen", self._handle_replies_seen)
     self.router.add("GET", "/poll", self._handle_poll)
     self.router.add("POST", "/poll/skip", self._handle_skip_poll)
+    self.router.add("DELETE", "/poll/skip", self._handle_cancel_skip_poll)
 
     self.router.add("GET", "/tasks", self._handle_list_tasks)
     self.router.add("POST", "/tasks", self._handle_create_task)
@@ -933,6 +934,7 @@ class SteeringApp:
         "read_set": self._read_set,
         "survey": survey,
         "polling": polling,
+        "skip_poll": self.messages.skip_poll_armed(),
         "polling_since": self.store.get_meta("polling_since") if polling else None,
         "agent_seen_at": self.store.get_meta("agent_seen_at") or None,
         "turn_ended_at": self.store.get_meta("turn_ended_at") or None,
@@ -1434,6 +1436,12 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     self.messages.trigger_skip_poll()
     return (int(HTTPStatus.OK), {"skip_poll": True})
+
+  def _handle_cancel_skip_poll(
+    self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, Any]:
+    self.messages.cancel_skip_poll()
+    return (int(HTTPStatus.OK), {"skip_poll": False})
 
   def _handle_list_tasks(
     self, _params: dict[str, str], query: dict[str, list[str]], _body: Any

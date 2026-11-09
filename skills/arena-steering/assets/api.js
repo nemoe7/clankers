@@ -340,6 +340,9 @@ export const api = {
   skipPoll() {
     return requestJson("POST", "/poll/skip", {}, true);
   },
+  cancelSkipPoll() {
+    return requestJson("DELETE", "/poll/skip", {}, true);
+  },
   listTasks({ full = true } = {}) {
     const q = new URLSearchParams({ full: full ? "1" : "0" });
     return requestJson("GET", `/tasks?${q.toString()}`);

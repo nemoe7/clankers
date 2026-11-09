@@ -642,6 +642,15 @@ class MessageService:
     with self._cond:
       self._cond.notify_all()
 
+  def skip_poll_armed(self) -> bool:
+    """Read the armed flag without consuming it."""
+    return self._meta.get_meta("skip_poll", "0") == "1"
+
+  def cancel_skip_poll(self) -> None:
+    """Disarm a user-requested skip without changing poll timing."""
+    with self._reports.transaction():
+      self._meta.set_meta("skip_poll", "0")
+
   def consume_skip_poll(self) -> bool:
     with self._reports.transaction():
       flag = self._meta.get_meta("skip_poll", "0") == "1"
@@ -808,7 +817,6 @@ class MessageService:
           blocking=True,
         )
         self._survey_pending = True
-        self._meta.set_meta("skip_poll", "1")
       self._cond.notify_all()
     return self.get_survey()
 

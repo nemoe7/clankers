@@ -3508,3 +3508,8 @@ article#report.report img,
 .tab-btn:active:not(:disabled)::before {
   background-color: hsl(var(--surface-tertiary));
 }
+
+#skip-poll[data-armed="true"] {
+  color: hsl(var(--interactive-positive));
+  background-color: hsl(var(--surface-tertiary));
+}
