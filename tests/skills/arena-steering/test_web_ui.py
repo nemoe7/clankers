@@ -5863,13 +5863,15 @@ def test_blocked_bash_dismissal_is_immediate_and_recovers(
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
 @pytest.mark.parametrize("width", [390, 1200])
+@pytest.mark.parametrize("with_heading", [True, False])
 def test_report_header_tracks_linked_tasks_without_duplicate_title(
-  tmp_path: Path, width: int
+  tmp_path: Path, width: int, with_heading: bool
 ) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store)
-  app.reports.publish_report("decision", "Decision", "# Decision\n\nReport body.")
+  body = "# Decision\n\nReport body." if with_heading else "Report body."
+  app.reports.publish_report("decision", "Decision", body)
   server = create_http_server(app, host="0.0.0.0", port=0)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
@@ -5913,6 +5915,7 @@ def test_report_header_tracks_linked_tasks_without_duplicate_title(
           timeout=10000
         )
         assert report.locator(".report-task-links button").count() == 2
+        assert report.locator(".report-task-links").inner_text().startswith("Tasks:")
         app.tasks.mod_links_rm("linked-two", "report", "decision")
         report.get_by_role("button", name="Open task linked-two").wait_for(
           state="detached", timeout=10000
@@ -5921,8 +5924,14 @@ def test_report_header_tracks_linked_tasks_without_duplicate_title(
         chip_box = chip.bounding_box()
         id_box = report.locator('button[data-parent-id="decision"]').bounding_box()
         assert title_box and chip_box and id_box
-        assert title_box["y"] + title_box["height"] <= chip_box["y"]
-        assert chip_box["y"] + chip_box["height"] <= id_box["y"] + 1
+        assert id_box["y"] + id_box["height"] <= title_box["y"], (id_box, title_box)
+        assert title_box["y"] + title_box["height"] <= chip_box["y"], (
+          title_box,
+          chip_box,
+        )
+        stamp_box = report.locator("#report-status time").bounding_box()
+        assert stamp_box and abs(stamp_box["y"] - id_box["y"]) < id_box["height"]
+        assert report.locator(".report-task-links").inner_text().startswith("Task:")
         page.screenshot(path=str(tmp_path / f"report-linked-task-{width}.png"))
         chip.click()
         page.locator('#tab-tasks[aria-selected="true"]').wait_for()

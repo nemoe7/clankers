@@ -13,6 +13,7 @@ This log has no Unreleased section.
 - Wrap inline code with cloned pill edges, preserving code blocks and report table styles.
 - Keep the report picker and answer-history divider outside both scrolling containers.
 - Use the available message width before wrapping attachment cards.
+- Place report ID and timestamp above the title, with linked task chips below it.
 
 ### Security
 

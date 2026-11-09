@@ -224,11 +224,10 @@ export function renderReportsView(container, state, handlers) {
     (task.links?.report_ids || task.report_ids || []).includes(activeReport.id)
   );
   const taskLinksHtml = linkedTasks.length
-    ? `<span class="report-task-links">${linkedTasks.map((task) => renderParentChip("task", task.id)).join(" ")}</span>`
+    ? `<div class="report-task-links"><span>${linkedTasks.length === 1 ? "Task:" : "Tasks:"}</span> ${linkedTasks.map((task) => renderParentChip("task", task.id)).join(" ")}</div>`
     : "";
   const statusBlockHtml = `
     <div id="report-status" class="report-meta muted" role="status">
-      ${taskLinksHtml}
       <button type="button" class="parent-id-button" data-parent-type="report" data-parent-id="${escapeHtml(activeReport.id)}" aria-label="Report ${escapeHtml(activeReport.id)} as message parent" aria-pressed="${reportParentSelected ? "true" : "false"}"><code class="msg-id">${escapeHtml(activeReport.id)}</code></button>
       <span>Updated <time datetime="${modIso}" data-timestamp="${modIso}">${modRel}</time></span>
     </div>
@@ -237,7 +236,8 @@ export function renderReportsView(container, state, handlers) {
   const reportProse = (html) => {
     if (!insertedStatus && html.includes("</h1>")) {
       insertedStatus = true;
-      html = html.replace("</h1>", `</h1>${statusBlockHtml}`);
+      html = html.replace(/<h1\b[^>]*>/, (heading) => `${statusBlockHtml}${heading}`)
+        .replace("</h1>", `</h1>${taskLinksHtml}`);
     }
     return markdownBatch.slot(html, "prose-block");
   };
@@ -337,7 +337,7 @@ export function renderReportsView(container, state, handlers) {
   const selectionError = state.reportSelectionError ? `<p role="alert">${escapeHtml(state.reportSelectionError)}</p>` : "";
   const renderedWithMeta = (insertedStatus && !loadingReport
     ? reportBody
-    : `<div class="prose-block"><h1>${escapeHtml(activeReport.title)}</h1>${statusBlockHtml}</div>${reportBody}`) + selectionError;
+    : `<div class="prose-block">${statusBlockHtml}<h1>${escapeHtml(activeReport.title)}</h1>${taskLinksHtml}</div>${reportBody}`) + selectionError;
 
   const markup = `
     <div class="reports-layout">

@@ -2487,7 +2487,8 @@ code.msg-id {
   min-width: 0;
 }
 
-.report h1:first-child {
+.report h1:first-child,
+.report #report-status + h1 {
   margin: 0 0 2px;
 }
 
@@ -2503,12 +2504,22 @@ article#report.report img,
 
 #report-status {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  margin: 0 0 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 2px;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.report-task-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 12px;
+  color: hsl(var(--text-tertiary));
+  font-size: 12px;
 }
 
 #report-ack-history .report-answer-entry {
