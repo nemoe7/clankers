@@ -3597,3 +3597,147 @@ def test_health_expires_abandoned_poll_heartbeat() -> None:
     assert health["polling_since"] is None
   finally:
     store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("hidden_target", [False, True])
+def test_navigation_loads_unseen_message_history(
+  tmp_path: Path, hidden_target: bool
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for index in range(60):
+    app.messages.send_message(
+      f"Message {index} " + "Text " * 100,
+      msg_id=f"{index:06x}",
+      blocking=False,
+      hidden=hidden_target and index == 1,
+      parent_refs=[{"type": "message", "id": "000001"}] if index == 59 else None,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page(viewport={"width": 411, "height": 799})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        page.locator(
+          '.message[data-msg-id="00003b"] [data-reference-id="000001"]'
+        ).click()
+        target = page.locator('.message[data-msg-id="000001"]')
+        target.wait_for()
+        assert target.get_attribute("data-hidden") == (
+          "true" if hidden_target else "false"
+        )
+        assert target.get_attribute("data-highlight") == "true"
+        page.wait_for_timeout(1000)
+        assert target.evaluate("""el => {
+          const target = el.getBoundingClientRect();
+          const history = document.querySelector('#history').getBoundingClientRect();
+          return target.bottom > history.top && target.top < history.bottom;
+        }""")
+        app.messages.send_message("New message", msg_id="ff0000", blocking=False)
+        page.wait_for_function(
+          "document.querySelector('.message[data-msg-id=\"ff0000\"]') !== null",
+          timeout=10000,
+        )
+        assert target.count() == 1
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("change_tab", [True, False])
+def test_navigation_handles_tab_change_and_refresh(
+  tmp_path: Path, change_tab: bool
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  for index in range(40):
+    app.messages.send_message(
+      f"Message {index}",
+      msg_id=f"{index:06x}",
+      blocking=False,
+      parent_refs=[{"type": "message", "id": "000001"}] if index == 39 else None,
+    )
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
+      )
+      try:
+        page = browser.new_page()
+        page.add_init_script("""(() => {
+          const original = window.fetch.bind(window);
+          window.holdHistory = false;
+          window.releaseHistory = null;
+          window.historyRequests = 0;
+          window.fetch = async (...args) => {
+            if (String(args[0]).startsWith('/messages?')) window.historyRequests += 1;
+            if (window.holdHistory && String(args[0]).startsWith('/messages?')) {
+              window.holdHistory = false;
+              await new Promise(resolve => { window.releaseHistory = resolve; });
+            }
+            return original(...args);
+          };
+        })()""")
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.wait_for_function(
+          "document.querySelectorAll('#history .message').length === 20"
+        )
+        page.evaluate("window.holdHistory = true")
+        page.locator(
+          '.message[data-msg-id="000027"] [data-reference-id="000001"]'
+        ).click()
+        page.wait_for_function("window.releaseHistory !== null")
+        if change_tab:
+          page.locator("#tab-tasks").click()
+        else:
+          previous_requests = page.evaluate("window.historyRequests")
+          app.messages.send_message(
+            "Concurrent update", msg_id="ff0000", blocking=False
+          )
+          page.wait_for_function(
+            "count => window.historyRequests > count",
+            arg=previous_requests,
+            timeout=10000,
+          )
+        page.evaluate("window.releaseHistory()")
+        if change_tab:
+          page.wait_for_function(
+            "document.querySelector('#view-tasks').hidden === false"
+          )
+          assert page.locator("#tab-tasks").get_attribute("aria-selected") == "true"
+        else:
+          page.locator('.message[data-msg-id="000001"]').wait_for(timeout=10000)
+        assert not page.locator("#modal-shell").evaluate("element => element.open")
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

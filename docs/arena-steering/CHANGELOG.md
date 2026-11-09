@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Load message history through referenced IDs before scrolling to them.
+
 - Continue work when polling directs it.
 
 - Increase keyboard focus contrast and keep the ring inside the control.

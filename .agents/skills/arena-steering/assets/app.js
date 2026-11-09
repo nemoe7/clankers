@@ -615,6 +615,7 @@ const composerUploads = createComposerUploads(store, (file) => api.uploadFile(fi
 let replySelectionRevision = 0;
 let reportSelectionRevision = 0;
 let confirmedReportId = null;
+let referenceNavigationRevision = 0;
 
 const handlers = {
   onRenderDraft(markdown) {
@@ -681,16 +682,31 @@ const handlers = {
   },
   async onNavigateReference(type, id) {
     if (!id) return;
+    const navigationRevision = ++referenceNavigationRevision;
     try {
       const current = store.getState();
       if (type === "message") {
         let target = (current.messages || []).find((item) => item.id === id);
         if (!target) target = (await api.getMessage(id)).message;
+        if (navigationRevision !== referenceNavigationRevision) return;
         if (!target) throw new Error("Message not found");
         expandMessageHistory();
         const latest = store.getState();
-        store.setState({ activeTab: "messages", searchQuery: "", showHidden: latest.showHidden || target.hidden,
-          messages: (latest.messages || []).some((item) => item.id === id) ? latest.messages : [...(latest.messages || []), target] });
+        store.setState({ activeTab: "messages", searchQuery: "", showHidden: latest.showHidden || target.hidden });
+        const key = messageQueryKey(store.getState());
+        let messages = loadedMessageKey === key && (latest.messages || []).some((item) => item.id === id)
+          ? latest.messages : await fetchMessagePage({ reset: true });
+        while (navigationRevision === referenceNavigationRevision && messageQueryKey(store.getState()) === key && store.getState().activeTab === "messages") {
+          if (messages?.some((item) => item.id === id)) break;
+          if (!messages && store.getState().messagesError) throw new Error(store.getState().messagesError);
+          if (!messages) {
+            messages = await fetchMessagePage({ reset: true });
+            continue;
+          }
+          if (!store.getState().messagesHasMore || !messages.length) throw new Error("Message not found in history");
+          messages = await fetchMessagePage({ before: messages[0].id });
+        }
+        if (navigationRevision !== referenceNavigationRevision || messageQueryKey(store.getState()) !== key || store.getState().activeTab !== "messages") return;
       } else if (type === "task") {
         let target = (current.tasks || []).find((item) => item.id === id);
         if (!target) target = (await api.getTask(id)).task;
@@ -711,7 +727,7 @@ const handlers = {
       } else return;
       const selector = type === "message" ? `.message[data-msg-id="${CSS.escape(id)}"]` : `.task[data-task-id="${CSS.escape(id)}"]`;
       const row = document.querySelector(selector);
-      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      row?.scrollIntoView({ behavior: type === "message" ? "instant" : "smooth", block: "center" });
       if (row) {
         row.dataset.highlight = "true";
         setTimeout(() => { if (row.isConnected) delete row.dataset.highlight; }, 1200);
