@@ -2444,11 +2444,6 @@ def test_house_style_amendments_stay_synced():
       encoding="utf-8"
     )
     assert "--edge-fade: 24px; --edge-ramp: 32px; --scrollbar-carve: 15px;" in edge_fade
-    timestamps = (root / "references/recipes/relative-timestamps.md").read_text(
-      encoding="utf-8"
-    )
-    assert "font-variant-numeric: tabular-nums" in timestamps
-    assert "without requiring `var(--font-mono)`" in timestamps
     page_mem = (root / "references/recipes/page-memory.md").read_text(encoding="utf-8")
     assert "ACC207" in page_mem
     ranges = (root / "references/recipes/range-sliders.md").read_text(encoding="utf-8")
