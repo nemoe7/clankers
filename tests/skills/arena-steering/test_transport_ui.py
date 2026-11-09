@@ -667,3 +667,88 @@ def test_cli_poll_repeat_uses_v1_timing_and_resets_after_read(
   assert poll() == 0
   assert messages.pending_violation() is None
   store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+@pytest.mark.parametrize("transport", ["websocket", "poll", "mixed"])
+def test_overlapping_refresh_keeps_task_links_with_message_receipts(
+  tmp_path: Path, transport: str
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  message_id = "ab0123"
+  task_id = "delayed-link"
+  ack_text = "Acknowledged before browser refresh"
+  app.messages.send_message("Delayed latest-page probe", msg_id=message_id)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.add_init_script(
+          path=str(Path(__file__).parent / "fixtures" / "delayed_message_responses.js")
+        )
+        query = "?transport=poll" if transport == "poll" else ""
+        page.goto(f"http://127.0.0.1:{server.server_port}/{query}")
+        card = page.locator(f'.message[data-msg-id="{message_id}"]')
+        card.wait_for(state="visible")
+        page.wait_for_function("window.taskResponses > 0")
+        baseline = page.evaluate("window.taskResponses")
+        page.evaluate("window.holdLatest = true")
+        with store.transaction():
+          app.tasks.create_task(
+            task_id,
+            "Delayed link",
+            size=3,
+            details=["Probe only"],
+            msg_ids=[message_id],
+          )
+          app.messages.ack(message_id, ack_text)
+        page.evaluate("window.refreshProbe()")
+        page.wait_for_function("window.heldLatest.length >= 1")
+        if transport == "mixed":
+          page.evaluate("window.probeSocket.close()")
+          page.wait_for_function("window.probeSocket.readyState === 3")
+        page.evaluate("window.refreshProbe()")
+        page.wait_for_function("window.heldLatest.length >= 2")
+        page.wait_for_function(
+          "baseline => window.taskResponses >= baseline + 2", arg=baseline
+        )
+        page.evaluate("""() => {
+          const older = window.heldLatest.splice(0, window.heldLatest.length - 1);
+          for (const release of older) release();
+        }""")
+        page.evaluate("""() => new Promise(resolve => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        })""")
+        chip = card.locator(f'[data-reference-id="{task_id}"]')
+        assert not chip.count()
+        assert not card.locator(".reply").count()
+        page.evaluate("""() => {
+          window.holdLatest = false;
+          for (const release of window.heldLatest.splice(0)) release();
+        }""")
+        card.locator(".reply").get_by_text(ack_text).wait_for(timeout=10000)
+        chip.wait_for(state="visible", timeout=10000)
+        assert (
+          card.locator(".receipt-status").get_attribute("data-state-label")
+          == "Status: acked"
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    app._retire_store()

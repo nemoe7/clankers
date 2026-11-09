@@ -8,6 +8,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Reject superseded browser refreshes instead of combining new task links with stale message receipts. Preserve consistency across transports.
+
 - Schedule random book-and-clause recall quizzes. Validate the citation and exact clause before storing replies, retaining pending quizzes after rejection.
 
 - Show server validation details when survey submissions fail, retaining a nonzero CLI exit status.

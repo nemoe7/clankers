@@ -504,7 +504,10 @@ function scheduleTaskAgeRefresh(tasks) {
   taskAgeTimer = setTimeout(() => { void refreshAll(true); }, delay);
 }
 
+let refreshEpoch = 0;
+
 async function refreshAll(force = false) {
+  const epoch = ++refreshEpoch;
   try {
     const curState = store.getState();
     const currentReportEpoch = reportEpoch;
@@ -514,6 +517,7 @@ async function refreshAll(force = false) {
       api.listTasks({ full: true }),
       api.listReports({ stale: false, summary: true }),
     ]);
+    if (epoch !== refreshEpoch || msgRes === null) return;
     if (health.asset_version) {
       if (knownAssetVersion && knownAssetVersion !== health.asset_version) {
         reloadPreservingSurvey();
@@ -535,10 +539,10 @@ async function refreshAll(force = false) {
         reportedTimezone = null;
       });
     }
-    const messages = msgRes || store.getState().messages || [];
+    const messages = msgRes;
     const tasks = taskRes.tasks || [];
     scheduleTaskAgeRefresh(tasks);
-    if (currentReportEpoch !== reportEpoch) return;
+    if (epoch !== refreshEpoch || currentReportEpoch !== reportEpoch) return;
     const reportSummaries = (repRes.reports || []).filter((report) => !pendingReportDismissals.has(report.id));
     const survey = health.survey || {};
     const lastTool = health.last_tool || null;
@@ -565,7 +569,7 @@ async function refreshAll(force = false) {
         } });
       }
     }
-    if (currentReportEpoch !== reportEpoch) return;
+    if (epoch !== refreshEpoch || currentReportEpoch !== reportEpoch) return;
     const reports = hydrateReportsWithCache(reportSummaries);
     const latestSelection = store.getState().selectedReportId;
     const currentSelectedReportId = reports.some((report) => report.id === latestSelection)
