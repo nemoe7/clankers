@@ -602,8 +602,7 @@ code.msg-id[data-state="bad"],
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
-  --tab-rail: 0px;
-  height: 54px;
+  --tab-rail: 8px;
   padding: var(--tab-rail) 5vw;
   background-color: hsl(var(--surface-secondary));
   border-bottom: 1px solid hsl(var(--border-faint));
@@ -1074,9 +1073,10 @@ mark.search-hit {
   content: "";
   position: absolute;
   z-index: -1;
-  inset: -1px;
-  height: auto;
-  border-radius: 0;
+  inset: 50% 0 auto;
+  height: calc(1lh + 2 * (var(--tab-padding-block) + 1px));
+  transform: translateY(-50%);
+  border-radius: 6px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1092,7 +1092,7 @@ mark.search-hit {
 #report-pip,
 .tab-pip {
   position: absolute;
-  top: 6.5px;
+  top: calc(50% - 3.5px);
   right: 5px;
   display: inline-block;
   width: 7px;
@@ -1107,8 +1107,8 @@ mark.search-hit {
 
 #report-needs-answer {
   position: absolute;
-  top: 3px;
-  right: 5px;
+  top: calc(50% - 7px);
+  right: 1px;
   display: inline-flex;
   width: 14px;
   height: 14px;
@@ -2607,7 +2607,8 @@ article#report.report img,
 
 @media (max-width: 60em) {
   .topbar {
-    padding: var(--tab-rail) 16px;
+    --tab-rail: 10px;
+    padding: var(--tab-rail) 8px;
   }
 
   .main-content {
@@ -2685,6 +2686,7 @@ article#report.report img,
 
 @media (max-height: 30em) {
   .topbar {
+    --tab-rail: 6px;
     padding: var(--tab-rail) 12px;
   }
 

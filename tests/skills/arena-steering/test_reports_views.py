@@ -899,7 +899,6 @@ def test_reports_tab_prioritizes_attention_inside_compact_header(
         pip = page.locator("#report-pip")
         question.wait_for(state="visible")
         assert pip.is_hidden()
-        expected_header_height = 54
 
         def check_layout(state):
           for width, height in ((1372, 883), (855, 325), (411, 799), (375, 700)):
@@ -911,15 +910,29 @@ def test_reports_tab_prioritizes_attention_inside_compact_header(
               const bounds = tab.getBoundingClientRect();
               const header = document.querySelector('.topbar').getBoundingClientRect();
               const hover = getComputedStyle(tab, '::before');
+              const oldHeader = document.querySelector('.topbar').cloneNode(true);
+              oldHeader.style.cssText = 'position:fixed;visibility:hidden;height:auto';
+              const oldNav = oldHeader.querySelector('.tab-nav');
+              oldNav.style.cssText = 'align-self:center;margin-block:0;align-items:center';
+              document.body.append(oldHeader);
+              const oldHeaderHeight = oldHeader.getBoundingClientRect().height;
+              oldHeader.remove();
               const indicator = [...tab.querySelectorAll('[role="img"]')].find(el => !el.hidden);
               const icon = indicator?.getBoundingClientRect();
+              const hoverHeight = parseFloat(hover.height);
+              const hoverTop = bounds.top + tab.clientTop + parseFloat(hover.top) - hoverHeight / 2;
               return {
-                headerHeight: header.height,
+                headerHeight: header.height, oldHeaderHeight,
+                textLeft: text.left, textRight: text.right,
+                iconLeft: icon?.left, iconRight: icon?.right,
+                tabLeft: bounds.left, tabRight: bounds.right,
                 textCenter: (text.left + text.right) / 2,
                 tabCenter: (bounds.left + bounds.right) / 2,
                 tabTop: bounds.top, tabBottom: bounds.bottom,
                 headerTop: header.top, headerBottom: header.bottom,
-                hoverHeight: parseFloat(hover.height),
+                hoverHeight,
+                iconInsideHover: !icon || (icon.top >= hoverTop
+                  && icon.bottom <= hoverTop + hoverHeight),
                 iconInside: !icon || (icon.top >= bounds.top && icon.bottom <= bounds.bottom
                   && icon.left >= bounds.left && icon.right <= bounds.right),
                 iconOutsideText: !icon || icon.left >= text.right || icon.right <= text.left
@@ -934,21 +947,25 @@ def test_reports_tab_prioritizes_attention_inside_compact_header(
                 overflow: document.documentElement.scrollWidth > innerWidth,
               };
             }""")
-            assert geometry["headerHeight"] == expected_header_height
+            assert geometry["headerHeight"] <= geometry["oldHeaderHeight"], geometry
             assert abs(geometry["textCenter"] - geometry["tabCenter"]) < 1
             assert geometry["tabTop"] == geometry["headerTop"]
             assert geometry["headerBottom"] - geometry["tabBottom"] <= 1
             assert geometry["topHit"] and geometry["bottomHit"]
-            assert (
-              abs(
-                geometry["hoverHeight"] - (geometry["tabBottom"] - geometry["tabTop"])
-              )
-              < 1
+            assert geometry["hoverHeight"] < geometry["tabBottom"] - geometry["tabTop"]
+            assert geometry["iconInside"] and geometry["iconOutsideText"], (
+              geometry["textLeft"],
+              geometry["textRight"],
+              geometry["iconLeft"],
+              geometry["iconRight"],
+              geometry["tabLeft"],
+              geometry["tabRight"],
             )
-            assert geometry["iconInside"] and geometry["iconOutsideText"]
+            assert geometry["iconInsideHover"], geometry
             assert max(geometry["tabWidths"]) - min(geometry["tabWidths"]) < 1
             assert geometry["navRight"] < geometry["actionsLeft"]
             assert not geometry["overflow"]
+            page.locator("#tab-reports").hover()
             page.screenshot(path=str(tmp_path / f"header-{state}-{width}.png"))
 
         check_layout("question")

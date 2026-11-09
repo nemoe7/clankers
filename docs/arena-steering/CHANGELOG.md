@@ -10,7 +10,7 @@ This log has no Unreleased section.
 
 - Send hidden nonblocking run verdict notices at completion without requiring an active poll, retaining one notice per run.
 
-- Set a compact header with full-height tab hover targets. Center tab labels and show the question indicator before unseen report dots.
+- Restore compact header spacing and rounded inner hover backgrounds while retaining full-height tab click targets. Center labels and prioritize question indicators before unseen dots.
 
 - Reject superseded browser refreshes instead of combining new task links with stale message receipts. Preserve consistency across transports.
 
