@@ -11,6 +11,7 @@ This log has no Unreleased section.
 ### Changed
 
 - Load startup survey question text from `skills/arena-steering/references/survey-questions.txt` in Arena prompt fill and align startup survey instructions with `steer survey`.
+- Remove the retired key-command hint without changing proxy routes or storage keys, and correct the detached-test command.
 
 ## [1.13.13]
 

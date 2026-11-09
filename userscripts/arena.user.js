@@ -1123,7 +1123,7 @@
         type +
         " (" +
         keyCountdown(atIso, nowMs) +
-        "). Run arena-preview key to read it."
+        ")."
       );
     }
 
