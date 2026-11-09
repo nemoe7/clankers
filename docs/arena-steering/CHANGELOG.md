@@ -11,6 +11,10 @@ This log has no Unreleased section.
 - Carry the Steering procedures moved out of Arena: installer rerun, survey timing, reference reading, process startup, inbox acknowledgement, task records, gates, reports, and questions.
 - State that Arena and the skill stay in force together.
 
+### Fixed
+
+- Give the report ID chip the same horizontal text inset as the message and task chips.
+
 ## [2.2.5]
 
 ### Removed

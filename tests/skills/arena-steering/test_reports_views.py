@@ -1748,6 +1748,24 @@ def test_report_header_tracks_linked_tasks_without_duplicate_title(
         assert (
           id_chip.evaluate("el => parseFloat(getComputedStyle(el).borderRadius)") > 0
         )
+        insets = id_chip.evaluate("""el => {
+          const chip = el.getBoundingClientRect();
+          const code = el.querySelector('code');
+          const range = document.createRange();
+          range.selectNodeContents(code);
+          const ink = range.getBoundingClientRect();
+          const chipStyle = getComputedStyle(el);
+          const codeStyle = getComputedStyle(code);
+          return {
+            left: ink.left - chip.left,
+            right: chip.right - ink.right,
+            expected: parseFloat(chipStyle.borderLeftWidth)
+              + parseFloat(chipStyle.paddingLeft)
+              + parseFloat(codeStyle.paddingLeft),
+          };
+        }""")
+        assert abs(insets["left"] - insets["right"]) < 0.5, insets
+        assert abs(insets["left"] - insets["expected"]) < 0.5, insets
         assert report.locator(".report-task-links").inner_text().startswith("Task:")
         page.screenshot(path=str(tmp_path / f"report-linked-task-{width}.png"))
         chip.click()

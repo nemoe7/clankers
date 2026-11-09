@@ -218,7 +218,8 @@ pre,
   font-variant-numeric: tabular-nums;
 }
 
-:not(pre) > code:not(.msg-id) {
+:not(pre) > code:not(.msg-id),
+.reply-parent-chip > code.msg-id {
   overflow-wrap: anywhere;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -1759,6 +1760,7 @@ code.msg-id {
 }
 
 .reply-parent-chip > code:not(.msg-id),
+.reply-parent-chip > code.msg-id,
 .composer-reply-chip > code:not(.msg-id),
 #report .reply-parent-chip > code:not(.msg-id) {
   font-size: 11px;
