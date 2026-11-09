@@ -1145,10 +1145,16 @@ class SteeringApp:
       if report.status != "published":
         raise ValueError("report_id must name a published report")
 
-    heading = f"VIOLATION: {reason}. Ack with file:ln: clause then fix cause."
+    label = (
+      "Task missing details"
+      if reason == "missing-details"
+      else reason.removesuffix("-violation").replace("-", " ").capitalize()
+    )
+    lines = [f"VIOLATION: {label}"]
     if cited:
-      heading += f" Cited: {cited}"
-    lines = [heading]
+      lines.append(f"Cited: {cited}")
+    if clause_file:
+      lines.append(f"Book: {clause_file}")
     if report is not None:
       lines.append(f"Report: {report.id}")
       source = Path(report.source_file) if report.source_file else None

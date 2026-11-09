@@ -67,7 +67,8 @@ POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
 POLL_IMMEDIATE_SECONDS = 1.0
-BIBLE_READ = "If full bible missing, use read_file for {paths}"
+VIOLATION_ACK = "Ack this with file:ln:clause for which rule was violated then fix the cause of the violation."
+BIBLE_READ = "If cannot recall clause from memory, use read_file for {paths} and answer the `steer survey`"
 _BIBLE_PATHS = (
   "AGENTS.md",
   "ARENA.md",
@@ -86,10 +87,10 @@ def _validate_new_entity_id(value: str, label: str) -> None:
 
 
 def with_bible_read(body: str) -> str:
-  """Append the separate, conditional full-bible reminder to a true violation."""
+  """Append the acknowledgement and conditional full-bible reminder to a true violation."""
   root = pre_mod.repo_root()
   paths = ", ".join(home_relative(root / relative) for relative in _BIBLE_PATHS)
-  return body + "\n" + BIBLE_READ.format(paths=paths)
+  return f"{body}\n{VIOLATION_ACK}\n{BIBLE_READ.format(paths=paths)}"
 
 
 def _validate_ack_markdown(markdown: str, target_id: str) -> str:

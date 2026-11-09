@@ -19,8 +19,9 @@ import pytest
 from arena_steering import cli, git_safety, pre
 from arena_steering.cli import main as cli_main
 from arena_steering.server import scripts_signature
-from arena_steering.services import with_bible_read
+from arena_steering.services import BIBLE_READ, VIOLATION_ACK, with_bible_read
 
+BIBLE_READ_PREFIX = BIBLE_READ.split("{paths}")[0].strip()
 PENDING_ACK_PUSH_REASON = "Inbox has pending"
 
 
@@ -77,6 +78,15 @@ def test_notice_paths_resolve_against_runtime_home(
   assert "~/checkout/ARENA.md" in violation
   assert "~/checkout/.agents/skills/arena-steering/SKILL.md" in violation
   assert str(checkout) not in violation
+  assert violation.splitlines()[-2] == VIOLATION_ACK
+  expected_paths = (
+    "~/checkout/AGENTS.md",
+    "~/checkout/ARENA.md",
+    "~/checkout/.agents/skills/arena-steering/SKILL.md",
+  )
+  assert violation.splitlines()[-1] == BIBLE_READ.format(
+    paths=", ".join(expected_paths)
+  )
   ctx = pre.PreContext(
     line=f"rg -n gate {checkout / 'AGENTS.md'}",
     cwd=checkout,
@@ -1112,7 +1122,7 @@ def test_marked_detached_shell_does_not_spend_inbox_call_budget(
   )
   assert code == pre.BLOCK
   assert PENDING_ACK_PUSH_REASON in out
-  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
 
 
 @pytest.mark.parametrize(
@@ -1229,9 +1239,7 @@ def test_owner_supplied_pre_notices_have_only_conditional_violation_guidance(
   _seed(_isolate_state, "Ready", acked=True)
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK and notice in out
-  assert (
-    "If full bible missing, use read_file for" in out  # nonemo: NMT100
-  ) == is_violation
+  assert (BIBLE_READ_PREFIX in out) == is_violation
   if line.startswith("steer read"):
     assert "Run `steer read` or `steer poll` alone" in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
@@ -1261,7 +1269,7 @@ def test_other_immediate_violations_show_conditional_bible_guidance(
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK
   assert notice in out
-  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
   assert ".agents/skills/arena-steering/SKILL.md" in out
 
 
@@ -1279,7 +1287,7 @@ def test_sleep_during_live_run_names_it_and_shows_bible_guidance(
   assert code == pre.BLOCK
   assert "VIOLATION: Sleep run BANNED." in out  # nonemo: NMT100
   assert "Live run: verify." in out  # nonemo: NMT100
-  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
 
 
 def test_unknown_cwd_push_uses_nonviolation_recovery() -> None:
@@ -1300,7 +1308,7 @@ def test_wireframe_stage_warning_has_no_violation_flag(_isolate_state: Path) -> 
     and "Commit has wireframe. Remove and retry." in out  # nonemo: NMT100
   )
   assert "Violation flag:" not in out
-  assert "If full bible missing" not in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX not in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   assert messages.pending_ids() == []
@@ -1763,7 +1771,7 @@ def test_routed_pr_session_id_violation_keeps_its_immediate_notice(
   assert code == pre.BLOCK
   assert "VIOLATION: Cited session-local ID in PR data." in out  # nonemo: NMT100
   assert "body:1: aa11bb" in out
-  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
   assert "Run failed:" not in out
 
 
@@ -1853,7 +1861,7 @@ def test_commit_refuses_staged_capture_and_new_session_id(
   assert "VIOLATION: Cited session-local ID." in out  # nonemo: NMT100
   assert f"~/{os.path.relpath(note, Path.home())}:2:" in out
   assert "Remove the citation and retry." in out  # nonemo: NMT100
-  assert "If full bible missing" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
   assert "Violation flag:" not in out
   assert messages.pending_violation() is None
   nested = "bash -c 'git commit -m review'"
@@ -1907,7 +1915,7 @@ def test_commit_name_collision_guides_safe_rename(
   assert code == pre.BLOCK
   assert "style.css:1: alias-token" in out
   assert "steer ren OLD_ID NEW_ID" in out
-  assert "If full bible missing" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   store.close()
@@ -1941,7 +1949,7 @@ def test_commit_comparison_failure_does_not_flag_content(
   )
   assert code == pre.BLOCK
   assert out.splitlines()[0] == "Git changes failed detect. Retry after recover."
-  assert "If full bible missing" not in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX not in out
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.pending_violation() is None
   store.close()
@@ -1967,7 +1975,7 @@ def test_managed_worktree_refuses_commit_push_and_run(
   ):
     code, out = _run("pre", "-l", command, "-c", command, "-s", "bash")
     assert code == pre.BLOCK and "blocked in worktree" in out, command  # nonemo: NMT100
-    assert "If full bible missing" not in out  # nonemo: NMT100
+    assert BIBLE_READ_PREFIX not in out
 
   monkeypatch.chdir(_git_checkout)
   command = f"git -C {worktree} commit -m review"
@@ -2009,7 +2017,7 @@ def test_push_uses_remote_default_and_fails_closed(
   )
   assert code == pre.BLOCK and "trunk" in out
   assert "VIOLATION: Push blocked. Only push main." in out  # nonemo: NMT100
-  assert "If full bible missing, use read_file for" in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX in out
   code, _ = _run(
     "pre",
     "-l",
@@ -2042,7 +2050,7 @@ def test_push_uses_remote_default_and_fails_closed(
   )
   assert code == pre.BLOCK and "trunk" in out
   assert "Push blocked. Rebase default and retry." in out  # nonemo: NMT100
-  assert "If full bible missing" not in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX not in out
   nested = "bash -c 'git push origin HEAD:topic'"
   code, out = _run("pre", "-l", nested, "-c", nested, "-s", "bash")
   assert code == pre.BLOCK and "trunk" in out
@@ -2061,7 +2069,7 @@ def test_push_uses_remote_default_and_fails_closed(
   assert (
     "remote default compare failed. Check remote and retry." in out  # nonemo: NMT100
   )
-  assert "If full bible missing" not in out  # nonemo: NMT100
+  assert BIBLE_READ_PREFIX not in out
 
   extra = tmp_path / "extra.git"
   git("init", "--bare", "-b", "develop", str(extra))
