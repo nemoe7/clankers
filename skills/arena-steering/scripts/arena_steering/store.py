@@ -455,10 +455,19 @@ class SqliteStore:
       self._conn.close()
 
   def data_version(self) -> tuple[int, int]:
-    """Count commits from other connections and changes on this connection."""
+    """Version content and metadata without treating poll heartbeat ticks as changes."""
     with self._lock:
-      row = self._conn.execute("PRAGMA data_version").fetchone()
-      return (int(row[0]) if row else 0, self._conn.total_changes)
+      rows = self._conn.execute(
+        "SELECT state_clock.revision_us, meta.key, "
+        "CASE WHEN meta.key = 'polling_at' THEN CAST(meta.value <> '' AS TEXT) "
+        "ELSE meta.value END AS value "
+        "FROM state_clock LEFT JOIN meta ON 1 = 1 WHERE singleton = 1 ORDER BY meta.key"
+      ).fetchall()
+      metadata = [(row["key"], row["value"]) for row in rows if row["key"] is not None]
+      digest = hashlib.sha256(
+        json.dumps(metadata, ensure_ascii=False).encode("utf-8")
+      ).digest()
+      return (int(rows[0]["revision_us"]) if rows else 0, int.from_bytes(digest, "big"))
 
   @contextmanager
   def transaction(self) -> Iterator[None]:

@@ -14,6 +14,7 @@ This log has no Unreleased section.
 - Keep the report picker and answer-history divider outside both scrolling containers.
 - Use the available message width before wrapping attachment cards.
 - Place report ID and timestamp above the title, with linked task chips below it.
+- Ignore polling heartbeat timestamp changes in WebSocket refresh detection, retaining poll start, stop, and content updates.
 
 ### Security
 

@@ -21,6 +21,34 @@ from arena_steering.store import SqliteStore
 EXPECTED_INITIAL_VERSION = "2.2.3"
 
 
+@pytest.mark.parametrize("external", [False, True])
+def test_data_version_ignores_poll_heartbeat_churn(
+  tmp_path: Path, external: bool
+) -> None:
+  path = tmp_path / "heartbeat.sqlite3"
+  reader = SqliteStore(path)
+  writer = SqliteStore(path) if external else reader
+  try:
+    before = reader.data_version()
+    writer.set_meta("polling_at", "2026-11-09T00:00:00Z")
+    started = reader.data_version()
+    assert started != before
+    writer.set_meta("polling_at", "2026-11-09T00:00:01Z")
+    assert reader.data_version() == started
+    writer.set_meta("timezone", "UTC")
+    changed = reader.data_version()
+    assert changed != started
+    writer.set_meta("polling_at", "")
+    assert reader.data_version() != changed
+    before_message = reader.data_version()
+    writer.save_message(Message(id="aa0010", body="New content"))
+    assert reader.data_version() != before_message
+  finally:
+    if external:
+      writer.close()
+    reader.close()
+
+
 def test_package_exposes_current_semver_version() -> None:
   assert __version__ == EXPECTED_INITIAL_VERSION
 

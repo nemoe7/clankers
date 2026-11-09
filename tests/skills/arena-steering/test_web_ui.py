@@ -4847,7 +4847,11 @@ def test_external_sqlite_write_changes_websocket_data_version(tmp_path: Path) ->
   not os.environ.get("ARENA_STEERING_CHROMIUM"),
   reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
 )
-def test_websocket_refreshes_after_external_store_write(tmp_path: Path) -> None:
+def test_websocket_refreshes_after_external_store_write(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.setattr("arena_steering.server.WS_HEARTBEAT_SECONDS", 0.05)
+  monkeypatch.setattr("arena_steering.server.WS_TICK_SECONDS", 0.02)
   playwright = pytest.importorskip("playwright.sync_api")
   path = tmp_path / "state.sqlite3"
   server_store = SqliteStore(path)
@@ -4879,6 +4883,20 @@ def test_websocket_refreshes_after_external_store_write(tmp_path: Path) -> None:
         page.goto(f"http://127.0.0.1:{server.server_port}/")
         page.locator('[data-msg-id="ac0001"]').first.wait_for(state="visible")
         assert sockets and '{"type":"change"}' in frames
+        with sockets[0].expect_event(
+          "framereceived",
+          predicate=lambda frame: frame == '{"type":"change"}',
+          timeout=6000,
+        ):
+          writer_store.set_meta("polling_at", "2026-11-09T00:00:00Z")
+        frames.clear()
+        with sockets[0].expect_event(
+          "framereceived",
+          predicate=lambda frame: frame == '{"type":"heartbeat"}',
+          timeout=6000,
+        ):
+          writer_store.set_meta("polling_at", "2026-11-09T00:00:01Z")
+        assert '{"type":"change"}' not in frames
         with sockets[0].expect_event(
           "framereceived",
           predicate=lambda frame: frame == '{"type":"change"}',
