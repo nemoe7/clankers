@@ -8,6 +8,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-09
 
+### Removed
+
+#### rules
+
+- Remove the retired ntfy restoration rule and both retired question-tool channel cases.
+
 ### Fixed
 
 #### maintenance

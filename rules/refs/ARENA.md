@@ -70,7 +70,6 @@
 - A receipt means received, not implemented. MUST acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
 - Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
-- NEVER silently restore ntfy.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
 - MUST use `nemoizer` for every piece of human-facing text you produce (responses, reports, code comments, and documentation), run every report over `nemoizer` before `steer report pub`, and fall back to ASD-STE100 Simplified Technical English and Humanizer when `nemoizer` is unavailable.
@@ -123,7 +122,7 @@
 - MUST ask questions as soon as they arise.
 - A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
 - Carry every proposal and question in a fielded report, never in chat.
-- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
+- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
 - Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before any work beyond setup, and the process tool's live-preview banner is not owner confirmation. The first successful start not yet confirmed in this session or after a branch change still needs a visibility question, including a start that repairs earlier failed reads; a later restart in the same session on the same branch does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with options carries a recommended answer, marked with `(x)` or `[x]` without writing `(recommended)` or `*` in the option text.

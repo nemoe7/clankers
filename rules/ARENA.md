@@ -65,7 +65,6 @@
 - Receipt ≠ completion: ack in same block as surfacing read, before announced implementation; longer work acked in progress.
 - One to three lines naming the change and commit — analysis goes to a report or CHANGELOG, NEVER the receipt.
 - No visible preview: ack in chat as literal `ACK:` + interpretation; notes only, NEVER in thought.
-- NEVER silently restore ntfy.
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions and patterns.
 - MUST use `nemoizer` for all human-facing text (responses, reports, comments, docs), run every report over `nemoizer` before `steer report pub`, falling back to ASD-STE100 and Humanizer when unavailable.
@@ -111,7 +110,7 @@
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - Ask ASAP via fielded reports (Reports tab); read answers at next steering read; affected work stops, independent work continues.
 - Carry every proposal and question in a fielded report, never in chat.
-- Use `ask_user` ONLY for: explicit tool request, unavailable preview (incl. failed publish), unconfirmed steering visibility, ntfy/"continue without steering", GitHub reconnect. NEVER when a report/new report can carry it.
+- Use `ask_user` ONLY for: explicit tool request, unavailable preview (incl. failed publish), unconfirmed steering visibility, GitHub reconnect. NEVER when a report/new report can carry it.
 - Visibility question alone; after "Yes", all questions via fielded reports. Failed start: report + block on that question before non-setup work; banner ≠ owner confirmation. Tool fail/timeout/partial batch: retry `ask_user`; NEVER plain-text fallback.
 - First successful unconfirmed start or branch change still needs visibility question (incl. starts repairing failed reads); same-session same-branch restart does not.
 - Every question with options MUST carry a recommended answer, marked with `(x)`/`[x]` (never `(recommended)` or `*` in text).
