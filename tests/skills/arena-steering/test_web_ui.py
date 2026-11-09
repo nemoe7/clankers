@@ -7059,9 +7059,9 @@ def test_violation_form_and_cancel_in_browser(
         assert reason.locator('option[value="format-violation"]').count() == 0
         page.locator("#violation-clause-file").select_option("ARENA.md")
         cited_reason = "Wrong command."
-        assert (
-          page.locator('label[for="violation-msg"]').inner_text()  # nonemo: NMT100
-          == "Cited reason (optional)"
+        page.locator('label[for="violation-msg"]').click()
+        assert page.locator("#violation-msg").evaluate(
+          "element => element === document.activeElement && !element.required"
         )
         page.locator("#violation-msg").fill(cited_reason)
         box = form.bounding_box()
