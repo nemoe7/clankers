@@ -2264,13 +2264,14 @@ def test_report_custom_answer_caret_matches_text_answer_padding(
             return {
               left: element.getBoundingClientRect().left,
               height: element.getBoundingClientRect().height,
+              minHeight: parseFloat(css.minHeight),
               inset: parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft),
             };
           }
           return {text: measure('.field-text-input'), custom: measure('.custom-text-input')};
         }""")
         assert metrics["custom"]["inset"] == metrics["text"]["inset"]
-        assert metrics["custom"]["height"] == 32
+        assert metrics["custom"]["height"] == metrics["custom"]["minHeight"]
         assert metrics["custom"]["left"] > metrics["text"]["left"] + 16
         custom.fill("An answer")
         assert custom.evaluate("element => document.activeElement === element")

@@ -19,6 +19,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Detect pixel strings, static measurement lookups, chained reads, and JavaScript `toBe` and `toHaveCSS` assertions.
+- Exempt measurements explicitly set to the asserted value in the same test.
 - Reconfigure `markers.py` CLI output streams to UTF-8 on Windows consoles.
 - Align rotation guidance with explicit forms and current mappings.
 

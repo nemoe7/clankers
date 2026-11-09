@@ -2703,9 +2703,15 @@ try {
   console.log(JSON.stringify({error:'SyntaxError', line:error.loc.line, column:error.loc.column + 1}));
   process.exit(0);
 }
+const MEASUREMENTS = new Set(__MEASUREMENTS__);
 function shape(node) {
   if (node?.type === 'Identifier') return node.name;
-  if (node?.type === 'MemberExpression' && !node.computed) return `${shape(node.object)}.${node.property.name}`;
+  if (node?.type === 'MemberExpression') {
+    if (!node.computed) return `${shape(node.object)}.${node.property.name}`;
+    if (node.property.type === 'Literal' && typeof node.property.value === 'string' &&
+      MEASUREMENTS.has(node.property.value.toLowerCase()))
+      return `${shape(node.object)}.${node.property.value}`;
+  }
   if (node?.type === 'CallExpression') return `${shape(node.callee)}(${node.arguments.map(shape).join(',')})`;
   return '<expression>';
 }
@@ -2859,25 +2865,57 @@ function boundedPoll(node) {
   return /(?:Date\.now|performance\.now|(?:time\.)?(?:monotonic|perf_counter))\s*\(/.test(condition) &&
     /\b(?:deadline|timeout|timeout_at|end_time|expires_at)\b/i.test(condition);
 }
-function pair(left, right, node, operator) {
+function pair(left, right, node, operator, explicit) {
   for (const [actual, expected] of [[left,right],[right,left]]) {
     if (expected?.type === 'Literal' && ['string','number'].includes(typeof expected.value)) {
       const column = Array.from(lines[node.loc.start.line - 1].slice(0, node.loc.start.column)).length + 1;
       const actShape = shape(actual);
       pairs.push({actual:actShape, value:expected.value, operator, lang:'js',
+        explicit_input:explicit.has(actShape) && explicit.get(actShape) === expected.value,
         web_taint:isTaintRhs(actShape), tainted:[...tainted],
         line:node.loc.start.line, column});
     }
   }
 }
-function checkIncludes(expr, node) {
+function checkIncludes(expr, node, explicit) {
   if (expr?.type === 'CallExpression' && expr.callee?.type === 'MemberExpression' &&
     expr.callee.property?.name === 'includes') {
-    pair(expr.callee.object, expr.arguments[0], node, 'membership');
+    pair(expr.callee.object, expr.arguments[0], node, 'membership', explicit);
   }
 }
-function visit(node, isBoundedPoll=false) {
+function recordInput(name, value, explicit) {
+  for (const key of explicit.keys()) {
+    if (key === name || key.startsWith(name + '.')) explicit.delete(key);
+  }
+  if (value?.type === 'Literal' && ['string','number'].includes(typeof value.value))
+    explicit.set(name, value.value);
+}
+function visit(node, isBoundedPoll=false, explicit=new Map()) {
   if (!node || typeof node !== 'object') return;
+  if (['FunctionDeclaration','FunctionExpression','ArrowFunctionExpression'].includes(node.type))
+    explicit = new Map();
+  if (node.type === 'IfStatement') {
+    visit(node.test, isBoundedPoll, new Map(explicit));
+    visit(node.consequent, isBoundedPoll, new Map(explicit));
+    visit(node.alternate, isBoundedPoll, new Map(explicit));
+    explicit.clear();
+    return;
+  }
+  if (['ForStatement','ForOfStatement','ForInStatement','WhileStatement','DoWhileStatement',
+    'TryStatement','SwitchStatement','SwitchCase'].includes(node.type)) {
+    explicit.clear();
+    explicit = new Map();
+  }
+  if (node.type === 'VariableDeclarator') recordInput(shape(node.id), node.init, explicit);
+  if (node.type === 'AssignmentExpression')
+    recordInput(shape(node.left), node.operator === '=' ? node.right : null, explicit);
+  if (node.type === 'UpdateExpression') recordInput(shape(node.argument), null, explicit);
+  if (node.type === 'ExpressionStatement' && node.expression?.type === 'CallExpression') {
+    const call = node.expression;
+    const setter = /^(.*\.)?set_([A-Za-z_][A-Za-z_0-9]*)$/.exec(shape(call.callee));
+    if (setter && call.arguments.length === 1)
+      recordInput((setter[1] || '') + setter[2], call.arguments[0], explicit);
+  }
   if (boundedPoll(node)) isBoundedPoll = true;
   if (node.type === 'AwaitExpression') {
     const delay = awaitedTimer(node);
@@ -2894,26 +2932,38 @@ function visit(node, isBoundedPoll=false) {
       ['FunctionExpression','ArrowFunctionExpression'].includes(arg.type))) testScope = true;
     if (['assert.equal','assert.strictEqual','assert.deepEqual',
       'assert.deepStrictEqual','assert.notEqual','assert.notStrictEqual'].includes(name)) {
-      pair(node.arguments[0], node.arguments[1], node, 'equality');
-      checkIncludes(node.arguments[0], node);
-      checkIncludes(node.arguments[1], node);
+      pair(node.arguments[0], node.arguments[1], node, 'equality', explicit);
+      checkIncludes(node.arguments[0], node, explicit);
+      checkIncludes(node.arguments[1], node, explicit);
+    } else if (node.callee?.type === 'MemberExpression' &&
+      node.callee.object?.type === 'CallExpression' &&
+      shape(node.callee.object.callee) === 'expect') {
+      const actual = node.callee.object.arguments[0];
+      if (node.callee.property.name === 'toBe') {
+        pair(actual, node.arguments[0], node, 'equality', explicit);
+      } else if (node.callee.property.name === 'toHaveCSS' &&
+        typeof node.arguments[0]?.value === 'string') {
+        pair({type:'MemberExpression', object:actual,
+          property:{type:'Identifier', name:node.arguments[0].value}, computed:false},
+          node.arguments[1], node, 'equality', explicit);
+      }
     } else if (name === 'assert' || name === 'assert.ok') {
       const expression = node.arguments[0];
       if (expression?.type === 'BinaryExpression' && ['==','===','!=','!=='].includes(expression.operator)) {
-        pair(expression.left, expression.right, node, 'equality');
+        pair(expression.left, expression.right, node, 'equality', explicit);
       } else {
-        checkIncludes(expression, node);
+        checkIncludes(expression, node, explicit);
       }
     }
   }
   for (const value of Object.values(node)) {
-    if (Array.isArray(value)) value.forEach(child => visit(child, isBoundedPoll));
-    else if (value && typeof value === 'object') visit(value, isBoundedPoll);
+    if (Array.isArray(value)) value.forEach(child => visit(child, isBoundedPoll, explicit));
+    else if (value && typeof value === 'object') visit(value, isBoundedPoll, explicit);
   }
 }
 visit(tree);
 console.log(JSON.stringify({pairs, waits, test_scope:testScope}));
-"""
+""".replace("__MEASUREMENTS__", json.dumps(sorted(MEASUREMENTS)))
 
 
 def shape(node):
@@ -2921,6 +2971,13 @@ def shape(node):
     return node.id
   if isinstance(node, ast.Attribute):
     return f"{shape(node.value)}.{node.attr}"
+  if (
+    isinstance(node, ast.Subscript)
+    and isinstance(node.slice, ast.Constant)
+    and isinstance(node.slice.value, str)
+    and node.slice.value.lower() in MEASUREMENTS
+  ):
+    return f"{shape(node.value)}.{node.slice.value}"
   if isinstance(node, ast.Call):
     return f"{shape(node.func)}({','.join(map(shape, node.args))})"
   return "<expression>"
@@ -3099,7 +3156,7 @@ def python_pairs(text):
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
   }
 
-  def pair(left, right, node, operator, tainted):
+  def pair(left, right, node, operator, tainted, explicit):
     for actual, expected in ((left, right), (right, left)):
       if isinstance(expected, ast.Constant) and type(expected.value) in (
         str,
@@ -3115,6 +3172,7 @@ def python_pairs(text):
         pairs.append(
           {
             "actual": act_shape,
+            "explicit_input": act_shape in explicit and explicit[act_shape] == raw_val,
             "value": val,
             "raw_value": raw_val,
             "tainted": sorted(tainted),
@@ -3129,11 +3187,64 @@ def python_pairs(text):
           }
         )
 
-  def walk_scope(scope_node, active_taint):
+  def record_input(node, explicit):
+    targets, value = [], None
+    if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+      targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+      value = None if isinstance(node, ast.AugAssign) else node.value
+    elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+      call = node.value
+      setter = shape(call.func).rsplit(".", 1)
+      if setter[-1].startswith("set_") and len(call.args) == 1:
+        target = setter[-1][4:]
+        if len(setter) > 1:
+          target = setter[0] + "." + target
+        targets = [target]
+        value = call.args[0]
+    for target in targets:
+      name = target if isinstance(target, str) else shape(target)
+      for key in list(explicit):
+        if key == name or key.startswith(name + "."):
+          explicit.pop(key)
+      if isinstance(value, ast.Constant) and type(value.value) is not bool:
+        explicit[name] = value.value
+
+  def walk_scope(scope_node, active_taint, explicit=None):
+    if explicit is None:
+      explicit = {}
     for child in ast.iter_child_nodes(scope_node):
       if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        walk_scope(child, active_taint | func_taint.get(id(child), set()))
+        walk_scope(child, active_taint | func_taint.get(id(child), set()), {})
         continue
+      if isinstance(
+        child,
+        (
+          ast.If,
+          ast.For,
+          ast.AsyncFor,
+          ast.While,
+          ast.Try,
+          ast.With,
+          ast.AsyncWith,
+          ast.Match,
+        ),
+      ):
+        incoming = dict(explicit) if isinstance(child, ast.If) else {}
+        for _, branch in ast.iter_fields(child):
+          if isinstance(branch, list):
+            statements = [item for item in branch if isinstance(item, ast.stmt)]
+            if statements:
+              walk_scope(
+                ast.Module(body=statements, type_ignores=[]),
+                active_taint,
+                dict(incoming),
+              )
+            for handler in branch:
+              if isinstance(handler, (ast.ExceptHandler, ast.match_case)):
+                walk_scope(handler, active_taint, {})
+        explicit.clear()
+        continue
+      record_input(child, explicit)
       if isinstance(child, ast.Assert):
         for expression in ast.walk(child.test):
           if isinstance(expression, ast.Compare):
@@ -3148,6 +3259,7 @@ def python_pairs(text):
                   if isinstance(operator, (ast.Eq, ast.NotEq))
                   else "membership",
                   active_taint,
+                  explicit,
                 )
               left = right
       if (
@@ -3165,8 +3277,9 @@ def python_pairs(text):
           if child.func.attr in {"assertIn", "assertNotIn"}
           else "equality",
           active_taint,
+          explicit,
         )
-      walk_scope(child, active_taint)
+      walk_scope(child, active_taint, explicit)
 
   walk_scope(tree, module_tainted)
   return {"pairs": pairs, "waits": _python_waits(tree, lines)}
@@ -3202,12 +3315,18 @@ def category(pair):
       words = re.findall(r"(?<![A-Za-z0-9_-])[A-Za-z']+(?![A-Za-z0-9_-])", candidate)
       if web_taint or len(words) >= 3:
         return "output_text"
+  measurement_value = value
+  if isinstance(value, str):
+    pixels = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+))px", value)
+    measurement_value = float(pixels[1]) if pixels else None
   if (
-    type(value) in (int, float)
-    and value > 0
+    type(measurement_value) in (int, float)
+    and measurement_value > 0
     and pair["operator"] == "equality"
+    and not pair.get("explicit_input")
     and (
       actual.split("(")[0].split(".")[-1].lower() in MEASUREMENTS
+      or actual.rsplit(".", 1)[-1].split("(")[0].lower() in MEASUREMENTS
       or actual.startswith("px(")
       or actual.startswith("len(")
       and any(word in CHANNELS for word in re.findall(r"\w+", actual))

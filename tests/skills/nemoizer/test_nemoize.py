@@ -660,6 +660,123 @@ def test_nmt200_zero_measurements_are_exempt(tmp_path):
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 3)]
 
 
+@pytest.mark.parametrize(
+  ("suffix", "assertion"),
+  [
+    ("py", 'assert element.width == "42px"'),
+    ("py", "assert check.measure(path.name) == 42"),
+    ("py", "assert check.measure(make_path(path.name)) == 42"),
+    ("py", 'assert metrics["width"] == 42'),
+    ("py", 'assert element.bounding_box()["width"] == 42'),
+    ("js", "expect(element.width).toBe(42);"),
+    ("js", 'expect(element).toHaveCSS("width", "42px");'),
+    ("js", "assert.equal(element.getBoundingClientRect().width, 42);"),
+    ("js", 'assert.equal(metrics["width"], 42);'),
+  ],
+)
+def test_nmt200_measurement_forms(tmp_path, suffix, assertion):
+  source = tmp_path / f"test_measurements.{suffix}"
+  source.write_text(assertion + "\n", encoding="utf-8")
+  reviewed = nemoize.review_tests([source])
+  assert not reviewed["errors"]
+  assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 1)]
+
+
+@pytest.mark.parametrize(
+  ("suffix", "assertion"),
+  [
+    ("py", 'assert metrics["width"] >= 42'),
+    ("py", 'assert metrics["width"] == 0'),
+    ("py", 'assert metrics["width"] == "0px"'),
+    ("py", 'assert metrics["width"] == config.WIDTH'),
+    ("py", 'assert metrics["status"] == 42'),
+    ("js", "expect(element.width).toBe(0);"),
+    ("js", "expect(element.width).toBe(config.WIDTH);"),
+    ("js", "expect(element.width).toBeGreaterThan(42);"),
+    ("js", 'expect(element).toHaveCSS("width", "0px");'),
+    ("js", 'expect(element).toHaveCSS("color", "42px");'),
+    ("js", "assert.equal(metrics[dynamicKey], 42);"),
+  ],
+)
+def test_nmt200_measurement_forms_keep_relations_and_constants(
+  tmp_path, suffix, assertion
+):
+  source = tmp_path / f"test_measurements.{suffix}"
+  source.write_text(assertion + "\n", encoding="utf-8")
+  reviewed = nemoize.review_tests([source])
+  assert not reviewed["errors"]
+  assert not reviewed["findings"]
+
+
+@pytest.mark.parametrize(
+  ("setup", "assertion", "flagged"),
+  [
+    ("set_height(200)", "height == 200", False),
+    ("panel.set_height(200)", "panel.height == 200", False),
+    ("height = 200", "height == 200", False),
+    ("set_height(200)", "height == 201", True),
+    ("set_width(200)", "height == 200", True),
+    ("other.set_height(200)", "panel.height == 200", True),
+    ("set_height(200)\nset_height(300)", "height == 200", True),
+    ("set_height(200)\nset_height(dynamic)", "height == 200", True),
+    ("height = 200\nheight = dynamic", "height == 200", True),
+    ("height = 200\nheight += 1", "height == 200", True),
+  ],
+)
+def test_nmt200_explicit_measurement_setup(tmp_path, setup, assertion, flagged):
+  source = tmp_path / "test_measurements.py"
+  body = "\n".join(
+    "  " + line for line in (setup + "\nassert " + assertion).splitlines()
+  )
+  source.write_text("def test_size():\n" + body + "\n", encoding="utf-8")
+  reviewed = nemoize.review_tests([source])
+  assert not reviewed["errors"]
+  assert bool(reviewed["findings"]) is flagged
+
+
+def test_nmt200_explicit_setup_stays_local_and_precedes_assertion(tmp_path):
+  source = tmp_path / "test_measurements.py"
+  source.write_text(
+    "def test_setup():\n  set_height(200)\n"
+    "def test_other():\n  assert height == 200\n  set_height(200)\n",
+    encoding="utf-8",
+  )
+  reviewed = nemoize.review_tests([source])
+  assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 4)]
+
+
+@pytest.mark.parametrize(
+  ("setup", "assertion", "flagged"),
+  [
+    ("set_height(200);", "height", False),
+    ("panel.set_height(200);", "panel.height", False),
+    ("let height = 200;", "height", False),
+    ("set_height(300);", "height", True),
+    ("other.set_height(200);", "panel.height", True),
+    ("set_height(200); set_height(dynamic);", "height", True),
+  ],
+)
+def test_nmt200_explicit_javascript_setup(tmp_path, setup, assertion, flagged):
+  source = tmp_path / "measurements.test.js"
+  source.write_text(
+    "test('size', () => { " + setup + " expect(" + assertion + ").toBe(200); });\n",
+    encoding="utf-8",
+  )
+  reviewed = nemoize.review_tests([source])
+  assert not reviewed["errors"]
+  assert bool(reviewed["findings"]) is flagged
+
+
+def test_nmt200_setup_does_not_leak_between_conditional_branches(tmp_path):
+  source = tmp_path / "test_measurements.py"
+  source.write_text(
+    "def test_size():\n  if flag:\n    set_height(200)\n  else:\n    assert height == 200\n",
+    encoding="utf-8",
+  )
+  reviewed = nemoize.review_tests([source])
+  assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 5)]
+
+
 def test_nmt300_detects_real_sleeps_and_exempts_bounded_polling(tmp_path):
   source = tmp_path / "test_waits.py"
   source.write_text(
@@ -2387,3 +2504,23 @@ def test_rotation_respects_fences_links_tables_and_code(tmp_path):
   assert code.read_text(encoding="utf-8") == (
     "item = pick(items)  # Select the type.\n"
   )
+
+
+@pytest.mark.parametrize(
+  ("suffix", "source_text"),
+  [
+    ("py", "height = 200\ndef test_default():\n  assert height == 200\n"),
+    (
+      "js",
+      "const height = 200;\ntest('default', () => { expect(height).toBe(200); });\n",
+    ),
+  ],
+)
+def test_nmt200_module_defaults_are_not_explicit_test_inputs(
+  tmp_path, suffix, source_text
+):
+  source = tmp_path / f"test_defaults.{suffix}"
+  source.write_text(source_text, encoding="utf-8")
+  reviewed = nemoize.review_tests([source])
+  assert not reviewed["errors"]
+  assert [row["rule"] for row in reviewed["findings"]] == ["NMT200"]

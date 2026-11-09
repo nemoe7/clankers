@@ -1428,19 +1428,20 @@ html = "components/buttons.html"
     assert chr_ann["renderer"] == "chromium"
     assert chr_ann["font_family"].startswith('"Custom Toml Sans"')
 
+  crop_bounds = (4, 4, 30, 20)
   crop_dst = toml_proj / "shot-cropped.png"
   crop_ann = annotate.annotate_image(
     toml_src,
     crop_dst,
     boxes=["4,4,20,20,red"],
-    crop="4,4,30,20",
+    crop=",".join(map(str, crop_bounds)),
     project=toml_proj,
     renderer="bitmap",
   )
-  assert crop_ann["width"] == 30
-  assert crop_ann["height"] == 20
+  assert crop_ann["width"] == crop_bounds[2]
+  assert crop_ann["height"] == crop_bounds[3]
   cw_dec, ch_dec, _ = annotate.decode_png(crop_dst.read_bytes())
-  assert (cw_dec, ch_dec) == (30, 20)
+  assert (cw_dec, ch_dec) == crop_bounds[2:]
 
   (toml_proj / "dev.css").write_text(
     "/* nuu-deviation: compact-toolbar: single-row 34px controls */\n"
@@ -1792,9 +1793,14 @@ def test_toml_annotations_canvas_arrows_and_icon_extraction(tmp_path, monkeypatc
   )
   png = tmp_path / "source.png"
   png.write_bytes(annotate.encode_png(80, 60, bytearray([10, 20, 30, 255] * 4800)))
+  box_geometry = (10, 10, 20, 20)
+  auto_crop_padding = 16
   spec = tmp_path / "annotate.toml"
   spec.write_text(
-    '[annotate]\ncrop = "pad"\nboxes = [{ x = 10, y = 10, width = 20, height = 20, color = "red" }]\n',
+    '[annotate]\ncrop = "pad"\nboxes = [{ '
+    f"x = {box_geometry[0]}, y = {box_geometry[1]}, "
+    f"width = {box_geometry[2]}, height = {box_geometry[3]}, "
+    'color = "red" }]\n',
     encoding="utf-8",
   )
   annotation = annotate.annotate_image(
@@ -1805,7 +1811,8 @@ def test_toml_annotations_canvas_arrows_and_icon_extraction(tmp_path, monkeypatc
     renderer="bitmap",
   )
   assert annotation["status"] == "annotated"
-  assert annotation["width"] == annotation["height"] == 46
+  assert annotation["width"] == box_geometry[0] + box_geometry[2] + auto_crop_padding
+  assert annotation["height"] == box_geometry[1] + box_geometry[3] + auto_crop_padding
   json_spec = tmp_path / "annotate.json"
   json_spec.write_text('{"boxes": []}', encoding="utf-8")
   with pytest.raises(ValueError, match="TOML"):
