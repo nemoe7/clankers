@@ -720,14 +720,14 @@ class MessageService:
     *,
     initial_task: Task | None = None,
     live_run: Callable[[], bool] | None = None,
-    finished_run: Callable[[], list[tuple[str, int]]] | None = None,
+    finished_run: Callable[[], list[tuple[str, int, str]]] | None = None,
   ) -> dict[str, Any]:
     """Wait for inbox work, an initial runnable task, a run, or eligible Skip."""
     timeout = max(0.0, min(float(timeout_seconds), 1799.0))
     deadline = time.monotonic() + timeout
     skipped = timed_out = False
     task: Task | None = None
-    verdicts: list[tuple[str, int]] = []
+    verdicts: list[tuple[str, int, str]] = []
     self.touch_agent()
     if not self.has_pending_deliverables():
       task = initial_task

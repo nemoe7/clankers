@@ -593,6 +593,8 @@ class PreContext:
   pending_ids: list[str] = field(default_factory=list)
   call_count: int = 0
   active_runs: tuple[str, ...] = ()
+  active_run_ids: tuple[tuple[str, str], ...] = ()
+  seen_live_run_log_ids: tuple[str, ...] = ()
   routed: bool = False
   cwd: Path | None = None
   checkout_root: Path | None = None
@@ -933,6 +935,49 @@ def _line_commands(ctx: PreContext, *, unwrap_timeout: bool = False) -> list[lis
       for inner, _ in embedded_pieces(words)
     ),
   ]
+
+
+LIVE_RUN_LOG_VIOLATION = (
+  "VIOLATION: Repeated read of live-run logs. Create a worktree associated "
+  "with the next upcoming task using `steer worktree add <name>`; see "
+  "`ARENA.md:192`. The live run will send its verdict in the inbox."
+)
+
+
+def live_run_log_read_ids(ctx: PreContext) -> tuple[str, ...]:
+  """Return active run IDs named by `steer run logs` in this shell line."""
+  active_by_name = dict(ctx.active_run_ids)
+  if not active_by_name:
+    return ()
+  run_ids: list[str] = []
+  for words in _line_commands(ctx, unwrap_timeout=True):
+    if (
+      len(words) < 4
+      or Path(words[0]).name not in {"steer", "arena-preview"}
+      or words[1:3] != ["run", "logs"]
+      or any(flag in words[3:] for flag in ("-h", "--help", "--version", "-V"))
+    ):
+      continue
+    if run_id := active_by_name.get(words[3]):
+      run_ids.append(run_id)
+  return tuple(run_ids)
+
+
+class LiveRunLogGuard:
+  """Block every repeat read of a run's logs while that run is live."""
+
+  name = "live-run-logs"
+
+  def applies(self, ctx: PreContext) -> bool:
+    return bool(live_run_log_read_ids(ctx))
+
+  def run(self, ctx: PreContext) -> PreResult:
+    seen = set(ctx.seen_live_run_log_ids)
+    for run_id in live_run_log_read_ids(ctx):
+      if run_id in seen:
+        return PreResult([LIVE_RUN_LOG_VIOLATION], BLOCK, blocked_by=self.name)
+      seen.add(run_id)
+    return PreResult()
 
 
 def remote_git_push(words: list[str]) -> bool:
@@ -1806,6 +1851,7 @@ class StartProcessTitleGuard:
 
 PIPELINE: tuple[PreStep, ...] = (
   StartProcessTitleGuard(),
+  LiveRunLogGuard(),
   SleepGuard(),
   InboxPipeGuard(),
   PollTimeoutGuard(),
@@ -1830,7 +1876,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     if step.name in finished and not (
       (step.name == "gate" and ctx.is_push())
       or (step.name == "sleep" and ctx.active_runs)
-      or step.name in {"git-safe", "route", "ack-quote"}
+      or step.name in {"git-safe", "route", "ack-quote", "live-run-logs"}
     ):
       continue
     if not step.applies(ctx):
