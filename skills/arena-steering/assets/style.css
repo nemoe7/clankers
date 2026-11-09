@@ -490,6 +490,11 @@ code.msg-id[data-state="bad"],
   white-space: normal;
 }
 
+.report :is(th, td) code:not(.msg-id):not(pre > code),
+.message-text :is(th, td) code:not(.msg-id):not(pre > code) {
+  overflow-wrap: normal;
+}
+
 .report tr,
 .message-text tr {
   background-color: hsl(var(--surface-primary));

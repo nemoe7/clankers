@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Preserve words in table code while allowing horizontal scrolling.
+
 - Keep recently viewed reports out of stale cleanup for five minutes after the last view signal.
 
 - Keep survey subtitle text inside the modal scroll area.

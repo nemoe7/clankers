@@ -3498,7 +3498,10 @@ def test_inline_code_wraps_without_changing_blocks_or_tables(tmp_path: Path) -> 
   store = SqliteStore(tmp_path / "state.sqlite3")
   app = SteeringApp(store, repo_name="Inline code wrapping")
   token = "long_path_segment/" * 20
-  markdown = f"`{token}`\n\n```text\n{token}\n```\n\n| Value |\n| --- |\n| Cell |\n"
+  markdown = (
+    f"`{token}`\n\n```text\n{token}\n```\n\n"
+    f"| `Value` | Another |\n| --- | --- |\n| `Keep the report picker` | `{'x' * 300}` |\n"
+  )
   app.messages.send_message(markdown, msg_id="aa0001", blocking=False)
   app.reports.publish_report("code-wrapping", "Code wrapping", markdown)
   server = create_http_server(app, host="0.0.0.0", port=0)
@@ -3545,6 +3548,26 @@ def test_inline_code_wraps_without_changing_blocks_or_tables(tmp_path: Path) -> 
               "element => getComputedStyle(element).overflowWrap"
             )
             == "normal"
+          )
+          header_code = page.locator(f"{container} th code").first
+          assert (
+            header_code.evaluate("element => getComputedStyle(element).overflowWrap")
+            == "normal"
+          )
+          table_code = page.locator(f"{container} td code").first
+          assert (
+            table_code.evaluate("element => getComputedStyle(element).overflowWrap")
+            == "normal"
+          )
+          long_code = page.locator(f"{container} td code").nth(1)
+          assert long_code.evaluate("element => element.getClientRects().length") == 1
+          table = page.locator(f"{container} table").first
+          assert table.evaluate("element => element.scrollWidth > element.clientWidth")
+          assert (
+            table.evaluate(
+              "element => { element.scrollLeft = element.scrollWidth; return element.scrollLeft; }"
+            )
+            > 0
           )
       finally:
         browser.close()

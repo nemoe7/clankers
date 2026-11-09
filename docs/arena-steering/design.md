@@ -18,6 +18,7 @@
 - Spacing follows the `4px` / `8px` / `12px` / `16px` / `20px` scale (`--space-1` through `--space-5`).
 - All three tab panels (`Messages`, `Reports`, `Tasks`) share a centered `900px` max-width container (`width: min(900px, 90vw)`).
 - List items use `2ch` hanging indentation (`list-style-position: outside; padding-inline-start: 2ch`) across Tasks and Markdown lists.
+- Markdown tables scroll horizontally when needed. Inline code inside cells wraps at normal breaks without splitting long tokens.
 
 ## Viewport Budget
 
