@@ -35,6 +35,8 @@ steer msg <id>
 - ALWAYS read attached images and text in full with `functions.read_file` before acknowledging their note.
 - Report missing attachment bytes instead of inferring content from a listed path.
 - Use `steer ack -i -t -z -d` to create and link a task while acknowledging one message or report answer.
+- Link messages only when they change a task's scope or acceptance criteria.
+- Leave unrelated clarifications unlinked.
 
 ## Tasks (`Tasks`)
 
