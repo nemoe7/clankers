@@ -49,6 +49,84 @@ def test_data_version_ignores_poll_heartbeat_churn(
     reader.close()
 
 
+def test_reopening_current_schema_skips_schema_setup(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  import sqlite3
+
+  path = tmp_path / "current-schema.sqlite3"
+  initial = SqliteStore(path)
+  message = Message(id="ac0010", body="Keep the existing data")
+  initial.save_message(message)
+  initial.close()
+  statements: list[str] = []
+  connect = sqlite3.connect
+
+  def traced_connect(*args, **kwargs):
+    connection = connect(*args, **kwargs)
+    connection.set_trace_callback(statements.append)
+    return connection
+
+  monkeypatch.setattr(sqlite3, "connect", traced_connect)
+  reopened = SqliteStore(path)
+  try:
+    assert reopened.get_message(message.id).body == message.body
+    assert not any(
+      "CREATE " in sql.upper() or "TABLE_INFO" in sql.upper() for sql in statements
+    ), statements
+    assert not any("BEGIN IMMEDIATE" in sql.upper() for sql in statements), statements
+    assert reopened._conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    assert reopened._conn.execute("PRAGMA synchronous").fetchone()[0] == 1
+  finally:
+    reopened.close()
+
+
+@pytest.mark.parametrize("invalidation", ["revision", "schema", "missing-marker"])
+def test_schema_setup_cache_invalidates_safely(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalidation: str
+) -> None:
+  import sqlite3
+
+  from arena_steering import store as store_module
+
+  path = tmp_path / "invalidated-schema.sqlite3"
+  initial = SqliteStore(path)
+  initial.close()
+  if invalidation == "revision":
+    monkeypatch.setattr(
+      store_module, "SCHEMA_REVISION", store_module.SCHEMA_REVISION + 1
+    )
+  else:
+    with sqlite3.connect(path) as connection:
+      if invalidation == "schema":
+        connection.execute("DROP INDEX messages_written_at")
+      else:
+        connection.execute("DELETE FROM meta WHERE key = 'schema_ready'")
+  calls: list[SqliteStore] = []
+  initialize = SqliteStore._init_state_tracking
+
+  def tracked_initialize(self):
+    calls.append(self)
+    initialize(self)
+
+  monkeypatch.setattr(SqliteStore, "_init_state_tracking", tracked_initialize)
+  reopened = SqliteStore(path)
+  try:
+    assert calls == [reopened]
+    version = reopened._conn.execute("PRAGMA schema_version").fetchone()[0]
+    assert (
+      reopened.get_meta("schema_ready") == f"{store_module.SCHEMA_REVISION}:{version}"
+    )
+    assert reopened._conn.execute(
+      "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'messages_written_at'"
+    ).fetchone()
+  finally:
+    reopened.close()
+  cached = SqliteStore(path)
+  assert calls == [reopened]
+  cached.close()
+
+
 def test_package_exposes_current_semver_version() -> None:
   assert __version__ == EXPECTED_INITIAL_VERSION
 

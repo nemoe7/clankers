@@ -16,6 +16,7 @@ This log has no Unreleased section.
 - Place report ID and timestamp above the title, with linked task chips below it.
 - Ignore polling heartbeat timestamp changes in WebSocket refresh detection, retaining poll start, stop, and content updates.
 - Resume through current-task discovery, with conditional bible reads and survey submission.
+- Skip repeated schema setup on current databases, rechecking schema changes, migration revisions, and legacy task states.
 
 ### Security
 

@@ -29,6 +29,7 @@ from .models import (
 )
 
 STATE_TABLES = ("messages", "tasks", "reports")
+SCHEMA_REVISION = 0  # Bump when schema setup or migrations change.
 LEGACY_TASK_STATUSES = frozenset({"in_progress", "blocked"})
 _STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -99,6 +100,19 @@ class SqliteStore:
           time.sleep(0.01)
       self._conn.execute("PRAGMA synchronous=NORMAL")
       self._conn.execute("PRAGMA foreign_keys=ON")
+      schema_version = self._conn.execute("PRAGMA schema_version").fetchone()[0]
+      if self._conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'"
+      ).fetchone():
+        ready = self._conn.execute(
+          "SELECT value FROM meta WHERE key = 'schema_ready'"
+        ).fetchone()
+        if ready is not None and ready[0] == f"{SCHEMA_REVISION}:{schema_version}":
+          legacy = self._conn.execute(
+            "SELECT 1 FROM tasks WHERE status IN ('in_progress', 'blocked') LIMIT 1"
+          ).fetchone()
+          if legacy is None:
+            return
       self._conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS messages (
@@ -333,6 +347,12 @@ class SqliteStore:
           "UPDATE tasks SET status = 'upcoming', modified_at = ? WHERE id = ?",
           (_advance_stamp(str(row["modified_at"]), now), row["id"]),
         )
+      schema_version = self._conn.execute("PRAGMA schema_version").fetchone()[0]
+      self._conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('schema_ready', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (f"{SCHEMA_REVISION}:{schema_version}",),
+      )
 
   def _init_state_tracking(self) -> None:
     # Arrival order stays independent of the clocks in merged rows.
