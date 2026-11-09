@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Use the self-repository reference for the CI preparation action.
+
 - Register split Steering browser suites with the CI module selector so ownership checks and Preview test selection include them.
 
 - Check PR versions against the repo default branch, retaining exactly one version bump and the original PR commit range.

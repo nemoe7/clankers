@@ -32,7 +32,7 @@ jobs:
           persist-credentials: false
 
       - name: Prep Runner
-        uses: ./.github/actions/prepare
+        uses: $/.github/actions/prepare
         with:
           pip-cache-key: ci
 

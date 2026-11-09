@@ -716,7 +716,10 @@ def test_shared_runner_uses_uv_cache_before_workflow_installs():
     ):
       prepared = False
       for step in job.get("steps", []):
-        prepared |= step.get("uses") == "./.github/actions/prepare"
+        prepared |= step.get("uses") in {
+          "./.github/actions/prepare",
+          "$/.github/actions/prepare",
+        }
         for line in step.get("run", "").splitlines():
           if "pip install " in line:
             assert prepared, (path, line)
