@@ -3926,7 +3926,8 @@ def test_userscript_detects_ended_turn_through_cross_origin_steering(
           content_type="text/html",
           body="""<html><body>
           <iframe title="App preview on port 8000" src="https://steering.example/"></iframe>
-          <div class="tiptap ProseMirror" contenteditable="true"></div>
+          <div data-agent-transcript-message id="turn"><div class="prose">Finished.</div></div>
+          <div class="tiptap ProseMirror" contenteditable="true"><p><br></p></div>
           <button aria-label="Stop generating">Stop</button>
           <button aria-label="Send message" onclick="window.sent = (window.sent || 0) + 1">Send</button>
         </body></html>""",
@@ -3941,7 +3942,6 @@ def test_userscript_detects_ended_turn_through_cross_origin_steering(
           if (key === 'auto-wake' || key === 'auto-scroll' || key === 'clankers-arena-show-settings-button') {
             return true;
           }
-          if (key === 'clankers-arena-no-poll-text') return 'Missed final poll';
           if (key === 'clankers-arena-wake-delay-ms' || key === 'clankers-arena-wake-delay-min-ms') return 0;
           if (typeof fallback === 'boolean') return false;
           return fallback;
@@ -3956,13 +3956,17 @@ def test_userscript_detects_ended_turn_through_cross_origin_steering(
       assert (
         page.locator('[data-setting-key="clankers-arena-no-poll-text"]').count() == 1
       )
+      expected_message = page.locator(
+        '[data-setting-key="clankers-arena-no-poll-text"]'
+      ).get_attribute("placeholder")
+      assert expected_message
       if os.environ.get("ARENA_STEERING_SCREENSHOT"):
         page.screenshot(path=os.environ["ARENA_STEERING_SCREENSHOT"])
       page.locator("[data-clankers-settings-close]").click()
       page.locator('[aria-label="Stop generating"]').evaluate("el => el.remove()")
       page.wait_for_function("window.sent === 1", timeout=15000)
-      expected_message = "Missed final poll"
-      assert page.locator(".tiptap").inner_text() == expected_message
+      rendered_message = page.locator(".tiptap").inner_text()
+      assert rendered_message == expected_message.replace("\n", "\n\n")
       browser.close()
   finally:
     server.shutdown()

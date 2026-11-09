@@ -483,8 +483,11 @@ runBundle("arena");
       click() { clicks += 1; },
     };
     const editor = {
-      innerText: "wake up", hidden: false, ariaDisabled: null,
-      focus() {},
+      innerText: "wake up", hidden: false, ariaDisabled: null, children: [],
+      get firstChild() { return this.children[0] || null; },
+      appendChild(node) { this.children.push(node); this.innerText = this.children.map(child => child.textContent).join("\n\n"); },
+      removeChild(node) { this.children.splice(this.children.indexOf(node), 1); this.innerText = ""; },
+      dispatchEvent() {}, focus() {},
       get textContent() { return this.innerText; },
       getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
       getClientRects() { return this.hidden ? [] : [{}]; },
@@ -504,8 +507,9 @@ runBundle("arena");
       location: { href: "https://arena.ai/agent/session", pathname: "/agent/session" },
       document: {
         documentElement: {},
+        createElement() { return { textContent: "" }; },
         createRange() { return { selectNodeContents() {} }; },
-        execCommand(command, ui, text) { assert.equal(command, "insertText"); editor.innerText = text; return true; },
+        execCommand(command, ui, text) { assert.equal(command, "insertText"); editor.innerText = text.replace(/\n/g, "\n\n"); return true; },
         querySelector(selector) {
           if (selector.includes("tiptap")) return present ? editor : null;
           if (selector.includes("button:nth-child(3)")) return keepWorkingVisible ? keepWorkingButton : null;
@@ -528,6 +532,7 @@ runBundle("arena");
         removeEventListener(name, callback) { listeners.get(name)?.delete(callback); },
       },
       sessionStorage: { getItem() { return null; } },
+      InputEvent: class { constructor() {} },
       MutationObserver: class {
         constructor(callback) { this.callback = callback; this.active = false; observers.push(this); }
         observe() { this.active = true; }
@@ -684,7 +689,7 @@ runBundle("arena");
     flush();
     assert.equal(clicks, 5, "sends wake up after Keep working opens the composer");
     saved.set("clankers-arena-wake-text", "Resume now");
-    saved.set("clankers-arena-no-poll-text", "Missed final poll");
+    saved.set("clankers-arena-no-poll-text", "Missed final poll\nRead the bible");
     editor.innerText = "";
     keepWorkingVisible = false;
     roots = [messageRoot("ended-valid", false, [proseRow])];
@@ -695,8 +700,21 @@ runBundle("arena");
     roots = [messageRoot("ended-gate", false, [proseRow])];
     pollState = {available: "true", polling: "true", pollingGate: "true", turnEndedAt: "", updatedAt: "9999999999999"};
     generating = true; fire();
-    generating = false; fire(); flush();
-    assert.equal(editor.innerText, "Missed final poll", "gate wait is not a final poll");
+    generating = false; fire();
+    assert.equal(editor.innerText, "Missed final poll\n\nRead the bible", "gate wait is not a final poll");
+    editor.innerText = "Edited draft"; fire(); flush();
+    assert.equal(clicks, 5, "editing a generated violation cancels the send");
+    editor.innerText = ""; generating = true; fire();
+    generating = false; fire();
+    roots = [messageRoot("ended-gate", false, [actionRow])];
+    fire(); flush();
+    assert.equal(clicks, 5, "a changed last row cancels a pending violation");
+    roots = [messageRoot("ended-gate", false, [proseRow])];
+    pollState = {available: "true", polling: "true", pollingGate: "false", pollCompleted: "true", updatedAt: "9999999999999"};
+    fire(); flush();
+    assert.equal(clicks, 5, "a completed poll cancels a pending violation");
+    pollState = {available: "true", polling: "true", pollingGate: "true", pollCompleted: "false", updatedAt: "9999999999999"};
+    fire(); flush();
     assert.equal(clicks, 6, "the configured violation message is auto-sent");
     fire(); flush();
     assert.equal(clicks, 6, "the same turn is sent once");
@@ -731,7 +749,7 @@ runBundle("arena");
     assert.equal(editor.innerText, "", "waits for fresh poll state before filling the composer");
     emit("message", {source: frameWindow, origin: "https://example.test", data: {...pollState, type: "clankers:steering-poll-state"}});
     fire(); flush();
-    assert.equal(editor.innerText, "Missed final poll", "Keep working carries the violation text");
+    assert.equal(editor.innerText, "Resume now", "a non-prose last row uses the normal wake");
     assert.equal(clicks, 9);
     editor.innerText = ""; fire();
     present = false; keepWorkingVisible = true;

@@ -14,6 +14,7 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Send generated multiline violation messages only for a final prose row without a completed poll.
 - Send exact Wake up drafts through the shared composer-action lookup without requiring the obsolete editor wrapper. Never click Stop generating.
 
 ### Changed

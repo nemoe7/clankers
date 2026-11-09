@@ -33,3 +33,4 @@
 - Run `node --test tests/userscripts/arena.test.cjs tests/userscripts/chatgpt.test.cjs` via `steer run start` before pushing `userscripts/` changes.
 
 - Use the shared composer-action lookup for automatic Wake up submission, not an `.editor-content` ancestor. Require a Send message label.
+- Track the actual rendered draft for automatic multiline composer messages, and cancel the send when the user changes that draft.

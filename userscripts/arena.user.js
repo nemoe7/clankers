@@ -4545,6 +4545,8 @@
     var pollTimeout = null;
     var watchedDocument = null;
     var frameReply = null;
+    var generatedViolation = null;
+    var violationSince = 0;
     var requestedFrame = null;
     var requestedSrc = "";
     var knownFrame = null;
@@ -4592,19 +4594,24 @@
       var wake = wakeText();
       var violation = noPollText();
       var draft = String(editor.innerText || "");
-      if (draft !== wake && draft !== violation) autoWakeSentFor = null;
+      if (generatedViolation !== null && draft !== generatedViolation) generatedViolation = null;
+      if (draft !== wake && generatedViolation === null) autoWakeSentFor = null;
       if ((!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
           composing || captchaSignal(document) || !renderedNode(editor) ||
           editor.getAttribute("aria-disabled") === "true") return null;
       if (editor.textContent === "" && endedAt) {
         var state = pollState();
         if (state && state.available === "true" && Number(state.updatedAt) >= endedAt) {
+          violationSince = endedAt;
           endedAt = 0;
           pollCheckPending = false;
           if (pollTimeout !== null) { clearTimeout(pollTimeout); pollTimeout = null; }
-          if (!(state.polling === "true" && state.pollingGate !== "true") && state.pollCompleted !== "true") {
+          var lastRow = lastMessageRow(lastMessageRoot(document));
+          if (lastRow && hasClassToken(lastRow, "prose") &&
+              !(state.polling === "true" && state.pollingGate !== "true") && state.pollCompleted !== "true") {
             autoWakeSentFor = null;
             setComposerText(editor, violation);
+            generatedViolation = String(editor.innerText || "");
           }
         }
       }
@@ -4624,7 +4631,16 @@
         if (String(editor.innerText || "") === wake) logEvent("auto-wake", "filled");
       }
       draft = String(editor.innerText || "");
-      if ((draft !== wake && draft !== violation) || autoWakeSentFor === location.href) return null;
+      if ((draft !== wake && (generatedViolation === null || draft !== generatedViolation)) ||
+          autoWakeSentFor === location.href) return null;
+      if (generatedViolation !== null && draft === generatedViolation) {
+        var latestRow = lastMessageRow(lastMessageRoot(document));
+        var latestState = pollState();
+        if (!latestRow || !hasClassToken(latestRow, "prose") || !latestState ||
+            latestState.available !== "true" || !(Number(latestState.updatedAt) >= violationSince) ||
+            (latestState.polling === "true" && latestState.pollingGate !== "true") ||
+            latestState.pollCompleted === "true") return null;
+      }
       var button = findComposerActionButton(document);
       if (!button || !isSendMessageLabel(button.getAttribute("aria-label")) ||
           button.disabled || button.getAttribute("aria-disabled") === "true" ||
