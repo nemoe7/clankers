@@ -752,3 +752,63 @@ def test_overlapping_refresh_keeps_task_links_with_message_receipts(
     server.server_close()
     thread.join(timeout=5)
     app._retire_store()
+
+
+def test_fixture_server_close_waits_for_pending_sqlite_request() -> None:
+  from urllib.request import urlopen
+
+  store = SqliteStore()
+  app = SteeringApp(store)
+  entered = threading.Event()
+  release = threading.Event()
+  closing = threading.Event()
+  closed = threading.Event()
+  read_finished = threading.Event()
+  dispatch = app.dispatch
+
+  def held_dispatch(*args, **kwargs):
+    entered.set()
+    assert release.wait(5)
+    result = dispatch(*args, **kwargs)
+    read_finished.set()
+    return result
+
+  app.dispatch = held_dispatch
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  serving = threading.Thread(target=server.serve_forever)
+  serving.start()
+
+  def request():
+    with urlopen(
+      f"http://127.0.0.1:{server.server_port}/health", timeout=5
+    ) as response:
+      response.read()
+
+  client = threading.Thread(target=request)
+  client.start()
+
+  def close_server():
+    server.shutdown()
+    closing.set()
+    server.server_close()
+    closed.set()
+
+  closer = threading.Thread(target=close_server)
+  try:
+    assert entered.wait(5)
+    closer.start()
+    assert closing.wait(5)
+    assert not closed.wait(0.1)
+    assert not read_finished.is_set()
+  finally:
+    release.set()
+    client.join(timeout=5)
+    if closer.ident is not None:
+      closer.join(timeout=5)
+    else:
+      server.shutdown()
+      server.server_close()
+    serving.join(timeout=5)
+    store.close()
+  assert closed.is_set() and read_finished.is_set()
+  assert not client.is_alive() and not closer.is_alive()

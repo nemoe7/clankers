@@ -12,6 +12,8 @@ This log has no Unreleased section.
 
 ### Fixed
 
+- Join browser-fixture HTTP request threads before closing SQLite stores. Leave production request handling unchanged.
+
 - Stack report timestamps, report-ID chips, titles, and linked task chips on separate rows.
 
 - Use regular proportional numerals in timestamps without changing relative-time formatting.
