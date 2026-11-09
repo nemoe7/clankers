@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Move Steering procedures from Arena into the skill and keep both in force together.
 - Require the squash skill for refs-to-live rule amendments.
 - Group Arena clauses by domain and place the bible definition before its first reference.
+- Keep each nemoizer rewrite example faithful to its input contract.
 
 ### Removed
 
@@ -23,12 +24,16 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Remove the retired ntfy restoration rule and both retired question-tool channel cases.
 - Remove the Steering installer, lifecycle, survey, inbox, task, gate, report, and preview procedures that the skill now carries.
+- Remove invented port, claim, and threshold details from the nemoizer rewrite examples.
 
 ### Fixed
 
 #### maintenance
 
 - Retain the local CI preparation-action reference until the released syntax validator supports self-repository references.
+- Match the release-impact prompt to Semantic Versioning 2.0.0 section 7.
+- Align the baseline Steering CLI reference with the shipped poll warning.
+- Place the DAILIES item-count rule in the section it names.
 
 - Register split Steering browser suites with the CI module selector so ownership checks and Preview test selection include them.
 

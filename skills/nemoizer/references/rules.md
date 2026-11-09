@@ -163,7 +163,7 @@ Start the local preview server from the root directory and wait until the status
 To fix this issue, rewrite the text as follows:
 
 ```text
-Start the local preview server from the root directory. Wait until the status endpoint is ready.
+Start the local preview server from the root directory. Wait until every background worker is ready.
 ```
 
 Note: Inline code spans and fenced code blocks are excluded from the word count.
@@ -405,7 +405,7 @@ Timeouts are not uncommon when the network is slow.
 To fix this issue, rewrite the text as follows:
 
 ```text
-Timeouts are common when the network is slow.
+Timeouts are frequent when the network is slow.
 ```
 
 Rationale: Positive statements express conditions directly without mental inversion.
@@ -609,7 +609,7 @@ The server starts. The server listens. The server logs.
 To fix this issue, rewrite the text as follows:
 
 ```text
-The server starts, listens on port 8000, and writes to the log.
+The server starts, listens, and logs.
 ```
 
 Rationale: Varying or combining repetitive sentence starts improves readability.
@@ -877,7 +877,7 @@ assert check.measure(path) == 42
 To fix this issue, rewrite the text as follows:
 
 ```text
-assert check.measure(path) > 0
+assert check.measure(path) == EXPECTED
 ```
 
 Rationale: Relational or named-constant assertions keep tests resilient to legitimate size or timing changes.

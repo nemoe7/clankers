@@ -20,7 +20,7 @@ Bare `steer` runs from the repo checkout. `steer --version` shows the installed 
 
 Inbox headers use the saved IANA zone or UTC. Reads omit display-only status tags and raw ISO timestamps.
 
-`steer poll` snapshots runnable tasks on entry. It does not recheck newly unblocked tasks or display-only state changes. Linked live runs print `running: NAME` once, and a verdict prints `run NAME done: exit N`. The follow-up line is `DO NOT END TURN. POLL AGAIN.` A runnable task prints `DO NOT END TURN, CONTINUE TASK: TITLE | ID | TYPE`.
+`steer poll` snapshots runnable tasks on entry. It does not recheck newly unblocked tasks or display-only state changes. Linked live runs print `running: NAME` once, and a verdict prints `run NAME done: exit N`. The follow-up line is `DO NOT END TURN. POLL AGAIN.` A runnable task prints `ENDING TURN NOW IS A VIOLATION. IF BIBLE IS ABSENT READ ALL BOOKS AND ANSWER SURVEY THEN CONTINUE THIS OPEN TASK: TITLE | ID | TYPE`.
 
 A full wait prints `Poll waited fully. End turn.` A skip prints `User skipped poll. End turn.`
 

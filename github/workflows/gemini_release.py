@@ -103,7 +103,8 @@ template and evidence.
 - Determine impact under Semantic Versioning 2.0.0: major for incompatible public API changes; \
 minor for backward-compatible public API functionality, deprecation or substantial private \
 functionality; patch for backward-compatible bug fixes; none for no release impact; review \
-when the evidence cannot establish compatibility.
+when the evidence cannot establish compatibility. This project bumps a minor for substantial \
+private functionality as policy; Semantic Versioning 2.0.0 section 7 permits but never requires it.
 - Choose the highest required impact; NEVER infer compatibility from commit prefixes alone.
 """
     + RELEASE_RULES

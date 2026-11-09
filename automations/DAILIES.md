@@ -15,6 +15,7 @@
 - Apply the same 24-hour window on the first run and to newly added monitors.
 - Keep an ephemeral monitoring item until its purpose is complete or it is explicitly removed.
 - Use the exact section names, order, table columns, and templates section 4 specifies.
+- Keep the item count in the `simplified:` line in `## Use` equal to the rows in the table.
 - Output nothing only when monitoring completed without a gap and no section has an actionable finding.
 
 ## Precedence
@@ -80,7 +81,6 @@ Monitor the official stable release channel of each item below, preferring its G
 - Say in the row what counts as a stable release for that item when its channel mixes stable releases with pre-releases.
 - Mark a temporary item ephemeral in its row and state an observable completion condition. Recommend removal when that condition is met, but retain the row until explicitly told to remove it.
 - Add a repository to section 3's scope only when it is a `nemoe7` repository; everything else stays in this table.
-- Keep the item count in the `simplified:` line in `## Use` equal to the rows in the table.
 - Remove a row only on an explicit instruction, and state in one line that the item is no longer tracked.
 
 ## 2. Wiki audit
