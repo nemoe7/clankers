@@ -195,7 +195,7 @@
 - Link each local gate to its task at run start; the live run owns the task's blocked state.
 - After blocking the sole task for its running gate, MUST run `steer poll`.
 - NEVER call `get_process_output` to wait for a run.
-- NEVER spam `run logs` while a run is live; one diagnosis read, verdict on a later call.
+- After one diagnosis, resume unblocked work and use a worktree if the gate freezes its files. Recheck logs only after meaningful progress, never just to wait.
 - NEVER wait for a gate with `steer poll` unless only that gate's blocked task remains.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.

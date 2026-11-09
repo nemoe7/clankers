@@ -82,6 +82,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Remove the violation-notice trigger for full bible reads (`rules/refs/ARENA.md`, `rules/ARENA.md`).
 - Route turn start, task ordering, Steering procedures, and job-log lookup through the installed skill. Use v2 `steer` commands (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 - Split the contract rules and keep the no-commit rule free of storage-location details (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- After one diagnosis, resume unblocked work, use a worktree for frozen files, and recheck logs only after meaningful progress (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 
 ## 2026-11-05
 
