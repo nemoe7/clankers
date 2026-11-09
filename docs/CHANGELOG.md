@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- Register split Steering browser suites with the CI module selector so ownership checks and Preview test selection include them.
+
 - Check PR versions against the repo default branch, retaining exactly one version bump and the original PR commit range.
 
 ## 2026-11-07
