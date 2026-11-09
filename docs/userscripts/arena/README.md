@@ -86,15 +86,19 @@ Six rules follow the checklist:
 
 ## Arena auto-send wake up
 
-`Composer - auto-send wake up` defaults to On. On Arena composer and session pages, it clicks Send message after a random 0-5 second delay. The whole composer text must equal `wake up`. Case changes, whitespace, and other text do not match.
+`Composer - auto-send wake up` defaults to On. On Arena composer and session pages, it clicks Send message after a random 0-5 second delay. The whole composer text must equal the configured wake or no-poll message. Case changes, whitespace, and other text do not match.
+
+The default wake message is `wake up`.
 
 The feature checks the draft and controls again before the click. A hidden composer, disabled control, security check, IME composition, or global pause prevents the click. Disabling cancels the timer and listeners. An unchanged draft triggers at most one click in the current page runtime.
 
 The same switch fills an empty composer when the latest message root contains a matching generation-error banner. Banner visibility does not matter. Other drafts stay unchanged. Each root ID permits one automatic fill in the current page runtime, including after a DOM remount.
 
+When generation ends, the userscript reads polling state from the Steering preview. If the agent ended without a final poll, it fills and sends the configured no-poll message. An unknown or unreachable preview does not trigger a violation message. Existing drafts are left unchanged.
+
 Auto-wake logs `filled` after an error-recovery insert and `clicked` after the Send button click. These events contain no message text and do not prove server acceptance.
 
-`Composer - keep working` defaults to On. It checks whether the latest message root ends on a non-spinner, non-`prose` row while `Keep working` is visible. It then clicks `Keep working`, waits for an enabled empty composer, enters `wake up`, and logs `clicked` and `filled` once per root.
+`Composer - keep working` defaults to On. It checks whether the latest message root ends on a non-spinner, non-`prose` row while `Keep working` is visible. It then clicks `Keep working`, waits for an enabled empty composer, enters the configured wake message, and logs `clicked` and `filled` once per root.
 
 ## Arena transcript trim
 

@@ -436,6 +436,10 @@ runBundle("arena");
     let roots = [];
     let keepWorkingVisible = false;
     let keepWorkingClicks = 0;
+    let pollState = null;
+    let crossOrigin = false;
+    const frameWindow = { postMessage() {} };
+    const frame = {src: "https://example.test/", contentWindow: frameWindow, getAttribute(name) { return name === "title" ? "App preview on port 8000" : null; }, get contentDocument() { return !crossOrigin && pollState ? {querySelector() { return {dataset: pollState}; }} : null; }};
     const spinnerRow = {
       tagName: "DIV",
       className: "flex w-fit items-center justify-start gap-1.5",
@@ -490,10 +494,10 @@ runBundle("arena");
       for (const callback of [...(listeners.get(name) || [])]) callback(event);
     };
     const fire = () => { for (const observer of observers) if (observer.active) observer.callback([]); };
-    const flush = () => {
-      const pending = [...timers.values()];
-      timers.clear();
-      for (const timer of pending) timer.callback();
+    const flush = (maxDelay = 5000) => {
+      const pending = [...timers.entries()].filter(([, timer]) => timer.ms <= maxDelay);
+      for (const [id] of pending) timers.delete(id);
+      for (const [, timer] of pending) timer.callback();
     };
     const context = {
       console: { log(...args) { logged.push(args); }, warn(...args) { logged.push(args); }, error(...args) { logged.push(args); } }, URL,
@@ -508,6 +512,7 @@ runBundle("arena");
           return null;
         },
         querySelectorAll(selector) {
+          if (selector === "iframe[title]") return pollState ? [frame] : [];
           if (selector === "button[aria-label]" || selector === "button") return generating ? [{ getAttribute() { return "Stop generating"; } }, button] : [button];
           if (selector === "[data-agent-transcript-message]") return roots;
           if (selector.includes("border-red-500")) return alerts;
@@ -678,6 +683,74 @@ runBundle("arena");
     assert.ok(logged.some(([line]) => line === "[NemoUtils][keep-working][info] filled"));
     flush();
     assert.equal(clicks, 5, "sends wake up after Keep working opens the composer");
+    saved.set("clankers-arena-wake-text", "Resume now");
+    saved.set("clankers-arena-no-poll-text", "Missed final poll");
+    editor.innerText = "";
+    keepWorkingVisible = false;
+    roots = [messageRoot("ended-valid", false, [proseRow])];
+    pollState = {available: "true", polling: "true", pollingGate: "false", turnEndedAt: "", updatedAt: "9999999999999"};
+    generating = true; fire();
+    generating = false; fire(); flush();
+    assert.equal(clicks, 5, "an active final poll does not trigger violation");
+    roots = [messageRoot("ended-gate", false, [proseRow])];
+    pollState = {available: "true", polling: "true", pollingGate: "true", turnEndedAt: "", updatedAt: "9999999999999"};
+    generating = true; fire();
+    generating = false; fire(); flush();
+    assert.equal(editor.innerText, "Missed final poll", "gate wait is not a final poll");
+    assert.equal(clicks, 6, "the configured violation message is auto-sent");
+    fire(); flush();
+    assert.equal(clicks, 6, "the same turn is sent once");
+    editor.innerText = ""; fire();
+    editor.innerText = "Resume now"; fire(); flush();
+    assert.equal(clicks, 7, "the configured wake text also auto-sends");
+    editor.innerText = ""; fire();
+    roots = [messageRoot("cross-origin", false, [proseRow])];
+    crossOrigin = true;
+    generating = true; fire();
+    generating = false; fire(); flush();
+    assert.equal(clicks, 7, "without a reply, no automatic message is sent");
+    const reply = { type: "clankers:steering-poll-state", available: "true", polling: "false", pollingGate: "false", pollCompleted: "false", updatedAt: "9999999999999" };
+    emit("message", {source: {}, origin: "https://example.test", data: reply});
+    emit("message", {source: frameWindow, origin: "https://wrong.test", data: reply});
+    flush();
+    assert.equal(clicks, 7, "untrusted frames and origins are ignored");
+    emit("message", {source: frameWindow, origin: "https://example.test", data: reply});
+    flush();
+    assert.equal(clicks, 8, "a fresh reply from the Steering frame triggers the violation");
+    editor.innerText = ""; fire();
+    crossOrigin = true;
+    present = false;
+    keepWorkingVisible = true;
+    roots = [messageRoot("gate-keep-working", false, [proseRow, actionRow])];
+    pollState = {available: "true", polling: "true", pollingGate: "true", pollCompleted: "false", updatedAt: "9999999999999"};
+    generating = true; fire();
+    generating = false; fire(); flush();
+    assert.equal(keepWorkingClicks, 2, "opens the composer through Keep working");
+    keepWorkingVisible = false;
+    present = true; fire(); flush();
+    assert.equal(editor.innerText, "", "waits for fresh poll state before filling the composer");
+    emit("message", {source: frameWindow, origin: "https://example.test", data: {...pollState, type: "clankers:steering-poll-state"}});
+    fire(); flush();
+    assert.equal(editor.innerText, "Missed final poll", "Keep working carries the violation text");
+    assert.equal(clicks, 9);
+    editor.innerText = ""; fire();
+    present = false; keepWorkingVisible = true;
+    roots = [messageRoot("unreachable-steering", false, [proseRow, actionRow])];
+    generating = true; fire();
+    generating = false; fire(); flush();
+    keepWorkingVisible = false; present = true; fire(); flush();
+    assert.equal(editor.innerText, "", "waits briefly when a known Steering frame stops responding");
+    flush(9000); flush();
+    assert.equal(editor.innerText, "Resume now", "the existing wake resumes if Steering is unreachable");
+    editor.innerText = ""; fire();
+    frame.src = "https://older-preview.test/";
+    present = false; keepWorkingVisible = true;
+    roots = [messageRoot("legacy-preview", false, [proseRow, actionRow])];
+    generating = true; fire();
+    generating = false; fire(); flush();
+    keepWorkingVisible = false; present = true; fire(); flush();
+    assert.equal(editor.innerText, "Resume now", "unrecognized previews preserve the existing wake flow");
+    assert.equal(clicks, 11);
   });
 }
 
@@ -976,7 +1049,7 @@ runBundle("arena");
         const out = [];
         const visit = (node) => {
           for (const child of node.children || []) {
-            if (sel === "input, select" && (child.tag === "input" || child.tag === "select")) out.push(child);
+            if (sel === "input, select, textarea" && (child.tag === "input" || child.tag === "select" || child.tag === "textarea")) out.push(child);
             if (sel === "path" && child.tag === "path") out.push(child);
             if (sel === "section" && child.tag === "section") out.push(child);
             if (sel === "button" && child.tag === "button") out.push(child);
@@ -1109,7 +1182,17 @@ runBundle("arena");
       "settings modal groups settings into alphabetized sections",
     );
 
-    const allInputs = modalNode.querySelectorAll("input, select");
+    const allInputs = modalNode.querySelectorAll("input, select, textarea");
+    const wakeTextInput = allInputs.find(el => el.attrs["data-setting-key"] === "clankers-arena-wake-text");
+    const noPollInput = allInputs.find(el => el.attrs["data-setting-key"] === "clankers-arena-no-poll-text");
+    assert.ok(wakeTextInput && noPollInput, "both messages are configurable");
+    assert.equal(noPollInput.tag, "textarea", "the violation message supports multiple lines");
+    wakeTextInput.value = "Continue";
+    wakeTextInput.listeners.change();
+    noPollInput.value = "Violation\nRead the bible";
+    noPollInput.listeners.change();
+    assert.equal(saved.get("clankers-arena-wake-text"), "Continue");
+    assert.equal(saved.get("clankers-arena-no-poll-text"), "Violation\nRead the bible");
     const allButtons = modalNode.querySelectorAll("button");
     assert.equal(
       allButtons.some((btn) => btn.attrs["data-settings-action"] === "choose-state-file"),

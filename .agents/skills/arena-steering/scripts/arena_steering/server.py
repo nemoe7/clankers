@@ -935,6 +935,8 @@ class SteeringApp:
         "read_set": self._read_set,
         "survey": survey,
         "polling": polling,
+        "polling_gate": polling and self.store.get_meta("polling_gate") == "1",
+        "poll_completed": self.store.get_meta("poll_completed") == "1",
         "skip_poll": self.messages.skip_poll_armed(),
         "polling_since": self.store.get_meta("polling_since") if polling else None,
         "agent_seen_at": self.store.get_meta("agent_seen_at") or None,
@@ -1436,7 +1438,7 @@ class SteeringApp:
   ) -> tuple[int, Any]:
     timeout_raw = query.get("timeout", ["0"])[0]
     timeout_sec = float(timeout_raw) if timeout_raw else 0.0
-    delivered = self.messages.poll(timeout_seconds=timeout_sec)
+    delivered = self.messages.poll(timeout_seconds=timeout_sec, track_agent=False)
     return (
       int(HTTPStatus.OK),
       {

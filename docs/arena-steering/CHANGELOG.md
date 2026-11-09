@@ -10,6 +10,10 @@ This log has no Unreleased section.
 
 - Remove database column upgrades, backfills, retired task-status normalization, and missing-column read fallbacks. Support fresh and current-schema databases only.
 
+### Added
+
+- Expose agent polling state to the Arena userscript through the preview frame.
+
 ### Fixed
 
 - Correct retry and hover setup in browser regression tests.

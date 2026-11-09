@@ -8,6 +8,10 @@ This log has no Unreleased section.
 
 ## [1.13.14]
 
+### Added
+
+- Detect turns ending without a Steering poll and configure separate wake and violation messages.
+
 ### Fixed
 
 - Send exact Wake up drafts through the shared composer-action lookup without requiring the obsolete editor wrapper. Never click Stop generating.

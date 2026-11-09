@@ -362,7 +362,7 @@ def test_cli_poll_prints_live_linked_gate_once_while_waiting(
     assert stdout.getvalue() == "running: verify\n"
     thread.join(timeout=1.5)
     assert codes == [0]
-    assert stdout.getvalue() == "running: verify\nPoll waited fully. End turn.\n"
+    assert stdout.getvalue() == "running: verify\nDO NOT END TURN. POLL AGAIN.\n"
     assert stderr.getvalue() == ""
   finally:
     thread.join(timeout=2)
@@ -436,7 +436,7 @@ def test_cli_poll_keeps_skip_armed_during_live_run(
       return original_poll(self, timeout_seconds=0.08, **kwargs)
 
     monkeypatch.setattr(cli.MessageService, "poll", short_poll)
-    assert _run_cli(state_dir, "poll") == (0, "Poll waited fully. End turn.\n", "")
+    assert _run_cli(state_dir, "poll") == (0, "DO NOT END TURN. POLL AGAIN.\n", "")
     assert store.get_meta("skip_poll") == "1"
     exit_path.write_text("0", encoding="utf-8")
     _run_cli(state_dir, "read")  # Clear the fast-repeat guard.

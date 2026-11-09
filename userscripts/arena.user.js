@@ -380,6 +380,16 @@
   var HTTP_JITTER_KEY = "clankers-arena-http-jitter-ms";
   var STATE_WATCH_KEY = "clankers-arena-state-watch-ms";
   var STATE_PANEL_KEY = "clankers-arena-state-panel-ms";
+  var WAKE_TEXT_KEY = "clankers-arena-wake-text";
+  var NO_POLL_TEXT_KEY = "clankers-arena-no-poll-text";
+  var DEFAULT_NO_POLL_TEXT = "VIOLATION: Ended turn without poll\nThe bible may be absent from your context, read all books of the bible before continuing.\nFollow the resume-turn recipe if its available.";
+  function wakeText() {
+    return String(typeof GM_getValue === "function" ? GM_getValue(WAKE_TEXT_KEY, "wake up") : "wake up").trim() || "wake up";
+  }
+  function noPollText() {
+    return String(typeof GM_getValue === "function" ? GM_getValue(NO_POLL_TEXT_KEY, DEFAULT_NO_POLL_TEXT) : DEFAULT_NO_POLL_TEXT).trim() || DEFAULT_NO_POLL_TEXT;
+  }
+  var POLL_STATE_WAIT_MS = 9000;
   var WAKE_DELAY_MIN_MS = 0;
   var WAKE_DELAY_MIN_KEY = "clankers-arena-wake-delay-min-ms";
   var WAKE_DELAY_MS = 5000;
@@ -3076,8 +3086,8 @@
           "display:flex;align-items:center;justify-content:space-between;gap:8px";
         var span = document.createElement("span");
         span.textContent = labelText;
-        var input = document.createElement("input");
-        input.type = inputType || "text";
+        var input = document.createElement(inputType === "textarea" ? "textarea" : "input");
+        if (inputType !== "textarea") input.type = inputType || "text";
         input.value = String(GM_getValue(key, "") || "");
         if (placeholder) input.placeholder = placeholder;
         input.setAttribute("data-setting-key", key);
@@ -3133,6 +3143,8 @@
         return row;
       }
 
+      addDependentSectionItem("Composer", "Wake message", buildTextRow("Wake message", WAKE_TEXT_KEY, "wake up"), "auto-wake");
+      addDependentSectionItem("Composer", "No-poll message", buildTextRow("No-poll message", NO_POLL_TEXT_KEY, DEFAULT_NO_POLL_TEXT, null, "textarea"), "auto-wake");
       var wakeRange = wakeDelayRangeMs();
       addDependentSectionItem(
         "Composer",
@@ -4521,11 +4533,52 @@
     setBoundedMap(autoWakeBoardTokens, sid, wakeToken, 64);
     return true;
   }
+  var pollCheckPending = false;
+  var keepWorkingNotify = null;
   runFeature("auto-wake", "Composer - auto-send wake up", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
     var timerFor = null;
     var composing = false;
+    var wasGenerating = false;
+    var endedAt = 0;
+    var pollTimeout = null;
+    var watchedDocument = null;
+    var frameReply = null;
+    var requestedFrame = null;
+    var requestedSrc = "";
+    var knownFrame = null;
+    var knownSrc = "";
+    var frameObserver = new MutationObserver(function () { sync(); if (keepWorkingNotify) keepWorkingNotify(); });
+
+    function pollState() {
+      var frame = previewFrame(document);
+      if (frame !== requestedFrame || (frame && frame.src !== requestedSrc)) {
+        requestedFrame = frame;
+        requestedSrc = frame ? frame.src : "";
+        frameReply = null;
+        if (frame && frame.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({type: "clankers:steering-poll-request"}, new URL(frame.src).origin);
+          } catch (_) {}
+        }
+      }
+      try {
+        var doc = frame && frame.contentDocument;
+        if (doc !== watchedDocument) {
+          if (watchedDocument) frameObserver.disconnect();
+          watchedDocument = doc;
+          if (doc && doc.documentElement) frameObserver.observe(doc.documentElement, {subtree: true, attributes: true, attributeFilter: ["data-updated-at"]});
+        }
+        var marker = doc && doc.querySelector("#steering-poll-state");
+        if (marker) { knownFrame = frame; knownSrc = frame.src; }
+        return (marker && marker.dataset) || frameReply;
+      } catch (_) {
+        if (watchedDocument) frameObserver.disconnect();
+        watchedDocument = null;
+        return frameReply;
+      }
+    }
 
     function cancel() {
       if (timer !== null) clearTimeout(timer);
@@ -4536,10 +4589,25 @@
     function target() {
       var editor = document.querySelector('div.tiptap.ProseMirror[contenteditable="true"]');
       if (!editor) return null;
-      if (String(editor.innerText || "") !== "wake up") autoWakeSentFor = null;
+      var wake = wakeText();
+      var violation = noPollText();
+      var draft = String(editor.innerText || "");
+      if (draft !== wake && draft !== violation) autoWakeSentFor = null;
       if ((!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
           composing || captchaSignal(document) || !renderedNode(editor) ||
           editor.getAttribute("aria-disabled") === "true") return null;
+      if (editor.textContent === "" && endedAt) {
+        var state = pollState();
+        if (state && state.available === "true" && Number(state.updatedAt) >= endedAt) {
+          endedAt = 0;
+          pollCheckPending = false;
+          if (pollTimeout !== null) { clearTimeout(pollTimeout); pollTimeout = null; }
+          if (!(state.polling === "true" && state.pollingGate !== "true") && state.pollCompleted !== "true") {
+            autoWakeSentFor = null;
+            setComposerText(editor, violation);
+          }
+        }
+      }
       if (editor.textContent === "") {
         var message = lastMessageRoot(document);
         var hasAlertWake = Boolean(
@@ -4552,10 +4620,11 @@
           return null;
         }
         autoWakeSentFor = null;
-        setComposerText(editor, "wake up");
-        if (String(editor.innerText || "") === "wake up") logEvent("auto-wake", "filled");
+        setComposerText(editor, wake);
+        if (String(editor.innerText || "") === wake) logEvent("auto-wake", "filled");
       }
-      if (String(editor.innerText || "") !== "wake up" || autoWakeSentFor === location.href) return null;
+      draft = String(editor.innerText || "");
+      if ((draft !== wake && draft !== violation) || autoWakeSentFor === location.href) return null;
       var button = findComposerActionButton(document);
       if (!button || !isSendMessageLabel(button.getAttribute("aria-label")) ||
           button.disabled || button.getAttribute("aria-disabled") === "true" ||
@@ -4565,6 +4634,28 @@
 
     function sync(event) {
       if (event && event.isComposing) composing = true;
+      var generating = Boolean(findStopGeneratingButton(document));
+      if (generating) {
+        wasGenerating = true;
+        endedAt = 0;
+        pollCheckPending = false;
+        if (pollTimeout !== null) { clearTimeout(pollTimeout); pollTimeout = null; }
+      } else if (wasGenerating) {
+        wasGenerating = false;
+        endedAt = Date.now();
+        var frame = previewFrame(document);
+        pollCheckPending = Boolean(frame && frame === knownFrame && frame.src === knownSrc);
+        if (pollCheckPending) {
+          pollTimeout = setTimeout(function () {
+            pollTimeout = null;
+            endedAt = 0;
+            pollCheckPending = false;
+            if (keepWorkingNotify) keepWorkingNotify();
+          }, POLL_STATE_WAIT_MS);
+        }
+        requestedFrame = null;
+      }
+      pollState();
       var next = target();
       if (!next) { cancel(); return; }
       if (timer !== null && timerFor === next.url) return;
@@ -4581,6 +4672,17 @@
       }, randomWakeDelayMs());
     }
 
+    function onPollMessage(event) {
+      var frame = previewFrame(document);
+      if (!frame || event.source !== frame.contentWindow || !event.data ||
+          event.data.type !== "clankers:steering-poll-state") return;
+      try { if (event.origin !== new URL(frame.src).origin) return; } catch (_) { return; }
+      knownFrame = frame;
+      knownSrc = frame.src;
+      frameReply = event.data;
+      sync();
+      if (keepWorkingNotify) keepWorkingNotify();
+    }
     function compositionStart() { composing = true; cancel(); }
     function compositionEnd() { composing = false; sync(); }
     autoWakeNotify = sync;
@@ -4589,6 +4691,7 @@
       subtree: true, childList: true, characterData: true, attributes: true,
       attributeFilter: ["disabled", "aria-disabled", "aria-label", "role", "hidden", "style", "class"],
     });
+    window.addEventListener("message", onPollMessage);
     window.addEventListener("input", sync, true);
     window.addEventListener("compositionstart", compositionStart, true);
     window.addEventListener("compositionend", compositionEnd, true);
@@ -4597,7 +4700,11 @@
     return function () {
       cancel();
       if (autoWakeNotify === sync) autoWakeNotify = null;
+      pollCheckPending = false;
+      if (pollTimeout !== null) clearTimeout(pollTimeout);
       observer.disconnect();
+      if (watchedDocument) frameObserver.disconnect();
+      window.removeEventListener("message", onPollMessage);
       window.removeEventListener("input", sync, true);
       window.removeEventListener("compositionstart", compositionStart, true);
       window.removeEventListener("compositionend", compositionEnd, true);
@@ -4655,6 +4762,7 @@
     function fillComposer() {
       if (
         !keepWorkingWaitingComposer ||
+        pollCheckPending ||
         (!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
         composing ||
         captchaSignal(document)
@@ -4668,8 +4776,8 @@
       keepWorkingWaitingComposer = false;
       if (editor.textContent === "") {
         autoWakeSentFor = null;
-        setComposerText(editor, "wake up");
-        if (String(editor.innerText || "") === "wake up") {
+        setComposerText(editor, wakeText());
+        if (String(editor.innerText || "") === wakeText()) {
           logEvent("keep-working", "filled");
           if (typeof autoWakeNotify === "function") autoWakeNotify();
         }
@@ -4706,6 +4814,7 @@
 
     function compositionStart() { composing = true; cancel(); }
     function compositionEnd() { composing = false; sync(); }
+    keepWorkingNotify = sync;
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
@@ -4718,6 +4827,7 @@
     return function () {
       cancel();
       keepWorkingWaitingComposer = false;
+      if (keepWorkingNotify === sync) keepWorkingNotify = null;
       observer.disconnect();
       window.removeEventListener("compositionstart", compositionStart, true);
       window.removeEventListener("compositionend", compositionEnd, true);

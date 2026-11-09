@@ -2191,18 +2191,44 @@ def test_skip_arriving_during_live_run_waits_until_run_ends(tmp_path: Path) -> N
     while not sender_store.get_meta("polling_at") and time.monotonic() < deadline:
       time.sleep(0.02)
     assert sender_store.get_meta("polling_at")
+    status, health = sender.dispatch("GET", "/health")
+    assert status == 200
+    assert health["polling"] is True
+    assert health["polling_gate"] is True
     sender.messages.trigger_skip_poll()
     thread.join(timeout=1.5)
     assert not thread.is_alive()
     assert delivered[0]["status"] == "timeout"
+    assert delivered[0]["gate_wait"] is True
+    assert not sender_store.get_meta("turn_ended_at")
+    assert not sender_store.get_meta("poll_completed")
     assert sender_store.get_meta("skip_poll") == "1"
     live[0] = False
     assert poller.messages.poll()["status"] == "skipped"
+    assert not sender_store.get_meta("poll_completed")
     assert sender_store.get_meta("skip_poll") == "0"
   finally:
     thread.join(timeout=2)
     polling_store.close()
     sender_store.close()
+
+
+def test_gate_poll_completion_does_not_set_final_marker(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  calls = 0
+
+  def live() -> bool:
+    nonlocal calls
+    calls += 1
+    return calls < 4
+
+  try:
+    result = app.messages.poll(timeout_seconds=0.01, live_run=live)
+    assert result["status"] in {"timeout", "skipped"}
+    assert not store.get_meta("poll_completed")
+  finally:
+    store.close()
 
 
 def test_cli_agent_call_clears_turn_end(
@@ -2214,9 +2240,73 @@ def test_cli_agent_call_clears_turn_end(
     old_seen = _stamp(2000)
     store.set_meta("agent_seen_at", old_seen)
     store.set_meta("turn_ended_at", _stamp(200))
+    store.set_meta("poll_completed", "1")
     assert cli.main(["read"], out=io.StringIO(), err=io.StringIO()) == 0
     assert not store.get_meta("turn_ended_at")
+    assert not store.get_meta("poll_completed")
     assert store.get_meta("agent_seen_at") != old_seen
+  finally:
+    store.close()
+
+
+def test_browser_poll_does_not_set_or_clear_cli_poll_marker(tmp_path: Path) -> None:
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  try:
+    assert app.dispatch("GET", "/poll?timeout=0")[0] == 200
+    assert not store.get_meta("poll_completed")
+    store.set_meta("poll_completed", "1")
+    assert app.dispatch("GET", "/poll?timeout=0")[0] == 200
+    assert store.get_meta("poll_completed") == "1"
+  finally:
+    store.close()
+
+
+def test_browser_long_poll_is_not_agent_polling(tmp_path: Path) -> None:
+  db = tmp_path / "state.sqlite3"
+  browser_store = SqliteStore(db)
+  check_store = SqliteStore(db)
+  app = SteeringApp(browser_store)
+  thread = threading.Thread(
+    target=lambda: app.dispatch("GET", "/poll?timeout=0.4"), daemon=True
+  )
+  thread.start()
+  try:
+    deadline = time.monotonic() + 0.3
+    while thread.is_alive() and time.monotonic() < deadline:
+      assert not check_store.get_meta("polling_at")
+      time.sleep(0.01)
+    thread.join(timeout=1)
+    assert not check_store.get_meta("poll_completed")
+    assert not check_store.get_meta("turn_ended_at")
+  finally:
+    thread.join(timeout=1)
+    browser_store.close()
+    check_store.close()
+
+
+def test_cli_clean_poll_sets_marker(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: tmp_path)
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    SteeringApp(store).messages.trigger_skip_poll()
+    assert cli.main(["poll"], out=io.StringIO(), err=io.StringIO()) == 0
+    assert store.get_meta("poll_completed") == "1"
+  finally:
+    store.close()
+
+
+def test_cli_version_clears_poll_marker(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+  monkeypatch.setattr(cli, "resolve_state_dir", lambda: tmp_path)
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  try:
+    store.set_meta("poll_completed", "1")
+    assert cli.main(["--version"], out=io.StringIO(), err=io.StringIO()) == 0
+    assert not store.get_meta("poll_completed")
   finally:
     store.close()
 
@@ -2291,6 +2381,14 @@ def test_connection_states_and_survey_modal(tmp_path: Path) -> None:
         )
         store.set_meta("polling_at", _stamp())
         store.set_meta("polling_since", _stamp(10))
+        store.set_meta("polling_gate", "1")
+        page.wait_for_function(
+          "document.querySelector('#steering-poll-state')?.dataset.pollingGate === 'true'",
+          timeout=7000,
+        )
+        assert page.locator("#steering-poll-state").evaluate(
+          "element => element.hidden"
+        )
         page.wait_for_function(
           "() => document.querySelector('#connection-dot')?.dataset.state === 'polling'",
           timeout=7000,
@@ -3743,4 +3841,131 @@ def test_navigation_handles_tab_change_and_refresh(
     server.shutdown()
     server.server_close()
     thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_cross_origin_parent_cannot_read_poll_marker(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  server = create_http_server(SteeringApp(store), host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], headless=True
+      )
+      page = browser.new_page()
+      port = server.server_address[1]
+      page.goto(f"http://127.0.0.1:{port}/")
+      page.evaluate(
+        "src => { const f = document.createElement('iframe'); f.src = src; document.body.appendChild(f); }",
+        f"http://localhost:{port}/",
+      )
+      frame = page.frame_locator("iframe")
+      frame.locator("#steering-poll-state").wait_for(state="attached")
+      frame.locator("#steering-poll-state[data-available='true']").wait_for(
+        state="attached"
+      )
+      assert page.evaluate("document.querySelector('iframe').contentDocument") is None
+      page.evaluate("""() => {
+        window.pollReply = null;
+        window.addEventListener('message', event => {
+          if (event.data?.type === 'clankers:steering-poll-state') window.pollReply = event.data;
+        });
+        document.querySelector('iframe').contentWindow.postMessage(
+          {type: 'clankers:steering-poll-request'}, 'http://localhost:' + location.port
+        );
+      }""")
+      page.wait_for_function("window.pollReply?.available === 'true'")
+      assert page.evaluate("window.pollReply.pollCompleted") == "false"
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_userscript_detects_ended_turn_through_cross_origin_steering(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  server = create_http_server(SteeringApp(store), host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], headless=True
+      )
+      page = browser.new_page()
+      page.route(
+        "https://steering.example/**",
+        lambda route: route.fulfill(
+          response=route.fetch(
+            url=route.request.url.replace(
+              "https://steering.example", f"http://127.0.0.1:{server.server_port}"
+            )
+          )
+        ),
+      )
+      page.route(
+        "https://arena.ai/agent/test",
+        lambda route: route.fulfill(
+          status=200,
+          content_type="text/html",
+          body="""<html><body>
+          <iframe title="App preview on port 8000" src="https://steering.example/"></iframe>
+          <div class="tiptap ProseMirror" contenteditable="true"></div>
+          <button aria-label="Stop generating">Stop</button>
+          <button aria-label="Send message" onclick="window.sent = (window.sent || 0) + 1">Send</button>
+        </body></html>""",
+        ),
+      )
+      page.goto("https://arena.ai/agent/test")
+      page.frame_locator("iframe").locator(
+        "#steering-poll-state[data-available='true']"
+      ).wait_for(state="attached")
+      page.evaluate("""() => {
+        window.GM_getValue = (key, fallback) => {
+          if (key === 'auto-wake' || key === 'auto-scroll' || key === 'clankers-arena-show-settings-button') {
+            return true;
+          }
+          if (key === 'clankers-arena-no-poll-text') return 'Missed final poll';
+          if (key === 'clankers-arena-wake-delay-ms' || key === 'clankers-arena-wake-delay-min-ms') return 0;
+          if (typeof fallback === 'boolean') return false;
+          return fallback;
+        };
+        window.GM_setValue = () => {};
+        window.GM_registerMenuCommand = () => 1;
+        window.GM_unregisterMenuCommand = () => {};
+      }""")
+      page.add_script_tag(path=str(ROOT / "userscripts" / "arena.user.js"))
+      page.locator("[data-clankers-settings-toggle]").click()
+      assert page.locator('[data-setting-key="clankers-arena-wake-text"]').count() == 1
+      assert (
+        page.locator('[data-setting-key="clankers-arena-no-poll-text"]').count() == 1
+      )
+      if os.environ.get("ARENA_STEERING_SCREENSHOT"):
+        page.screenshot(path=os.environ["ARENA_STEERING_SCREENSHOT"])
+      page.locator("[data-clankers-settings-close]").click()
+      page.locator('[aria-label="Stop generating"]').evaluate("el => el.remove()")
+      page.wait_for_function("window.sent === 1", timeout=15000)
+      expected_message = "Missed final poll"
+      assert page.locator(".tiptap").inner_text() == expected_message
+      browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=2)
     store.close()

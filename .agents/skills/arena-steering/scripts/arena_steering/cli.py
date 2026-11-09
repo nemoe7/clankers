@@ -174,6 +174,20 @@ def main(
   stderr = err if err is not None else sys.stderr
   args_list = list(sys.argv[1:] if argv is None else argv)
 
+  if not args_list or any(
+    arg in {"-h", "--help", "--version", "-V"} for arg in args_list
+  ):
+    try:
+      db = resolve_state_dir() / "state.sqlite3"
+      if db.is_file():
+        marker_store = SqliteStore(db)
+        try:
+          marker_store.set_meta("poll_completed", "")
+        finally:
+          marker_store.close()
+    except (OSError, sqlite3.Error):
+      pass
+
   if args_list in (["--version"], ["-V"]):
     print(f"steer {__version__}", file=stdout)
     return 0
@@ -470,6 +484,9 @@ def main(
           print(f"run {name} done: exit {exit_code}", file=stdout)
         print("DO NOT END TURN. POLL AGAIN.", file=stdout)
         messages.request_poll_followup()
+      elif delivered.get("gate_wait"):
+        print("DO NOT END TURN. POLL AGAIN.", file=stdout)
+        messages.request_poll_followup()
       elif delivered["status"] == "timeout":
         print("Poll waited fully. End turn.", file=stdout)
       elif delivered["status"] == "skipped":
@@ -484,6 +501,8 @@ def main(
           file=stdout,
         )
       messages.reset_gate_if_clear()
+      if not delivered.get("gate_wait") and not verdicts:
+        store.set_meta("poll_completed", "1")
       return 0
     if cmd == "ack":
       parsed = ack_p.parse_args(cmd_args)

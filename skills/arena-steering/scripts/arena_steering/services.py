@@ -681,7 +681,7 @@ class MessageService:
     except ValueError:
       return 0
 
-  def touch_agent(self) -> None:
+  def touch_agent(self, *, clear_poll_marker: bool = True) -> None:
     """Record an agent call and clear the previous turn-end marker."""
     stamp = self._clock.now_iso()
     with self._reports.transaction():
@@ -689,6 +689,8 @@ class MessageService:
         self._meta.set_meta("agent_seen_at", stamp)
       if self._meta.get_meta("turn_ended_at"):
         self._meta.set_meta("turn_ended_at", "")
+      if clear_poll_marker and self._meta.get_meta("poll_completed"):
+        self._meta.set_meta("poll_completed", "")
 
   def trigger_skip_poll(self) -> None:
     self._meta.set_meta("skip_poll", "1")
@@ -757,6 +759,7 @@ class MessageService:
     initial_task: Task | None = None,
     live_run: Callable[[], bool] | None = None,
     finished_run: Callable[[], list[tuple[str, int, str]]] | None = None,
+    track_agent: bool = True,
   ) -> dict[str, Any]:
     """Wait for inbox work, an initial runnable task, a run, or eligible Skip."""
     timeout = max(0.0, min(float(timeout_seconds), 1799.0))
@@ -764,7 +767,9 @@ class MessageService:
     skipped = timed_out = False
     task: Task | None = None
     verdicts: list[tuple[str, int, str]] = []
-    self.touch_agent()
+    gate_poll = bool(live_run and live_run())
+    if track_agent:
+      self.touch_agent(clear_poll_marker=False)
     if not self.has_pending_deliverables():
       task = initial_task
       if task is None:
@@ -772,9 +777,13 @@ class MessageService:
         if not verdicts and not (live_run and live_run()):
           skipped = self.consume_skip_poll()
       if task is None and not skipped and not verdicts and timeout > 0:
-        with self._reports.transaction():
-          self._meta.set_meta("polling_since", self._clock.now_iso())
-          self._meta.set_meta("polling_at", self._clock.now_iso())
+        if track_agent:
+          with self._reports.transaction():
+            self._meta.set_meta("polling_since", self._clock.now_iso())
+            gate_active = bool(live_run and live_run())
+            gate_poll = gate_poll or gate_active
+            self._meta.set_meta("polling_gate", "1" if gate_poll else "0")
+            self._meta.set_meta("polling_at", self._clock.now_iso())
         try:
           while not self.has_pending_deliverables():
             verdicts = finished_run() if finished_run else []
@@ -787,18 +796,33 @@ class MessageService:
             if remaining <= 0:
               timed_out = True
               break
-            self._meta.set_meta("polling_at", self._clock.now_iso())
+            gate_active = bool(live_run and live_run())
+            gate_poll = gate_poll or gate_active
+            if track_agent:
+              self._meta.set_meta("polling_gate", "1" if gate_poll else "0")
+              self._meta.set_meta("polling_at", self._clock.now_iso())
             # Do not hold the condition while accessing the store. An answer
             # callback may notify while its store transaction is open.
             with self._cond:
               self._cond.wait(timeout=min(POLL_HEARTBEAT_SECONDS, remaining))
         finally:
-          with self._reports.transaction():
-            self._meta.set_meta("polling_at", "")
-            self._meta.set_meta("polling_since", "")
+          if track_agent:
+            with self._reports.transaction():
+              self._meta.set_meta("polling_at", "")
+              self._meta.set_meta("polling_since", "")
+              self._meta.set_meta("polling_gate", "")
+    gate_wait = bool(live_run and live_run())
     delivered = self.read_pending(mark_seen=True)
     inbox_ready = bool(delivered["messages"] or delivered["report_answers"])
-    if (skipped or timed_out) and not inbox_ready and task is None and not verdicts:
+    if (
+      track_agent
+      and (skipped or timed_out)
+      and not gate_poll
+      and not gate_wait
+      and not inbox_ready
+      and task is None
+      and not verdicts
+    ):
       self._meta.set_meta("turn_ended_at", self._clock.now_iso())
     delivered["status"] = (
       "ready"
@@ -809,6 +833,7 @@ class MessageService:
       if skipped
       else "timeout"
     )
+    delivered["gate_wait"] = gate_poll or gate_wait
     delivered["next_task"] = None if inbox_ready else task
     if verdicts:
       delivered["run_verdicts"] = verdicts

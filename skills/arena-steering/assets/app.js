@@ -149,9 +149,37 @@ let appliedHealthRequestId = 0;
 let optimisticViolation = null;
 let confirmedViolation = { agent_interrupt_pending: false };
 
-function applyConnection(requestId, health, error = false) {
+let pollStateRecipient = null;
+
+function sendPollState() {
+  const marker = document.getElementById("steering-poll-state");
+  if (!pollStateRecipient || !marker) return;
+  pollStateRecipient.source.postMessage({
+    type: "clankers:steering-poll-state",
+    ...marker.dataset,
+  }, pollStateRecipient.origin);
+}
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent || event.data?.type !== "clankers:steering-poll-request" ||
+      !/^https?:\/\//.test(event.origin)) return;
+  pollStateRecipient = { source: event.source, origin: event.origin };
+  getHealthWithConnection().catch(() => {});
+});
+
+function applyConnection(requestId, health, error = false, startedAt = Date.now()) {
   if (requestId < appliedHealthRequestId) return;
   appliedHealthRequestId = requestId;
+  const pollState = document.getElementById("steering-poll-state");
+  if (pollState) {
+    pollState.dataset.updatedAt = String(startedAt);
+    pollState.dataset.available = String(!error);
+    pollState.dataset.polling = String(!error && Boolean(health.polling));
+    pollState.dataset.pollingGate = String(!error && Boolean(health.polling_gate));
+    pollState.dataset.pollCompleted = String(!error && Boolean(health.poll_completed));
+    pollState.dataset.turnEndedAt = error ? "" : (health.turn_ended_at || "");
+    sendPollState();
+  }
   const connection = error ? { error: true } : {
     loaded: true,
     polling: Boolean(health.polling),
@@ -188,16 +216,17 @@ function setViolationStatus(message) {
 
 async function getHealthWithConnection() {
   const requestId = ++healthRequestId;
+  const startedAt = Date.now();
   try {
     const health = await api.getHealth();
-    applyConnection(requestId, health);
+    applyConnection(requestId, health, false, startedAt);
     if (requestId === appliedHealthRequestId) {
       confirmedViolation = health;
       paintViolationFlag(health);
     }
     return health;
   } catch (error) {
-    applyConnection(requestId, null, true);
+    applyConnection(requestId, null, true, startedAt);
     throw error;
   }
 }
