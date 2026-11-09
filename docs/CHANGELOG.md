@@ -8,6 +8,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-09
 
+### Changed
+
+#### rules
+
+- Require the squash skill for refs-to-live rule amendments.
+
 ### Removed
 
 #### rules
