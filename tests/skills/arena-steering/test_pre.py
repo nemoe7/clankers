@@ -424,7 +424,7 @@ def test_arena_platform_shells_do_not_spend_inbox_call_budget(
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.CONTINUE, out
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
-  assert '_arena_preview_done="gate"' in out
+  assert '_steer_done="gate"' in out
 
 
 @pytest.mark.parametrize(
@@ -449,7 +449,7 @@ def test_exact_maintenance_shell_skips_its_cleanup_without_widening_the_match(
   store.close()
   code, out = _run("pre", "-l", line, "-c", command, "-s", "bash")
   assert code == pre.CONTINUE, out
-  assert '_arena_preview_done="gate"' in out
+  assert '_steer_done="gate"' in out
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
   blocked, out = _run("pre", "-l", line, "-c", cleanup, "-s", "bash")
   assert blocked == pre.BLOCK, out
@@ -688,7 +688,7 @@ def test_native_mkdir_and_mixed_shell_gate_each_current_command(
     assert code == pre.CONTINUE, output
     assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
     if line != native:
-      assert "gate" not in output.split("_arena_preview_done=")[-1]
+      assert "gate" not in output.split("_steer_done=")[-1]
     code, output = _run("pre", "-l", line, "-c", "source ~/.profile", "-s", "bash")
     assert code == pre.CONTINUE, output
     assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
@@ -2102,7 +2102,7 @@ def test_a_pass_through_reports_the_finished_steps(_isolate_state: Path) -> None
   line = "/repo/skills/arena-steering/scripts/steer --version"
   code, out = _run("pre", "-l", line, "-s", "bash")
   assert code == pre.CONTINUE
-  assert '_arena_preview_done="bare"' in out
+  assert '_steer_done="bare"' in out
 
   code, out = _run("pre", "-l", line, "-s", "bash", "-d", "bare")
   assert code == pre.CONTINUE
@@ -2206,7 +2206,10 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   profile_text = profile.read_text(encoding="utf-8")
   assert profile_text.count("# Existing profile content") == 1
   profile.write_text(
-    profile_text.replace("_steer_single_push_approved=\n", "", 1), encoding="utf-8"
+    profile_text.replace("_steer_single_push_approved=\n", "", 1).replace(
+      "_steer_done", "_arena_preview_done"
+    ),
+    encoding="utf-8",
   )
   refreshed = subprocess.run(
     ["bash", str(install)],
@@ -3293,7 +3296,7 @@ def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
   command.parent.mkdir(parents=True)
   command.write_text(
     "#!/bin/sh\nprintf '%s\\n' '_steer_route_output=1' '_steer_route_rc=123' "
-    "'_arena_preview_done=literal' 'helper output' '_steer_route_rc=7'\nexit 2\n",
+    "'_steer_done=literal' 'helper output' '_steer_route_rc=7'\nexit 2\n",
     encoding="utf-8",
   )
   command.chmod(0o755)
@@ -3307,7 +3310,7 @@ def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
   )
   assert shell.returncode == 7
   assert "_steer_route_rc=123" in shell.stdout
-  assert "_arena_preview_done=literal" in shell.stdout
+  assert "_steer_done=literal" in shell.stdout
   assert "_steer_route_output=1" not in shell.stdout
   assert "helper output" in shell.stdout
   assert "original" not in shell.stdout
@@ -4216,3 +4219,18 @@ def test_pre_enforces_steering_start_process_title(_isolate_state: Path) -> None
   code, output = _run("pre", "-l", good_line, "-c", good_cmd, "-s", "bash")
   assert code == pre.CONTINUE, output
   assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
+
+
+@pytest.mark.parametrize("executable", ["steer", "arena-preview"])
+@pytest.mark.parametrize(
+  ("guard", "command"),
+  [
+    (pre.InboxPipeGuard(), "{executable} read | cat"),
+    (pre.PollTimeoutGuard(), "timeout 1 {executable} poll"),
+  ],
+)
+def test_retired_cli_names_do_not_receive_steer_guards(
+  executable: str, guard: pre.PreStep, command: str
+) -> None:
+  context = pre.PreContext(line=command.format(executable=executable))
+  assert guard.applies(context) == (executable == "steer")

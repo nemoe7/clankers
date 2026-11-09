@@ -87,7 +87,7 @@ _steer_gate() {
     _steer_line="$(tr '\0' ' ' < "/proc/$$/cmdline" 2>/dev/null)" || :
   fi
   [ -n "${_steer_line:-}" ] || _steer_line=$command
-  if reply="$("$HOME/.local/bin/steer" pre --line "$_steer_line" --command "$command" --shell "${0##*/}" --done "${_arena_preview_done:-}")"; then
+  if reply="$("$HOME/.local/bin/steer" pre --line "$_steer_line" --command "$command" --shell "${0##*/}" --done "${_steer_done:-}")"; then
     status=0
   else
     status=$?
@@ -113,10 +113,10 @@ _steer_gate() {
         _steer_route_output=1)
           if [ "$status" = 2 ]; then route_output=1; else printf '%s\n' "$line"; fi
           ;;
-        _arena_preview_done=*)
-          _arena_preview_done=${line#_arena_preview_done=}
-          _arena_preview_done=${_arena_preview_done#\"}
-          _arena_preview_done=${_arena_preview_done%\"}
+        _steer_done=*)
+          _steer_done=${line#_steer_done=}
+          _steer_done=${_steer_done#\"}
+          _steer_done=${_steer_done%\"}
           ;;
         _steer_single_push_approved=1)
           _steer_single_push_approved=1

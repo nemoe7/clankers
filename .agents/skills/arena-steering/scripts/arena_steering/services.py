@@ -590,7 +590,7 @@ class MessageService:
       self._cond.notify_all()
 
   def tool_activity(self) -> dict[str, str] | None:
-    """Return the last agent tool in the shared v1-compatible state shape."""
+    """Return the last agent tool in the shared state shape."""
     name = self._meta.get_meta(TOOL_NAME_META)
     stamp = self._meta.get_meta(TOOL_AT_META, "") or ""
     if name not in TOOL_PROBE_NAMES or not stamp:

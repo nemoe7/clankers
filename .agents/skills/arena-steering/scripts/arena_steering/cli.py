@@ -1162,9 +1162,7 @@ def _schedule_instruction_check(
   """Mint one hidden instruction checkpoint after each elapsed interval."""
   words = pre_mod._line_commands(pre_mod.PreContext(line=line))
   if any(
-    len(command) >= 2
-    and Path(command[0]).name in {"steer", "arena-preview"}
-    and command[1] == "poll"
+    len(command) >= 2 and Path(command[0]).name == "steer" and command[1] == "poll"
     for command in words
   ):
     return
@@ -1376,7 +1374,7 @@ def _run_pre(
   if parsed.shell and result.done != ctx.done:
     # The shell evals this line, so a later command in the same shell skips
     # the steps that already ran.
-    print(f'_arena_preview_done="{" ".join(result.done)}"', file=out)
+    print(f'_steer_done="{" ".join(result.done)}"', file=out)
   if not routed and not ctx.is_inbox_recovery():
     tool_name = pre_mod.native_tool_name(
       ctx.line, ctx.command, ctx.shell, checkout_root=ctx.checkout_root
@@ -1659,9 +1657,7 @@ def _slow_call_hint(line: str, elapsed: float) -> str:
   if elapsed < 10 or pre_mod.PreContext(line=line).is_inbox_recovery():
     return ""
   if any(
-    words
-    and Path(words[0]).name in {"steer", "arena-preview"}
-    and words[1:2] == ["run"]
+    words and Path(words[0]).name == "steer" and words[1:2] == ["run"]
     for words in pre_mod._line_commands(pre_mod.PreContext(line=line))
   ):
     return ""

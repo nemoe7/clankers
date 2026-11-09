@@ -859,7 +859,7 @@ class InboxPipeGuard:
       words = command_words(words)
       return (
         len(words) >= 2
-        and Path(words[0]).name in {"steer", "arena-preview"}
+        and Path(words[0]).name == "steer"
         and words[1] in {"read", "poll"}
       )
 
@@ -892,11 +892,7 @@ class PollTimeoutGuard:
   def applies(self, ctx: PreContext) -> bool:
     def poll(words: list[str]) -> bool:
       words = command_words(words)
-      return (
-        len(words) >= 2
-        and Path(words[0]).name in {"steer", "arena-preview"}
-        and words[1] == "poll"
-      )
+      return len(words) >= 2 and Path(words[0]).name == "steer" and words[1] == "poll"
 
     for words, _ in ctx.pieces():
       words = command_words(words)
@@ -953,7 +949,7 @@ def live_run_log_read_ids(ctx: PreContext) -> tuple[str, ...]:
   for words in _line_commands(ctx, unwrap_timeout=True):
     if (
       len(words) < 4
-      or Path(words[0]).name not in {"steer", "arena-preview"}
+      or Path(words[0]).name != "steer"
       or words[1:3] != ["run", "logs"]
       or any(flag in words[3:] for flag in ("-h", "--help", "--version", "-V"))
     ):
@@ -1222,7 +1218,7 @@ class GitSafetyGuard:
       return "push"
     if head == "git" and "commit" in args:
       return "commit"
-    if head in {"steer", "arena-preview"} and args[:2] == ["run", "start"]:
+    if head == "steer" and args[:2] == ["run", "start"]:
       return "gate"
     return ""
 
@@ -1348,9 +1344,7 @@ class WireframeGuard:
     )
 
 
-ACK_QUOTE = re.compile(
-  r'(?:^|[;&|]\s*)\s*(?:\S*/)?(?:steer|arena-preview)\s+ack\b[^;|]*?"'
-)
+ACK_QUOTE = re.compile(r'(?:^|[;&|]\s*)\s*(?:\S*/)?steer\s+ack\b[^;|]*?"')
 
 
 class AckQuoteReminder:
@@ -1458,7 +1452,7 @@ class SleepGuard:
     commands = [
       (Path(words[0]).name, words[1:]) for words, _ in self.commands(ctx) if words
     ]
-    if any(head in {"steer", "arena-preview", "preview.py"} for head, _ in commands):
+    if any(head == "steer" for head, _ in commands):
       return PreResult(
         ["VIOLATION: Sleep BANNED. Run alone."],
         BLOCK,
