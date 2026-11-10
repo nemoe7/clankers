@@ -32,9 +32,8 @@ function stopFallbackPoll() {
   }
 }
 
-// A backgrounded tab throttles timers, so the pill can sit on its last state
-// long after the socket died. Returning to the tab refreshes at once and
-// retries the upgrade instead of waiting for the next throttled tick.
+// Background tabs throttle timers, so a dead socket can leave the pill stale.
+// Returning to the tab refreshes at once and retries the upgrade.
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;

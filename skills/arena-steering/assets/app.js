@@ -961,8 +961,7 @@ const handlers = {
       const visibleKey = messageQueryKey({ ...state, showHidden: false });
       const cached = visibleWindowCache?.key === visibleKey ? visibleWindowCache : null;
       if (!cached) visibleWindowCache = null;
-      // A message written after the cache was stored is missing from it, so
-      // merge the live window instead of dropping newer visible messages.
+      // The cache misses later writes, so merge the live window into it.
       const live = (state.messages || []).filter(message => !message.hidden);
       const visible = cached
         ? [...live, ...cached.messages.filter(
@@ -986,8 +985,7 @@ const handlers = {
     };
     const cached = hiddenMessageCache?.query === query ? hiddenMessageCache : null;
     if (cached) loadedMessageRevision = cached.revision;
-    // The cache never holds a message written after it was stored, so merge it
-    // into the current window instead of replacing the window with it.
+    // The cache misses later writes, so merge it into the current window.
     const seed = cached
       ? [...(state.messages || []), ...cached.messages.filter(
         (item) => !(state.messages || []).some((message) => message.id === item.id)
