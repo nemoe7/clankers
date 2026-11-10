@@ -2041,7 +2041,8 @@ def test_selected_tooltips_are_absent_but_control_labels_remain(
           ".report-picker-unseen-dot",
           ".report-scroll-top",
         ):
-          assert page.locator(selector).get_attribute("title") is None, selector
+          for control in page.locator(selector).all():
+            assert control.get_attribute("title") is None, selector
         assert (
           page.locator(".report-picker-unanswered").get_attribute("aria-label")
           == "Needs answers"
