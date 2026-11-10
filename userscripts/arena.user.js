@@ -862,6 +862,7 @@
   }
 
   function setComposerText(el, text) {
+    var previous = document.activeElement;
     el.focus();
     var selection = window.getSelection();
     var range = document.createRange();
@@ -914,6 +915,9 @@
         }),
       );
       logEvent("fill", "rebuilt", { count: lines.length }, "debug");
+    }
+    if (previous && previous !== el && typeof previous.focus === "function") {
+      previous.focus({ preventScroll: true });
     }
   }
 

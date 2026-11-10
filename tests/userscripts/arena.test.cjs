@@ -482,12 +482,13 @@ runBundle("arena");
       getClientRects() { return this.hidden ? [] : [{}]; },
       click() { clicks += 1; },
     };
+    const focusCalls = [];
     const editor = {
       innerText: "wake up", hidden: false, ariaDisabled: null, children: [],
       get firstChild() { return this.children[0] || null; },
       appendChild(node) { this.children.push(node); this.innerText = this.children.map(child => child.textContent).join("\n\n"); },
       removeChild(node) { this.children.splice(this.children.indexOf(node), 1); this.innerText = ""; },
-      dispatchEvent() {}, focus() {},
+      dispatchEvent() {}, focus() { focusCalls.push(this); },
       get textContent() { return this.innerText; },
       getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
       getClientRects() { return this.hidden ? [] : [{}]; },
@@ -502,11 +503,14 @@ runBundle("arena");
       for (const [id] of pending) timers.delete(id);
       for (const [, timer] of pending) timer.callback();
     };
+    let previousFocusCalls = 0;
+    const previousTarget = { focus() { previousFocusCalls += 1; } };
     const context = {
       console: { log(...args) { logged.push(args); }, warn(...args) { logged.push(args); }, error(...args) { logged.push(args); } }, URL,
       location: { href: "https://arena.ai/agent/session", pathname: "/agent/session" },
       document: {
         documentElement: {},
+        activeElement: previousTarget,
         createElement() { return { textContent: "" }; },
         createRange() { return { selectNodeContents() {} }; },
         execCommand(command, ui, text) { assert.equal(command, "insertText"); editor.innerText = text.replace(/\n/g, "\n\n"); return true; },
@@ -686,6 +690,12 @@ runBundle("arena");
     fire();
     assert.equal(editor.innerText, "wake up", "types wake up once the composer mounts");
     assert.ok(logged.some(([line]) => line === "[NemoUtils][keep-working][info] filled"));
+    assert.ok(focusCalls.length >= 1, "focuses the composer to write the draft");
+    assert.equal(
+      previousFocusCalls,
+      focusCalls.length,
+      "restores focus to the element that had it after every fill",
+    );
     flush();
     assert.equal(clicks, 5, "sends wake up after Keep working opens the composer");
     saved.set("clankers-arena-wake-text", "Resume now");

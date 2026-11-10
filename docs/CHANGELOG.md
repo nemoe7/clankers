@@ -34,6 +34,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Match the release-impact prompt to Semantic Versioning 2.0.0 section 7.
 - Align the baseline Steering CLI reference with the shipped poll warning.
 - Place the DAILIES item-count rule in the section it names.
+- Restore focus after filling the Arena composer with a wake-up or no-poll draft.
 
 - Register split Steering browser suites with the CI module selector so ownership checks and Preview test selection include them.
 
