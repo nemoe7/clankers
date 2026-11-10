@@ -16,7 +16,9 @@ def test_a_MISSING_BROWSER_fails_when_the_run_requires_one(tmp_path: Path) -> No
   package = tmp_path / "probe"
   package.mkdir()
   (package / "conftest.py").write_text(stub, encoding="utf-8")
-  (package / "test_probe.py").write_text("def test_probe():\n  pass\n", encoding="utf-8")
+  (package / "test_probe.py").write_text(
+    "def test_probe():\n  pass\n", encoding="utf-8"
+  )
   result = subprocess.run(
     [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(package)],
     cwd=Path(__file__).parents[3],
