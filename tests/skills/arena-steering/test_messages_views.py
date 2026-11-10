@@ -897,7 +897,13 @@ def test_displayed_ids_choose_typed_composer_parents(
         page.screenshot(path=str(tmp_path / f"typed-composer-parents-{width}.png"))
         page.locator("#msg").fill("Child from browser")
         page.locator("#send").click()
-        page.locator(".message").filter(has_text="Child from browser").wait_for()
+        # The optimistic row matches at once, so wait for the confirmed row
+        # that carries the server id.
+        page.wait_for_function(
+          """() => [...document.querySelectorAll('.message')].some(item =>
+            item.textContent.includes('Child from browser')
+            && !item.dataset.msgId.startsWith('pending-'))"""
+        )
         child = next(
           msg
           for msg in app.messages.list_messages(unread_only=False, include_hidden=True)
