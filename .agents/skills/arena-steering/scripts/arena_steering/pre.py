@@ -1868,6 +1868,43 @@ class StartProcessTitleGuard:
     return PreResult([error], BLOCK) if error else PreResult()
 
 
+def _asks_for_logs(args: list[str]) -> bool:
+  """Return True when a `gh run view` argument list requests log output."""
+  for arg in args:
+    if arg in {"--log", "--log-failed", "-l"}:
+      return True
+    if arg.startswith("--log"):
+      return True
+  return False
+
+
+class JobLogRedirectGuard:
+  """Point `gh run view` log reads at the direct job-log helper."""
+
+  name = "job-log-redirect"
+
+  def applies(self, ctx: PreContext) -> bool:
+    for words in _line_commands(ctx):
+      if not words:
+        continue
+      head, args = Path(words[0]).name, words[1:]
+      if head == "gh" and args[:2] == ["run", "view"] and _asks_for_logs(args[2:]):
+        return True
+    return False
+
+  def run(self, ctx: PreContext) -> PreResult:
+    return PreResult(
+      [
+        "VIOLATION: `gh run view` log reads hit an egress redirect that the shell cannot follow.",
+        (
+          "Use the job-log recipe: `gh pr checks <PR>` for the job ID, then "
+          "`steer job-log -j <job-id>`, then `functions.fetch_page` on the printed URL."
+        ),
+      ],
+      BLOCK,
+    )
+
+
 PIPELINE: tuple[PreStep, ...] = (
   StartProcessTitleGuard(),
   LiveRunLogGuard(),
@@ -1875,6 +1912,7 @@ PIPELINE: tuple[PreStep, ...] = (
   InboxPipeGuard(),
   PollTimeoutGuard(),
   PrStateGuard(),
+  JobLogRedirectGuard(),
   DestructivePushGuard(),
   WireframeGuard(),
   InboxGate(),

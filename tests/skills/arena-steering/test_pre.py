@@ -2978,6 +2978,21 @@ def test_demo_lives_in_maintenance_and_retains_port_option(tmp_path: Path) -> No
   assert live_state.read_bytes() == b"live state is not demo data"
 
 
+@pytest.mark.parametrize("flag", ["--log", "--log-failed", "-l"])
+def test_job_log_guard_redirects_run_view_log_reads(flag: str) -> None:
+  line = f"gh run view 42739739541 {flag}"
+  ctx = pre.PreContext(line=line, command=line, shell="bash")
+  result = pre.JobLogRedirectGuard().run(ctx)
+  assert result.verdict == pre.BLOCK
+  assert "steer job-log -j" in result.messages[1]
+
+
+def test_job_log_guard_leaves_plain_run_view_alone() -> None:
+  line = "gh run view 42739739541"
+  ctx = pre.PreContext(line=line, command=line, shell="bash")
+  assert not pre.JobLogRedirectGuard().applies(ctx)
+
+
 def test_moved_demo_reseeds_a_demo_store_on_reload(tmp_path: Path) -> None:
   store = cli.SqliteStore(tmp_path / "arena-steering-demo-fixture" / "state.sqlite3")
   app = cli.SteeringApp(store)
