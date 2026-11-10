@@ -314,6 +314,27 @@ assert.doesNotMatch(html, /Live steering active/);
   assert "callsSinceMessage," in state_update
 
 
+def test_hidden_toggle_refreshes_after_the_windowed_request() -> None:
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  toggle = app_js.partition("async onToggleHidden() {")[2].partition("\n  onSearchChange(")[0]
+  window_call = toggle.partition("api.hiddenMessageWindow(")[2]
+  assert window_call, "the toggle must fetch the hidden window"
+  assert "await fetchMessagePage({ preserve: true })" in window_call, (
+    "the toggle must refresh through the normal page fetch so newer hidden "
+    "messages appear"
+  )
+
+
+def test_hidden_message_cache_invalidates_while_the_toggle_is_on() -> None:
+  app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  guard = next(
+    line for line in app_js.splitlines() if "hiddenMessageCache.dirty = true" in line
+  )
+  assert "!state.showHidden" not in guard, (
+    "a revision change must dirty the hidden cache even while the toggle is on"
+  )
+
+
 def test_message_receipts_show_sent_and_seen_and_name_acked_state() -> None:
   script = r"""
 import assert from 'node:assert/strict';

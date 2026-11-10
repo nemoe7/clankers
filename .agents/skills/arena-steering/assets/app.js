@@ -475,7 +475,7 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
     const options = { all: true, hidden: Boolean(state.showHidden), query: (state.searchQuery || "").trim(), requestId: state.optimisticMessage?.requestId || "" };
     const result = await api.listMessages({ ...options, before });
     if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
-    if (hiddenMessageCache && !state.showHidden && hiddenMessageCache.revision !== result.revision) hiddenMessageCache.dirty = true;
+    if (hiddenMessageCache && hiddenMessageCache.revision !== result.revision) hiddenMessageCache.dirty = true;
     let fresh = result.messages || [];
     let hasMore = result.has_more;
     if (!before && previous.length && !refreshDuringOlderPage) {
@@ -876,6 +876,9 @@ const handlers = {
         return current.indexOf(a) - current.indexOf(b);
       });
       store.setState({ messages: merged, messagesError: "" });
+      if (epoch === messageEpoch && store.getState().showHidden) {
+        await fetchMessagePage({ preserve: true });
+      }
     } catch (error) {
       if (epoch === messageEpoch) store.setState({ messagesError: error.message });
     }
