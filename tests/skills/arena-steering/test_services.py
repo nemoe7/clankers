@@ -1697,14 +1697,16 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
     code = cli.main(list(args), out=out, err=err)
     return code, out.getvalue(), err.getvalue()
 
-  args = ("-t", "New work", "-z", "2", "-d", "Inspect.")
+  args = ("-t", "New work", "-z", "2", "-S", "New work", "-d", "Inspect.")
   code, output, error = run("ack", "ab1021", "Read", "-i", "via-ack", *args)
   assert code == 0, error
   assert "Priority: P4" in output
 
   code, _, error = run("ack", "ab1022", "Read", "-i", "explicit-ack", *args, "-p", "P5")
   assert code == 0, error
-  code, _, error = run("task", "new", "-z", "2", "plain", "Plain", "-d", "Inspect.")
+  code, _, error = run(
+    "task", "new", "-z", "2", "-S", "Plain", "plain", "Plain", "-d", "Inspect."
+  )
   assert code == 0, error
 
   store = SqliteStore(tmp_path / "state.sqlite3")
@@ -2540,10 +2542,10 @@ def test_cli_requires_size_and_displays_values_only_in_details(
 
   for options in ((), ("-z", "4"), ("-z", "5", "-p", "P0")):
     with pytest.raises(SystemExit) as exc:
-      run("task", "new", "work", "Work", "-d", "Build.", *options)
+      run("task", "new", "work", "Work", "-d", "Build.", "-S", "Scope", *options)
     assert exc.value.code == 2
   code, created, err = run(
-    "task", "new", "work", "Work", "-d", "Build.", "-z", "5", "-p", "P2"
+    "task", "new", "work", "Work", "-d", "Build.", "-z", "5", "-p", "P2", "-S", "Scope"
   )
   assert code == 0, err
   assert "Priority: P2" in created and "Size: 5" in created
@@ -2588,7 +2590,7 @@ def test_acknowledgement_task_creation_requires_a_size(
   assert store.get_message("ab1200").acks == []
   store.close()
 
-  code, _, err = run(*options, "-z", "5", "-p", "P2")
+  code, _, err = run(*options, "-z", "5", "-p", "P2", "-S", "New work")
   assert code == 0, err
   store = SqliteStore(tmp_path / "state.sqlite3")
   task = store.get_task("new-work")
