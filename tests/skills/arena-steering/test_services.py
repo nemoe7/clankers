@@ -205,6 +205,16 @@ def test_repeated_same_id_removal_keeps_each_pending_orphan_deliverable() -> Non
   store.close()
 
 
+def test_unread_ids_include_non_blocking_while_pending_ids_stay_blocking() -> None:
+  store = SqliteStore(":memory:")
+  messages = MessageService(store, store, store, store)
+  messages.send_message("Blocking note", msg_id="de4001")
+  messages.send_message("Advisory note", blocking=False, msg_id="de4002")
+  assert messages.pending_ids() == ["de4001"]
+  assert messages.unread_ids() == ["de4001", "de4002"]
+  store.close()
+
+
 def test_answered_report_body_is_locked_but_owner_can_revise_answers() -> None:
   store = SqliteStore(":memory:")
   reports = ReportService(store, store)

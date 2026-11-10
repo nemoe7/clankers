@@ -603,6 +603,16 @@ class MessageService:
     ids.extend(answer.id for answer in self._latest_pending_answers())
     return ids
 
+  def unread_ids(self) -> list[str]:
+    """Return IDs of every unread message, blocking or not, without marking anything seen."""
+    return [
+      message.id
+      for message in self._messages.list_messages(
+        unread_only=True, include_hidden=True
+      )
+      if message.type != "report_answer"
+    ]
+
   def reset_gate_if_clear(self) -> None:
     """Reset the shell countdown only after all blocking work is acknowledged."""
     with self._reports.transaction():

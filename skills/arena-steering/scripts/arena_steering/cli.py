@@ -963,6 +963,7 @@ def _count_outer_bash(state_dir: Path, line: str, *, routed: bool) -> None:
   store, messages, _, _ = open_services(state_dir)
   try:
     pending_ids = messages.pending_ids()
+    unread_ids = messages.unread_ids()
     if not pending_ids:
       messages.reset_gate_if_clear()
       return
@@ -971,6 +972,7 @@ def _count_outer_bash(state_dir: Path, line: str, *, routed: bool) -> None:
       command=pre_mod.shell_line(line),
       shell="bash",
       pending_ids=pending_ids,
+      unread_ids=unread_ids,
       call_count=_call_count(store),
       routed=routed,
       cwd=Path.cwd(),
@@ -1214,6 +1216,7 @@ def _run_pre(
   ):
     _schedule_instruction_check(parsed.line or parsed.command_text, messages, store)
   pending_ids = messages.pending_ids()
+  unread_ids = messages.unread_ids()
   if not pending_ids:
     messages.reset_gate_if_clear()
   count = _call_count(store) if pending_ids else 0
@@ -1254,6 +1257,7 @@ def _run_pre(
     shell=str(parsed.shell or ""),
     done=tuple(str(parsed.done or "").split()),
     pending_ids=pending_ids,
+    unread_ids=unread_ids,
     call_count=count,
     active_runs=tuple(name for name, _run_id in active_run_ids),
     active_run_ids=active_run_ids,

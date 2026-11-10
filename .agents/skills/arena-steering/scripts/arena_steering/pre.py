@@ -591,6 +591,7 @@ class PreContext:
   shell: str = ""
   done: tuple[str, ...] = ()
   pending_ids: list[str] = field(default_factory=list)
+  unread_ids: list[str] = field(default_factory=list)
   call_count: int = 0
   active_runs: tuple[str, ...] = ()
   active_run_ids: tuple[tuple[str, str], ...] = ()
@@ -1315,7 +1316,9 @@ class InboxGate:
       )
     remaining = GATE_THRESHOLD - ctx.call_count
     if remaining > 0:
-      return PreResult([f"bash block in {remaining} calls. Read and ack now."])
+      quiet = len([i for i in ctx.unread_ids if i not in ctx.pending_ids])
+      extra = f" Plus {quiet} non-blocking unread." if quiet else ""
+      return PreResult([f"bash block in {remaining} calls. Read and ack now.{extra}"])
     return PreResult(
       [
         "VIOLATION: Bash blocked. Read and ack all NOW.",
