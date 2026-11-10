@@ -10,6 +10,10 @@ This log has no Unreleased section.
 
 - Run the browser tests in CI instead of skipping them, with the download cached by Playwright version.
 
+### Fixed
+
+- Reuse the hidden message window across toggles so a repeat toggle issues no request.
+
 ## [2.2.9]
 
 ### Added

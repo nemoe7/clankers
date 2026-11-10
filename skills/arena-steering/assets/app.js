@@ -887,6 +887,14 @@ const handlers = {
     searchBase = null;
     const epoch = ++messageEpoch;
     if (!nextHidden) {
+      // Keep the hidden window so the next toggle reuses it instead of refetching.
+      hiddenMessageCache = {
+        query,
+        messages: state.messages || [],
+        hasMore: state.messagesHasMore,
+        revision: loadedMessageRevision,
+        dirty: Boolean(state.messagesLoading || messageRequests) || loadedMessageRevision == null,
+      };
       // Reuse the window the toggle-off already holds instead of refetching it.
       const visibleKey = messageQueryKey({ ...state, showHidden: false });
       const cached = visibleWindowCache?.key === visibleKey ? visibleWindowCache : null;
@@ -909,8 +917,15 @@ const handlers = {
       hasMore: state.messagesHasMore,
       revision: visibleQueryRevision,
     };
-    store.setState({ showHidden: true, messagesLoading: false });
+    const cached = hiddenMessageCache?.query === query ? hiddenMessageCache : null;
+    if (cached) loadedMessageRevision = cached.revision;
+    store.setState({
+      showHidden: true,
+      ...(cached ? { messages: cached.messages, messagesHasMore: cached.hasMore } : {}),
+      messagesLoading: false,
+    });
     loadedMessageKey = messageQueryKey(store.getState());
+    if (cached && !cached.dirty && !messageRequests) return;
     const messages = state.messages || [];
     if (!messages.length) return;
     try {

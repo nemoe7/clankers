@@ -1640,12 +1640,14 @@ def test_hidden_messages_are_cached_across_toggles(tmp_path: Path) -> None:
         assert calls == []
         toggle.click()
         hidden.wait_for(state="detached")
+        # A refresh that advances the revision invalidates the hidden window, so
+        # the next toggle refetches it instead of reusing a stale cache.
         with page.expect_response(lambda response: "/messages?" in response.url):
           pass
         calls.clear()
         toggle.click()
         hidden.wait_for()
-        assert calls == []
+        assert calls
         toggle.click()
         hidden.wait_for(state="detached")
         app.messages.send_message("New hidden", msg_id="aa0003", hidden=True)
