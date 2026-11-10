@@ -895,6 +895,15 @@ const handlers = {
         revision: loadedMessageRevision,
         dirty: Boolean(state.messagesLoading || messageRequests) || loadedMessageRevision == null,
       };
+      // Visibility is gated on the visible revision, not the hidden one.
+      if (visibleQueryRevision !== undefined && !state.messagesLoading && !messageRequests) {
+        visibleWindowCache = {
+          key: messageQueryKey({ ...state, showHidden: false }),
+          messages: (state.messages || []).filter(message => !message.hidden),
+          hasMore: state.messagesHasMore,
+          revision: visibleQueryRevision,
+        };
+      }
       // Reuse the window the toggle-off already holds instead of refetching it.
       const visibleKey = messageQueryKey({ ...state, showHidden: false });
       const cached = visibleWindowCache?.key === visibleKey ? visibleWindowCache : null;
