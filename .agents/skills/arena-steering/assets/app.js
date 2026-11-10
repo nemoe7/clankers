@@ -219,6 +219,7 @@ async function getHealthWithConnection() {
   const startedAt = Date.now();
   try {
     const health = await api.getHealth();
+    healthSeenRevision = health.message_revision;
     applyConnection(requestId, health, false, startedAt);
     if (requestId === appliedHealthRequestId) {
       confirmedViolation = health;
@@ -420,6 +421,9 @@ let loadedMessageKey = null;
 let olderPageErrorKey = null;
 let historyCache = null;
 let hiddenMessageCache = null;
+let visibleWindowCache = null;
+let healthSeenRevision = undefined;
+let visibleQueryRevision = undefined;
 let loadedMessageRevision = null;
 let searchBase = null;
 const confirmedSeenRevisions = new Map();
@@ -457,9 +461,28 @@ export function messageMatchesQuery(message, query) {
   return haystacks.some((item) => String(item || "").toLowerCase().includes(needle));
 }
 
+function cachedVisibleWindow(key) {
+  // The cached window serves polls until the server reports a newer revision.
+  const cached = visibleWindowCache;
+  if (!cached || cached.key !== key || !cached.revision) return null;
+  return cached;
+}
+
 async function fetchMessagePage({ before = "", reset = false, preserve = false } = {}) {
   const state = store.getState();
   const key = messageQueryKey(state);
+  if (!before && !reset && !preserve && !state.showHidden) {
+    const cached = cachedVisibleWindow(key);
+    // An unchanged server revision means the cached view is still exact.
+    if (cached && (cached.revision === visibleQueryRevision || cached.revision === healthSeenRevision)) {
+      loadedMessageKey = key;
+      loadedMessageRevision = cached.revision;
+      if (JSON.stringify(state.messages) !== JSON.stringify(cached.messages)) {
+        store.setState({ messages: cached.messages, messagesHasMore: cached.hasMore, messagesError: "", messagesLoading: false });
+      }
+      return cached.messages;
+    }
+  }
   // Refresh the latest page now. Keep loaded history until the older-page retry completes.
   const refreshDuringOlderPage = !before && !reset && olderPageRequest?.key === key;
   if (refreshDuringOlderPage) olderPageRequest.refreshRequested = true;
@@ -476,6 +499,7 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
     const result = await api.listMessages({ ...options, before });
     if (epoch !== messageEpoch || messageQueryKey(store.getState()) !== key) return null;
     if (hiddenMessageCache && hiddenMessageCache.revision !== result.revision) hiddenMessageCache.dirty = true;
+    if (!state.showHidden) visibleQueryRevision = result.revision;
     let fresh = result.messages || [];
     let hasMore = result.has_more;
     if (!before && previous.length && !refreshDuringOlderPage) {
@@ -853,11 +877,28 @@ const handlers = {
     searchBase = null;
     const epoch = ++messageEpoch;
     if (!nextHidden) {
-      const visible = (state.messages || []).filter(message => !message.hidden);
-      store.setState({ showHidden: false, messages: visible, messagesLoading: false });
+      // Reuse the window the toggle-off already holds instead of refetching it.
+      const visibleKey = messageQueryKey({ ...state, showHidden: false });
+      const cached = visibleWindowCache?.key === visibleKey ? visibleWindowCache : null;
+      if (!cached) visibleWindowCache = null;
+      const visible = cached
+        ? cached.messages
+        : (state.messages || []).filter(message => !message.hidden);
+      store.setState({
+        showHidden: false,
+        messages: visible,
+        messagesHasMore: cached ? cached.hasMore : state.messagesHasMore,
+        messagesLoading: false,
+      });
       loadedMessageKey = messageQueryKey(store.getState());
       return;
     }
+    visibleWindowCache = {
+      key: messageQueryKey(state),
+      messages: state.messages || [],
+      hasMore: state.messagesHasMore,
+      revision: visibleQueryRevision,
+    };
     store.setState({ showHidden: true, messagesLoading: false });
     loadedMessageKey = messageQueryKey(store.getState());
     const messages = state.messages || [];

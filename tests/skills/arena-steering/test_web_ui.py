@@ -3837,3 +3837,59 @@ def test_page_keeps_retrying_when_both_transports_drop(tmp_path: Path) -> None:
     thread.join(timeout=5)
     writer_store.close()
     server_store.close()
+
+
+def test_hidden_toggle_off_uses_the_cached_window_without_refetching() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("Visible note", msg_id="aa0001")
+  for index in range(5):
+    app.messages.send_message(f"Hidden {index}", msg_id=f"bb{index:04x}", hidden=True)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.add_init_script(
+          """(() => {
+            const realFetch = window.fetch;
+            window.__messageFetches = [];
+            window.__healthFetches = 0;
+            window.fetch = (...args) => {
+              const url = String(args[0]);
+              if (url.startsWith("/messages?")) window.__messageFetches.push(url);
+              if (url === "/health") window.__healthFetches += 1;
+              return realFetch(...args);
+            };
+          })()"""
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('.message[data-msg-id="aa0001"]').wait_for()
+        toggle = page.locator("#quiet-msgs")
+        toggle.click()
+        page.locator('.message[data-msg-id="bb0000"]').wait_for()
+        toggle.click()
+        page.locator('.message[data-msg-id="aa0001"]').wait_for()
+        assert page.locator('.message[data-msg-id="bb0000"]').count() == 0
+        # Later polls must reuse the cached window too, not refetch it.
+        page.evaluate("() => { window.__messageFetches = []; }")
+        polls = page.evaluate("() => window.__healthFetches")
+        page.wait_for_function(
+          "start => window.__healthFetches > start", arg=polls, timeout=12000
+        )
+        page.wait_for_timeout(500)
+        assert page.evaluate("() => window.__messageFetches.length") == 0
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()

@@ -942,6 +942,7 @@ class SteeringApp:
         "agent_seen_at": self.store.get_meta("agent_seen_at") or None,
         "turn_ended_at": self.store.get_meta("turn_ended_at") or None,
         "last_tool": self.messages.tool_activity(),
+        "message_revision": self.store.message_revision(),
         "calls_since_message": self.messages.calls_since_message(),
       },
     )
