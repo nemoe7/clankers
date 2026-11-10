@@ -173,6 +173,17 @@ function socketRequest(method, path, bodyStr, timeoutMs = 15000) {
   });
 }
 
+export function transportState() {
+  // `attempted` keeps a page that never opened a transport out of the fault state.
+  const mode = new URL(window.location.href).searchParams.get("transport") === "poll" ? "poll" : "ws";
+  return {
+    socket: Boolean(liveSocket && liveSocket.readyState === 1),
+    poll: Boolean(disconnectPollTimer),
+    attempted: Boolean(liveSocket || disconnectPollTimer),
+    mode,
+  };
+}
+
 export const AUTOMATIC_WRITE_RETRIES = 3;
 const WRITE_RETRY_DELAYS_MS = [50, 100, 200];
 

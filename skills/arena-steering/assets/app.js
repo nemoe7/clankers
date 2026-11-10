@@ -2,7 +2,7 @@ import { createComposerUploads } from "./composer-uploads.js";
 import { copyText } from "./copy.js";
 // Main ES module controller for Arena Steering.
 
-import { api, connectWebSocket } from "./api.js";
+import { api, connectWebSocket, transportState } from "./api.js";
 import { expandMessageHistory, messageQueryKey, paintConnection, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
@@ -186,6 +186,7 @@ function applyConnection(requestId, health, error = false, startedAt = Date.now(
     polling_since: health.polling_since,
     agent_seen_at: health.agent_seen_at,
     turn_ended_at: health.turn_ended_at,
+    transport: transportState(),
   };
   store.getState().connection = connection;
   if (!error && store.getState().skipPollArmed !== Boolean(health.skip_poll)) {

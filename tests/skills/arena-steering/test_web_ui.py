@@ -2252,9 +2252,11 @@ def test_connection_states_and_survey_modal(tmp_path: Path) -> None:
         page.wait_for_function("() => !!window.releaseHealth", timeout=7000)
         assert dot.get_attribute("data-state") == "connecting"
         page.evaluate("window.releaseHealth()")
+        # Poll transport is live with no socket, so the pill names the poll.
         page.wait_for_function(
           "() => document.querySelector('#connection-dot')?.dataset.state === 'ok'"
         )
+        assert page.locator("#connection-text").inner_text() == "Connected (poll)"
         assert (
           dot.evaluate("el => getComputedStyle(el).backgroundColor")
           == "rgb(34, 197, 94)"
@@ -2263,16 +2265,29 @@ def test_connection_states_and_survey_modal(tmp_path: Path) -> None:
           """async () => {
             const { connectionPresentation } = await import('/messages-view.js');
             const now = Date.parse('2026-01-01T12:00:00Z');
+            const transport = (mode, socket, poll) => ({mode, socket, poll, attempted: true});
             return [
               connectionPresentation({loaded: true, turn_ended_at: '2026-01-01T11:57:00Z'}, now).state,
               connectionPresentation({loaded: true, turn_ended_at: '2026-01-01T11:56:59Z'}, now).state,
               connectionPresentation({loaded: true, agent_seen_at: '2026-01-01T11:28:00Z'}, now).state,
               connectionPresentation({loaded: true, agent_seen_at: '2026-01-01T11:27:59Z'}, now).state,
               connectionPresentation({loaded: true, polling: true, turn_ended_at: '2026-01-01T11:00:00Z'}, now).state,
+              connectionPresentation({loaded: true, transport: transport("poll", false, true)}, now).text,
+              connectionPresentation({loaded: true, transport: transport("ws", true, false)}, now).state,
+              connectionPresentation({loaded: true, transport: transport("ws", false, false)}, now).text,
             ];
           }"""
         )
-        assert states == ["ok", "idle", "ok", "idle", "polling"]
+        assert states == [
+          "ok",
+          "idle",
+          "ok",
+          "idle",
+          "polling",
+          "Connected (poll)",
+          "ok",
+          "Something went wrong",
+        ]
         page.locator("#survey-open").click()
         page.locator("#modal-shell").wait_for(state="visible")
         assert page.get_by_role("heading", name="Survey Verification").is_visible()

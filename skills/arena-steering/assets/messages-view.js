@@ -61,9 +61,17 @@ export function connectionPresentation(connection = {}, now = Date.now()) {
   const ended = connectionStamp(connection.turn_ended_at);
   const seen = connectionStamp(connection.agent_seen_at);
   const idle = ended !== null ? now - ended > AGENT_QUIET_MS : seen !== null && now - seen > AGENT_CALL_MS;
-  return idle
-    ? { state: "idle", label: "No agent", text: "Agent 404" }
-    : { state: "ok", label: "Connected", text: "Connected" };
+  if (idle) return { state: "idle", label: "No agent", text: "Agent 404" };
+  // A live connection with no socket names the poll, so the loss shows in the pill.
+  if (connection.transport?.mode === "poll" && !connection.transport.socket) {
+    return { state: "ok", label: "Connected (poll)", text: "Connected (poll)" };
+  }
+  // A transport that opened and then died is a fault, so it shows amber.
+  if (connection.transport?.mode === "ws" && connection.transport.attempted &&
+      !connection.transport.socket && !connection.transport.poll) {
+    return { state: "fault", label: "No transport", text: "Something went wrong" };
+  }
+  return { state: "ok", label: "Connected", text: "Connected" };
 }
 
 export function paintConnection(container, connection) {
