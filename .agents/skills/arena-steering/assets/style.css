@@ -1592,7 +1592,8 @@ select,
   border-top: 1px solid hsl(var(--border-faint));
 }
 
-.message-bubble > .answer.reply > div:last-child > p:last-child {
+/* Only the final reply ends the bubble; earlier replies keep paragraph spacing. */
+.message-bubble > .answer.reply:last-child > div:last-child > p:last-child {
   margin-bottom: 0;
 }
 
