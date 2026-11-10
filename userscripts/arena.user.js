@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.14
+// @name         Arena.ai | NemoUtils | v1.13.15
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.14
+// @version      1.13.15
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -916,8 +916,14 @@
       );
       logEvent("fill", "rebuilt", { count: lines.length }, "debug");
     }
-    if (previous && previous !== el && typeof previous.focus === "function") {
+    var restoreTarget =
+      previous && previous !== el && previous !== document.body &&
+      typeof previous.focus === "function";
+    if (restoreTarget) {
       previous.focus({ preventScroll: true });
+    } else if (previous !== el && typeof el.blur === "function") {
+      // Nothing meaningful held focus, so leave the composer unfocused too.
+      el.blur();
     }
   }
 

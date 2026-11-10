@@ -696,6 +696,11 @@ runBundle("arena");
       focusCalls.length,
       "restores focus to the element that had it after every fill",
     );
+    assert.equal(
+      context.document.activeElement,
+      previousTarget,
+      "leaves focus where it was after the fill",
+    );
     flush();
     assert.equal(clicks, 5, "sends wake up after Keep working opens the composer");
     saved.set("clankers-arena-wake-text", "Resume now");
@@ -887,6 +892,113 @@ runBundle("arena");
         ["arena-preview survey '<json>'", "git ls-remote origin <branch>"],
       );
       assert.equal(composer.children[3].textContent, "Plain line");
+    });
+  });
+}
+
+{
+  const { test } = require("node:test");
+  test("a wake-up fill leaves the composer unfocused when body held focus", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const makeNode = (tag) => ({
+      tagName: tag.toUpperCase(),
+      children: [],
+      _text: "",
+      get firstChild() { return this.children[0] || null; },
+      get textContent() {
+        return this.children.length
+          ? this.children.map(child => child.textContent).join("")
+          : this._text;
+      },
+      set textContent(value) {
+        this.children = [];
+        this._text = String(value);
+      },
+      get innerText() {
+        return this.children.length
+          ? this.children.map(child => child.textContent).join("\n")
+          : this._text;
+      },
+      appendChild(child) { this.children.push(child); return child; },
+      removeChild(child) {
+        const idx = this.children.indexOf(child);
+        if (idx >= 0) this.children.splice(idx, 1);
+      },
+      dispatchEvent() {},
+      focus() {},
+      getAttribute() { return null; },
+    });
+    const composer = makeNode("div");
+    const body = makeNode("body");
+    let blurs = 0;
+    composer.blur = () => { blurs += 1; };
+    const context = {
+      console: { log() {}, warn() {}, error() {} },
+      URL,
+      InputEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+      location: { href: "https://arena.ai/agent", pathname: "/agent" },
+      document: {
+        documentElement: {},
+        body,
+        activeElement: body,
+        createElement(tag) { return makeNode(tag); },
+        createTextNode(text) { return { nodeType: 3, textContent: String(text) }; },
+        createRange() { return { selectNodeContents() {} }; },
+        execCommand() { return true; },
+        querySelector(selector) {
+          if (selector === 'div.tiptap.ProseMirror[contenteditable="true"]') return composer;
+          if (selector.indexOf("div.relative.z-10") === 0) {
+            return {
+              textContent: "nemoe7/clankers",
+              querySelectorAll() {
+                return [{ textContent: "nemoe7/clankers" }];
+              },
+            };
+          }
+          return null;
+        },
+        querySelectorAll() { return []; },
+        title: "",
+      },
+      window: {
+        addEventListener() {},
+        removeEventListener() {},
+        getSelection() { return { removeAllRanges() {}, addRange() {} }; },
+      },
+      getComputedStyle() { return { overflowY: "auto" }; },
+      MutationObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      requestAnimationFrame() { return 1; },
+      cancelAnimationFrame() {},
+      setInterval() { return 1; },
+      clearInterval() {},
+      setTimeout() { return 1; },
+      clearTimeout() {},
+      fetch(url) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(
+            url.includes("arena-prompt-fill.txt")
+              ? "Run `git ls-remote origin <branch>`.\nPlain line"
+              : ""
+          ),
+        });
+      },
+      sessionStorage: { getItem() { return null; }, setItem() {} },
+      GM_getValue(key, fallback) {
+        if (key === "prompt-fill") return true;
+        return false;
+      },
+      GM_setValue() {},
+      GM_registerMenuCommand() { return 1; },
+      GM_unregisterMenuCommand() {},
+      GM_xmlhttpRequest() {},
+    };
+    vm.runInNewContext(source, context);
+    return new Promise((resolve) => setImmediate(resolve)).then(() => {
+      assert.ok(composer.children.length >= 2, "the fill wrote the prompt into the composer");
+      assert.equal(blurs, 1, "an unfocused page does not end up focused on the composer");
     });
   });
 }

@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
-## [1.13.14]
+## [1.13.15]
 
 ### Added
 
@@ -16,6 +16,7 @@ This log has no Unreleased section.
 
 - Send generated multiline violation messages only for a final prose row without a completed poll.
 - Send exact Wake up drafts through the shared composer-action lookup without requiring the obsolete editor wrapper. Never click Stop generating.
+- Leave the composer unfocused after a wake-up fill when the page held no focus, instead of keeping focus there.
 
 ### Changed
 
