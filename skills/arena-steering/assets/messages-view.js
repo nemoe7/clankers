@@ -262,6 +262,10 @@ function updateHistory(history, nextHistory, signatures, confirmation) {
       old = pending;
     }
     const use = pending || (old && renderedMessageSignatures.get(old) === signature ? old : node);
+    // A transient highlight outlives the render that follows a reference jump.
+    if (old && use !== old && old.getAttribute("data-highlight")) {
+      use.setAttribute("data-highlight", "true");
+    }
     if (old && use === node) {
       const previous = Array.from(old.querySelectorAll("[data-markdown-key]"));
       for (const next of node.querySelectorAll("[data-markdown-key]")) {
