@@ -153,12 +153,6 @@ ROTATION_FORMS = {
   "transmitting": "sending",
   "transmitter": "sender",
   "transmitters": "senders",
-  "pick": "select",
-  "picks": "selects",
-  "picked": "selected",
-  "picking": "selecting",
-  "picker": "selector",
-  "pickers": "selectors",
   "kind": "type",
   "kinds": "types",
   "repository": "repo",
@@ -202,7 +196,6 @@ def rotation_pattern(prefix):
 
 
 ROTATIONS = (
-  ("pick", rotation_pattern("pick"), "select"),
   ("transmit", rotation_pattern("transmit"), "send"),
   ("kind", r"(?<!\bbe )(?<!\bin )" + rotation_pattern("kind"), "type"),
   ("repository", rotation_pattern("repositor"), "repo"),
@@ -229,7 +222,6 @@ ROTATIONS = (
 )
 RULE_IDS = {
   "transmit": "NMO100",
-  "pick": "NMO901",
   "kind": "NMO100",
   "repository": "NMO901",
   "pull request": "NMO901",

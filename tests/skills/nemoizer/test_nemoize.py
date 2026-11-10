@@ -46,20 +46,20 @@ def test_a_rotation_matches_the_stem_and_prose():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     (root / "note.md").write_text(
-      "He picked one. Do not transmit this.\n", encoding="utf-8"
+      "He names the tool. Do not transmit this.\n", encoding="utf-8"
     )
     (root / "code.py").write_text("kind = 'plain'\n", encoding="utf-8")
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "note.md:1: [NMO901] (advisory) names -> specify" in result.stdout
     assert "note.md:1: [NMO100] (advisory-free) transmit -> send" in result.stdout
     assert "code.py:1:" not in result.stdout
-    assert "\n    He picked one. Do not transmit this." in result.stdout
+    assert "\n    He names the tool. Do not transmit this." in result.stdout
     assert (
       nemoize.format_summary(
         [
           "note.md:1: [NMO100] (advisory-free) transmit -> send",
-          "note.md:1: [NMO901] (advisory) picked -> select",
+          "note.md:1: [NMO901] (advisory) names -> specify",
         ]
       )
       in result.stdout
@@ -72,15 +72,15 @@ def test_a_line_marker_skips_that_line_and_a_head_marker_skips_the_file():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     (root / "marked.py").write_text(
-      "value = 'kind'  # nonemo: NMO100\n# picked one\n", encoding="utf-8"
+      "value = 'kind'  # nonemo: NMO100\n# names the tool\n", encoding="utf-8"
     )
     (root / "whole.md").write_text(
-      "<!-- nonemo: NMO100 -->\nkind and picked stay\n", encoding="utf-8"
+      "<!-- nonemo: NMO100 -->\nkind and names the tool stay\n", encoding="utf-8"
     )
     result = run(cwd=directory)
     assert "marked.py:1:" not in result.stdout
-    assert "marked.py:2: [NMO901] (advisory) picked -> select" in result.stdout
-    assert "whole.md:2: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "marked.py:2: [NMO901] (advisory) names -> specify" in result.stdout
+    assert "whole.md:2: [NMO901] (advisory) names -> specify" in result.stdout
     assert "whole.md:2: [NMO100] (advisory-free) kind -> type" not in result.stdout
     listing = run("--ignores", cwd=directory)
     assert listing.returncode == 0
@@ -113,28 +113,34 @@ def test_the_rotation_table_never_flags_itself():
     assert result.returncode == 0, result.stdout
 
 
-def test_a_picker_is_a_rotation_and_a_marked_pickle_is_not():
+def test_pick_is_retired_and_the_stem_still_shields_identifiers():
   import tempfile
 
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     ui = root / "ui.js"
     ui.write_text(
-      "// picker widget\nconst var_pick = 2\n// repick item\n"
-      "// pickle jar  nonemo: NMO901\n",
+      "// picker widget\nconst var_pick = 2\n// repick item\nconst other = 3\n"
+      "// pickle jar  nonemo: NMO901\n"
+      "// names the tool\n",
       encoding="utf-8",
     )
     result = run(cwd=directory)
     assert result.returncode == 0
-    assert "ui.js:1: [NMO901] (advisory) picker -> select" in result.stdout
+    # The retired rotation must not flag any pick form.
+    assert "picker -> select" not in result.stdout
+    assert "ui.js:1" not in result.stdout
     assert "ui.js:2" not in result.stdout
     assert "ui.js:3" not in result.stdout
     assert "ui.js:4" not in result.stdout
+    assert "ui.js:5" not in result.stdout
+    assert "ui.js:6: [NMO901] (advisory) names -> specify" in result.stdout
     formatted = run("--format", cwd=directory)
     assert formatted.returncode == 0, formatted.stderr
     assert ui.read_text(encoding="utf-8") == (
-      "// selector widget\nconst var_pick = 2\n// repick item\n"
+      "// picker widget\nconst var_pick = 2\n// repick item\nconst other = 3\n"
       "// pickle jar  nonemo: NMO901\n"
+      "// specifies the tool\n"
     )
 
 
@@ -160,13 +166,13 @@ def test_the_format_mode_honors_the_marker():
     root = Path(directory)
     note = root / "note.md"
     note.write_text(
-      "kind stays  <!-- nonemo: NMO100 -->\npicked one\nkind moves\n",
+      "kind stays  <!-- nonemo: NMO100 -->\nnames the tool\nkind moves\n",
       encoding="utf-8",
     )
     result = run("--format", cwd=directory)
     assert result.returncode == 0, result.stderr
     assert note.read_text(encoding="utf-8") == (
-      "kind stays  <!-- nonemo: NMO100 -->\nselected one\ntype moves\n"
+      "kind stays  <!-- nonemo: NMO100 -->\nspecifies the tool\ntype moves\n"
     )
 
 
@@ -243,18 +249,19 @@ def test_rule_ids_suppress_only_the_named_rotation():
     root = Path(directory)
     note = root / "note.md"
     note.write_text(
-      "kind and picked  # nonemo: NMO100\ntransmit # nonemo: N999\n", encoding="utf-8"
+      "kind and names the tool  # nonemo: NMO100\ntransmit # nonemo: N999\n",
+      encoding="utf-8",
     )
     result = run(cwd=directory)
     assert result.returncode == 1
-    assert "note.md:1: [NMO901] (advisory) picked -> select" in result.stdout
+    assert "note.md:1: [NMO901] (advisory) names -> specify" in result.stdout
     assert "note.md:1: [NMO100] (advisory-free) kind -> type" not in result.stdout
     assert "note.md:2: [NMO100] (advisory-free) transmit -> send" in result.stdout
     result = run("--format", cwd=directory)
     assert result.returncode == 0
     assert (
       note.read_text(encoding="utf-8")
-      == "kind and selected  # nonemo: NMO100\nsend # nonemo: N999\n"
+      == "kind and specifies the tool  # nonemo: NMO100\nsend # nonemo: N999\n"
     )
 
 
@@ -333,7 +340,7 @@ def test_multiple_rule_exclusions_preserve_the_marker_text():
 
   with tempfile.TemporaryDirectory() as directory:
     note = Path(directory) / "note.md"
-    content = "picked kind # nonemo: NMO901 # nonemo: NMO100\nkind # nonemo: kind\n"
+    content = "names kind # nonemo: NMO901 # nonemo: NMO100\nkind # nonemo: kind\n"
     note.write_text(content, encoding="utf-8")
     result = run(cwd=directory)
     assert "note.md:1:" not in result.stdout
@@ -342,7 +349,7 @@ def test_multiple_rule_exclusions_preserve_the_marker_text():
     assert formatted.returncode == 0
     assert (
       note.read_text(encoding="utf-8")
-      == "picked kind # nonemo: NMO901 # nonemo: NMO100\ntype # nonemo: kind\n"
+      == "names kind # nonemo: NMO901 # nonemo: NMO100\ntype # nonemo: kind\n"
     )
 
 
@@ -870,8 +877,8 @@ def test_ignore_prefixes_accept_windows_paths():
 def test_generated_pytest_cache_is_not_scanned(tmp_path):
   cache = tmp_path / ".pytest_cache" / "v" / "cache"
   cache.mkdir(parents=True)
-  (cache / "nodeids").write_text("picked fixture\n", encoding="utf-8")
-  (tmp_path / "prose.md").write_text("picked wording\n", encoding="utf-8")
+  (cache / "nodeids").write_text("names the fixture\n", encoding="utf-8")
+  (tmp_path / "prose.md").write_text("names the wording\n", encoding="utf-8")
   result = run(cwd=tmp_path)
   assert result.returncode == 0
   assert "prose.md:1: [NMO901]" in result.stdout  # nonemo: NMT100
@@ -1027,14 +1034,14 @@ def test_default_prose_checks_extract_python_comments_not_literals(tmp_path):
 def test_rotation_group_markers_and_removed_legacy_aliases(tmp_path):
   source = tmp_path / "note.md"
   source.write_text(
-    "kind picked transmit # nonemo: NMO100 # nonemo: NMO901\n"
-    "kind picked transmit # nonemo: N003 # nonemo: P001\n",
+    "kind names the tool and transmit # nonemo: NMO100 # nonemo: NMO901\n"
+    "kind names the tool and transmit # nonemo: N003 # nonemo: P001\n",
     encoding="utf-8",
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert "note.md:1:" not in result.stdout
-  assert "note.md:2: [NMO901] (advisory) picked -> select" in result.stdout
+  assert "note.md:2: [NMO901] (advisory) names -> specify" in result.stdout
   assert "note.md:2: [NMO100] (advisory-free) transmit -> send" in result.stdout
   assert "note.md:2: [NMO100] (advisory-free) kind -> type" in result.stdout
 
@@ -1231,16 +1238,16 @@ def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
 
 def test_soft_rotation_is_advisory_in_checks_and_explicit_in_format(tmp_path):
   source = tmp_path / "note.md"
-  original = "Pick one.\n"
+  original = "Repository one.\n"
   source.write_text(original, encoding="utf-8")
   result = run(str(source), cwd=tmp_path)
   assert result.returncode == 0, result.stderr
-  assert "[NMO901] (advisory) Pick -> select" in result.stdout
+  assert "[NMO901] (advisory) Repository -> repo" in result.stdout
   assert "manual review" in result.stdout
   assert source.read_text(encoding="utf-8") == original
   formatted = run("--format", str(source), cwd=tmp_path)
   assert formatted.returncode == 0
-  assert source.read_text(encoding="utf-8") == "Select one.\n"
+  assert source.read_text(encoding="utf-8") == "Repo one.\n"
   source.write_text("Pick this kind.\n", encoding="utf-8")
   assert run(str(source), cwd=tmp_path).returncode == 1
   source.write_text("Pick one. <!-- nonemo: NMO901 -->\n", encoding="utf-8")
@@ -2487,24 +2494,22 @@ def test_rotation_respects_fences_links_tables_and_code(tmp_path):
   doc.write_text(
     "```python\ndef pick(x): pass\n```\n"
     "[API](https://example.com?kind=full&pick=1)\n"
-    "| `check.py` | Pick the kind of repository |\n",
+    "| `check.py` | Transmit the kind of repository |\n",
     encoding="utf-8",
   )
   findings, _ = nemoize.scan([doc], [])
   assert any("NMO100" in item and "kind" in item for item in findings)
-  assert any("NMO901" in item and "Pick" in item for item in findings)
+  assert any("NMO100" in item and "Transmit" in item for item in findings)
   nemoize.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "```python\ndef pick(x): pass\n```\n"
     "[API](https://example.com?kind=full&pick=1)\n"
-    "| `check.py` | Select the type of repo |\n"
+    "| `check.py` | Send the type of repo |\n"
   )
   code = tmp_path / "example.py"
-  code.write_text("item = pick(items)  # Pick the kind.\n", encoding="utf-8")
+  code.write_text("item = pick(items)  # Transmit the kind.\n", encoding="utf-8")
   nemoize.format_paths([code], [])
-  assert code.read_text(encoding="utf-8") == (
-    "item = pick(items)  # Select the type.\n"
-  )
+  assert code.read_text(encoding="utf-8") == ("item = pick(items)  # Send the type.\n")
 
 
 @pytest.mark.parametrize(
