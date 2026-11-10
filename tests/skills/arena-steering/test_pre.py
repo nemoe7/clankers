@@ -4396,4 +4396,3 @@ def test_recorded_activity_labels_reach_the_messages_tab(_isolate_state: Path) -
   with pytest.raises(ValueError):
     messages.record_tool("nope")
   store.close()
-
