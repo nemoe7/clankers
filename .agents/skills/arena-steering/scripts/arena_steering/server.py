@@ -20,12 +20,11 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from functools import lru_cache
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse, urlsplit
@@ -33,17 +32,17 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 from . import __version__
 from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
 from .display_paths import home_relative
-from .http_transport import make_request_handler
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
-from .markdown import render_markdown, render_report_markdown
-from .markdown_fields import parse_report_markdown
+from .http_transport import make_request_handler
+from .markdown import render_markdown
 from .models import Attachment, Task
 from .services import (
   POLL_FRESH_SECONDS,
   MessageService,
   ReportService,
   TaskService,
+  serialize_report_blocks,
   with_bible_read,
 )
 from .store import STATE_TABLES, SqliteStore
@@ -322,6 +321,7 @@ class SteeringApp:
       store,
       on_answer_callback=self.messages.notify_new_work,
       on_ack_callback=self.messages.reset_gate_if_clear,
+      messages=store,
     )
     self.router = Router()
     self._register_routes()
@@ -1176,10 +1176,16 @@ class SteeringApp:
       if report.status != "published":
         raise ValueError("report_id must name a published report")
 
-    heading = f"VIOLATION: {reason}. Ack with file:ln: clause then fix cause."
+    label = (
+      "Task missing details"
+      if reason == "missing-details"
+      else reason.removesuffix("-violation").replace("-", " ").capitalize()
+    )
+    lines = [f"VIOLATION: {label}"]
     if cited:
-      heading += f" Cited: {cited}"
-    lines = [heading]
+      lines.append(f"Cited: {cited}")
+    if clause_file:
+      lines.append(f"Book: {clause_file}")
     if report is not None:
       lines.append(f"Report: {report.id}")
       source = Path(report.source_file) if report.source_file else None
@@ -1675,22 +1681,7 @@ class SteeringApp:
         cache.move_to_end(report.id)
         payload["blocks"] = cached[1]
         return payload
-    blocks, _ = parse_report_markdown(report.body)
-    serialized_blocks: list[dict[str, Any]] = []
-    for btype, val in blocks:
-      if btype == "markdown":
-        block_headings: list[dict[str, Any]] = []
-        block_html = render_report_markdown(val, headings=block_headings)
-        serialized_blocks.append(
-          {
-            "type": "markdown",
-            "markdown": val,
-            "html": block_html,
-            "headings": block_headings,
-          }
-        )
-      else:
-        serialized_blocks.append({"type": "field", "field": val.to_dict()})
+    serialized_blocks = serialize_report_blocks(report.body)
     if not dismissed:
       with cache_lock:
         cache[report.id] = (report.body, serialized_blocks)
@@ -1755,11 +1746,18 @@ def scripts_signature(
   return file_signature(targets)
 
 
-
 def reload_server_handler(server: ThreadingHTTPServer, app: SteeringApp) -> SteeringApp:
   """Reload arena_steering modules and swap server.RequestHandlerClass in-process."""
   pkg = __package__ or "arena_steering"
-  for sub in ("models", "ports", "store", "markdown_fields", "services", "http_transport", "server"):
+  for sub in (
+    "models",
+    "ports",
+    "store",
+    "markdown_fields",
+    "services",
+    "http_transport",
+    "server",
+  ):
     mod_name = f"{pkg}.{sub}"
     if mod_name in sys.modules:
       importlib.reload(sys.modules[mod_name])

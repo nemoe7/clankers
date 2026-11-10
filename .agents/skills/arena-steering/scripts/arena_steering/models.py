@@ -355,6 +355,7 @@ class Task:
   size: int
   insertion_order: int | None
   created_at: str
+  finished_at: str
   modified_at: str
   effective_priority: str
 
@@ -382,6 +383,7 @@ class Task:
     gate_names: list[str] | None = None,
     modified_at: str = "",
     created_at: str = "",
+    finished_at: str = "",
     allow_long_details: bool = False,
   ) -> None:
     validate_entity_id(id, "Task.id")
@@ -496,6 +498,7 @@ class Task:
       "gate_names": cleaned_gates,
     }
     self.modified_at = str(modified_at or "")
+    self.finished_at = str(finished_at or (modified_at if status == "finished" else ""))
 
   @property
   def msg_ids(self) -> list[str]:
@@ -563,6 +566,7 @@ class Task:
       },
       "modified_at": self.modified_at,
       "created_at": self.created_at,
+      "finished_at": self.finished_at,
     }
     if blocked is not None:
       payload["blocked"] = bool(blocked)
@@ -601,6 +605,7 @@ class Task:
       ),
       modified_at=str(data.get("modified_at", "")),
       created_at=str(data.get("created_at", "")),
+      finished_at=str(data.get("finished_at", "")),
       allow_long_details=True,
     )
 

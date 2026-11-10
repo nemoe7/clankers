@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import io
 import json
 import os
@@ -18,12 +19,12 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import UTC, datetime
+from http import HTTPStatus
 from pathlib import Path
 from typing import TextIO
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from markdown_it import MarkdownIt
-
 
 from . import __version__, git_safety, task_cli
 from . import pre as pre_mod
@@ -43,7 +44,6 @@ from .models import (
   Message,
   Report,
   ReportAnswer,
-  Task,
 )
 from .server import SteeringApp, create_http_server
 from .services import (
@@ -156,6 +156,7 @@ def open_services(
     store,
     on_answer_callback=messages.notify_new_work,
     on_ack_callback=messages.reset_gate_if_clear,
+    messages=store,
   )
   return store, messages, tasks, reports
 
@@ -191,6 +192,22 @@ def main(
   if args_list in (["--version"], ["-V"]):
     print(f"steer {__version__}", file=stdout)
     return 0
+
+  command = args_list[0] if args_list else ""
+  help_requested = any(arg in {"-h", "--help"} for arg in args_list)
+  preflight_state_dir: Path | None = None
+  if command not in {"", "pre", "serve"} and not help_requested:
+    try:
+      preflight_state_dir = resolve_state_dir()
+      health_state_dir = preflight_state_dir
+    except (OSError, sqlite3.Error):
+      health_state_dir = pre_mod.repo_root() / "arena-state"
+    if _healthy_server_url(health_state_dir) is None:
+      print(
+        "Steering server is unavailable. Run `steer serve`, then retry.",
+        file=stderr,
+      )
+      return 1
 
   parser = argparse.ArgumentParser(
     prog="steer",
@@ -369,7 +386,7 @@ def main(
   if cmd == "post-exit":
     parsed = post_exit_p.parse_args(cmd_args)
     try:
-      return _run_post_exit(parsed, resolve_state_dir(), stdout)
+      return _run_post_exit(parsed, preflight_state_dir or resolve_state_dir(), stdout)
     except (OSError, sqlite3.Error, ValueError):
       return 0  # The exit hook must never change the completed line's status.
   group_parsers = {
@@ -382,9 +399,10 @@ def main(
     group_parsers[cmd].print_help(file=stdout)
     return 0
 
-  resolved_state_dir: Path | None = None
+  resolved_state_dir: Path | None = preflight_state_dir
   try:
-    resolved_state_dir = resolve_state_dir()
+    if resolved_state_dir is None:
+      resolved_state_dir = resolve_state_dir()
     if cmd == "pre" and not (resolved_state_dir / "state.sqlite3").is_file():
       parsed = pre_p.parse_args(cmd_args)
       return _pre_state_unavailable(
@@ -412,13 +430,32 @@ def main(
       serve_p.parse_args(cmd_args)
       _validate_serve_process_title(stdout)
       app = SteeringApp(store)
-      httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
+      try:
+        httpd = create_http_server(app, host=BIND_HOST, port=SERVE_PORT)
+      except OSError as exc:
+        assert resolved_state_dir is not None
+        existing_url = _healthy_server_url(resolved_state_dir)
+        if existing_url is not None:
+          _write_server_file(resolved_state_dir, existing_url)
+          print(f"Reusing healthy Arena Steering server at {existing_url}", file=stdout)
+          return 0
+        if exc.errno == errno.EADDRINUSE:
+          print(
+            f"Port {SERVE_PORT} is occupied by an unverified listener; it was left "
+            "untouched. Verify it before stopping it, then retry `steer serve`.",
+            file=stderr,
+          )
+        else:
+          print(
+            f"Could not start the Steering server at {BIND_HOST}:{SERVE_PORT}: {exc}. "
+            "Fix the underlying issue and retry `steer serve`.",
+            file=stderr,
+          )
+        return 1
       port = int(httpd.server_address[1])
+      assert resolved_state_dir is not None
       server_file = resolved_state_dir / "server.json"
-      server_file.write_text(
-        json.dumps({"host": BIND_HOST, "port": port}, indent=2),
-        encoding="utf-8",
-      )
+      _write_server_file(resolved_state_dir, f"http://127.0.0.1:{port}")
       print(f"Steering server listening on http://{BIND_HOST}:{port}", file=stdout)
       try:
         httpd.serve_forever()
@@ -482,10 +519,21 @@ def main(
         finished_run=run_watcher.finished,
       )
       messages.record_poll_duration(time.monotonic() - started)
+      verdicts = [
+        *delivered.get("run_verdicts", []),
+        *run_watcher.finished(),
+      ]
       if delivered["messages"] or delivered["report_answers"]:
         _print_delivered(delivered, stdout, store.get_meta("timezone", "") or "")
-      if verdicts := delivered.get("run_verdicts", []):
-        for name, exit_code in verdicts:
+      if verdicts:
+        for name, exit_code, run_id in verdicts:
+          messages.send_message(
+            f"Run {name} completed with exit code {exit_code}.",
+            hidden=True,
+            blocking=False,
+            request_id=f"run-completion:{run_id}",
+            fingerprint=f"{name}:{exit_code}",
+          )
           print(f"run {name} done: exit {exit_code}", file=stdout)
         print("DO NOT END TURN. POLL AGAIN.", file=stdout)
         messages.request_poll_followup()
@@ -888,6 +936,9 @@ def _safe_local_name(name: str) -> str:
   return cleaned
 
 
+LIVE_RUN_LOG_READS_META = "live_run_log_reads"
+
+
 def _call_count(store: SqliteStore) -> int:
   """Read how many shell lines ran since the inbox was last read."""
   raw = store.get_meta(pre_mod.CALL_COUNT_META, "0") or "0"
@@ -1180,6 +1231,23 @@ def _run_pre(
         | report_ids
       )
     )
+  run_status = FileGateStatus(Path(store.db_path).parent)
+  active_run_ids = run_status.running_run_ids()
+  active_run_id_set = {run_id for _name, run_id in active_run_ids}
+  raw_seen_run_log_ids = store.get_meta(LIVE_RUN_LOG_READS_META, "[]") or "[]"
+  try:
+    stored_run_log_ids = json.loads(raw_seen_run_log_ids)
+  except json.JSONDecodeError:
+    stored_run_log_ids = []
+  if not isinstance(stored_run_log_ids, list):
+    stored_run_log_ids = []
+  seen_live_run_log_ids = tuple(
+    sorted(
+      run_id
+      for run_id in stored_run_log_ids
+      if isinstance(run_id, str) and run_id in active_run_id_set
+    )
+  )
   ctx = pre_mod.PreContext(
     line=str(parsed.line or ""),
     command=str(parsed.command_text or ""),
@@ -1187,7 +1255,9 @@ def _run_pre(
     done=tuple(str(parsed.done or "").split()),
     pending_ids=pending_ids,
     call_count=count,
-    active_runs=FileGateStatus(Path(store.db_path).parent).running_names(),
+    active_runs=tuple(name for name, _run_id in active_run_ids),
+    active_run_ids=active_run_ids,
+    seen_live_run_log_ids=seen_live_run_log_ids,
     routed=routed,
     cwd=Path.cwd(),
     checkout_root=pre_mod.repo_root(),
@@ -1195,6 +1265,13 @@ def _run_pre(
     renamable_ids=renamable_ids,
   )
   result = pre_mod.run_pipeline(ctx)
+  updated_run_log_ids = set(seen_live_run_log_ids)
+  if result.verdict == pre_mod.CONTINUE:
+    updated_run_log_ids.update(pre_mod.live_run_log_read_ids(ctx))
+  updated_run_log_ids.intersection_update(active_run_id_set)
+  serialized_run_log_ids = json.dumps(sorted(updated_run_log_ids))
+  if serialized_run_log_ids != raw_seen_run_log_ids:
+    store.set_meta(LIVE_RUN_LOG_READS_META, serialized_run_log_ids)
   if result.verdict == pre_mod.BLOCK and parsed.shell:
     _audit_blocked_bash(
       Path(store.db_path).parent,
@@ -1228,6 +1305,7 @@ def _run_pre(
     )
     print(f"Violation flag: {flag.id}", file=out)
   flag_reasons = {
+    "live-run-logs": ("live-run-log-repeat", pre_mod.LIVE_RUN_LOG_VIOLATION),
     "inbox-pipe": ("bash-inbox-pipe", "VIOLATION: Inbox piped."),
     "sleep": (
       "bash-sleep",
@@ -1323,6 +1401,18 @@ def _repo_root() -> Path:
   return Path(top) if top else Path.cwd()
 
 
+def _main_worktree_root() -> Path:
+  """Return the primary checkout root even when called from a linked worktree."""
+  worktrees = _run_git(["git", "worktree", "list", "--porcelain"])
+  for line in worktrees.splitlines():
+    if not line.startswith("worktree "):
+      continue
+    root = Path(line[len("worktree ") :]).resolve()
+    if root.is_dir() and (root / ".git").exists():
+      return root
+  return _repo_root()
+
+
 def _run_worktree(args: list[str], out: TextIO) -> int:
   if not args:
     raise ValueError("Usage: steer worktree <add|list|remove|prune|collect> ...")
@@ -1340,7 +1430,7 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     add_p.add_argument("-b", "--branch", default=None)
     parsed = add_p.parse_args(args[1:])
     name = _safe_local_name(parsed.name)
-    target = _repo_root() / ".worktrees" / name
+    target = _main_worktree_root() / ".worktrees" / name
     git_args = ["git", "worktree", "add"]
     if parsed.branch:
       git_args += ["-b", parsed.branch]
@@ -1352,7 +1442,7 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     if len(args) != 2:
       raise ValueError("Usage: steer worktree collect <name>")
     name = _safe_local_name(args[1])
-    target = _repo_root() / ".worktrees" / name
+    target = _main_worktree_root() / ".worktrees" / name
     if not target.is_dir():
       raise ValueError(f"No worktree at {target}")
     head = _run_git(["git", "-C", str(target), "rev-parse", "HEAD"]).strip()
@@ -1374,7 +1464,7 @@ def _run_worktree(args: list[str], out: TextIO) -> int:
     if len(args) != 2:
       raise ValueError("Usage: steer worktree remove <name>")
     name = _safe_local_name(args[1])
-    target = _repo_root() / ".worktrees" / name
+    target = _main_worktree_root() / ".worktrees" / name
     _run_git(["git", "worktree", "remove", str(target)])
     _run_git(["git", "worktree", "prune"])
     print(f"Removed worktree {name}", file=out)
@@ -1896,6 +1986,53 @@ def _survey_server_url(state_dir: Path) -> str | None:
   return f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}"
 
 
+def _healthy_server_url(state_dir: Path) -> str | None:
+  """Return a local Arena Steering server URL after validating /health."""
+  candidates: list[str] = []
+  recorded = _survey_server_url(state_dir)
+  if recorded is not None:
+    hostname = urllib.parse.urlparse(recorded).hostname
+    if hostname in {"127.0.0.1", "localhost"}:
+      candidates.append(recorded)
+  fallback = f"http://127.0.0.1:{SERVE_PORT}"
+  if fallback not in candidates:
+    candidates.append(fallback)
+
+  opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+  for base_url in candidates:
+    request = urllib.request.Request(
+      f"{base_url}/health", headers={"Accept": "application/json"}
+    )
+    try:
+      with opener.open(request, timeout=1.0) as response:
+        if response.status != int(HTTPStatus.OK):
+          continue
+        payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+      continue
+    if (
+      isinstance(payload, dict)
+      and payload.get("ok") is True
+      and isinstance(payload.get("version"), str)
+      and isinstance(payload.get("asset_version"), str)
+      and isinstance(payload.get("survey"), dict)
+    ):
+      return base_url
+  return None
+
+
+def _write_server_file(state_dir: Path, base_url: str) -> None:
+  """Record a verified local server URL for survey submissions."""
+  parsed = urllib.parse.urlparse(base_url)
+  if parsed.scheme != "http" or parsed.port is None:
+    raise ValueError("A Steering server URL must have an HTTP port")
+  state_dir.mkdir(parents=True, exist_ok=True)
+  (state_dir / "server.json").write_text(
+    json.dumps({"host": BIND_HOST, "port": parsed.port}, indent=2),
+    encoding="utf-8",
+  )
+
+
 def _post_survey(url: str, payload: str) -> dict:
   """Submit survey answers to the running server so its memory holds them."""
   # The HTTP layer takes objects only, so array submissions travel under "answers".
@@ -1931,7 +2068,7 @@ def _post_survey(url: str, payload: str) -> dict:
 
 
 def _submit_survey(payload: str, state_dir: Path) -> None:
-  """Submit answers to the server and never persist them locally."""
+  """Submit survey answers to the server and never persist them locally."""
   url = _survey_server_url(state_dir) or f"http://127.0.0.1:{SERVE_PORT}"
   _post_survey(url, payload)
 
@@ -1940,7 +2077,7 @@ def _run_survey(
   parsed: argparse.Namespace,
   messages: MessageService,
   out: TextIO,
-  state_dir: Path | None = None,
+  state_dir: Path,
 ) -> int:
   import json
 
@@ -1949,7 +2086,6 @@ def _run_survey(
   if getattr(parsed, "template", False):
     print(json.dumps(survey_mod.template(), indent=2), file=out)
     return 0
-  state_dir = state_dir or resolve_state_dir()
   if getattr(parsed, "file", None):
     payload = Path(parsed.file).read_text(encoding="utf-8")
     _submit_survey(payload, state_dir)

@@ -393,4 +393,3 @@ def make_request_handler(app: SteeringApp) -> type[BaseHTTPRequestHandler]:
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
   return SteeringRequestHandler
-

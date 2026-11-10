@@ -46,13 +46,35 @@ from .ports import (
   UtcClock,
 )
 
+
+def serialize_report_blocks(body: str) -> list[dict[str, Any]]:
+  """Render report blocks without constructing a web application."""
+  blocks, _ = parse_report_markdown(body)
+  serialized = []
+  for kind, value in blocks:
+    if kind == "markdown":
+      headings: list[dict[str, Any]] = []
+      rendered = render_report_markdown(value, headings=headings)
+      serialized.append(
+        {"type": "markdown", "markdown": value, "html": rendered, "headings": headings}
+      )
+    else:
+      serialized.append({"type": "field", "field": value.to_dict()})
+  return serialized
+
+
 REPORT_IDLE_INTERVAL = timedelta(minutes=30)
+REPORT_TASK_FINISH_GRACE = timedelta(minutes=10)
 REPORT_VIEW_GRACE = timedelta(minutes=5)
 POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
 POLL_IMMEDIATE_SECONDS = 1.0
-BIBLE_READ = "If full bible missing, read all of {paths} in one batched read_file call"
+VIOLATION_ACK = "Ack this with file:ln:clause for which rule was violated then fix the cause of the violation."
+BIBLE_READ = (
+  "If cannot recall clause from memory, read all of {paths} in one batched "
+  "read_file call, then answer the `steer survey`"
+)
 _BIBLE_PATHS = (
   "AGENTS.md",
   "ARENA.md",
@@ -130,6 +152,36 @@ def _append_answer_details_to_linked_tasks(
       task.modified_at = now
       added[task.id] = task.details[previous_length:]
   if added:
+    tasks.save_task_queue(queue)
+  return added
+
+
+def _append_acknowledged_answer_details_to_task(
+  tasks: TaskRepository,
+  reports: ReportRepository,
+  task_id: str,
+  report_ids: list[str],
+  now: str,
+) -> list[str]:
+  if not report_ids:
+    return []
+  queue = tasks.list_tasks()
+  task = next((item for item in queue if item.id == task_id), None)
+  if task is None:
+    return []
+  previous_length = len(task.details)
+  for report_id in dict.fromkeys(report_ids):
+    if report_id not in task.report_ids:
+      continue
+    report = reports.get_report(report_id)
+    if report is None:
+      continue
+    for answer in reports.list_report_answers(report_id):
+      if answer.status == "acked":
+        _append_unique_details(task, _answer_detail_lines(report, answer))
+  added = task.details[previous_length:]
+  if added:
+    task.modified_at = now
     tasks.save_task_queue(queue)
   return added
 
@@ -721,7 +773,7 @@ class MessageService:
     *,
     initial_task: Task | None = None,
     live_run: Callable[[], bool] | None = None,
-    finished_run: Callable[[], list[tuple[str, int]]] | None = None,
+    finished_run: Callable[[], list[tuple[str, int, str]]] | None = None,
     track_agent: bool = True,
   ) -> dict[str, Any]:
     """Wait for inbox work, an initial runnable task, a run, or eligible Skip."""
@@ -729,7 +781,7 @@ class MessageService:
     deadline = time.monotonic() + timeout
     skipped = timed_out = False
     task: Task | None = None
-    verdicts: list[tuple[str, int]] = []
+    verdicts: list[tuple[str, int, str]] = []
     gate_poll = bool(live_run and live_run())
     if track_agent:
       self.touch_agent(clear_poll_marker=False)
@@ -897,6 +949,36 @@ def _transactional_task_write(method: Any) -> Any:
       raise
 
   return wrapped
+
+
+def _rewrite_message_parent_refs(
+  messages: MessageRepository | None,
+  parent_type: str,
+  old_id: str,
+  new_id: str,
+  now: str,
+) -> None:
+  if messages is None:
+    return
+  for message in messages.list_messages():
+    if not any(
+      ref["type"] == parent_type and ref["id"] == old_id for ref in message.parent_refs
+    ):
+      continue
+    parent_refs: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for ref in message.parent_refs:
+      ref_type = ref["type"]
+      ref_id = new_id if ref_type == parent_type and ref["id"] == old_id else ref["id"]
+      key = (ref_type, ref_id)
+      if key in seen:
+        continue
+      seen.add(key)
+      parent_refs.append({"type": ref_type, "id": ref_id})
+    if parent_refs != message.parent_refs:
+      message.parent_refs = parent_refs
+      message.modified_at = now
+      messages.save_message(message)
 
 
 class TaskService:
@@ -1098,6 +1180,11 @@ class TaskService:
     for op in commit_ops:
       op()
     self._tasks.save_task_queue(ordered)
+    task.details.extend(
+      _append_acknowledged_answer_details_to_task(
+        self._tasks, self._reports, task.id, task.report_ids, now
+      )
+    )
     return task
 
   def backfill_open_task_scopes(self) -> int:
@@ -1293,11 +1380,13 @@ class TaskService:
     phase_evidence = list(task.phase_evidence)
     phase_evidence[index] = evidence
     next_index = index + 1
+    finished = next_index == len(task.types)
     return self._copy_task(
       task,
-      status="finished" if next_index == len(task.types) else "upcoming",
+      status="finished" if finished else "upcoming",
       phase_index=next_index,
       phase_evidence=phase_evidence,
+      finished_at=self._clock.now_iso() if finished else task.finished_at,
     )
 
   @_transactional_task_write
@@ -1352,6 +1441,7 @@ class TaskService:
       updated_queue.append(item)
     ordered = self._enforce_dependency_order(updated_queue)
     self._tasks.save_task_queue(ordered)
+    _rewrite_message_parent_refs(self._messages, "task", old_task_id, new_task_id, now)
     return renamed
 
   @_transactional_task_write
@@ -1377,23 +1467,31 @@ class TaskService:
     return updated
 
   @_transactional_task_write
-  def mod_deets(self, task_id: str, detail: str) -> Task:
+  def mod_deets(self, task_id: str, detail: str, *, size: int | None = None) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     self._validate_input_details([detail])
-    updated = self._copy_task(target, details=[*target.details, detail])
+    if size is None:
+      raise ValueError(
+        "Adding or removing task details requires an explicit size (-z/--size)"
+      )
+    updated = self._copy_task(target, details=[*target.details, detail], size=size)
     self._replace_in_queue(queue, updated)
     return updated
 
   @_transactional_task_write
-  def mod_deets_rm(self, task_id: str, number: int) -> Task:
+  def mod_deets_rm(self, task_id: str, number: int, *, size: int | None = None) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     idx = number - 1 if number >= 1 else number
     if idx < 0 or idx >= len(target.details):
       raise IndexError(
         f"Detail number {number} out of range (1..{len(target.details)})"
       )
+    if size is None:
+      raise ValueError(
+        "Adding or removing task details requires an explicit size (-z/--size)"
+      )
     new_details = [item for i, item in enumerate(target.details) if i != idx]
-    updated = self._copy_task(target, details=new_details)
+    updated = self._copy_task(target, details=new_details, size=size)
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -1406,6 +1504,7 @@ class TaskService:
     link_type: str | None = None,
     append_detail: str | None = None,
     remove_detail: int | None = None,
+    size: int | None = None,
   ) -> Task:
     queue, target = self._load_queue_and_target(task_id)
     cleaned = link_id.strip()
@@ -1415,6 +1514,7 @@ class TaskService:
     task_ids = list(target.task_ids)
     gate_names = list(target.gate_names)
     known_task_ids = {item.id for item in queue}
+    report_id_to_backfill: str | None = None
 
     if explicit_type == "gate":
       if cleaned not in gate_names:
@@ -1436,6 +1536,7 @@ class TaskService:
       validate_entity_id(cleaned, "Report or message link ID")
       if cleaned not in report_ids:
         report_ids.append(cleaned)
+      report_id_to_backfill = cleaned
     else:
       raise ValueError(
         f"Link type must be 'msg', 'report', 'task', or 'gate', got {link_type!r}"
@@ -1454,6 +1555,7 @@ class TaskService:
     updated = self._copy_task(
       target,
       details=details,
+      size=target.size if size is None else size,
       links={
         "msg_ids": msg_ids,
         "report_ids": report_ids,
@@ -1464,6 +1566,12 @@ class TaskService:
     added_msg_ids = [msg_id for msg_id in msg_ids if msg_id not in target.msg_ids]
     updated, commit_ops = self._plan_message_attachments(updated, added_msg_ids)
     self._validate_message_link_details(target, updated, added_msg_ids)
+    self._validate_detail_change_size(
+      target,
+      updated,
+      size,
+      explicit_detail_change=(append_detail is not None or remove_detail is not None),
+    )
     if remove_detail is not None or added_msg_ids:
       self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
@@ -1474,6 +1582,18 @@ class TaskService:
     for op in commit_ops:
       op()
     self._tasks.save_task_queue(ordered)
+    if report_id_to_backfill is not None:
+      backfill_now = self._clock.now_iso()
+      added_details = _append_acknowledged_answer_details_to_task(
+        self._tasks,
+        self._reports,
+        updated.id,
+        [report_id_to_backfill],
+        backfill_now,
+      )
+      if added_details:
+        updated.details.extend(added_details)
+        updated.modified_at = backfill_now
     return updated
 
   @_transactional_task_write
@@ -1581,6 +1701,9 @@ class TaskService:
     if "commit_hash" in changes and not finishing:
       raise ValueError("A commit hash can only accompany phase completion")
     raw_links = changes.get("links")
+    report_links_requested = "report_ids" in changes or (
+      isinstance(raw_links, dict) and "report_ids" in raw_links
+    )
     merged_links = {
       "gate_names": list(
         changes.get(
@@ -1639,6 +1762,7 @@ class TaskService:
     ]
     updated, commit_ops = self._plan_message_attachments(updated, added_msg_ids)
     self._validate_message_link_details(target, updated, added_msg_ids)
+    self._validate_detail_change_size(target, updated, changes.get("size"))
     self._validate_details(updated)
     self._validate_deps_exist(updated, queue)
     if finishing:
@@ -1649,6 +1773,18 @@ class TaskService:
     for op in commit_ops:
       op()
     self._tasks.save_task_queue(ordered)
+    if report_links_requested and updated.report_ids:
+      backfill_now = self._clock.now_iso()
+      added_details = _append_acknowledged_answer_details_to_task(
+        self._tasks,
+        self._reports,
+        updated.id,
+        updated.report_ids,
+        backfill_now,
+      )
+      if added_details:
+        updated.details.extend(added_details)
+        updated.modified_at = backfill_now
     return updated
 
   def _load_queue_and_target(self, task_id: str) -> tuple[list[Task], Task]:
@@ -1698,6 +1834,20 @@ class TaskService:
       )
 
   @staticmethod
+  def _validate_detail_change_size(
+    previous: Task,
+    updated: Task,
+    size: Any,
+    *,
+    explicit_detail_change: bool = False,
+  ) -> None:
+    details_changed = Counter(previous.details) != Counter(updated.details)
+    if (details_changed or explicit_detail_change) and size is None:
+      raise ValueError(
+        "Adding or removing task details requires an explicit size (-z/--size)"
+      )
+
+  @staticmethod
   def _validate_details(task: Task) -> None:
     if not task.details:
       raise ValueError("Task requires at least one detail")
@@ -1739,7 +1889,9 @@ class TaskService:
     except (ValueError, TypeError):
       return
     if age >= timedelta(hours=1):
-      task.effective_priority = f"P{max(1, int(task.priority[1]) - 1)}"
+      priority_level = int(task.priority[1])
+      if priority_level > 1:
+        task.effective_priority = f"P{max(2, priority_level - 1)}"
 
   def _enforce_dependency_order(self, tasks: list[Task]) -> list[Task]:
     """Rank upcoming tasks while promoting prerequisites and preserving history."""
@@ -1812,9 +1964,11 @@ class ReportService:
     id_gen: IdGenerator | None = None,
     on_answer_callback: Any | None = None,
     on_ack_callback: Any | None = None,
+    messages: MessageRepository | None = None,
   ) -> None:
     self._reports = reports
     self._tasks = tasks
+    self._messages = messages
     self._clock = clock or UtcClock()
     self._id_gen = id_gen or SecretsHexIdGenerator()
     self._on_answer = on_answer_callback
@@ -1831,18 +1985,14 @@ class ReportService:
   ) -> Report:
     if not isinstance(source_file, str) or "\n" in source_file or "\r" in source_file:
       raise ValueError("Report source file must be a single-line path")
-    blocks, fields = parse_report_markdown(body)
+    _, fields = parse_report_markdown(body)
     for field in fields:
       if field.type in {"choice", "checkbox"} and not field.recommended:
         raise ValueError(f"Report field {field.id!r} needs a preselected option")
     warnings = unparsed_strike_lines(body)
     if warnings and not allow_unparsed_markers:
       raise ValueError(f"Possible unparsed strike markers on lines: {warnings}")
-    rendered = [
-      render_report_markdown(value)
-      for block_type, value in blocks
-      if block_type == "markdown"
-    ]
+    rendered = serialize_report_blocks(body)
     saved = self._publish_report(report_id, title, body, fields, source_file)
     verified = self._reports.get_report(report_id)
     if (
@@ -1854,12 +2004,9 @@ class ReportService:
       or verified.source_file != source_file
     ):
       raise RuntimeError("Report publication verification failed after saving")
-    actual_blocks, _ = parse_report_markdown(verified.body)
-    if [
-      render_report_markdown(value)
-      for block_type, value in actual_blocks
-      if block_type == "markdown"
-    ] != rendered:
+    if [field.to_dict() for field in verified.fields] != [
+      field.to_dict() for field in fields
+    ] or serialize_report_blocks(verified.body) != rendered:
       raise RuntimeError("Report rendered verification failed after saving")
     return verified
 
@@ -1977,8 +2124,12 @@ class ReportService:
         continue
       tasks = linked.get(report.id, [])
       if tasks:
-        if all(task.status == "finished" for task in tasks):
-          stale.append(report)
+        if all(task.status == "finished" for task in tasks) and all(
+          task.finished_at for task in tasks
+        ):
+          latest_finish = max(_report_timestamp(task.finished_at) for task in tasks)
+          if now - latest_finish >= REPORT_TASK_FINISH_GRACE:
+            stale.append(report)
         continue
       if (
         report.ack_seen
@@ -2143,6 +2294,7 @@ class ReportService:
       pub_at=existing.pub_at,
       last_viewed_at=existing.last_viewed_at,
       pinned=existing.pinned,
+      source_file=existing.source_file,
     )
     self._reports.rename_report_answers(old_report_id, new_report_id, now)
     self._reports.save_report(renamed)
@@ -2166,6 +2318,9 @@ class ReportService:
         changed = True
     if changed:
       self._tasks.save_task_queue(queue)
+    _rewrite_message_parent_refs(
+      self._messages, "report", old_report_id, new_report_id, now
+    )
     return self.get_report(new_report_id)
 
   @_transactional_task_write

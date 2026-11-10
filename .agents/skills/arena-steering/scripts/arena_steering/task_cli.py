@@ -115,7 +115,6 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
   raise ValueError(f"Unrecognized task arguments: {args}")
 
 
-
 def _parse_task_size_value(raw: str) -> int:
   try:
     size = int(raw)
@@ -124,7 +123,6 @@ def _parse_task_size_value(raw: str) -> int:
   if size not in TASK_SIZES:
     raise ValueError(f"Task size must be one of {TASK_SIZES}, got {size}")
   return size
-
 
 
 def _extract_size_flag(tokens: list[str]) -> tuple[int | None, list[str]]:
@@ -153,7 +151,6 @@ def _extract_size_flag(tokens: list[str]) -> tuple[int | None, list[str]]:
     remaining.append(token)
     idx += 1
   return size, remaining
-
 
 
 def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
@@ -245,7 +242,6 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   return 0
 
 
-
 def _task_type_label(task: Task) -> str:
   if len(task.types) == 1:
     return task.type
@@ -256,11 +252,9 @@ def _task_type_label(task: Task) -> str:
   return f"{task.type}; {phases}"
 
 
-
 def _print_task_list(items: list[tuple[Task, bool]], out: TextIO) -> None:
   for task, _blocked in items:
     print(f"{task.id} - {task.title}", file=out)
-
 
 
 def _print_single_task(
@@ -271,8 +265,8 @@ def _print_single_task(
   include_details: bool = True,
   tasks: TaskService | None = None,
 ) -> None:
-  from .services import format_task_detail_status
   from .cli import resolve_state_dir
+  from .services import format_task_detail_status
 
   state_str = f"{task.status}, blocked" if blocked else task.status
   print(f"task {task.id}, status {state_str}, type {_task_type_label(task)}", file=out)
@@ -300,4 +294,3 @@ def _print_single_task(
     )
     for idx, line in enumerate(rendered_details, 1):
       print(f"- [{idx}] {line}", file=out)
-
