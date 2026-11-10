@@ -316,7 +316,9 @@ assert.doesNotMatch(html, /Live steering active/);
 
 def test_hidden_toggle_refreshes_after_the_windowed_request() -> None:
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
-  toggle = app_js.partition("async onToggleHidden() {")[2].partition("\n  onSearchChange(")[0]
+  toggle = app_js.partition("async onToggleHidden() {")[2].partition(
+    "\n  onSearchChange("
+  )[0]
   window_call = toggle.partition("api.hiddenMessageWindow(")[2]
   assert window_call, "the toggle must fetch the hidden window"
   assert "await fetchMessagePage({ preserve: true })" in window_call, (
