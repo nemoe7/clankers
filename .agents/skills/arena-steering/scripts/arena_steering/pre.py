@@ -1506,6 +1506,31 @@ def _github_route(words: list[str]) -> RouteRequest | None:
   return None
 
 
+def _line_routes(ctx: PreContext) -> list[RouteRequest]:
+  """Return the routes a line names, in command order."""
+  commands = _line_commands(ctx, unwrap_timeout=True)
+  if ctx.command:
+    commands.extend(_line_commands(PreContext(line=ctx.command), unwrap_timeout=True))
+  commands.extend(
+    words[1:]
+    for words in commands[:]
+    if words and words[0] in {"if", "then", "elif", "do"}
+  )
+  return [
+    request
+    for words in commands
+    if (request := _test_route(words) or _github_route(words)) is not None
+  ]
+
+
+def _pr_patch_message(number: str) -> str:
+  """Name the sanctioned path for a PR title and body change."""
+  return (
+    f"PR PATCH routed. Use `steer pr-update -n {number} "
+    "-t <title> -f <workspace-file>` instead of direct curl PATCH."
+  )
+
+
 def post_push_watch(line: str) -> bool:
   """A successful line needs a check watch only after a real push or PR creation."""
   for words in _line_commands(PreContext(line=line), unwrap_timeout=True):
@@ -1654,8 +1679,16 @@ class RouteGuard:
 
   def run(self, ctx: PreContext) -> PreResult:
     pieces = ctx.pieces()
-    if len(pieces) > 1 and (route := _mixed_route(ctx.line, ctx.command)):
-      return PreResult(verdict=END_CALL, route=route)
+    routes = _line_routes(ctx)
+    if len(pieces) > 1:
+      patch = next((item for item in routes if item.kind.startswith("pr-update")), None)
+      if patch is not None:
+        return PreResult([_pr_patch_message(patch.args[0])], BLOCK)
+      if routes and all(item.kind == "job-log" for item in routes):
+        return PreResult()  # A plain GitHub read passes through with its pipeline.
+      route = _mixed_route(ctx.line, ctx.command)
+      if route is not None and route.kind == "mixed" and route.args[1]:
+        return PreResult(verdict=END_CALL, route=route)
     mixed_syntax = ctx.is_mixed_line() and not (
       len(pieces) == 1 and _mixed_route(f"{shell_line(ctx.line)}; true", "")
     )
@@ -1672,27 +1705,14 @@ class RouteGuard:
             "Use separate calls or explicit `steer run start`."
           ),
           "For a detached command, use `steer run start <name> -- <remaining command>`.",
-          "For a GitHub call, use its helper.",
         ],
         BLOCK,
       )
-    route = next(
-      request
-      for words in _line_commands(ctx, unwrap_timeout=True)
-      if (request := _test_route(words) or _github_route(words)) is not None
-    )
+    route = routes[0]
     if route.kind == "pr-update-possible":
       return PreResult()  # Ordinary single-field metadata PATCHes remain allowed.
     if route.kind == "pr-update-manual":
-      return PreResult(
-        [
-          (
-            f"PR PATCH routed. Use `steer pr-update -n {route.args[0]} "
-            "-t <title> -f <workspace-file>` instead of direct curl PATCH."
-          )
-        ],
-        BLOCK,
-      )
+      return PreResult([_pr_patch_message(route.args[0])], BLOCK)
     return PreResult(verdict=END_CALL, route=route)
 
 

@@ -23,6 +23,9 @@ This log has no Unreleased section.
 
 - Show the keyboard-navigation highlight only when keyboard input gained focus, not on caret movement inside a clicked field.
 
+- Pass plain GitHub reads, redirects, and pipelines through inline instead of blocking them as mixed shells.
+- Keep the detach block for long runs only, and name `steer pr-update` when a line edits a PR title or body.
+
 ## [2.2.5]
 
 ### Removed

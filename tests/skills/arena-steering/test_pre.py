@@ -3231,8 +3231,8 @@ def test_test_and_check_waits_route_to_background(
   (
     "printf ready && pytest -q; printf done",
     "false || pytest -q",
-    "printf 'a b' && gh api repos/o/r/actions/jobs/123/logs",
-    "gh api repos/o/r/pulls/42 -X PATCH -f title='New title' -F body=@pr.md && printf done",
+    "printf 'a b' && pytest -q",
+    "cd repo && node --test tests/one.test.js",
   ),
 )
 def test_safe_mixed_routes_intercept_before_first_command(line: str) -> None:
@@ -3289,6 +3289,42 @@ def test_mixed_shell_routing_block_is_not_a_violation(_isolate_state: Path) -> N
   store.close()
 
 
+@pytest.mark.parametrize(
+  "line",
+  (
+    "gh api repos/o/r/actions/jobs/1/logs | grep failed",
+    "gh api repos/o/r/actions/jobs/1/logs | grep failed > /tmp/out",
+    "printf job && gh api repos/o/r/actions/jobs/1/logs",
+    "gh api repos/o/r/pulls/128 --jq .title | cat",
+    "gh pr view 128 --json body > /tmp/body.md",
+  ),
+)
+def test_plain_github_lines_pass_through_inline(line: str) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.CONTINUE
+  assert result.route is None
+
+
+@pytest.mark.parametrize(
+  "line", ("gh pr checks 128 --watch | tail -5", "gh run watch 42 | tail -3")
+)
+def test_a_piped_check_watch_still_needs_detaching(line: str) -> None:
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.BLOCK
+  assert result.messages[0].startswith("Mixed shell blocked for auto detach.")
+  assert len(result.messages) == 2
+
+
+def test_blocked_line_names_the_pr_update_helper() -> None:
+  line = "curl -X PATCH https://api.github.com/repos/o/r/pulls/128 -f title=x | cat"
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.BLOCK
+  assert result.messages[0] == (
+    "PR PATCH routed. Use `steer pr-update -n 128 -t <title> -f <workspace-file>` "
+    "instead of direct curl PATCH."
+  )
+
+
 def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
   root = Path(__file__).resolve().parents[3]
   installer = (root / "skills/arena-steering/scripts/install.sh").read_text(
@@ -3318,33 +3354,6 @@ def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
   assert "_steer_route_output=1" not in shell.stdout
   assert "helper output" in shell.stdout
   assert "original" not in shell.stdout
-
-
-def test_mixed_helper_route_preserves_connectors_and_status(
-  _isolate_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-  _seed(_isolate_state, "Acknowledged", acked=True)
-  helper = tmp_path / "steer"
-  helper.write_text("#!/bin/sh\nprintf 'helper\\n'\nexit 7\n", encoding="utf-8")
-  helper.chmod(0o755)
-  monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-  marker = tmp_path / "prefix-log"
-  prefix = tmp_path / "prefix"
-  prefix.write_text(
-    f"#!/bin/sh\nprintf 'ran\\n' >> {shlex.quote(str(marker))}\n", encoding="utf-8"
-  )
-  prefix.chmod(0o755)
-  line = f"{shlex.quote(str(prefix))} && gh api repos/o/r/actions/jobs/123/logs || printf recovered"
-  code, out = _run("pre", "-l", line, "-c", shlex.quote(str(prefix)), "-s", "bash")
-  assert code == pre.END_CALL
-  assert marker.read_text(encoding="utf-8").splitlines() == ["ran"]
-  assert "helper" in out and "recovered" in out
-  assert "_steer_route_rc=0" in out
-  failing = "gh api repos/o/r/actions/jobs/123/logs && printf skipped"
-  code, out = _run("pre", "-l", failing, "-c", failing.split(" && ")[0], "-s", "bash")
-  assert code == pre.END_CALL
-  assert "helper" in out and "skipped" not in out
-  assert "_steer_route_rc=7" in out
 
 
 @pytest.mark.parametrize(
