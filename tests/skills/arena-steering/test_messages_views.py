@@ -1010,7 +1010,7 @@ def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
           <= 24
         )
         # The optimistic row also matches. Only the confirmed row carries a
-        # server id, so pick that one.
+        # server id, so select that one.
         sent_ids = [
           value
           for value in sent.evaluate_all("els => els.map(el => el.dataset.msgId)")
