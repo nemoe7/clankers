@@ -25,8 +25,8 @@ BIBLE_READ_PREFIX = BIBLE_READ.split("{paths}")[0].strip()
 PENDING_ACK_PUSH_REASON = "Inbox has pending"
 SLEEP_BLOCKED_MESSAGE = "VIOLATION: Sleep blocked while a violation waits for an ack."
 FULL_READ_DEMAND = (
-  "Read every book in full with read_file before answering when any book is "
-  "not already in context."
+  "If any book is not in context, read every book in full with read_file "
+  "before answering."
 )
 
 
