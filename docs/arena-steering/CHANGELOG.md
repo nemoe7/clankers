@@ -19,6 +19,8 @@ This log has no Unreleased section.
 
 - Show each report answer field on its own line instead of one dot-separated line.
 
+- Mark non-blocking messages in `steer read` output as not needing an acknowledgement.
+
 ## [2.2.5]
 
 ### Removed

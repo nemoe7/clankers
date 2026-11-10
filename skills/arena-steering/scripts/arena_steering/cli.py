@@ -1917,7 +1917,8 @@ def _print_delivered(
 def _print_message(msg: Message, out: TextIO) -> None:
   from .services import is_attachment_present
 
-  print(f"`{msg.id}`", file=out)
+  label = f"`{msg.id}`" if msg.blocking else f"`{msg.id}` (no ack needed)"
+  print(label, file=out)
   if msg.parent_refs:
     parents = (
       ", ".join(msg.parent_ids)

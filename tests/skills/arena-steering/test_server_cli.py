@@ -5883,6 +5883,21 @@ def test_installed_launcher_suggests_bare_steer_without_blocking(
     assert "It works without the full path." in text
 
 
+def test_cli_read_marks_non_blocking_messages_as_no_ack_needed(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, messages, _, _ = cli.open_services(state_dir)
+  messages.send_message("Needs an answer", msg_id="ab2001")
+  messages.send_message("Just context", msg_id="ab2002", blocking=False)
+  store.close()
+  code, out, _ = _run_cli(state_dir, "read")
+  assert code == 0
+  lines = out.splitlines()
+  assert "`ab2001`" in lines
+  assert "`ab2002` (no ack needed)" in lines
+
+
 def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
   store, messages, tasks, _ = cli.open_services(state_dir)
