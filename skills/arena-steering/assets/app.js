@@ -473,8 +473,10 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
   const key = messageQueryKey(state);
   if (!before && !reset && !preserve && !state.showHidden) {
     const cached = cachedVisibleWindow(key);
-    // The health revision expires the cache. A self-comparison never would.
-    if (cached && healthSeenRevision !== undefined && cached.revision === healthSeenRevision) {
+    // Only the revision this pass read may expire the cache. A revision read
+    // before the fetch can be older than the server, and then it never expires.
+    const passRevision = healthSeenRevision !== undefined ? healthSeenRevision : visibleQueryRevision;
+    if (cached && passRevision !== undefined && cached.revision === passRevision) {
       loadedMessageKey = key;
       loadedMessageRevision = cached.revision;
       if (JSON.stringify(state.messages) !== JSON.stringify(cached.messages)) {

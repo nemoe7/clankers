@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import struct
 import subprocess
 import threading
@@ -377,6 +378,19 @@ for (const item of [hidden, seen, sent, acked]) {
     check=False,
   )
   assert result.returncode == 0, result.stderr
+
+
+def test_the_cached_window_gate_uses_the_revision_this_pass_fetched() -> None:
+  app = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  assert "cached.revision === healthSeenRevision" not in app, (
+    "the gate must not compare a cached revision to one read before the fetch"
+  )
+  assert re.search(r"const passRevision = [^;]+;", app), (
+    "the gate must name the revision this pass read"
+  )
+  assert re.search(r"cached\.revision === passRevision", app), (
+    "the gate must compare against the revision this pass read"
+  )
 
 
 def test_hidden_reply_renders_a_seen_sentinel_without_an_ack() -> None:

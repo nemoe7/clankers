@@ -10,6 +10,10 @@ This log has no Unreleased section.
 
 - Order a `report` phase first when the code waits on an approved report.
 - Offer the reply seen marker on a hidden reply that carries no acknowledgement.
+
+### Fixed
+
+- Serve the cached message window only on the revision the same pass read, so a stale gate cannot keep the view behind the server.
 - Create a work message's task before starting the work it asks for.
 - Demand a full `read_file` read of every bible book in the quiz prompt when any book is absent from context.
 
