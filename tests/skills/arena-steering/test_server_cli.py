@@ -247,10 +247,11 @@ def test_cli_poll_prints_first_ranked_unblocked_task_only(tmp_path: Path) -> Non
     )
     assert store.get_meta("skip_poll") == "1"  # Ready work outranks Skip poll.
     app.messages.consume_skip_poll()
-    assert app.dispatch("GET", "/poll?timeout=0") == (
-      HTTPStatus.OK,
-      {"messages": [], "report_answers": []},
-    )
+    status, delivered = app.dispatch("GET", "/poll?timeout=0")
+    assert status == HTTPStatus.OK
+    assert [msg["body"].splitlines()[0] for msg in delivered["messages"]] == [
+      "VIOLATION: Poll with 4 tasks queued. Continue the next task now."
+    ]
   finally:
     store.close()
 
@@ -6157,6 +6158,7 @@ def test_task_finish_warns_when_a_higher_priority_task_waits(tmp_path: Path) -> 
   lines = out.splitlines()
   assert "Warning: high (P1) outranks the finished task." in lines
 
+
 def test_poll_flags_a_queue_with_several_tasks(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
   store, messages, tasks, _ = cli.open_services(state_dir)
@@ -6165,10 +6167,15 @@ def test_poll_flags_a_queue_with_several_tasks(tmp_path: Path) -> None:
   store.close()
   code, out, error = _run_cli(state_dir, "poll")
   assert code == 0, error
-  lines = out.splitlines()
-  assert any(line.startswith("VIOLATION: Poll with 2 tasks queued.") for line in lines)
+  assert out == (
+    "ENDING TURN NOW IS A VIOLATION. IF BIBLE IS ABSENT READ ALL BOOKS "
+    "AND ANSWER SURVEY THEN CONTINUE THIS OPEN TASK: One | one | code\n"
+  )
   store, messages, _, _ = cli.open_services(state_dir)
-  assert messages.pending_violation() is not None
+  pending = messages.pending_violation()
+  assert pending is not None
+  assert "Poll with 2 tasks queued" in pending.body
+  assert "continue the next task now" in pending.body.casefold()
   store.close()
 
 
@@ -6181,4 +6188,3 @@ def test_poll_with_one_task_keeps_the_continue_line(tmp_path: Path) -> None:
   assert code == 0, error
   assert "Poll with" not in out
   assert "Only | only" in out
-

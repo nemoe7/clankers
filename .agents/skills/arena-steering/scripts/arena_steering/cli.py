@@ -459,11 +459,9 @@ def main(
       gate_status = FileGateStatus(resolved_state_dir)
       run_watcher = RunCompletionWatcher(resolved_state_dir)
       open_tasks = [task for task, _ in listed_tasks]
-      if len(open_tasks) > 1:
-        flag = messages.flag_early_poll(
-          len(open_tasks), bool(gate_status.running_names())
-        )
-        print(flag.body, file=stdout)
+      queued = len(open_tasks)
+      if queued > 1 and gate_status.running_names():
+        print(messages.flag_early_poll(queued, True).body, file=stdout)
         return 0
       if initial_task is None and not messages.has_pending_deliverables():
         running = set(gate_status.running_names())
@@ -507,6 +505,8 @@ def main(
           f"{task.title} | {task.id} | {task.type}",
           file=stdout,
         )
+      if queued > 1:
+        messages.flag_early_poll(queued, False)
       messages.reset_gate_if_clear()
       if not delivered.get("gate_wait") and not verdicts:
         store.set_meta("poll_completed", "1")
