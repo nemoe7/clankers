@@ -11,14 +11,11 @@ This log has no Unreleased section.
 ### Changed
 
 - Split the repository-discovery bullet and the cost-comparison bullet into one action each.
+- Rewrite `docs/gpt-plugins/README.md` in human-facing prose and drop the stale turn receipt.
 
 ### Removed
 
 - Remove unshipped imperative `README.md` stubs under `gpt-plugins/skills/gpt-*/`.
-
-### Changed
-
-- Rewrite `docs/gpt-plugins/README.md` in human-facing prose and drop the stale turn receipt.
 
 ### Fixed
 
