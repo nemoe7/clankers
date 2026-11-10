@@ -2186,6 +2186,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
     "PATH": "/usr/bin:/bin",
     "STEER_STATE_DIR": str(tmp_path / "override"),
   }
+  env.pop("XDG_CONFIG_HOME", None)
   install = scripts / "install.sh"
   state_dir = project / "arena-state"
   database = state_dir / "state.sqlite3"
