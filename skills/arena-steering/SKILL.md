@@ -86,6 +86,7 @@ steer task rm <id>
 - Treat a run of 10 seconds or more as long: start it with `steer run start -t <task> <name> -- <command>`, name it descriptively after what it runs, and append `-2`, `-3`, ... to retries.
 - Link each local gate to its task at run start, and let the live run own its task's blocked state.
 - After blocking the sole task for its running gate, MUST run `steer poll`; NEVER run `steer poll` as a gate wait otherwise.
+- After one diagnosis, resume unblocked work and use a worktree if the gate freezes its files. Recheck logs only after meaningful progress, never just to wait.
 - Continue independent work and poll when no unblocked work remains.
 - Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports.
 - ALWAYS end every turn with `steer poll` on the final Bash call unless the listing carries a `skip_poll` stamp, calling Bash with `{"command":"steer poll","timeout":1800}`; NEVER wrap it in a shell timeout, substitute sleep, or treat a bounded no-result poll as a successful wait.

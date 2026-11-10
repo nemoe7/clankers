@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require the squash skill for refs-to-live rule amendments.
 - Group Arena clauses by domain and place the bible definition before its first reference.
 - Keep each nemoizer rewrite example faithful to its input contract.
+- Move the resumed-work and worktree gate clause from Arena into the skill.
 
 ### Removed
 
