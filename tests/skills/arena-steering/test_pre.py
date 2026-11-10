@@ -23,6 +23,7 @@ from arena_steering.services import BIBLE_READ, VIOLATION_ACK, with_bible_read
 
 BIBLE_READ_PREFIX = BIBLE_READ.split("{paths}")[0].strip()
 PENDING_ACK_PUSH_REASON = "Inbox has pending"
+SLEEP_BLOCKED_MESSAGE = "VIOLATION: Sleep blocked while a violation waits for an ack."
 
 
 @pytest.fixture(autouse=True)
@@ -1304,9 +1305,7 @@ def test_sleep_exits_130_while_a_violation_waits_for_an_ack(
 
   code, out = _run("pre", "-c", "sleep 1", "-l", "sleep 1", "-s", "bash")
   assert code == pre.BLOCK
-  assert (
-    "VIOLATION: Sleep blocked while a violation waits for an ack." in out
-  )  # nonemo: NMT100
+  assert SLEEP_BLOCKED_MESSAGE in out
 
 
 def test_unknown_cwd_push_uses_nonviolation_recovery() -> None:
