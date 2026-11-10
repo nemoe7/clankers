@@ -575,7 +575,8 @@ document.getElementById('f').addEventListener('submit', async (e) => {
     encoding="utf-8",
   )
   (site / "good.html").write_text(
-    """<!doctype html><html data-theme="dark"><body style="background:#0f0f12;color:#f4f4f6">
+    """<!doctype html><html data-theme="dark"><head>
+<link rel="icon" href="data:,"></head><body style="background:#0f0f12;color:#f4f4f6">
 <h1>Fast Optimistic Form</h1>
 <button id="inc" type="button" onclick="this.textContent='Clicked '+(++window.__n||1)">Count</button>
 <form id="f"><input name="title" aria-label="Title" /><button type="submit">Add row</button></form>
