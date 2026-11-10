@@ -304,7 +304,6 @@ def test_markdownlint_scope_includes_readmes_except_agents(tmp_path):
     "docs/archive/old/README.md",
     "rules/README.md",
     "skills/example/README.md",
-    "automations/README.md",
     "ordinary.md",
   ]
   excluded = [
@@ -314,7 +313,6 @@ def test_markdownlint_scope_includes_readmes_except_agents(tmp_path):
     "docs/archive/old/notes.md",
     "skills/example/SKILL.md",
     "system-prompts/prompt.md",
-    "automations/job.md",
   ]
   for name in included + excluded:
     path = tmp_path / name

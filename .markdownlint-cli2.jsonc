@@ -8,7 +8,6 @@
     "!gpt-plugins/skills/**/!(README).md",
     "!gpt-plugins/refs/**/!(README).md",
     "!system-prompts/**/!(README).md",
-    "!automations/**/!(README).md",
     "!docs/archive/**/!(README).md",
     "!.agents/**"
   ],

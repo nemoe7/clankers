@@ -138,18 +138,6 @@ Read these first:
 - The file stays under 500 lines.
 - A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to `docs/<skill>/CHANGELOG.md` or [docs/arena-quirks.md](docs/arena-quirks.md).
 
-## Automations
-
-- Automation prompts live in `automations/`: self-contained text pasted into an external scheduler, not rules an agent loads.
-- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request.
-  - Web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt MUST not depend on them.
-  - The connector can read and write in this repository; the prompts repeat no git rule.
-  - The [gpt-github](gpt-plugins/skills/gpt-github/SKILL.md) skill manages ChatGPT's behavior when using GitHub.
-  - Reports go to the chat response and nothing is persisted.
-- Prompts carry no budget row and no validator gate, both declined on request rather than deferred.
-  - The scheduler owns its own copy and edits the embedded datetime between runs; CI MUST not depend on their contents.
-- Amend one here, then re-paste it into the task: an edit in the repo NEVER reaches a running automation.
-
 ## Style
 
 - 2-space indentation, overriding formatter defaults.

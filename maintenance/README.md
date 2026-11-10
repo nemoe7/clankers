@@ -60,7 +60,7 @@ Verbatim baselines would exceed live budgets. Refs preserve originals, identical
 
 ### Formatting
 
-Markdown linting covers repository Markdown and `README.md` files selected by [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc). It excludes `AGENTS.md`, `ARENA.md`, non-README rule and skill files, system prompts, automations, archived notes, and `.agents/`. The required blank first line and `###` heading of a Kilo mode override fail MD001 and MD041.
+Markdown linting covers repository Markdown and `README.md` files selected by [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc). It excludes `AGENTS.md`, `ARENA.md`, non-README rule and skill files, system prompts, archived notes, and `.agents/`. The required blank first line and `###` heading of a Kilo mode override fail MD001 and MD041.
 
 Soft-wrap prose: one line per paragraph, list item and table row. Keep third-party license wrapping.
 
