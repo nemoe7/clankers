@@ -1985,7 +1985,7 @@ DESIGN_BOARD_CSS = """
 .board { position: relative; padding: 32px; background: var(--bg); color: var(--text);
   font-family: var(--font-sans, var(--nuu-font-sans)); width: max-content;
   max-width: 1536px; box-sizing: border-box; isolation: isolate; }
-.board.wide { width: 2816px; max-width: 2816px; }
+.board.wide { width: 2856px; max-width: 2856px; }
 .board h1 { font-size: var(--size-22, 22px); font-weight: 600; margin: 0 0 4px; }
 .board .lede { color: var(--muted); font-size: var(--size-14, 14px); margin: 0 0 24px; max-width: 720px; }
 .board .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
