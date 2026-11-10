@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import shutil
 import subprocess
 import threading
@@ -30,10 +29,6 @@ SKILL_DIR = ROOT / "skills" / "arena-steering"
 ASSETS_DIR = SKILL_DIR / "assets"
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_survey_modal_survives_asset_hot_reload(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   assets = tmp_path / "assets"
@@ -47,7 +42,6 @@ def test_survey_modal_survives_asset_hot_reload(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -119,10 +113,6 @@ def test_hot_reload_waits_for_quiet_seconds_and_keeps_last_good_app(
   assert [app for _when, app in calls] == [original_app, original_app]
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_messages_keep_scroll_target_during_unchanged_polling() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -139,7 +129,6 @@ def test_messages_keep_scroll_target_during_unchanged_polling() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -240,10 +229,6 @@ def test_external_sqlite_write_changes_websocket_data_version(tmp_path: Path) ->
     server_store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_websocket_refreshes_after_external_store_write(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -263,7 +248,6 @@ def test_websocket_refreshes_after_external_store_write(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -313,10 +297,6 @@ def test_websocket_refreshes_after_external_store_write(
     server_store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_fallback_poll_refreshes_without_analytics_across_reload(
   tmp_path: Path, width: int
@@ -330,7 +310,6 @@ def test_fallback_poll_refreshes_without_analytics_across_reload(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -374,10 +353,6 @@ def test_fallback_poll_refreshes_without_analytics_across_reload(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("transport", ["websocket", "poll"])
 def test_asset_reload_waits_for_quiet_period_while_state_updates(
   tmp_path: Path, transport: str
@@ -393,7 +368,6 @@ def test_asset_reload_waits_for_quiet_period_while_state_updates(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -669,10 +643,6 @@ def test_cli_poll_repeat_uses_v1_timing_and_resets_after_read(
   store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("transport", ["websocket", "poll", "mixed"])
 def test_overlapping_refresh_keeps_task_links_with_message_receipts(
   tmp_path: Path, transport: str
@@ -690,7 +660,6 @@ def test_overlapping_refresh_keeps_task_links_with_message_receipts(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -814,10 +783,6 @@ def test_fixture_server_close_waits_for_pending_sqlite_request() -> None:
   assert not client.is_alive() and not closer.is_alive()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_report_views_from_two_browser_tabs_refresh_the_same_lease(
   tmp_path: Path,
 ) -> None:
@@ -831,7 +796,6 @@ def test_report_views_from_two_browser_tabs_refresh_the_same_lease(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )

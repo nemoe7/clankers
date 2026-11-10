@@ -5678,6 +5678,13 @@ def test_installer_reports_runtime_paths_and_reuses_package(tmp_path: Path) -> N
     "PATH": f"{fake_bin}:{os.environ['PATH']}",
     "STEER_CHROMIUM_DIR": str(cache),
   }
+  browser = tmp_path / "browsers/chromium-1/chrome-linux64/chrome"
+  shell = (
+    tmp_path
+    / "browsers/chromium_headless_shell-1/chrome-headless-shell-linux64"
+    / "chrome-headless-shell"
+  )
+  _fake_python(fake_bin, browser, shell)
   for _ in range(2):
     result = subprocess.run(
       [str(SCRIPT)],
@@ -5688,10 +5695,73 @@ def test_installer_reports_runtime_paths_and_reuses_package(tmp_path: Path) -> N
       check=True,
     )
     paths = dict(line.split("=", 1) for line in result.stdout.strip().splitlines())
-    assert Path(paths["CHROMIUM_BIN"]).is_file()
-    assert Path(paths["CHROMIUM_LIB"]).is_dir()
-    assert Path(paths["CHROMIUM_FONTS"]).is_dir()
+    assert Path(paths["CHROMIUM_BIN"]) == browser
+    assert Path(paths["CHROMIUM_LIB"]) == cache / "runtime/153.0.0/al2023/lib"
+    assert Path(paths["CHROMIUM_FONTS"]) == cache / "runtime/153.0.0/fonts"
   assert (cache / "npm-calls").read_text(encoding="utf-8").splitlines() == ["invoked"]
+
+
+def _fake_python(bin_dir: Path, browser: Path, shell: Path) -> None:
+  """Stand in for python3 so the installer links fixed paths."""
+  python = bin_dir / "python3"
+  python.write_text(
+    f"#!{sys.executable}\n"
+    "import pathlib, sys\n"
+    f"paths = [{str(browser)!r}, {str(shell)!r}]\n"
+    "if __name__ == '__main__' and sys.argv[1:2] == ['-']:\n"
+    "  print(paths[0])\n"
+    "  print(paths[1])\n"
+    "  raise SystemExit(0)\n"
+    "class _Chromium:\n"
+    "  executable_path = paths[0]\n"
+    "class _Runner:\n"
+    "  chromium = _Chromium()\n"
+    "  def __enter__(self):\n"
+    "    return self\n"
+    "  def __exit__(self, *exc):\n"
+    "    return False\n"
+    "def sync_playwright():\n"
+    "  return _Runner()\n",
+    encoding="utf-8",
+  )
+  python.chmod(0o755)
+
+
+def test_installer_links_the_playwright_default_paths(tmp_path: Path) -> None:
+  bin_dir = tmp_path / "bin"
+  bin_dir.mkdir()
+  browser = tmp_path / "browsers/chromium-1/chrome-linux64/chrome"
+  shell = (
+    tmp_path
+    / "browsers/chromium_headless_shell-1/chrome-headless-shell-linux64"
+    / "chrome-headless-shell"
+  )
+  _fake_python(bin_dir, browser, shell)
+  env = {
+    **os.environ,
+    "PATH": f"{bin_dir}:{os.environ['PATH']}",
+    "STEER_CHROMIUM_DIR": str(tmp_path / "runtime"),
+  }
+  result = subprocess.run(
+    [str(SCRIPT)],
+    env=env,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+  paths = dict(line.split("=", 1) for line in result.stdout.strip().splitlines())
+  assert Path(paths["CHROMIUM_BIN"]) == browser
+  for target in (browser, shell):
+    assert target.is_symlink()
+    assert target.readlink() == tmp_path / "runtime/chromium-launcher"
+  launcher = (tmp_path / "runtime/chromium-launcher").read_text(encoding="utf-8")
+  assert launcher.startswith("#!/bin/sh")
+  assert (
+    f"LD_LIBRARY_PATH={tmp_path / 'runtime'}/runtime/153.0.0/al2023/lib" in launcher
+  )
+  assert "FONTCONFIG_FILE=" in launcher and "exec " in launcher
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -5768,10 +5838,6 @@ def test_demo_reset_rolls_back_on_seed_failure(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "demo" / "state.sqlite3")
@@ -5782,7 +5848,6 @@ def test_running_demo_reset_refreshes_connected_browser(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -5908,7 +5973,10 @@ def test_browser_recipe_is_standard_tooling_without_installer_changes() -> None:
   ) in skill
   assert "Inflate `bin/al2023.tar.br`" in recipe
   assert "Call `setupLambdaEnvironment`" in recipe
-  assert "NEVER use a Playwright-managed browser." in recipe
+  assert (
+    "Install the extracted binary at the Playwright default executable path,"
+    " and set `CHROMIUM_BIN` to it."
+  ) in recipe
   assert "Python" not in recipe and "pip " not in recipe
   assert "@sparticuz/chromium" not in installer
 

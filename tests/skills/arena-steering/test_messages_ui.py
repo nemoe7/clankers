@@ -28,7 +28,6 @@ def composer_page(width: int, state_path: Path | None = None) -> Iterator[object
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -55,10 +54,6 @@ def box(page: object, selector: str) -> dict[str, float]:
   return page.locator(selector).bounding_box()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [1200, 390])
 def test_composer_grows_previews_and_expands_like_v1(width: int) -> None:
   with composer_page(width) as page:
@@ -125,10 +120,6 @@ def test_composer_grows_previews_and_expands_like_v1(width: int) -> None:
     assert expand.is_hidden()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [1200, 390])
 def test_composer_scrolls_only_when_content_overflows(width: int) -> None:
   with composer_page(width) as page:
@@ -147,10 +138,6 @@ def test_composer_scrolls_only_when_content_overflows(width: int) -> None:
     assert draft.evaluate("el => getComputedStyle(el).overflowY") == "hidden"
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_composer_reflows_when_the_viewport_narrows() -> None:
   with composer_page(1200) as page:
     draft = page.locator("#msg")
@@ -164,10 +151,6 @@ def test_composer_reflows_when_the_viewport_narrows() -> None:
     )
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [1200, 390])
 def test_staged_files_use_v1_layout_and_image_thumbnails(width: int) -> None:
   image = base64.b64decode(
@@ -190,10 +173,6 @@ def test_staged_files_use_v1_layout_and_image_thumbnails(width: int) -> None:
     assert page.locator("#composer-attachments").is_hidden()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_send_waits_for_an_inflight_upload_and_retries_a_failure() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -239,10 +218,6 @@ def test_send_waits_for_an_inflight_upload_and_retries_a_failure() -> None:
     page.wait_for_function("document.querySelector('#msg')?.value === ''")
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_pasting_an_image_with_text_preserves_the_text() -> None:
   image = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmGQAAAAASUVORK5CYII="
@@ -263,10 +238,6 @@ def test_pasting_an_image_with_text_preserves_the_text() -> None:
     page.locator(".composer-attachment-chip img").wait_for()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_preview_matches_server_markdown_and_paragraph_breaks() -> None:
   with composer_page(1200) as page:
     page.locator("#msg").fill("First line\nSecond **line**\n\nSeparate paragraph")
@@ -295,10 +266,6 @@ def test_preview_matches_server_markdown_and_paragraph_breaks() -> None:
     assert preview.locator("p").nth(1).inner_text() == "Separate paragraph"
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_draft_survives_a_new_browser_tab() -> None:
   with composer_page(1200) as page:
     page.locator("#msg").fill("Keep this draft across tabs")
@@ -309,10 +276,6 @@ def test_draft_survives_a_new_browser_tab() -> None:
     second.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_failed_upload_does_not_send_or_discard_the_draft() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -359,10 +322,6 @@ def test_failed_upload_does_not_send_or_discard_the_draft() -> None:
     page.wait_for_function("document.querySelector('#msg')?.value === ''")
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
   with composer_page(1200) as page:
     response = page.request.post(
@@ -423,10 +382,6 @@ def test_unconfirmed_send_retries_without_duplicate_or_losing_reply() -> None:
     assert page.locator("#msg").input_value() == ""
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_drop_anywhere_in_messages_stages_one_file_after_rerenders() -> None:
   with composer_page(1200) as page:
     page.locator("#quiet-msgs").click()
@@ -443,10 +398,6 @@ def test_drop_anywhere_in_messages_stages_one_file_after_rerenders() -> None:
     assert page.locator(".composer-attachment-chip").count() == 1
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_stale_preview_response_cannot_replace_the_new_draft() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -474,10 +425,6 @@ def test_stale_preview_response_cannot_replace_the_new_draft() -> None:
     assert "old draft" not in preview.inner_text()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_confirmed_send_clears_draft_without_waiting_for_refresh() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -506,10 +453,6 @@ def test_confirmed_send_clears_draft_without_waiting_for_refresh() -> None:
       page.evaluate("window.releaseHealth()")
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [1200, 390])
 def test_send_shows_message_before_network_response(tmp_path: Path, width: int) -> None:
   with composer_page(width) as page:
@@ -570,10 +513,6 @@ def test_send_shows_message_before_network_response(tmp_path: Path, width: int) 
     assert abs(confirmed_id.bounding_box()["width"] - pending_width) < 1
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_optimistic_send_reconciles_refresh_before_delayed_response() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -604,10 +543,6 @@ def test_optimistic_send_reconciles_refresh_before_delayed_response() -> None:
     assert matching.count() == 1
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_optimistic_send_failure_preserves_new_draft() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -644,10 +579,6 @@ def test_optimistic_send_failure_preserves_new_draft() -> None:
     assert page.evaluate("sessionStorage.getItem('steer:pendingSend')") is None
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> None:
   with composer_page(1200) as page:
     response = page.request.post(
@@ -713,10 +644,6 @@ def test_optimistic_send_clears_reply_selection_and_restores_on_failure() -> Non
     assert page.evaluate("window.sendRequestIds[4] !== window.sendRequestIds[0]")
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_send_during_delayed_pagination_preserves_older_messages() -> None:
   with composer_page(1200) as page:
     url = page.url.split("/?", 1)[0]
@@ -760,10 +687,6 @@ def test_send_during_delayed_pagination_preserves_older_messages() -> None:
     )
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("fail", [False, True])
 @pytest.mark.parametrize("width", [1200, 390])
 def test_skip_poll_feedback_is_immediate_and_recovers(
@@ -806,10 +729,6 @@ def test_skip_poll_feedback_is_immediate_and_recovers(
       )
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [1200, 390])
 def test_survey_modal_opens_before_fetch_and_stays_closed_after_release(
   tmp_path: Path, width: int
@@ -837,10 +756,6 @@ def test_survey_modal_opens_before_fetch_and_stays_closed_after_release(
     assert page.locator("#modal-shell").is_hidden()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_survey_modal_reports_fetch_failure_without_closing() -> None:
   with composer_page(390) as page:
     page.evaluate("""() => {
@@ -866,10 +781,6 @@ def test_survey_modal_reports_fetch_failure_without_closing() -> None:
     assert page.locator("#modal-shell").is_visible()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_survey_old_fetch_does_not_replace_a_reopened_modal() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -906,10 +817,6 @@ def test_survey_old_fetch_does_not_replace_a_reopened_modal() -> None:
     )
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_markdown_dom_cache_preserves_nodes_and_invalidates() -> None:
   with composer_page(1200) as page:
     result = page.evaluate("""async () => {
@@ -959,10 +866,6 @@ def test_markdown_dom_cache_preserves_nodes_and_invalidates() -> None:
     }
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_server_html_required_except_for_optimistic_messages() -> None:
   with composer_page(1200) as page:
     result = page.evaluate("""async () => {
@@ -995,10 +898,6 @@ def test_server_html_required_except_for_optimistic_messages() -> None:
     }
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_markdown_dom_reused_on_message_updates_and_search() -> None:
   with composer_page(1200) as page:
     result = page.evaluate("""async () => {
@@ -1034,10 +933,6 @@ def test_markdown_dom_reused_on_message_updates_and_search() -> None:
     }
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_markdown_dom_reused_in_report_refresh() -> None:
   with composer_page(1200) as page:
     result = page.evaluate("""async () => {
@@ -1067,10 +962,6 @@ def test_markdown_dom_reused_in_report_refresh() -> None:
     assert result == {"retained": True, "retainedAck": True, "changed": True}
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_code_and_id_copy_use_textarea_and_report_failures() -> None:
   with composer_page(1200) as page:
     page.evaluate("""() => {
@@ -1110,10 +1001,6 @@ def test_code_and_id_copy_use_textarea_and_report_failures() -> None:
     assert page.locator("textarea[readonly]").count() == 0
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_send_hover_changes_background_without_resizing(
   tmp_path: Path, width: int
@@ -1137,10 +1024,6 @@ def test_send_hover_changes_background_without_resizing(
     page.screenshot(path=str(tmp_path / f"send-hover-{width}.png"))
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_contained_buttons_hide_default_box_and_reveal_on_hover_and_press(
   tmp_path: Path,
 ) -> None:
@@ -1322,10 +1205,6 @@ def test_contained_buttons_hide_default_box_and_reveal_on_hover_and_press(
       mobile_context.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_reload_preserves_parents_and_completed_uploads_only(width: int) -> None:
   with composer_page(width) as page:
@@ -1380,10 +1259,6 @@ def test_reload_preserves_parents_and_completed_uploads_only(width: int) -> None
     assert "ready.txt" in sent.text_content()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_restored_image_preview_and_removal_survive_reload(tmp_path: Path) -> None:
   image = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmGQAAAAASUVORK5CYII="
@@ -1406,10 +1281,6 @@ def test_restored_image_preview_and_removal_survive_reload(tmp_path: Path) -> No
     assert page.locator("#composer-attachments").is_hidden()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
@@ -1479,7 +1350,6 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1691,10 +1561,6 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 @pytest.mark.parametrize("transport", ("poll", "ws"))
 def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
@@ -1713,7 +1579,6 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1790,7 +1655,6 @@ def test_wider_live_ack_keeps_reading_position(transport: str) -> None:
     store.close()
 
 
-@pytest.mark.skipif(not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN")
 @pytest.mark.parametrize("width", [390, 1050])
 def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
   tmp_path: Path,
@@ -1814,7 +1678,6 @@ def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1866,9 +1729,6 @@ def test_short_message_acknowledgement_does_not_expand_bubble_to_full_row(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN for Chromium"
-)
 def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
@@ -1884,7 +1744,6 @@ def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1938,10 +1797,6 @@ def test_wrapped_task_chips_have_vertical_spacing(tmp_path: Path) -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "state.sqlite3")
@@ -1962,9 +1817,7 @@ def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
   thread.start()
   try:
     with playwright.sync_playwright() as runner:
-      browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"], args=["--no-sandbox"]
-      )
+      browser = runner.chromium.launch(args=["--no-sandbox"])
       try:
         for width in (390, 1200):
           page = browser.new_page(viewport={"width": width, "height": 800})
@@ -2045,10 +1898,6 @@ def test_message_chip_rows_keep_height_and_align_text(tmp_path: Path) -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_pagination_error_survives_refresh_until_manual_retry() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -2065,7 +1914,6 @@ def test_pagination_error_survives_refresh_until_manual_retry() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2127,10 +1975,6 @@ def test_pagination_error_survives_refresh_until_manual_retry() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_hidden_toggle_retains_visible_cards_during_fetch(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -2147,7 +1991,6 @@ def test_hidden_toggle_retains_visible_cards_during_fetch(tmp_path: Path) -> Non
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2285,10 +2128,6 @@ assert.equal(history.removed, 1, 'rerender replaces the old scroll listener');
   assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_message_edge_fades_in_both_motion_preferences() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -2307,7 +2146,6 @@ def test_message_edge_fades_in_both_motion_preferences() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2395,10 +2233,6 @@ def test_message_edge_fades_in_both_motion_preferences() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_multiline_optimistic_paragraph_matches_confirmed_render(
   tmp_path: Path,
 ) -> None:
@@ -2434,10 +2268,6 @@ def test_multiline_optimistic_paragraph_matches_confirmed_render(
     page.screenshot(path=str(tmp_path / "multiline-confirmed.png"))
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_reply_seen_indicator_optimistic_rollback_and_revision_guard(
   tmp_path: Path,
 ) -> None:
@@ -2458,7 +2288,6 @@ def test_reply_seen_indicator_optimistic_rollback_and_revision_guard(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2593,10 +2422,6 @@ REMOVED_LANDSCAPE_VIEWPORT = "855x325"
 REMOVED_LANDSCAPE_WIDTH = 855
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN to run the browser regression",
-)
 def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
   tmp_path: Path,
 ) -> None:
@@ -2646,7 +2471,6 @@ def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
 
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2727,10 +2551,6 @@ def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN to run the browser regression",
-)
 def test_composer_paste_unnamed_templates_and_dynamic_lost_ui(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   state_dir = tmp_path / "arena-state"
@@ -2745,7 +2565,6 @@ def test_composer_paste_unnamed_templates_and_dynamic_lost_ui(tmp_path: Path) ->
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2831,10 +2650,6 @@ def test_composer_paste_unnamed_templates_and_dynamic_lost_ui(tmp_path: Path) ->
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [1200, 390])
 def test_skip_poll_armed_indicator_persists_and_cancels(
   tmp_path: Path, width: int
@@ -2881,10 +2696,6 @@ def test_skip_poll_armed_indicator_persists_and_cancels(
     page.screenshot(path=str(tmp_path / f"skip-canceled-{width}.png"))
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_timestamps_use_regular_proportional_one(tmp_path: Path, width: int) -> None:
   with composer_page(width) as page:
@@ -2909,10 +2720,6 @@ def test_timestamps_use_regular_proportional_one(tmp_path: Path, width: int) -> 
     page.screenshot(path=str(tmp_path / f"timestamp-tabular-{width}.png"))
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_hidden_reveal_keeps_new_regular_messages(tmp_path: Path, width: int):
   with composer_page(width) as page:
@@ -2969,10 +2776,6 @@ def test_hidden_reveal_keeps_new_regular_messages(tmp_path: Path, width: int):
     assert new.is_visible() and latest.is_visible()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_survey_answers_open_by_touch_and_close_on_outside_tap(tmp_path: Path):
   from arena_steering import survey
 
@@ -2985,9 +2788,7 @@ def test_survey_answers_open_by_touch_and_close_on_outside_tap(tmp_path: Path):
   thread.start()
   try:
     with playwright.sync_playwright() as runner:
-      browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"], args=["--no-sandbox"]
-      )
+      browser = runner.chromium.launch(args=["--no-sandbox"])
       try:
         page = browser.new_page(
           viewport={"width": 390, "height": 800},
@@ -3018,10 +2819,6 @@ def test_survey_answers_open_by_touch_and_close_on_outside_tap(tmp_path: Path):
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_survey_subtitle_stays_inside_scroll_clip(tmp_path: Path, width: int):
   from arena_steering import survey

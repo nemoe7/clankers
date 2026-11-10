@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import subprocess
 import threading
 from datetime import UTC, datetime, timedelta
@@ -2062,10 +2061,6 @@ assert.ok(row.indexOf('Code') < row.indexOf('Docs'));
   assert "opacity:" in style
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_browser_shows_faded_finished_phase_chip(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore(tmp_path / "browser.sqlite3")
@@ -2086,7 +2081,6 @@ def test_browser_shows_faded_finished_phase_chip(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -2119,10 +2113,6 @@ def test_browser_shows_faded_finished_phase_chip(tmp_path: Path) -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_browser_shimmers_only_for_active_task_gates(tmp_path: Path) -> None:
   import json
 
@@ -2151,7 +2141,6 @@ def test_browser_shimmers_only_for_active_task_gates(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )

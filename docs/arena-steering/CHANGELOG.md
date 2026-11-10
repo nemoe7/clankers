@@ -4,6 +4,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.8]
+
+### Changed
+
+- Install the extracted Chromium binary at the Playwright default executable path, and set `CHROMIUM_BIN` to it.
+
+### Fixed
+
+- Write a launcher with its own library and font configuration instead of symlinking the bare binary.
+- Drop the browser test gates on `ARENA_STEERING_CHROMIUM` and `CHROMIUM_BIN` so the tests use the default browser.
+
 ## [2.2.6]
 
 ### Added

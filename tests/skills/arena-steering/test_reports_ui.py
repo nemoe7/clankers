@@ -11,9 +11,6 @@ from arena_steering.server import SteeringApp, create_http_server
 from arena_steering.store import SqliteStore
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN for browser tests"
-)
 @pytest.mark.parametrize("populated", [False, True])
 def test_report_states_without_external_audit(tmp_path: Path, populated: bool) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
@@ -29,7 +26,6 @@ def test_report_states_without_external_audit(tmp_path: Path, populated: bool) -
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -69,10 +65,6 @@ def test_report_states_without_external_audit(tmp_path: Path, populated: bool) -
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("transport", ["poll", "ws"])
 def test_saved_report_answer_can_be_edited_during_refresh(
   tmp_path: Path, transport: str
@@ -95,7 +87,6 @@ def test_saved_report_answer_can_be_edited_during_refresh(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -145,10 +136,6 @@ def test_saved_report_answer_can_be_edited_during_refresh(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_hidden_answer_and_live_report_replies(tmp_path: Path, width: int) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
@@ -172,7 +159,6 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path, width: int) -> No
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -226,10 +212,6 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path, width: int) -> No
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_report_answer_appears_before_the_network_reply(
   tmp_path: Path, width: int
@@ -250,7 +232,6 @@ def test_report_answer_appears_before_the_network_reply(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -288,10 +269,6 @@ def test_report_answer_appears_before_the_network_reply(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_pending_answer_reconciles_exact_request_and_preserves_edits(
   tmp_path: Path,
 ) -> None:
@@ -311,7 +288,6 @@ def test_pending_answer_reconciles_exact_request_and_preserves_edits(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -387,10 +363,6 @@ def test_answer_request_lookup_matches_report_and_committed_request() -> None:
   store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("committed", [False, True])
 def test_failed_answer_retains_draft_and_retry_is_idempotent(
   tmp_path: Path, committed: bool
@@ -411,7 +383,6 @@ def test_failed_answer_retains_draft_and_retry_is_idempotent(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -468,10 +439,6 @@ def test_failed_answer_retains_draft_and_retry_is_idempotent(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -498,7 +465,6 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -702,10 +668,6 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_submit_preserves_label_and_disables_during_request() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -722,7 +684,6 @@ def test_submit_preserves_label_and_disables_during_request() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -793,10 +754,6 @@ def test_submit_preserves_label_and_disables_during_request() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -823,7 +780,6 @@ def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -984,10 +940,6 @@ def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_keyboard_nav_flag_ignores_caret_movement_inside_inputs(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -999,7 +951,6 @@ def test_keyboard_nav_flag_ignores_caret_movement_inside_inputs(tmp_path: Path) 
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1025,10 +976,6 @@ def test_keyboard_nav_flag_ignores_caret_movement_inside_inputs(tmp_path: Path) 
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_reports_bottom_fade_only_hides_for_mobile_keyboard(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1045,7 +992,6 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard(tmp_path: Path) -> N
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1166,10 +1112,6 @@ def test_reports_bottom_fade_only_hides_for_mobile_keyboard(tmp_path: Path) -> N
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_switching_reports_keeps_picker_mounted_without_panel_flash() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1190,7 +1132,6 @@ def test_switching_reports_keeps_picker_mounted_without_panel_flash() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1270,10 +1211,6 @@ def test_switching_reports_keeps_picker_mounted_without_panel_flash() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 @pytest.mark.parametrize("fail", [False, True])
 @pytest.mark.parametrize("width", [1200, 390])
 def test_report_selection_is_immediate_during_delayed_fetch(
@@ -1296,7 +1233,6 @@ def test_report_selection_is_immediate_during_delayed_fetch(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1363,10 +1299,6 @@ def test_report_selection_is_immediate_during_delayed_fetch(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_report_selection_ignores_out_of_order_fetches() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1381,7 +1313,6 @@ def test_report_selection_ignores_out_of_order_fetches() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1436,10 +1367,6 @@ def test_report_selection_ignores_out_of_order_fetches() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_stretched_report_picker_pads_its_bottom_without_changing_compact_modes() -> (
   None
 ):
@@ -1459,7 +1386,6 @@ def test_stretched_report_picker_pads_its_bottom_without_changing_compact_modes(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1506,10 +1432,6 @@ def test_stretched_report_picker_pads_its_bottom_without_changing_compact_modes(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 @pytest.mark.parametrize("motion", ["reduce", "no-preference"])
 def test_report_loading_bar_respects_reduced_motion(motion: str) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
@@ -1522,7 +1444,6 @@ def test_report_loading_bar_respects_reduced_motion(motion: str) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1552,10 +1473,6 @@ def test_report_loading_bar_respects_reduced_motion(motion: str) -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 @pytest.mark.parametrize("fail", [False, True])
 @pytest.mark.parametrize("width", [390, 1200])
 @pytest.mark.parametrize("change_selection", [False, True])
@@ -1575,7 +1492,6 @@ def test_report_dismissal_is_immediate_and_preserves_new_selection(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1635,10 +1551,6 @@ def test_report_dismissal_is_immediate_and_preserves_new_selection(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"),
-  reason="Set CHROMIUM_BIN for the extracted browser",
-)
 def test_lost_report_dismissal_response_reconciles_server_state() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1650,7 +1562,6 @@ def test_lost_report_dismissal_response_reconciles_server_state() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1728,9 +1639,6 @@ def test_each_option_field_needs_a_default_without_changing_saved_answers(
   store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("CHROMIUM_BIN"), reason="Set CHROMIUM_BIN for browser tests"
-)
 def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
   tmp_path: Path,
 ) -> None:
@@ -1748,7 +1656,6 @@ def test_report_keyboard_viewport_offset_keeps_shell_at_visible_bottom(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["CHROMIUM_BIN"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )

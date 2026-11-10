@@ -13,7 +13,7 @@ if [ ! -f "$pkg/build/index.js" ] || ! node -e \
   npm --prefix "$root" install --no-audit --no-fund "@sparticuz/chromium@$version" >&2
 fi
 mkdir -p "$root/runtime/$version"
-TMPDIR="$root/runtime/$version" CHROMIUM_PACKAGE="$pkg" node --input-type=module <<'NODE'
+paths=$(TMPDIR="$root/runtime/$version" CHROMIUM_PACKAGE="$pkg" node --input-type=module <<'NODE'
 import { access, constants } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -33,7 +33,63 @@ await Promise.all([
   access(lib, constants.R_OK),
   access(fonts, constants.R_OK),
 ]);
-console.log(`CHROMIUM_BIN=${executable}`);
-console.log(`CHROMIUM_LIB=${lib}`);
-console.log(`CHROMIUM_FONTS=${fonts}`);
+console.log(executable);
+console.log(lib);
+console.log(fonts);
 NODE
+)
+bin=$(printf '%s\n' "$paths" | sed -n 1p)
+lib=$(printf '%s\n' "$paths" | sed -n 2p)
+fonts=$(printf '%s\n' "$paths" | sed -n 3p)
+
+conf="$root/fonts.conf"
+printf '%s\n' \
+  '<?xml version="1.0"?>' \
+  '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
+  '<fontconfig>' \
+  "  <dir>$fonts/fonts</dir>" \
+  "  <cachedir>$root/fonts-cache</cachedir>" \
+  '</fontconfig>' >"$conf"
+
+launcher="$root/chromium-launcher"
+printf '%s\n' \
+  '#!/bin/sh' \
+  "LD_LIBRARY_PATH=$lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}" \
+  "FONTCONFIG_FILE=$conf" \
+  "FONTCONFIG_PATH=$root" \
+  'export LD_LIBRARY_PATH FONTCONFIG_FILE FONTCONFIG_PATH' \
+  "exec '$bin' \"\$@\"" >"$launcher"
+chmod 755 "$launcher"
+
+targets=$(python3 - <<'PY'
+import sys
+from pathlib import Path
+
+try:
+  from playwright.sync_api import sync_playwright
+except ImportError:
+  raise SystemExit(0)
+
+with sync_playwright() as pw:
+  browser = Path(pw.chromium.executable_path)
+print(browser)
+root = next((p for p in browser.parents if p.name.startswith("chromium-")), None)
+if root is not None:
+  shell = root.name.replace("chromium-", "chromium_headless_shell-")
+  print(root.parent / shell / "chrome-headless-shell-linux64" / "chrome-headless-shell")
+  print(root.parent / shell / "chrome-headless-shell-mac-arm64" / "chrome-headless-shell")
+PY
+)
+
+bin=""
+for target in $targets; do
+  mkdir -p "$(dirname "$target")"
+  ln -sfn "$launcher" "$target"
+  if [ -z "$bin" ]; then
+    bin=$target
+  fi
+done
+
+echo "CHROMIUM_BIN=$bin"
+echo "CHROMIUM_LIB=$lib"
+echo "CHROMIUM_FONTS=$fonts"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import os
 import struct
 import subprocess
 import threading
@@ -116,10 +115,6 @@ def test_multi_message_reply_assets() -> None:
   assert ".parent-id-button" in style_css
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 900])
 def test_composer_hint_stays_on_one_line_without_fading_or_changing_draft(
   tmp_path: Path, width: int
@@ -135,7 +130,6 @@ def test_composer_hint_stays_on_one_line_without_fading_or_changing_draft(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -521,10 +515,6 @@ assert.equal(stage.firstElementChild, null);
   assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
   tmp_path: Path, width: int
@@ -581,7 +571,6 @@ def test_message_image_attachment_uses_existing_modal_and_keeps_other_files(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -741,10 +730,6 @@ assert.equal(context.messageMatchesQuery(message, 'zzz'), false);
   assert "searchBase = { query: activeQuery, messages: merged, hasMore }" in app_js
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 def test_displayed_ids_choose_typed_composer_parents(
   width: int, tmp_path: Path
@@ -765,7 +750,6 @@ def test_displayed_ids_choose_typed_composer_parents(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -777,7 +761,8 @@ def test_displayed_ids_choose_typed_composer_parents(
         assert "task-parent" not in task_row.inner_text()
         task_title = task_row.locator('button.task-title[data-parent-type="task"]')
         task_title.hover()
-        assert page.get_by_role("tooltip").filter(has_text="task-parent").is_visible()
+        tip = page.get_by_role("tooltip").filter(has_text="task-parent")
+        tip.wait_for(state="visible")
         page.evaluate("""() => {
           for (const [id, top] of [['tip-top', 2], ['tip-middle', 300], ['tip-bottom', 790]]) {
             const button = document.createElement('button');
@@ -795,7 +780,7 @@ def test_displayed_ids_choose_typed_composer_parents(
           button = page.locator(f"#{button_id}")
           button.hover()
           tooltip = page.locator("#arena-title-tooltip")
-          assert tooltip.is_visible()
+          tooltip.wait_for(state="visible")
           button_box, tip_box = button.bounding_box(), tooltip.bounding_box()
           assert button_box and tip_box
           if above:
@@ -918,10 +903,6 @@ def test_displayed_ids_choose_typed_composer_parents(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width,height", [(390, 844), (1200, 700)])
 def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
   width: int, height: int, tmp_path: Path
@@ -941,7 +922,6 @@ def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1015,10 +995,6 @@ def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width,height", [(390, 844), (1200, 700)])
 def test_message_content_growth_preserves_bottom_pin(
   tmp_path: Path, width: int, height: int
@@ -1036,7 +1012,6 @@ def test_message_content_growth_preserves_bottom_pin(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1075,10 +1050,6 @@ def test_message_content_growth_preserves_bottom_pin(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize(
   ("wait_for_poll", "gesture"),
   [(False, "wheel"), (True, "wheel"), (False, "scrollbar"), (False, "touch")],
@@ -1104,7 +1075,6 @@ def test_messages_keep_scroll_target_while_older_page_loads(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
         ignore_default_args=["--hide-scrollbars"],
@@ -1274,10 +1244,6 @@ def test_messages_keep_scroll_target_while_older_page_loads(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_message_search_can_page_while_an_old_query_is_loading() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1294,7 +1260,6 @@ def test_message_search_can_page_while_an_old_query_is_loading() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1357,10 +1322,6 @@ def test_message_search_can_page_while_an_old_query_is_loading() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1377,7 +1338,6 @@ def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1426,10 +1386,6 @@ def test_message_page_error_keeps_scroll_target_and_can_retry() -> None:
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("width", [390, 1200])
 @pytest.mark.parametrize("transport", ["ws", "poll"])
 def test_seen_reply_receipt_keeps_message_height(
@@ -1457,7 +1413,6 @@ def test_seen_reply_receipt_keeps_message_height(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1539,10 +1494,6 @@ def test_seen_reply_receipt_keeps_message_height(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 @pytest.mark.parametrize("motion", ["no-preference", "reduce"])
 def test_message_reference_highlights_bubble_not_row(
   tmp_path: Path, motion: str
@@ -1558,7 +1509,6 @@ def test_message_reference_highlights_bubble_not_row(
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
@@ -1594,10 +1544,6 @@ def test_message_reference_highlights_bubble_not_row(
     store.close()
 
 
-@pytest.mark.skipif(
-  not os.environ.get("ARENA_STEERING_CHROMIUM"),
-  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
-)
 def test_hidden_messages_are_cached_across_toggles(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()
@@ -1610,7 +1556,6 @@ def test_hidden_messages_are_cached_across_toggles(tmp_path: Path) -> None:
   try:
     with playwright.sync_playwright() as runner:
       browser = runner.chromium.launch(
-        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
       )
