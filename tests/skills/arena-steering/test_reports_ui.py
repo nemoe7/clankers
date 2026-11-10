@@ -352,9 +352,9 @@ def test_answer_request_lookup_matches_report_and_committed_request() -> None:
     {"values": {"choice": "B"}, "_request_id": request_id},
   )
   assert status == 201
-  assert app.dispatch(
-    "GET", f"/reports/decision/answer-requests/{request_id}"
-  )[1] == {"answer_id": result["answer"]["id"]}
+  assert app.dispatch("GET", f"/reports/decision/answer-requests/{request_id}")[1] == {
+    "answer_id": result["answer"]["id"]
+  }
   assert app.dispatch("GET", f"/reports/other/answer-requests/{request_id}")[1] == {
     "answer_id": None
   }
