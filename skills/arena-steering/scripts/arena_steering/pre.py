@@ -935,8 +935,8 @@ def _line_commands(ctx: PreContext, *, unwrap_timeout: bool = False) -> list[lis
 
 LIVE_RUN_LOG_VIOLATION = (
   "VIOLATION: Repeated read of live-run logs. Create a worktree associated "
-  "with the next upcoming task using `steer worktree add <name>`; see "
-  "`ARENA.md:192`. The live run will send its verdict in the inbox."
+  "with the next upcoming task using `steer worktree add <name>`. The live "
+  "run will send its verdict in the inbox."
 )
 
 

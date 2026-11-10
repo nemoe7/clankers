@@ -613,7 +613,7 @@ def test_pre_flags_second_live_run_log_read_in_a_mixed_line() -> None:
   notice = " ".join(result.messages)
   assert "Create a worktree associated with the next upcoming task" in notice
   assert "steer worktree add <name>" in notice
-  assert "ARENA.md:192" in notice
+  assert "ARENA.md" not in notice
   assert "The live run will send its verdict in the inbox." in notice
 
 
@@ -657,7 +657,7 @@ def test_cli_tracks_live_run_log_reads_until_each_run_finishes(tmp_path: Path) -
       in out
     )
     assert "steer worktree add <name>" in out
-    assert "ARENA.md:192" in out
+    assert "ARENA.md:192" not in out
     assert "The live run will send its verdict in the inbox." in out  # nonemo: NMT100
     flags = [
       message

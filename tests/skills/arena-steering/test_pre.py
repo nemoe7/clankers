@@ -3735,7 +3735,7 @@ def test_live_run_log_guard_blocks_second_read_in_mixed_line() -> None:
   text = " ".join(result.messages)
   assert "Create a worktree associated with the next upcoming task" in text
   assert "steer worktree add <name>" in text
-  assert "ARENA.md:192" in text
+  assert "ARENA.md" not in text
   assert "The live run will send its verdict in the inbox." in text
 
 
