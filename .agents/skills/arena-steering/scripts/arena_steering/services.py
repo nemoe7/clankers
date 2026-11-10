@@ -83,6 +83,18 @@ _BIBLE_PATHS = (
 TOOL_NAME_META = "last_tool_name"
 TOOL_AT_META = "last_tool_at"
 TOOL_PROBE_NAMES = frozenset({"read", "edit", "write", "bash"})
+# Named steer and git calls that the Messages timeline shows beside the native tools.
+ACTIVITY_LABELS = {
+  "commit": "Commit",
+  "push": "Push",
+  "inbox": "Inbox",
+  "run": "Run",
+  "task": "Task",
+  "task-mod": "M Task",
+  "task-finish": "F Task",
+  "pub": "Pub",
+}
+ACTIVITY_NAMES = frozenset(ACTIVITY_LABELS)
 ENTITY_ID_MAX_LEN = 64
 
 
@@ -607,9 +619,7 @@ class MessageService:
     """Return IDs of every unread message, blocking or not, without marking anything seen."""
     return [
       message.id
-      for message in self._messages.list_messages(
-        unread_only=True, include_hidden=True
-      )
+      for message in self._messages.list_messages(unread_only=True, include_hidden=True)
       if message.type != "report_answer"
     ]
 
@@ -682,7 +692,7 @@ class MessageService:
 
   def record_tool(self, name: str) -> None:
     """Record one agent tool without letting platform probes replace its cadence."""
-    if name not in TOOL_PROBE_NAMES:
+    if name not in TOOL_PROBE_NAMES | ACTIVITY_NAMES:
       raise ValueError(f"Unknown tool name: {name}")
     stamp = self._clock.now_iso()
     with self._reports.transaction():
@@ -695,7 +705,7 @@ class MessageService:
     """Return the last agent tool in the shared state shape."""
     name = self._meta.get_meta(TOOL_NAME_META)
     stamp = self._meta.get_meta(TOOL_AT_META, "") or ""
-    if name not in TOOL_PROBE_NAMES or not stamp:
+    if name not in TOOL_PROBE_NAMES | ACTIVITY_NAMES or not stamp:
       return None
     return {"tool": str(name), "at": stamp}
 

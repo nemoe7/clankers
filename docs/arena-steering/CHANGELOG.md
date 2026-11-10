@@ -9,6 +9,7 @@ This log has no Unreleased section.
 ### Added
 
 - Repeat the unpushed-commit reminder on every gated call while local commits sit ahead of the remote branch.
+- Show Commit, Push, Inbox, Run, Task, M Task, F Task, and Pub on the Messages timeline beside the native tool stamp.
 
 ### Changed
 

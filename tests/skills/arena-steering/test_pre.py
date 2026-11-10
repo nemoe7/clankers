@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from arena_steering import cli, git_safety, pre
+from arena_steering import cli, git_safety, pre, services
 from arena_steering.cli import main as cli_main
 from arena_steering.server import scripts_signature
 from arena_steering.services import BIBLE_READ, VIOLATION_ACK, with_bible_read
@@ -4319,3 +4319,41 @@ def test_retired_cli_names_do_not_receive_steer_guards(
 ) -> None:
   context = pre.PreContext(line=command.format(executable=executable))
   assert guard.applies(context) == (executable == "steer")
+
+
+def test_command_activity_names_timeline_labels() -> None:
+  cases = {
+    "git commit -m x": "commit",
+    "git push origin main": "push",
+    "steer read": "inbox",
+    "steer run start -t task gate -- ls": "run",
+    "steer tasks": "task",
+    "steer task mod x deets y -z 1": "task-mod",
+    "steer task finish x -c abc": "task-finish",
+    "steer task x": "task",
+    "steer ren x y": "task",
+    "steer report pub source.md -i id -t Title": "pub",
+    "steer ack aa0001 ok": "",
+    "ls": "",
+  }
+  for line, expected in cases.items():
+    assert pre.command_activity(line, line) == expected, line
+
+
+def test_timeline_activity_replaces_the_native_tool_label(_isolate_state: Path) -> None:
+  _seed(_isolate_state, "Acked.", acked=True)
+  code, output = _run("pre", "-l", "steer tasks", "-c", "steer tasks", "-s", "bash")
+  assert code == pre.CONTINUE, output
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  assert messages.tool_activity()["tool"] == "task"
+  store.close()
+
+
+def test_recorded_activity_labels_reach_the_messages_tab(_isolate_state: Path) -> None:
+  store, messages, _, _ = cli.open_services(_isolate_state)
+  for name in sorted(services.ACTIVITY_NAMES):
+    messages.record_tool(name)
+    assert messages.tool_activity()["tool"] == name
+  with pytest.raises(ValueError):
+    messages.record_tool("nope")
+  store.close()

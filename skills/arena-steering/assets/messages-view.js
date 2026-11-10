@@ -27,7 +27,20 @@ import {
 
 const AGENT_QUIET_MS = 180_000;
 const AGENT_CALL_MS = 1_920_000;
-const TOOL_LABELS = { read: "Read", edit: "Edit", write: "Write", bash: "Bash" };
+const TOOL_LABELS = {
+  read: "Read",
+  edit: "Edit",
+  write: "Write",
+  bash: "Bash",
+  commit: "Commit",
+  push: "Push",
+  inbox: "Inbox",
+  run: "Run",
+  task: "Task",
+  "task-mod": "M Task",
+  "task-finish": "F Task",
+  pub: "Pub",
+};
 
 function connectionStamp(value) {
   if (typeof value !== "string" || !value) return null;

@@ -1324,7 +1324,9 @@ def _run_pre(
     # the steps that already ran.
     print(f'_steer_done="{" ".join(result.done)}"', file=out)
   if not routed and not ctx.is_inbox_recovery():
-    tool_name = pre_mod.native_tool_name(
+    tool_name = pre_mod.command_activity(
+      ctx.line, ctx.command
+    ) or pre_mod.native_tool_name(
       ctx.line, ctx.command, ctx.shell, checkout_root=ctx.checkout_root
     )
     if tool_name:

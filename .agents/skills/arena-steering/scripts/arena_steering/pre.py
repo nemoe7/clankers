@@ -539,6 +539,40 @@ def arena_maintenance_step(
   return False
 
 
+TASK_SUBCOMMANDS = frozenset({"task", "tasks", "ren"})
+
+
+def command_activity(line: str, command: str) -> str:
+  """Name a steer or git command for the Messages timeline, or return an empty string."""
+  text = shell_line(command or line).strip()
+  if not text:
+    return ""
+  try:
+    words = shlex.split(text)
+  except ValueError:
+    return ""
+  if not words:
+    return ""
+  head, args = Path(words[0]).name, words[1:]
+  if head == "git":
+    if "push" in args:
+      return "push"
+    return "commit" if "commit" in args else ""
+  if head != "steer" or not args:
+    return ""
+  verb = args[0]
+  if verb == "read":
+    return "inbox"
+  if verb == "run":
+    return "run"
+  if verb in TASK_SUBCOMMANDS:
+    action = args[1] if verb == "task" and len(args) > 1 else ""
+    return {"mod": "task-mod", "finish": "task-finish"}.get(action, "task")
+  if verb == "report" and args[1:2] == ["pub"]:
+    return "pub"
+  return ""
+
+
 def native_tool_name(
   line: str, command: str, shell: str, *, checkout_root: Path | None = None
 ) -> str:
