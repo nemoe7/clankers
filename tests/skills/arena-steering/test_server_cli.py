@@ -6159,6 +6159,17 @@ def test_task_finish_warns_when_a_higher_priority_task_waits(tmp_path: Path) -> 
   assert "Warning: high (P1) outranks the finished task." in lines
 
 
+def test_task_finish_names_no_task_when_the_queue_empties(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("solo", "Solo", size=3, details=["One."], type="ops")
+  store.close()
+  code, out, error = _run_cli(state_dir, "task", "finish", "solo")
+  assert code == 0, error
+  assert "Next task:" not in out
+  assert "outranks" not in out
+
+
 def test_poll_flags_a_queue_with_several_tasks(tmp_path: Path) -> None:
   state_dir = tmp_path / "arena-state"
   store, messages, tasks, _ = cli.open_services(state_dir)
