@@ -938,6 +938,8 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "getHealthWithConnection" in intervals[0]
   assert "refreshAll" not in intervals[0]
   assert "listTasks" not in intervals[0]
+  # The message fetch races the health fetch, so a stale window must refetch.
+  assert "health.message_revision !== loadedMessageRevision" in app_js
 
   markdown_js = (ASSETS_DIR / "markdown.js").read_text(encoding="utf-8")
   assert "const renderList = () =>" in markdown_js

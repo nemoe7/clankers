@@ -571,12 +571,20 @@ async function refreshAll(force = false) {
   try {
     const curState = store.getState();
     const currentReportEpoch = reportEpoch;
-    const [health, msgRes, taskRes, repRes] = await Promise.all([
+    const [health, firstMsgRes, taskRes, repRes] = await Promise.all([
       getHealthWithConnection(),
       fetchMessagePage(),
       api.listTasks({ full: true }),
       api.listReports({ stale: false, summary: true }),
     ]);
+    // The fetch races the health fetch, so refetch when this poll reports a
+    // newer revision than the rendered window.
+    const msgRes =
+      health.message_revision &&
+      loadedMessageRevision &&
+      health.message_revision !== loadedMessageRevision
+        ? await fetchMessagePage()
+        : firstMsgRes;
     if (epoch !== refreshEpoch || msgRes === null) return;
     if (health.asset_version) {
       if (knownAssetVersion && knownAssetVersion !== health.asset_version) {
