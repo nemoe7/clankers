@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -813,6 +814,80 @@ def test_report_views_from_two_browser_tabs_refresh_the_same_lease(
             page.locator("#tab-reports").click()
           assert viewed.value.ok
         assert store.get_report("read-now").last_viewed_at
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("ARENA_STEERING_CHROMIUM"),
+  reason="Set ARENA_STEERING_CHROMIUM to run the browser regression",
+)
+def test_browser_signed_retry_reuses_token_after_lost_reply(tmp_path):
+  playwright = pytest.importorskip("playwright.sync_api")
+  now = [1_000_000.0]
+  store = SqliteStore(tmp_path / "state.sqlite3", retry_clock=lambda: now[0])
+  app = SteeringApp(store)
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["ARENA_STEERING_CHROMIUM"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{server.server_port}/health")
+        result = page.evaluate("""async () => {
+          const { api } = await import('/static/assets/api.js');
+          const originalFetch = window.fetch.bind(window);
+          const tokens = [];
+          let issued = 0;
+          window.fetch = async (path, options) => {
+            const response = await originalFetch(path, options);
+            if (path === '/browser-write-token') issued += 1;
+            if (path === '/messages' && options?.method === 'POST') {
+              tokens.push(JSON.parse(options.body)._request_id);
+              if (tokens.length === 1 && response.ok) throw new TypeError('Lost reply');
+            }
+            return response;
+          };
+          const response = await api.sendMessage({body: 'Exactly once'});
+          return {tokens, issued, id: response.message.id};
+        }""")
+        assert result["issued"] == 1
+        assert len(result["tokens"]) == 2
+        assert result["tokens"][0] == result["tokens"][1]
+        assert result["tokens"][0].startswith("v1_")
+        assert [message.id for message in store.list_messages()] == [result["id"]]
+        token = page.evaluate(
+          "async () => (await import('/static/assets/api.js')).api.newRequestId()"
+        )
+        from arena_steering.browser_retry import TOKEN_LIFETIME_SECONDS
+
+        now[0] += TOKEN_LIFETIME_SECONDS
+        error = page.evaluate(
+          """async token => {
+          const { api } = await import('/static/assets/api.js');
+          try {
+            await api.sendMessage({body: 'Must not execute', request_id: token});
+            return null;
+          } catch (error) {
+            return {status: error.status, message: error.message};
+          }
+        }""",
+          token,
+        )
+        assert error["status"] == 400
+        assert "expired" in error["message"]
+        assert [message.id for message in store.list_messages()] == [result["id"]]
       finally:
         browser.close()
   finally:

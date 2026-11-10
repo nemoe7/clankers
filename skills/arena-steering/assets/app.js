@@ -690,6 +690,20 @@ let replySelectionRevision = 0;
 let reportSelectionRevision = 0;
 let confirmedReportId = null;
 let referenceNavigationRevision = 0;
+const PENDING_MESSAGE_RETRY_KEY = "steer:pendingSend";
+let pendingMessageRetry = null;
+try {
+  const saved = sessionStorage.getItem(PENDING_MESSAGE_RETRY_KEY);
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    if (typeof parsed?.payloadKey !== "string" || typeof parsed?.request?.request_id !== "string") {
+      throw new Error("Invalid pending message recovery data");
+    }
+    pendingMessageRetry = parsed;
+  }
+} catch {
+  pendingMessageRetry = { payloadKey: null };
+}
 
 const handlers = {
   onRenderDraft(markdown) {
@@ -697,7 +711,13 @@ const handlers = {
   },
   async onSendMessage(payload) {
     if (store.getState().sending) throw new Error("A send is already in progress");
-    const requestId = crypto.randomUUID();
+    const payloadKey = JSON.stringify(payload);
+    if (pendingMessageRetry && pendingMessageRetry.payloadKey !== payloadKey) {
+      const error = new Error("Resolve the previous message before sending a different one.");
+      store.setState({ composerError: error.message });
+      throw error;
+    }
+    const pendingId = `pending-${crypto.randomUUID()}`;
     // A page requested before this send cannot reconcile its optimistic row.
     messageEpoch += 1;
     const selectedRefs = store.getState().replyParentRefs || [];
@@ -705,7 +725,7 @@ const handlers = {
     const selectedRevision = replySelectionRevision;
     const staged = store.getState().composerAttachments || [];
     const optimisticMessage = {
-      id: `pending-${requestId}`, requestId, optimistic: true,
+      id: pendingId, requestId: null, optimistic: true,
       body: payload.body, parent_ids: payload.parent_ids || [], parent_refs: payload.parent_refs || [],
       attachments: (payload.attachmentIds || []).map(id => {
         const item = staged.find(entry => entry.id === id);
@@ -716,8 +736,11 @@ const handlers = {
     };
     store.setState({ sending: true, composerError: "", optimisticMessage, optimisticConfirmation: null, ...(clearRefs ? { replyParentRefs: [] } : {}) });
     try {
+      const requestId = pendingMessageRetry?.request.request_id || await api.newRequestId();
+      optimisticMessage.requestId = requestId;
+      store.setState({ optimisticMessage: { ...optimisticMessage } });
       const attachmentIds = payload.attachmentIds || [];
-      const attachments = await composerUploads.readyForSend(attachmentIds);
+      const attachments = pendingMessageRetry?.request.attachments || await composerUploads.readyForSend(attachmentIds);
       const parentRefs = payload.parent_refs || [];
       const request = {
         body: payload.body,
@@ -728,6 +751,9 @@ const handlers = {
         request_id: requestId,
       };
       if (parentRefs.length) request.parent_refs = parentRefs;
+      const pending = { payloadKey, request };
+      sessionStorage.setItem(PENDING_MESSAGE_RETRY_KEY, JSON.stringify(pending));
+      pendingMessageRetry = pending;
       let response;
       if (request.attachments.length) {
         response = await api.sendMessageWithFile(request);
@@ -735,6 +761,8 @@ const handlers = {
       } else {
         response = await api.sendMessage(request);
       }
+      sessionStorage.removeItem(PENDING_MESSAGE_RETRY_KEY);
+      pendingMessageRetry = null;
       // Ignore page responses started before this confirmed send.
       messageEpoch += 1;
       const current = store.getState();
@@ -745,7 +773,7 @@ const handlers = {
       const messages = confirmed && messageMatchesQuery(confirmed, current.searchQuery) && !confirmed.hidden
         ? [...(current.messages || []).filter(item => item.id !== confirmed.id), confirmed]
         : current.messages;
-      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false });
+      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false, composerError: response.reconciliation_error ? "Message sent, but its current state could not be loaded." : null });
     } catch (error) {
       const restoreRefs = clearRefs && replySelectionRevision === selectedRevision;
       store.setState({ sending: false, optimisticMessage: null, composerError: String(error.message || error), ...(restoreRefs ? { replyParentRefs: selectedRefs } : {}) });

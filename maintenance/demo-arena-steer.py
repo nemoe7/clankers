@@ -289,7 +289,8 @@ def _reseed_demo_store(store: SqliteStore) -> SteeringApp:
   conn.execute("DELETE FROM reports")
   conn.execute("DELETE FROM meta")
   conn.execute("DELETE FROM message_requests")
-  conn.execute("DELETE FROM browser_write_requests")
+  conn.execute("DELETE FROM browser_write_receipts")
+  conn.execute("DELETE FROM browser_retry_meta")
 
   _write_demo_media_files(store)
 

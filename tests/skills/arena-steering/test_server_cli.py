@@ -1787,7 +1787,6 @@ def test_router_round_trips_typed_parents_and_child_read() -> None:
       "body": "Child",
       "parent_refs": refs,
       "parent_ids": ["aa1001"],
-      "request_id": "typed-parent-1",
     },
   )
   assert status == int(HTTPStatus.CREATED)
@@ -3578,7 +3577,8 @@ def test_message_request_id_is_atomic_and_survives_restart(tmp_path: Path) -> No
   stores = [SqliteStore(path), SqliteStore(path)]
   apps = [SteeringApp(store) for store in stores]
   barrier = Barrier(2)
-  body = {"body": "Retry safely", "request_id": "request-1"}
+  token = stores[0].issue_browser_write_token()
+  body = {"body": "Retry safely", "request_id": token, "_request_id": token}
 
   def send(app: SteeringApp) -> tuple[int, dict]:
     barrier.wait()
@@ -3597,14 +3597,16 @@ def test_message_request_id_is_atomic_and_survives_restart(tmp_path: Path) -> No
   app = SteeringApp(store)
   status, result = app.dispatch("POST", "/messages", body)
   assert status == HTTPStatus.CREATED and result["message"]["id"] in ids
-  status, page = app.dispatch("GET", "/messages?all=1&request_id=request-1")
+  status, page = app.dispatch("GET", f"/messages?all=1&request_id={token}")
   assert status == HTTPStatus.OK and page["pending_message_id"] in ids
   status, page = app.dispatch("GET", "/messages?all=1&request_id=unknown")
   assert status == HTTPStatus.OK and page["pending_message_id"] is None
   status, _ = app.dispatch("GET", "/messages?request_id=bad%20id")
   assert status == HTTPStatus.BAD_REQUEST
   status, _ = app.dispatch(
-    "POST", "/messages", {"body": "Different content", "request_id": "request-1"}
+    "POST",
+    "/messages",
+    {"body": "Different content", "request_id": token, "_request_id": token},
   )
   assert status == HTTPStatus.BAD_REQUEST
   status, _ = app.dispatch("POST", "/messages", {"body": "Bad", "request_id": "bad id"})
@@ -3617,9 +3619,11 @@ def test_message_request_id_is_atomic_and_survives_restart(tmp_path: Path) -> No
 def test_attachment_message_retry_uses_original_message(tmp_path: Path) -> None:
   store = SqliteStore(tmp_path / "attachment-requests.sqlite3")
   app = SteeringApp(store)
+  token = store.issue_browser_write_token()
   payload = {
     "body": "Attachment retry",
-    "request_id": "attachment-request",
+    "request_id": token,
+    "_request_id": token,
     "attachments": [{"name": "note.txt", "path": "uploads/note.txt", "size_bytes": 3}],
   }
   first_status, first = app.dispatch("POST", "/messages/with-file", payload)
@@ -4415,7 +4419,10 @@ def test_browser_write_replay_survives_restart(tmp_path: Path) -> None:
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
-  request = {"_request_id": "action-001", "values": {"choice": "Yes"}}
+  request = {
+    "_request_id": store.issue_browser_write_token(),
+    "values": {"choice": "Yes"},
+  }
   first = app.dispatch("POST", "/reports/retry-report/answers", request)
   assert first[0] == HTTPStatus.CREATED
   store.close()
@@ -4427,7 +4434,7 @@ def test_browser_write_replay_survives_restart(tmp_path: Path) -> None:
     item for item in store.list_messages() if item.type == "report_answer"
   ]
   assert [item.id for item in answer_messages] == [first[1]["answer"]["id"]]
-  changed = {"_request_id": "action-001", "values": {"choice": "No"}}
+  changed = {"_request_id": request["_request_id"], "values": {"choice": "No"}}
   assert (
     app.dispatch("POST", "/reports/retry-report/answers", changed)[0]
     == HTTPStatus.BAD_REQUEST
@@ -4453,6 +4460,7 @@ def test_browser_write_replay_concurrent(tmp_path: Path) -> None:
       '- ( ) No <!-- option {"label": "No"} -->\n'
     ),
   )
+  token = store.issue_browser_write_token()
   store.close()
   barrier = Barrier(2)
 
@@ -4464,7 +4472,7 @@ def test_browser_write_replay_concurrent(tmp_path: Path) -> None:
       "POST",
       "/reports/retry-report/answers",
       {
-        "_request_id": "action-001",
+        "_request_id": token,
         "values": {"choice": "Yes"},
       },
     )
@@ -4486,7 +4494,7 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
   store = SqliteStore(db_path)
   app = SteeringApp(store)
   request = {
-    "_request_id": "upload-001",
+    "_request_id": store.issue_browser_write_token(),
     "file": {"name": "sample.txt", "text": "hello"},
   }
   first = app.dispatch("POST", "/uploads", request)
@@ -4509,7 +4517,7 @@ def test_browser_upload_replay_and_orphan_cleanup(tmp_path: Path) -> None:
     "POST",
     "/uploads",
     {
-      "_request_id": "long-upload",
+      "_request_id": store.issue_browser_write_token(),
       "file": {"name": long_name, "text": "long name"},
     },
   )
@@ -6128,7 +6136,11 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   _, staged_named = app.dispatch(
     "POST",
     "/uploads",
-    {"name": "diagram.png", "content_base64": png_b64, "_request_id": "req-up-1"},
+    {
+      "name": "diagram.png",
+      "content_base64": png_b64,
+      "_request_id": store.issue_browser_write_token(),
+    },
   )
   assert staged_named["attachment"]["name"] == "diagram.png"
 
@@ -6140,7 +6152,7 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
       "name": "",
       "content_type": "image/png",
       "content_base64": png_b64,
-      "_request_id": "req-up-2",
+      "_request_id": store.issue_browser_write_token(),
     },
   )
   unnamed_name = staged_unnamed["attachment"]["name"]
@@ -6154,7 +6166,7 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
     {
       "name": "20-pasted-lines-1762507200123.txt",
       "text": pasted_lines,
-      "_request_id": "req-up-3",
+      "_request_id": store.issue_browser_write_token(),
     },
   )
   assert staged_paste["attachment"]["name"] == "20-pasted-lines-1762507200123.txt"
@@ -6369,3 +6381,173 @@ def test_poll_with_one_task_keeps_the_continue_line(tmp_path: Path) -> None:
   assert code == 0, error
   assert "Poll with" not in out
   assert "Only | only" in out
+
+
+def test_browser_retry_token_endpoint_has_no_action_effects():
+  store = SqliteStore()
+  app = SteeringApp(store)
+  before = store.export_rows()
+  status, result = app.dispatch("POST", "/browser-write-token", {})
+  assert status == HTTPStatus.CREATED
+  assert result["request_id"].startswith("v1_")
+  assert store.export_rows() == before
+  assert store.browser_write_ids() == []
+  token = result["request_id"]
+  request = {"_request_id": token, "body": "once"}
+  first = app.dispatch("POST", "/messages", request)
+  assert first[0] == HTTPStatus.CREATED
+  assert app.dispatch("POST", "/messages", request) == first
+  assert len(store.list_messages()) == 1
+  store.close()
+
+
+def test_browser_retry_capacity_http_response_is_retryable(monkeypatch):
+  from arena_steering import browser_retry
+
+  monkeypatch.setattr(browser_retry, "RECEIPT_LIMIT", 0)
+  store = SqliteStore()
+  app = SteeringApp(store)
+  token = store.issue_browser_write_token()
+  status, result = app.dispatch(
+    "POST", "/messages", {"_request_id": token, "body": "blocked"}
+  )
+  assert status == HTTPStatus.SERVICE_UNAVAILABLE
+  assert result["retryable"] is True
+  assert store.list_messages() == []
+  store.close()
+
+
+def test_browser_retry_expired_receipt_keeps_report_attachment(tmp_path):
+  from arena_steering import browser_retry
+
+  now = [1000.0]
+  path = tmp_path / "retry.sqlite3"
+  store = SqliteStore(path, retry_clock=lambda: now[0])
+  app = SteeringApp(store)
+  token = store.issue_browser_write_token()
+  status, result = app.dispatch(
+    "POST",
+    "/uploads",
+    {"_request_id": token, "file": {"name": "keep.txt", "text": "keep"}},
+  )
+  assert status == HTTPStatus.CREATED
+  attachment_path = Path(result["attachment"]["path"])
+  app.reports.publish_report(
+    "kept-file", "Kept file", f"[Attachment]({attachment_path})"
+  )
+  assert attachment_path.exists()
+  now[0] += browser_retry.TOKEN_LIFETIME_SECONDS
+  store.cleanup_browser_write_receipts()
+  assert store.browser_write_ids() == []
+  store.close()
+  store = SqliteStore(path, retry_clock=lambda: now[0])
+  SteeringApp(store)
+  assert attachment_path.read_text(encoding="utf-8") == "keep"
+  store.close()
+
+
+def test_browser_retry_oversized_upload_result_removes_uncommitted_file(
+  tmp_path, monkeypatch
+):
+  from arena_steering import browser_retry
+
+  monkeypatch.setattr(browser_retry, "RETAINED_BYTES_LIMIT", 1)
+  store = SqliteStore(tmp_path / "retry.sqlite3")
+  app = SteeringApp(store)
+  token = store.issue_browser_write_token()
+  status, _ = app.dispatch(
+    "POST",
+    "/uploads",
+    {"_request_id": token, "file": {"name": "rollback.txt", "text": "rollback"}},
+  )
+  assert status == HTTPStatus.SERVICE_UNAVAILABLE
+  assert list(app._uploads_dir().iterdir()) == []
+  assert store.browser_write_ids() == []
+  store.close()
+
+
+def test_browser_retry_message_receipt_is_compact_and_immutable(tmp_path):
+  store = SqliteStore(tmp_path / "compact.sqlite3")
+  app = SteeringApp(store)
+  token = store.issue_browser_write_token()
+  request = {"_request_id": token, "body": "long original content " * 200}
+  first = app.dispatch("POST", "/messages", request)
+  assert first[0] == HTTPStatus.CREATED
+  saved = first[1]["message"]
+  assert "id" in saved and "modified_at" in saved
+  assert "body" not in saved and "body_html" not in saved and "acks" not in saved
+  message = store.get_message(saved["id"])
+  message.body = "edited"
+  store.save_message(message)
+  assert app.dispatch("POST", "/messages", request) == first
+  with store._conn:
+    store._conn.execute("DELETE FROM messages WHERE id = ?", (saved["id"],))
+  assert app.dispatch("POST", "/messages", request) == first
+  store.close()
+
+
+def test_browser_retry_answer_receipt_omits_report_rendering(tmp_path):
+  store = SqliteStore(tmp_path / "compact.sqlite3")
+  app = SteeringApp(store)
+  app.reports.publish_report(
+    "compact-report",
+    "Compact",
+    (
+      '<!-- question {"id":"choice","label":"Response"} -->\nResponse:\n'
+      '- (x) Yes <!-- option {"label":"Yes"} -->\n'
+      '- ( ) No <!-- option {"label":"No"} -->\n\n' + "Long report. " * 1000
+    ),
+  )
+  token = store.issue_browser_write_token()
+  first = app.dispatch(
+    "POST",
+    "/reports/compact-report/answers",
+    {"_request_id": token, "values": {"choice": "Yes"}},
+  )
+  assert first[0] == HTTPStatus.CREATED
+  assert first[1]["report"]["id"] == "compact-report"
+  assert "body" not in first[1]["report"] and "blocks" not in first[1]["report"]
+  assert "answers" not in first[1]["report"]
+  assert "values" not in first[1]["answer"]
+  assert "id" in first[1]["answer"] and "created_at" in first[1]["answer"]
+  store.close()
+
+
+def test_legacy_message_retry_key_cannot_bypass_bounded_receipts(tmp_path):
+  store = SqliteStore(tmp_path / "bounded.sqlite3")
+  app = SteeringApp(store)
+  status, _result = app.dispatch(
+    "POST", "/messages", {"body": "No legacy key", "request_id": "legacy-key"}
+  )
+  assert status == HTTPStatus.BAD_REQUEST
+  assert not store.list_messages()
+  assert store.message_id_for_request("legacy-key") is None
+  store.close()
+
+
+def test_browser_retry_rejected_asset_push_preserves_existing_file(
+  tmp_path, monkeypatch
+):
+  import base64
+
+  from arena_steering import browser_retry
+
+  store = SqliteStore(tmp_path / "assets.sqlite3")
+  app = SteeringApp(store)
+  target = app._uploads_dir() / "saved.txt"
+  target.write_bytes(b"original")
+  token = store.issue_browser_write_token()
+  monkeypatch.setattr(browser_retry, "RETAINED_BYTES_LIMIT", 1)
+  status, _ = app.dispatch(
+    "POST",
+    "/state/assets",
+    {
+      "_request_id": token,
+      "path": "uploads/saved.txt",
+      "content": base64.b64encode(b"replacement").decode(),
+    },
+  )
+  assert status == HTTPStatus.SERVICE_UNAVAILABLE
+  assert target.read_bytes() == b"original"
+  assert store.browser_write_ids() == []
+  store.close()

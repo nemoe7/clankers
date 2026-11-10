@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -895,3 +896,203 @@ def test_older_schema_is_not_upgraded(tmp_path):
   with sqlite3.connect(path) as connection:
     columns = {row[1] for row in connection.execute("PRAGMA table_info(messages)")}
   assert columns == {"id", "body", "modified_at"}
+
+
+def test_browser_retry_token_survives_restart_and_replays_exact_result(tmp_path):
+  path = tmp_path / "retry.sqlite3"
+  with closing(SqliteStore(path)) as store:
+    token = store.issue_browser_write_token()
+    status, result = store.execute_browser_write_once(
+      token, "fingerprint", lambda: (201, {"id": "abc123"})
+    )
+    assert status == 201 and result == {"id": "abc123"}
+  with closing(SqliteStore(path)) as reopened:
+    assert reopened.execute_browser_write_once(
+      token, "fingerprint", lambda: pytest.fail("Replayed action executed again")
+    ) == (status, result)
+    with pytest.raises(ValueError):
+      reopened.execute_browser_write_once(
+        token, "changed", lambda: pytest.fail("Mismatched action executed")
+      )
+
+
+def test_browser_retry_expiry_survives_receipt_cleanup(tmp_path):
+  now = [1000.0]
+  with closing(
+    SqliteStore(tmp_path / "expiry.sqlite3", retry_clock=lambda: now[0])
+  ) as store:
+    token = store.issue_browser_write_token()
+    store.execute_browser_write_once(token, "fingerprint", lambda: (200, {"ok": True}))
+    now[0] += 24 * 60 * 60 + 1
+    store.cleanup_browser_write_receipts()
+    assert store.browser_write_ids() == []
+    with pytest.raises(ValueError):
+      store.execute_browser_write_once(
+        token, "fingerprint", lambda: pytest.fail("Expired action executed")
+      )
+
+
+def test_browser_retry_rejects_unsigned_and_wrong_generation_tokens():
+  with closing(SqliteStore()) as first, closing(SqliteStore()) as second:
+    token = first.issue_browser_write_token()
+    for candidate in ["unsigned", token]:
+      with pytest.raises(ValueError):
+        second.execute_browser_write_once(
+          candidate, "fingerprint", lambda: pytest.fail("Invalid token executed")
+        )
+
+
+def test_browser_retry_capacity_preserves_live_replay(monkeypatch):
+  from arena_steering import browser_retry
+
+  monkeypatch.setattr(browser_retry, "RECEIPT_LIMIT", 1)
+  with closing(SqliteStore()) as store:
+    first, second = store.issue_browser_write_token(), store.issue_browser_write_token()
+    result = (201, {"id": "abc123"})
+    store.execute_browser_write_once(first, "first", lambda: result)
+    with pytest.raises(browser_retry.RetryCapacityError):
+      store.execute_browser_write_once(
+        second, "second", lambda: pytest.fail("Capacity rejection executed an action")
+      )
+    assert (
+      store.execute_browser_write_once(
+        first, "first", lambda: pytest.fail("Replay executed an action")
+      )
+      == result
+    )
+    assert store.browser_write_ids() == [first]
+
+
+def test_browser_retry_oversized_result_rolls_back_action(monkeypatch):
+  from arena_steering import browser_retry
+
+  monkeypatch.setattr(browser_retry, "RETAINED_BYTES_LIMIT", 16)
+  with closing(SqliteStore()) as store:
+    token = store.issue_browser_write_token()
+
+    def action():
+      store.set_meta("action", "committed")
+      return 200, {"result": "x" * 32}
+
+    with pytest.raises(browser_retry.RetryCapacityError):
+      store.execute_browser_write_once(token, "oversized", action)
+    assert store.get_meta("action") is None
+    assert store.browser_write_ids() == []
+
+
+def test_browser_retry_failed_response_rolls_back_action():
+  with closing(SqliteStore()) as store:
+    token = store.issue_browser_write_token()
+
+    def action():
+      store.set_meta("action", "committed")
+      return 400, {"error": "rejected"}
+
+    assert store.execute_browser_write_once(token, "failed", action)[0] == 400
+    assert store.get_meta("action") is None
+    assert store.browser_write_ids() == []
+
+
+def test_browser_retry_clock_rollback_cannot_revive_expired_token(tmp_path):
+  from arena_steering import browser_retry
+
+  now = [1000.0]
+  path = tmp_path / "retry.sqlite3"
+  with closing(SqliteStore(path, retry_clock=lambda: now[0])) as store:
+    token = store.issue_browser_write_token()
+    now[0] += browser_retry.TOKEN_LIFETIME_SECONDS
+    with pytest.raises(ValueError, match="expired"):
+      store.execute_browser_write_once(
+        token, "expired", lambda: pytest.fail("Expired action")
+      )
+  now[0] = 1000.0
+  with (
+    closing(SqliteStore(path, retry_clock=lambda: now[0])) as store,
+    pytest.raises(ValueError, match="expired"),
+  ):
+    store.execute_browser_write_once(
+      token, "expired", lambda: pytest.fail("Revived action")
+    )
+
+
+def test_browser_retry_cleanup_is_bounded_and_preserves_live_receipts(monkeypatch):
+  from arena_steering import browser_retry
+
+  now = [1000.0]
+  monkeypatch.setattr(browser_retry, "CLEANUP_BATCH_SIZE", 1)
+  with closing(SqliteStore(retry_clock=lambda: now[0])) as store:
+    expired = []
+    for index in range(2):
+      token = store.issue_browser_write_token()
+      store.execute_browser_write_once(token, str(index), lambda: (200, {"ok": True}))
+      expired.append(token)
+    now[0] += browser_retry.TOKEN_LIFETIME_SECONDS - 1
+    live = store.issue_browser_write_token()
+    store.execute_browser_write_once(live, "live", lambda: (200, {"ok": True}))
+    now[0] += 1
+    store.cleanup_browser_write_receipts()
+    remaining = store.browser_write_ids()
+    assert live in remaining
+    assert len(set(expired) & set(remaining)) == 1
+    store.cleanup_browser_write_receipts()
+    assert store.browser_write_ids() == [live]
+
+
+def test_browser_retry_monotonic_time_accumulates_subsecond_calls(monkeypatch):
+  import arena_steering.store as store_module
+
+  monotonic = [0.0]
+  monkeypatch.setattr(store_module.time, "monotonic", lambda: monotonic[0])
+  with closing(SqliteStore(retry_clock=lambda: 1000.0)) as store:
+    for index in range(1, 7):
+      monotonic[0] = index / 4
+      observed = store._browser_retry_time()
+    assert observed >= 1001
+
+
+def test_browser_retry_expiring_during_admission_never_runs_action(monkeypatch):
+  from arena_steering import browser_retry
+
+  now = [1_000_000]
+  store = SqliteStore(retry_clock=lambda: now[0])
+  token = store.issue_browser_write_token()
+  cleanup = store._cleanup_browser_write_receipts
+
+  def expire_during_cleanup(timestamp):
+    cleanup(timestamp)
+    now[0] += browser_retry.TOKEN_LIFETIME_SECONDS
+
+  monkeypatch.setattr(store, "_cleanup_browser_write_receipts", expire_during_cleanup)
+  with pytest.raises(ValueError, match="expired"):
+    store.execute_browser_write_once(
+      token, "fingerprint", lambda: pytest.fail("Expired action ran")
+    )
+  store.close()
+
+
+def test_expiry_during_admission_persists_watermark_after_restart(
+  tmp_path, monkeypatch
+):
+  from arena_steering import browser_retry
+
+  now = [1_000_000]
+  path = tmp_path / "watermark.sqlite3"
+  store = SqliteStore(path, retry_clock=lambda: now[0])
+  token = store.issue_browser_write_token()
+  cleanup = store._cleanup_browser_write_receipts
+
+  def expire_during_cleanup(timestamp):
+    cleanup(timestamp)
+    now[0] += browser_retry.TOKEN_LIFETIME_SECONDS
+
+  monkeypatch.setattr(store, "_cleanup_browser_write_receipts", expire_during_cleanup)
+  with pytest.raises(ValueError, match="expired"):
+    store.execute_browser_write_once(token, "fingerprint", lambda: (201, {}))
+  store.close()
+  now[0] = 1_000_000
+  store = SqliteStore(path, retry_clock=lambda: now[0])
+  with pytest.raises(ValueError, match="expired"):
+    store.execute_browser_write_once(
+      token, "fingerprint", lambda: pytest.fail("Revived action")
+    )
+  store.close()

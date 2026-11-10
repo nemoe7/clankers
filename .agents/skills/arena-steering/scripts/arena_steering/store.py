@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import sqlite3
 import threading
 import time
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+from . import browser_retry
 from .models import (
   TASK_PRIORITIES,
   TASK_SIZES,
@@ -30,7 +32,7 @@ from .models import (
 )
 
 STATE_TABLES = ("messages", "tasks", "reports")
-SCHEMA_REVISION = 3  # Bump when current schema setup changes.
+SCHEMA_REVISION = 4  # Bump when current schema setup changes.
 _STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
@@ -73,7 +75,12 @@ def _advance_stamp(previous: str, proposed: str) -> str:
 class SqliteStore:
   """Thread-safe SQLite store for messages, tasks, reports, and metadata."""
 
-  def __init__(self, db_path: str | Path = ":memory:") -> None:
+  def __init__(
+    self,
+    db_path: str | Path = ":memory:",
+    *,
+    retry_clock: Callable[[], float] = time.time,
+  ) -> None:
     self.db_path = str(db_path)
     if self.db_path != ":memory:":
       Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -84,6 +91,9 @@ class SqliteStore:
       "casefold", 1, lambda value: str(value or "").casefold(), deterministic=True
     )
     self._init_schema()
+    self._retry_clock = retry_clock
+    self._retry_epoch = retry_clock()
+    self._retry_monotonic = time.monotonic()
 
   def _init_schema(self) -> None:
     with self._lock, self._conn:
@@ -178,11 +188,18 @@ class SqliteStore:
           message_id TEXT NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS browser_write_requests (
+        CREATE TABLE IF NOT EXISTS browser_write_receipts (
           request_id TEXT PRIMARY KEY,
           fingerprint TEXT NOT NULL,
           status INTEGER NOT NULL,
-          response_json TEXT NOT NULL
+          response_json TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          result_bytes INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS browser_receipt_expiry ON browser_write_receipts(expires_at);
+        CREATE TABLE IF NOT EXISTS browser_retry_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS meta (
@@ -294,7 +311,12 @@ class SqliteStore:
   def clear(self) -> None:
     """Clear database state while preserving the browser timezone."""
     with self._lock, self._conn:
-      for table in (*STATE_TABLES, "message_requests", "browser_write_requests"):
+      for table in (
+        *STATE_TABLES,
+        "message_requests",
+        "browser_write_receipts",
+        "browser_retry_meta",
+      ):
         self._conn.execute(f"DELETE FROM {table}")
       self._conn.execute("DELETE FROM state_row_versions")
       self._conn.execute("DELETE FROM meta WHERE key != 'timezone'")
@@ -343,28 +365,113 @@ class SqliteStore:
       else:
         self._conn.commit()
 
+  def _browser_retry_time(self) -> int:
+    with self.transaction():
+      monotonic = time.monotonic()
+      elapsed = max(0.0, monotonic - self._retry_monotonic)
+      epoch = max(self._retry_clock(), self._retry_epoch + elapsed)
+      observed = int(epoch)
+      row = self._conn.execute(
+        "SELECT value FROM browser_retry_meta WHERE key = 'observed_at'"
+      ).fetchone()
+      observed = max(observed, int(row[0]) if row else 0)
+      self._conn.execute(
+        "INSERT INTO browser_retry_meta VALUES ('observed_at', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (str(observed),),
+      )
+      self._retry_epoch, self._retry_monotonic = max(epoch, observed), monotonic
+      return observed
+
+  def _browser_retry_signing_state(self) -> tuple[bytes, str]:
+    for key, value in [
+      ("secret", secrets.token_hex(32)),
+      ("generation", secrets.token_hex(8)),
+    ]:
+      self._conn.execute(
+        "INSERT OR IGNORE INTO browser_retry_meta VALUES (?, ?)", (key, value)
+      )
+    values = dict(self._conn.execute("SELECT key, value FROM browser_retry_meta"))
+    return bytes.fromhex(values["secret"]), values["generation"]
+
+  def issue_browser_write_token(self) -> str:
+    now = self._browser_retry_time()
+    with self.transaction():
+      secret, generation = self._browser_retry_signing_state()
+      return browser_retry.issue_token(secret, generation, now)
+
+  def _cleanup_browser_write_receipts(self, now: int) -> None:
+    expired = [
+      row[0]
+      for row in self._conn.execute(
+        "SELECT request_id FROM browser_write_receipts WHERE expires_at <= ? "
+        "ORDER BY expires_at LIMIT ?",
+        (now, browser_retry.CLEANUP_BATCH_SIZE),
+      )
+    ]
+    self._conn.executemany(
+      "DELETE FROM message_requests WHERE request_id = ?", [(key,) for key in expired]
+    )
+    self._conn.executemany(
+      "DELETE FROM browser_write_receipts WHERE request_id = ?",
+      [(key,) for key in expired],
+    )
+
+  def cleanup_browser_write_receipts(self) -> None:
+    now = self._browser_retry_time()
+    with self.transaction():
+      self._cleanup_browser_write_receipts(now)
+
   def execute_browser_write_once(
     self,
     request_id: str,
     fingerprint: str,
     action: Callable[[], tuple[int, dict]],
   ) -> tuple[int, dict]:
-    """Commit a browser action and its replay result together."""
+    """Commit a browser action and its bounded replay result together."""
+    now = self._browser_retry_time()
     with self.transaction():
+      secret, generation = self._browser_retry_signing_state()
+      browser_retry.verify_token(request_id, secret, generation, now)
+      self._cleanup_browser_write_receipts(now)
+    with self.transaction():
+      secret, generation = self._browser_retry_signing_state()
+      token = browser_retry.verify_token(request_id, secret, generation, now)
       row = self._conn.execute(
-        "SELECT fingerprint, status, response_json FROM browser_write_requests WHERE request_id = ?",
+        "SELECT fingerprint, status, response_json FROM browser_write_receipts WHERE request_id = ?",
         (request_id,),
       ).fetchone()
       if row is not None:
         if row["fingerprint"] != fingerprint:
           raise ValueError("Request ID already used for a different action")
         return int(row["status"]), json.loads(row["response_json"])
-      status, response = action()
-      if 200 <= status < 300:
-        self._conn.execute(
-          "INSERT INTO browser_write_requests VALUES (?, ?, ?, ?)",
-          (request_id, fingerprint, status, json.dumps(response)),
+      count, retained = self._conn.execute(
+        "SELECT count(*), coalesce(sum(result_bytes), 0) FROM browser_write_receipts"
+      ).fetchone()
+      if (
+        count >= browser_retry.RECEIPT_LIMIT
+        or retained >= browser_retry.RETAINED_BYTES_LIMIT
+      ):
+        raise browser_retry.RetryCapacityError(
+          "Browser retry capacity exhausted; retry later"
         )
+      self._conn.execute("SAVEPOINT browser_write_action")
+      status, response = action()
+      if not 200 <= status < 300:
+        self._conn.execute("ROLLBACK TO browser_write_action")
+        self._conn.execute("RELEASE browser_write_action")
+        return status, response
+      encoded = json.dumps(response, ensure_ascii=False, separators=(",", ":"))
+      size = len(encoded.encode("utf-8"))
+      if retained + size > browser_retry.RETAINED_BYTES_LIMIT:
+        raise browser_retry.RetryCapacityError(
+          "Browser retry result exceeds retained-byte capacity"
+        )
+      self._conn.execute(
+        "INSERT INTO browser_write_receipts VALUES (?, ?, ?, ?, ?, ?)",
+        (request_id, fingerprint, status, encoded, token.expires_at, size),
+      )
+      self._conn.execute("RELEASE browser_write_action")
       return status, response
 
   def browser_write_ids(self) -> list[str]:
@@ -372,13 +479,13 @@ class SqliteStore:
     with self._lock:
       return [
         row[0]
-        for row in self._conn.execute("SELECT request_id FROM browser_write_requests")
+        for row in self._conn.execute("SELECT request_id FROM browser_write_receipts")
       ]
 
   def browser_write_result(self, request_id: str) -> dict | None:
     with self._lock:
       row = self._conn.execute(
-        "SELECT response_json FROM browser_write_requests WHERE request_id = ?",
+        "SELECT response_json FROM browser_write_receipts WHERE request_id = ?",
         (request_id,),
       ).fetchone()
     return json.loads(row["response_json"]) if row is not None else None
