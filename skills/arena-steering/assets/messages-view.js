@@ -429,7 +429,7 @@ export function renderMessagesView(container, state, handlers) {
                 ${markdownBatch.slot(msg.optimistic ? renderMarkdownBlock(msg.body) : (msg.body_html ?? '<p role="alert">Rendered message unavailable.</p>'), `message-text${bodyClass}`, query)}
                 ${acksHtml}
               </div>
-              ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
+              ${(acks.length || Boolean(msg.hidden && msg.body)) && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 ${tasksSuffix}
                 <time class="receipt-bottom receipt-status" role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" data-prefix="${statusText}" datetime="${iso}" data-timestamp="${iso}">${statusText ? `${statusText} ` : ""}${rel}</time>

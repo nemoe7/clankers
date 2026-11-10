@@ -379,6 +379,41 @@ for (const item of [hidden, seen, sent, acked]) {
   assert result.returncode == 0, result.stderr
 
 
+def test_hidden_reply_renders_a_seen_sentinel_without_an_ack() -> None:
+  script = r"""
+import assert from 'node:assert/strict';
+import { renderMessagesView } from './skills/arena-steering/assets/messages-view.js';
+globalThis.document = { activeElement: null };
+const container = {
+  innerHTML: '',
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+  addEventListener() {},
+};
+renderMessagesView(container, {
+  showHidden: true,
+  messages: [
+    {id: 'aa0001', body: 'Hidden reply', status: 'sent', hidden: true,
+     blocking: false, acks: [], replies_revision: 'rev-1'},
+  ],
+}, {});
+assert.match(
+  container.innerHTML,
+  /class="reply-seen-sentinel" data-reply-id="aa0001" data-revision="rev-1"/,
+  'a hidden reply must offer the seen sentinel without an ack',
+);
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=SKILL_DIR.parents[1],
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+
+
 def test_image_lightbox_assets() -> None:
   index = (ASSETS_DIR / "index.html").read_text(encoding="utf-8")
   app = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")

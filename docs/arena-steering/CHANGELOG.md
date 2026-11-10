@@ -9,6 +9,7 @@ This log has no Unreleased section.
 ### Added
 
 - Order a `report` phase first when the code waits on an approved report.
+- Offer the reply seen marker on a hidden reply that carries no acknowledgement.
 - Create a work message's task before starting the work it asks for.
 - Demand a full `read_file` read of every bible book in the quiz prompt when any book is absent from context.
 
