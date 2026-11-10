@@ -10,6 +10,7 @@ This log has no Unreleased section.
 
 - Order a `report` phase first when the code waits on an approved report.
 - Create a work message's task before starting the work it asks for.
+- Demand a full `read_file` read of every bible book in the quiz prompt when any book is absent from context.
 
 ## [2.2.8]
 

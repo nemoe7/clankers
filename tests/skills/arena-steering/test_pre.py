@@ -24,6 +24,10 @@ from arena_steering.services import BIBLE_READ, VIOLATION_ACK, with_bible_read
 BIBLE_READ_PREFIX = BIBLE_READ.split("{paths}")[0].strip()
 PENDING_ACK_PUSH_REASON = "Inbox has pending"
 SLEEP_BLOCKED_MESSAGE = "VIOLATION: Sleep blocked while a violation waits for an ack."
+FULL_READ_DEMAND = (
+  "Read every book in full with read_file before answering when any book is "
+  "not already in context."
+)
 
 
 @pytest.fixture(autouse=True)
@@ -3991,6 +3995,7 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   assert f"`~/{old_skill.relative_to(root.parent).as_posix()}`" not in due[0].body
   citation = f"{due[0].quiz_data['file']}:{due[0].quiz_data['line']}"
   assert f"Ack this message with `{citation} <clause>`." in due[0].body
+  assert FULL_READ_DEMAND in due[0].body
   assert (
     "1. Read all books of the bible in full, batched in one read_file call."
     in due[0].body

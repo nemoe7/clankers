@@ -1111,6 +1111,8 @@ def _schedule_instruction_check(
     citation = f"{file}:{number}"
     messages.send_clause_quiz(
       f"{READ_SET_MESSAGE_MARKER} {citation}\n"
+      "Read every book in full with read_file before answering when any book is "
+      "not already in context.\n"
       f"Without opening files first, recall the clause at {citation}.\n"
       f"Ack this message with `{citation} <clause>`.\n"
       "Use the exact clause text, without its leading Markdown list marker.\n"
