@@ -17,7 +17,9 @@ Address and coordinate points require `id`. Named places require `name`. `catego
 `icon` is a string such as `"🎓"`, `"$250"`, or `"1"`:
 
 - Routes use the same place-emoji rule for every point, or omit every icon for automatic stop numbers.
-- Cost comparisons use grounded comparable cost amounts or bands for every point. If any cost is unavailable, use category icons for every point and state price units once in nearby prose.
+- Cost comparisons use grounded comparable cost amounts or bands for every point.
+- If any cost is unavailable, use category icons for every point.
+- State price units once in nearby prose.
 - Explicit rankings use grounded ranks for every point. If a rank is missing, use category icons for every point.
 - Recommendations omit icons to permit provider ratings. Use category icons when ratings are unwanted or any rating is explicitly missing.
 - Other factual maps use an appropriate place or category emoji.

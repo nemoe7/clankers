@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [1.10.33]
+
+### Changed
+
+- Split the repository-discovery bullet and the cost-comparison bullet into one action each.
+
 ## [1.10.32]
 
 ### Removed
