@@ -1185,14 +1185,18 @@ def test_contained_buttons_hide_default_box_and_reveal_on_hover_and_press(
         arg=transparent,
       )
       mobile_page.mouse.up()
+      # Releasing over the button arms the skip poll, so the armed state keeps
+      # a background while its border stays clear.
       mobile_page.wait_for_function(
         """clear => {
-          const s = getComputedStyle(document.querySelector('#skip-poll'));
-          return s.backgroundColor === clear && s.borderColor === clear;
+          const button = document.querySelector('#skip-poll');
+          const s = getComputedStyle(button);
+          return button.dataset.armed === 'true'
+            && s.backgroundColor !== clear && s.borderColor === clear;
         }""",
         arg=transparent,
       )
-      # Touch tap leaves pointer on button on mobile, yet background stays clear.
+      # Cancelling the armed state clears the background again.
       mobile_page.touchscreen.tap(cx, cy)
       mobile_page.wait_for_function(
         """clear => {
