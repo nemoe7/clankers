@@ -988,6 +988,47 @@ def test_report_picker_content_and_toc_fades_stay_in_their_own_regions() -> None
   not os.environ.get("CHROMIUM_BIN"),
   reason="Set CHROMIUM_BIN for the extracted browser",
 )
+def test_keyboard_nav_flag_ignores_caret_movement_inside_inputs(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("Context", msg_id="abc123")
+  server = create_http_server(app, host="127.0.0.1", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        executable_path=os.environ["CHROMIUM_BIN"],
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        nav_flag = "() => document.documentElement.getAttribute('data-keyboard-nav')"
+        search = page.locator("#log-search")
+        search.click()
+        search.type("ab")
+        search.press("ArrowLeft")
+        assert page.evaluate(nav_flag) is None
+        page.keyboard.press("Tab")
+        assert page.evaluate(nav_flag) == "true"
+        page.mouse.click(600, 400)
+        assert page.evaluate(nav_flag) is None
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+@pytest.mark.skipif(
+  not os.environ.get("CHROMIUM_BIN"),
+  reason="Set CHROMIUM_BIN for the extracted browser",
+)
 def test_reports_bottom_fade_only_hides_for_mobile_keyboard(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   store = SqliteStore()

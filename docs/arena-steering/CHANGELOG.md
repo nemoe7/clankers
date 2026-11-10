@@ -21,6 +21,8 @@ This log has no Unreleased section.
 
 - Mark non-blocking messages in `steer read` output as not needing an acknowledgement.
 
+- Show the keyboard-navigation highlight only when keyboard input gained focus, not on caret movement inside a clicked field.
+
 ## [2.2.5]
 
 ### Removed

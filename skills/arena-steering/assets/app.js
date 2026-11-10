@@ -1558,11 +1558,20 @@ function initEvents() {
   window.visualViewport?.addEventListener("scroll", syncViewportHeight);
   document.addEventListener("visibilitychange", () => markVisibleReport(store.getState()));
 
+  const isEditableTarget = (target) =>
+    Boolean(
+      target?.isContentEditable ||
+        target?.closest?.("input, textarea, select, [contenteditable='true']")
+    );
   window.addEventListener(
     "keydown",
     (event) => {
+      if (event.key === "Tab") {
+        document.documentElement.setAttribute("data-keyboard-nav", "true");
+        return;
+      }
+      if (isEditableTarget(event.target)) return;
       if (
-        event.key === "Tab" ||
         event.key.startsWith("Arrow") ||
         event.key === "Enter" ||
         event.key === " "
