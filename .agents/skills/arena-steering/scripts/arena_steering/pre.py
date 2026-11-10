@@ -1379,6 +1379,26 @@ class AckQuoteReminder:
     )
 
 
+def unpushed_message(count: int, *, private: bool = False) -> str:
+  """Name the push rule that applies to the repository's visibility."""
+  if private:
+    return f"{count} commit/s unpushed. Private repo: push small batches (<=3)."
+  return f"{count} commit/s unpushed. ALWAYS push. NEVER delay for batch."
+
+
+class UnpushedReminder:
+  """Repeat the standing push rule whenever local commits sit ahead of origin."""
+
+  name = "unpushed"
+
+  def applies(self, ctx: PreContext) -> bool:
+    return not (ctx.is_push() or ctx.is_arena_maintenance())
+
+  def run(self, ctx: PreContext) -> PreResult:
+    count = git_safety.unpushed_commit_count(repo_root())
+    return PreResult([unpushed_message(count)] if count else [])
+
+
 class BarePathReminder:
   """Remind the agent to call the executable by name, not by script path."""
 
@@ -1905,6 +1925,10 @@ class JobLogRedirectGuard:
     )
 
 
+# Standing reminders rerun on every call and never join the finished list.
+STANDING_STEPS = frozenset({"unpushed"})
+
+
 PIPELINE: tuple[PreStep, ...] = (
   StartProcessTitleGuard(),
   LiveRunLogGuard(),
@@ -1920,6 +1944,7 @@ PIPELINE: tuple[PreStep, ...] = (
   BibleReadGuard(),
   RouteGuard(),
   AckQuoteReminder(),
+  UnpushedReminder(),
   BarePathReminder(),
 )
 
@@ -1933,6 +1958,7 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     if step.name in finished and not (
       (step.name == "gate" and ctx.is_push())
       or (step.name == "sleep" and ctx.active_runs)
+      or step.name in STANDING_STEPS
       or step.name in {"git-safe", "route", "ack-quote", "live-run-logs"}
     ):
       continue
@@ -1944,7 +1970,11 @@ def run_pipeline(ctx: PreContext) -> PreResult:
     result = step.run(ctx)
     messages.extend(result.messages)
     if result.verdict == CONTINUE:
-      if step.name not in finished and not (step.name == "gate" and mixed):
+      if (
+        step.name not in finished
+        and step.name not in STANDING_STEPS
+        and not (step.name == "gate" and mixed)
+      ):
         finished.append(step.name)
       continue
     return PreResult(

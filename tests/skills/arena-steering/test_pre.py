@@ -3724,6 +3724,49 @@ def test_bare_path_warning_checks_executable_not_arguments(
   assert ("Use bare `steer`" in " ".join(result.messages)) == warn
 
 
+def test_unpushed_reminder_repeats_on_every_gated_call(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  monkeypatch.setattr(pre.git_safety, "unpushed_commit_count", lambda _root: 2)
+  texts = []
+  for line in ("ls", "git status", "steer tasks"):
+    result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+    assert result.verdict == pre.CONTINUE
+    texts.append(" ".join(result.messages))
+  for text in texts:
+    assert "2 commit/s unpushed. ALWAYS push. NEVER delay for batch." in text
+
+
+def test_unpushed_reminder_never_joins_the_finished_steps(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  monkeypatch.setattr(pre.git_safety, "unpushed_commit_count", lambda _root: 1)
+  first = pre.run_pipeline(pre.PreContext(line="ls", command="ls"))
+  second = pre.run_pipeline(pre.PreContext(line="ls", command="ls", done=first.done))
+  assert "unpushed" not in first.done
+  assert "1 commit/s unpushed." in " ".join(second.messages)
+
+
+def test_unpushed_reminder_stays_quiet_when_origin_is_current(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  monkeypatch.setattr(pre.git_safety, "unpushed_commit_count", lambda _root: 0)
+  result = pre.run_pipeline(pre.PreContext(line="ls", command="ls"))
+  assert result.verdict == pre.CONTINUE
+  assert "unpushed" not in " ".join(result.messages)
+
+
+def test_unpushed_reminder_does_not_repeat_the_push_block(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  monkeypatch.setattr(pre.git_safety, "unpushed_commit_count", lambda _root: 1)
+  result = pre.run_pipeline(
+    pre.PreContext(line="git push", command="git push", pending_ids=("aa0001",))
+  )
+  assert result.verdict == pre.BLOCK
+  assert "unpushed" not in " ".join(result.messages)
+
+
 def test_network_destination_and_port_warnings_remain_deferred() -> None:
   for line in ("curl https://example.test", "steer serve --port 8123"):
     result = pre.run_pipeline(pre.PreContext(line=line, command=line))

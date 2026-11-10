@@ -6,6 +6,10 @@ This log has no Unreleased section.
 
 ## [2.2.8]
 
+### Added
+
+- Repeat the unpushed-commit reminder on every gated call while local commits sit ahead of the remote branch.
+
 ### Changed
 
 - Install the extracted Chromium binary at the Playwright default executable path, and set `CHROMIUM_BIN` to it.
@@ -14,6 +18,8 @@ This log has no Unreleased section.
 
 - Write a launcher with its own library and font configuration instead of symlinking the bare binary.
 - Drop the browser test gates on `ARENA_STEERING_CHROMIUM` and `CHROMIUM_BIN` so the tests use the default browser.
+- Keep the standing reminder out of the finished-step list so a shell cannot skip it after the first call.
+- Share one unpushed-commit count and message between the pre-command guard and the exit reminders.
 
 ## [2.2.6]
 

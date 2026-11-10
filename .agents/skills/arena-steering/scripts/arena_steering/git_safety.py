@@ -237,6 +237,27 @@ def behind_main_pair(cwd: Path) -> tuple[str, str] | None:
   return (head, base) if verdict.returncode == 1 else None
 
 
+def unpushed_commit_count(cwd: Path) -> int:
+  """Count local commits ahead of the matching origin branch or upstream."""
+  try:
+    branch = _git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+  except GitCheckError:
+    return 0
+  name = branch.stdout.strip()
+  if not name:
+    return 0
+  for target in (f"refs/remotes/origin/{name}", "@{upstream}"):
+    try:
+      result = _git(cwd, "rev-list", "--count", f"{target}..HEAD")
+    except GitCheckError:
+      continue
+    try:
+      return max(0, int(result.stdout.strip()))
+    except ValueError:
+      continue
+  return 0
+
+
 def require_clean_tree(cwd: Path) -> None:
   """Refuse task completion when Git sees tracked or untracked checkout changes."""
   if _git(cwd, "status", "--porcelain=v1", "--untracked-files=all").stdout:

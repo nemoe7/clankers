@@ -1605,39 +1605,6 @@ def _start_locked_run(
   return 0
 
 
-def _unpushed_commit_count(root: Path) -> int:
-  """Count local commits ahead of the matching origin branch or configured upstream."""
-  if not (root / ".git").exists():
-    return 0
-  try:
-    branch = subprocess.run(
-      ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
-      cwd=root,
-      capture_output=True,
-      text=True,
-      encoding="utf-8",
-      check=False,
-      timeout=5,
-    )
-    if branch.returncode or not branch.stdout.strip():
-      return 0
-    for target in (f"refs/remotes/origin/{branch.stdout.strip()}", "@{upstream}"):
-      result = subprocess.run(
-        ["git", "rev-list", "--count", f"{target}..HEAD"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-        timeout=5,
-      )
-      if result.returncode == 0:
-        return max(0, int(result.stdout.strip()))
-  except (OSError, subprocess.TimeoutExpired, ValueError):
-    pass
-  return 0
-
-
 def _slow_call_hint(line: str, elapsed: float) -> str:
   """Suggest a detached run only for slow ordinary shell work."""
   if elapsed < 10 or pre_mod.PreContext(line=line).is_inbox_recovery():
@@ -1680,16 +1647,13 @@ def _exit_state_reminders(state_dir: Path) -> list[str]:
       stale = len(reports.list_reports(stale_only=True))
       if stale:
         parts.append(f"Unpublish {stale} stale report{'s' if stale != 1 else ''}.")
-    unpushed = _unpushed_commit_count(pre_mod.repo_root())
+    unpushed = git_safety.unpushed_commit_count(pre_mod.repo_root())
     if unpushed:
-      if store.get_meta("repo_private") == "1":
-        parts.append(
-          f"{unpushed} commit/s unpushed. Private repo: push small batches (<=3)."
+      parts.append(
+        pre_mod.unpushed_message(
+          unpushed, private=store.get_meta("repo_private") == "1"
         )
-      else:
-        parts.append(
-          f"{unpushed} commit/s unpushed. ALWAYS push. NEVER delay for batch."
-        )
+      )
     return parts
   finally:
     store.close()
