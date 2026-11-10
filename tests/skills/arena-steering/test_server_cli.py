@@ -6185,8 +6185,8 @@ def test_poll_flags_a_queue_with_several_tasks(tmp_path: Path) -> None:
   store, messages, _, _ = cli.open_services(state_dir)
   pending = messages.pending_violation()
   assert pending is not None
-  assert "Poll with 2 tasks queued" in pending.body
-  assert "continue the next task now" in pending.body.casefold()
+  assert "Poll with 2 tasks queued" in pending.body  # nonemo: NMT100
+  assert "continue the next task now" in pending.body.casefold()  # nonemo: NMT100
   store.close()
 
 
