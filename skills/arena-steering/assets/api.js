@@ -32,6 +32,17 @@ function stopFallbackPoll() {
   }
 }
 
+// A backgrounded tab throttles timers, so the pill can sit on its last state
+// long after the socket died. Returning to the tab refreshes at once and
+// retries the upgrade instead of waiting for the next throttled tick.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    changeHandler();
+    if (!liveSocket || liveSocket.readyState > 1) connectWebSocket();
+  });
+}
+
 export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
   if (typeof onChange === "function") changeHandler = onChange;
   if (typeof onReload === "function") reloadHandler = onReload;

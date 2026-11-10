@@ -3801,6 +3801,62 @@ def test_userscript_detects_ended_turn_through_cross_origin_steering(
     store.close()
 
 
+def test_returning_to_the_tab_reconnects_without_waiting_for_a_poll(
+  tmp_path: Path,
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore(tmp_path / "state.sqlite3")
+  app = SteeringApp(store)
+  app.messages.send_message("Awaiting reply", msg_id="ab0123")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        # Every socket attempt fails, so only a visibility change can recover.
+        page.add_init_script(
+          """(() => {
+            const RealWebSocket = window.WebSocket;
+            let attempts = 0;
+            window.__socketAttempts = () => attempts;
+            window.WebSocket = function () {
+              attempts += 1;
+              throw new Error("socket refused");
+            };
+            window.WebSocket.prototype = RealWebSocket.prototype;
+          })()"""
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/")
+        page.locator('[data-msg-id="ab0123"]').first.wait_for(state="visible")
+        before = page.evaluate("() => window.__socketAttempts()")
+        page.evaluate(
+          """() => {
+            Object.defineProperty(document, 'visibilityState', {
+              configurable: true, get: () => 'visible',
+            });
+            document.dispatchEvent(new Event('visibilitychange'));
+          }"""
+        )
+        page.wait_for_function(
+          "before => window.__socketAttempts() > before",
+          arg=before,
+          timeout=2000,
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 def test_page_keeps_retrying_when_both_transports_drop(tmp_path: Path) -> None:
   playwright = pytest.importorskip("playwright.sync_api")
   path = tmp_path / "state.sqlite3"
