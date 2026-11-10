@@ -2036,19 +2036,22 @@ def test_selected_tooltips_are_absent_but_control_labels_remain(
         assert page.locator(".receipt-status").get_attribute("title") is None
         page.locator("#tab-reports").click()
         page.locator(".report-picker-unanswered").wait_for()
-        for selector in (
-          ".report-picker-unanswered",
-          ".report-picker-unseen-dot",
-          ".report-scroll-top",
-        ):
-          for control in page.locator(selector).all():
-            assert control.get_attribute("title") is None, selector
+        # One DOM pass: a live handle goes stale when the poll re-renders.
+        titled = page.evaluate(
+          """() => [...document.querySelectorAll(
+            '.report-picker-unanswered, .report-picker-unseen-dot, .report-scroll-top'
+          )].filter(node => node.hasAttribute('title')).length"""
+        )
+        assert titled == 0
         assert (
           page.locator(".report-picker-unanswered").get_attribute("aria-label")
           == "Needs answers"
         )
-        for timestamp in page.locator("time").all():
-          assert timestamp.get_attribute("title") is None
+        titled_times = page.evaluate(
+          "() => [...document.querySelectorAll('time')]"
+          ".filter(node => node.hasAttribute('title')).length"
+        )
+        assert titled_times == 0
         page.screenshot(path=str(tmp_path / f"no-selected-tooltips-{width}.png"))
       finally:
         browser.close()
