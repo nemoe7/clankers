@@ -274,20 +274,20 @@ def test_pr_title_uses_the_commit_rules():
   assert any("lowercase" in failure.message for failure in failures)
 
 
-def test_ste_lint_accepts_valid_text():
-  passed, output = gate_pr.run_ste_lint("Start the server. Read the log.\n")
+def test_nemoizer_accepts_valid_text():
+  passed, output = gate_pr.run_nemoizer("Start the server. Read the log.\n")
   assert passed, output
 
 
-def test_ste_lint_rejects_invalid_text():
-  passed, output = gate_pr.run_ste_lint("Start the server; read the log.\n")
+def test_nemoizer_rejects_invalid_text():
+  passed, output = gate_pr.run_nemoizer("Start the server; read the log.\n")
   assert not passed
   assert "semicolon" in output
 
 
-def test_ste_lint_selftest_passes():
+def test_nemoizer_selftest_passes():
   result = subprocess.run(
-    [sys.executable, str(gate_pr.STE_LINT), "--selftest"],
+    [sys.executable, str(gate_pr.NEMOIZER), "--selftest"],
     capture_output=True,
     text=True,
     encoding="utf-8",
@@ -296,16 +296,16 @@ def test_ste_lint_selftest_passes():
   assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_gate_propagates_the_ste_failure(tmp_path: Path):
+def test_gate_propagates_the_nemoizer_failure(tmp_path: Path):
   body = tmp_path / "body.md"
   body.write_text(
     VALID_BODY.replace("pull request body.", "pull request body. One line; two rules."),
     encoding="utf-8",
   )
   failures = gate_pr.check(None, None, str(body), True)
-  assert any("STE lint failed" in failure.message for failure in failures)
-  without_ste = gate_pr.check(None, None, str(body), False)
-  assert not any("STE lint failed" in failure.message for failure in without_ste)
+  assert any("Nemoizer failed" in failure.message for failure in failures)
+  without_nemoize = gate_pr.check(None, None, str(body), False)
+  assert not any("Nemoizer failed" in failure.message for failure in without_nemoize)
 
 
 def test_main_exit_codes(tmp_path: Path, capsys):

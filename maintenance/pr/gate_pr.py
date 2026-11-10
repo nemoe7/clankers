@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-STE_LINT = ROOT / "skills" / "nemoizer" / "scripts" / "nemoize.py"
+NEMOIZER = ROOT / "skills" / "nemoizer" / "scripts" / "nemoize.py"
 USERSCRIPT_GATE = ROOT / "maintenance" / "userscripts" / "gate_userscripts.py"
 PLUGINS_GATE = ROOT / "maintenance" / "gpt_plugins" / "gate_gpt_plugins.py"
 # The `version-bumps` job watches only these paths.
@@ -275,13 +275,13 @@ def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[F
   return failures
 
 
-def run_ste_lint(text: str) -> tuple[bool, str]:
+def run_nemoizer(text: str) -> tuple[bool, str]:
   """Run the nemoizer prose linter over text. Return (passed, output)."""
   with tempfile.TemporaryDirectory() as directory:
     path = Path(directory) / "pr-body.md"
     path.write_text(text, encoding="utf-8")
     result = subprocess.run(
-      [sys.executable, str(STE_LINT), "--context", "description", str(path)],
+      [sys.executable, str(NEMOIZER), "--context", "description", str(path)],
       capture_output=True,
       text=True,
       encoding="utf-8",
@@ -422,7 +422,7 @@ def check(
   revision_range: str | None,
   pr_title: str | None,
   body_file: str | None,
-  ste: bool,
+  nemoize: bool,
   version_base: str | None = None,
 ) -> list[Failure]:
   """Collect every contract failure for the given inputs."""
@@ -443,10 +443,10 @@ def check(
     text = Path(body_file).read_text(encoding="utf-8")
     failures.extend(validate_pr_body(text))
     failures.extend(validate_breaking_crosscheck(subjects, text))
-    if ste:
-      passed, output = run_ste_lint(text)
+    if nemoize:
+      passed, output = run_nemoizer(text)
       if not passed:
-        failures.append(Failure("PR body", f"STE lint failed:\n{output}"))
+        failures.append(Failure("PR body", f"Nemoizer failed:\n{output}"))
   return failures
 
 
