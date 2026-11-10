@@ -17,6 +17,8 @@ This log has no Unreleased section.
 
 - Render report answer acknowledgements through the shared message answer block.
 
+- Show each report answer field on its own line instead of one dot-separated line.
+
 ## [2.2.5]
 
 ### Removed

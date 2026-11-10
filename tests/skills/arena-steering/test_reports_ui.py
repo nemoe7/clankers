@@ -206,6 +206,10 @@ def test_hidden_answer_and_live_report_replies(tmp_path: Path, width: int) -> No
           "Choice?: A"
           in entry.locator(".message-bubble > .message-text").first.inner_text()
         )
+        field_lines = entry.locator(
+          ".message-bubble > .message-text p"
+        ).all_inner_texts()
+        assert field_lines and all(" \u00b7 " not in line for line in field_lines)
         assert (
           "Reviewed answer"
           in entry.locator(".message-bubble > .answer.reply").inner_text()

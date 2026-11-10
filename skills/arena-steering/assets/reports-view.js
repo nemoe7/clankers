@@ -310,14 +310,15 @@ export function renderReportsView(container, state, handlers) {
               }
               return `${label}: ${Array.isArray(v) ? v.join(", ") : v}`;
             })
-            .join(" · ");
+            .map((line) => `<p>${escapeHtml(line)}</p>`)
+            .join("");
           const status = ans.pending ? "Sending" : ans.status === "sent" ? "Sent" : ans.status === "seen" ? "Seen" : "";
           const stateLabel = escapeHtml(`Status: ${ans.pending ? "sending" : ans.status}`);
           return `
             <div class="message report-answer-entry" data-answer-id="${escapeHtml(ans.id)}">
               <div class="message-heading"><strong><code class="msg-id" aria-label="Answer ${escapeHtml(ans.id)}">${escapeHtml(ans.id)}</code></strong></div>
               <div class="message-bubble">
-                <div class="message-text"><p>${escapeHtml(entries)}</p></div>
+                <div class="message-text">${entries}</div>
                 ${ans.pending || ans.ack ? renderAnswerBlock(markdownBatch.slot(ans.ack_html ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', "report-ack-markdown"), { pending: Boolean(ans.pending) }) : ""}
               </div>
               <p class="receipt"><time role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" datetime="${iso}" data-timestamp="${iso}" data-prefix="${status}">${status ? `${status} ` : ""}${rel}</time></p>
