@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.2.9]
+
+### Added
+
+- Order a `report` phase first when the code waits on an approved report.
+
 ## [2.2.8]
 
 ### Added
