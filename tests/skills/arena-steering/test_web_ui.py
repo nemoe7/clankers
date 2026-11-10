@@ -2403,7 +2403,7 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         page.keyboard.press("Tab")
         button.evaluate("el => el.blur()")
         button.focus()
-        assert tip.is_visible()
+        tip.wait_for(state="visible")
         page.keyboard.press("Escape")
         assert tip.is_hidden()
         page.evaluate("""() => {
