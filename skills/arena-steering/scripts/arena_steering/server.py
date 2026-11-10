@@ -479,7 +479,10 @@ class SteeringApp:
             else:
               file_path.write_bytes(contents)
 
+        deferred_flag = False
+
         def perform() -> tuple[int, dict[str, Any]]:
+          nonlocal deferred_flag
           self._browser_write.request_id = request_id
           self._browser_write.files = created_files
           self._browser_write.overwritten_files = overwritten_files
@@ -487,7 +490,9 @@ class SteeringApp:
             try:
               status, payload = handler(params, query, request_body)
             except DirtyTreeError as exc:
-              # Commit the flag after the task savepoint rolls back.
+              # The browser-write savepoint rolls a failed action back, so the
+              # flag is recorded after that rollback, never inside the action.
+              deferred_flag = True
               status, payload = int(HTTPStatus.BAD_REQUEST), {"error": str(exc)}
             if not 200 <= status < 300:
               rollback_files()
@@ -509,6 +514,9 @@ class SteeringApp:
         except BaseException:
           rollback_files()
           raise
+        finally:
+          if deferred_flag:
+            self.messages.flag_dirty_finish()
       else:
         status, payload = handler(params, query, request_body)
       if (

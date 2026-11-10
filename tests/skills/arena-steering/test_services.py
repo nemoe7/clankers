@@ -2226,7 +2226,9 @@ def test_dirty_checkout_finish_raises_one_persisted_violation(
   messages.ack(flag.id, "Read; investigating the dirty tree.")
   app = SteeringApp(store)
   status, response = app.dispatch(
-    "PATCH", "/tasks/review", {"status": "finished", "_request_id": "dirty-finish"}
+    "PATCH",
+    "/tasks/review",
+    {"status": "finished", "_request_id": store.issue_browser_write_token()},
   )
   assert status == HTTPStatus.BAD_REQUEST
   assert "clean Git tree" in response["error"]
