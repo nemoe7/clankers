@@ -1502,9 +1502,15 @@ def test_report_dismissal_is_immediate_and_preserves_new_selection(
       page.evaluate(
         """fail => {
         const original = window.fetch.bind(window);
+        let gated = false;
         window.fetch = async (...args) => {
           if (String(args[0]) === '/reports/first' && args[1]?.method === 'DELETE') {
-            await new Promise(resolve => { window.releaseDismiss = resolve; });
+            // Gate only the first attempt: later retries must reach the
+            // rejection path or the dismissal error never renders.
+            if (!gated) {
+              gated = true;
+              await new Promise(resolve => { window.releaseDismiss = resolve; });
+            }
             if (fail) return new Response(JSON.stringify({error:'offline'}), {
               status:503, headers:{'content-type':'application/json'}
             });
