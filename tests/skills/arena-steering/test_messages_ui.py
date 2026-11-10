@@ -2398,10 +2398,10 @@ def test_reply_seen_indicator_optimistic_rollback_and_revision_guard(
         == rev3
       )
       assert (
-        third_reply
-        in page.locator(
-          f'.message[data-msg-id="{target_id}"] .answer.reply'
-        ).inner_text()
+        page.locator(f'.message[data-msg-id="{target_id}"] .answer.reply')
+        .filter(has_text=third_reply)
+        .count()
+        == 1
       )
       assert not app.messages.get_message(target_id).replies_seen
       page.screenshot(path=str(tmp_path / "reply-seen-newer-revision.png"))
