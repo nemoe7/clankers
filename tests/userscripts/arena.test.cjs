@@ -3890,6 +3890,22 @@ function checkTabTitle(api, logging) {
   console.log("ok tab title " + cases.length);
 }
 
+function checkTurnEndLogging(api) {
+  assert.equal(typeof api.transportDetail, "function", "the transport state helper is exposed");
+  const cases = [
+    [null, false, "no preview frame"],
+    [{ available: "true", polling: "true", pollingGate: "false", pollCompleted: "false" }, true, "poll live"],
+    [{ available: "true", polling: "true", pollingGate: "true", pollCompleted: "false" }, false, "poll gated"],
+    [{ available: "true", polling: "true", pollingGate: "false", pollCompleted: "true" }, true, "poll completed"],
+    [{ available: "true", polling: "false" }, false, "marker absent"],
+  ];
+  for (const [state, live, detail] of cases) {
+    const result = api.transportDetail(state);
+    assert.equal(result.live, live, `live flag for ${detail}`);
+    assert.equal(result.detail, detail, `detail for ${detail}`);
+  }
+}
+
 function checkKeepAwake(api) {
   var wakeLockPlan = api.wakeLockPlan;
   assert.equal(wakeLockPlan(true, false, true), "acquire");
@@ -4528,6 +4544,7 @@ run("open steering", () => checkOpenSteering(arena.openSteering));
 run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
 run("transcript alerts", () => checkTranscriptAlerts(arena.transcriptAlerts));
+run("turn-end logging", () => checkTurnEndLogging(arena.turnEnd));
 run("hide composer", () => checkHideComposer(arena.hideComposer));
 run("tab title", () => checkTabTitle(arena.tabTitle, arena.logging));
 run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session, arena.logging));

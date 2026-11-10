@@ -81,6 +81,7 @@
     "preview-proxy": ["posted", "failed", "no-host"],
     steering: ["flagged-name"],
     wake: ["refused", "unavailable"],
+    "turn-end": ["poll-fired", "poll-skipped"],
     title: ["changed", "restored", "conditions"],
   };
   var LOG_VALUES = {
@@ -4551,6 +4552,15 @@
   }
   var pollCheckPending = false;
   var keepWorkingNotify = null;
+  function turnEndTransportDetail(state) {
+    if (!state || state.available !== "true") return { live: false, detail: "no preview frame" };
+    var polling = state.polling === "true";
+    var gated = polling && state.pollingGate === "true";
+    if (!polling) return { live: false, detail: "marker absent" };
+    return { live: !gated, detail: gated ? "poll gated" : (state.pollCompleted === "true" ? "poll completed" : "poll live") };
+  }
+  exposeChecks("turnEnd", { transportDetail: turnEndTransportDetail });
+
   runFeature("auto-wake", "Composer - auto-send wake up", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
@@ -4641,6 +4651,8 @@
           if (lastRow && hasClassToken(lastRow, "prose") &&
               !(state.polling === "true" && state.pollingGate !== "true") && state.pollCompleted !== "true") {
             autoWakeSentFor = null;
+            var transport = turnEndTransportDetail(pollState() || markerAbsentState());
+            logEvent("turn-end", "poll-fired", { live: transport.live, detail: transport.detail });
             setComposerText(editor, violation);
             generatedViolation = String(editor.innerText || "");
           }
@@ -4697,6 +4709,8 @@
             pollTimeout = null;
             endedAt = 0;
             pollCheckPending = false;
+            var transport = turnEndTransportDetail(pollState() || markerAbsentState());
+            logEvent("turn-end", "poll-skipped", { live: transport.live, detail: transport.detail });
             if (keepWorkingNotify) keepWorkingNotify();
           }, POLL_STATE_WAIT_MS);
         }
