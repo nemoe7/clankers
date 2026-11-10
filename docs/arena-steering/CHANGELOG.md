@@ -14,6 +14,7 @@ This log has no Unreleased section.
 ### Fixed
 
 - Serve the cached message window only on the revision the same pass read, so a stale gate cannot keep the view behind the server.
+- Animate the new reply button in instead of snapping into place.
 - Create a work message's task before starting the work it asks for.
 - Demand a full `read_file` read of every bible book in the quiz prompt when any book is absent from context.
 

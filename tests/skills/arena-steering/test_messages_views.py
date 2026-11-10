@@ -380,6 +380,15 @@ for (const item of [hidden, seen, sent, acked]) {
   assert result.returncode == 0, result.stderr
 
 
+def test_new_reply_button_animates_instead_of_jumping() -> None:
+  css = (ASSETS_DIR / "style.css").read_text(encoding="utf-8")
+  block = re.search(r"\.log-edited \{[^}]*\}", css)
+  assert block is not None
+  assert "animation:" in block.group(0) or "transition:" in block.group(0), (
+    "the new reply button must animate instead of appearing instantly"
+  )
+
+
 def test_the_cached_window_gate_uses_the_revision_this_pass_fetched() -> None:
   app = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
   assert "cached.revision === healthSeenRevision" not in app, (

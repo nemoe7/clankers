@@ -707,6 +707,19 @@ code.msg-id[data-state="bad"],
   z-index: 4;
   font-weight: 500;
   backdrop-filter: blur(8px);
+  animation: scroll-jump-in 160ms var(--ease);
+}
+
+@keyframes scroll-jump-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .log-newest {
