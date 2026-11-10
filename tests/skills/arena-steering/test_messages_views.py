@@ -1271,6 +1271,20 @@ def test_messages_keep_scroll_target_while_older_page_loads(
           page.locator('.message[data-msg-id="aa1234"]').wait_for(timeout=6000)
         if gesture in {"scrollbar", "touch"}:
           page.screenshot(path=str(tmp_path / f"scroll-{gesture}-after.png"))
+        # Restore and anchor correction land after the refresh. Settle first:
+        # otherwise the wheel races the correction and the offset moves.
+        page.evaluate("""() => new Promise(resolve => {
+          const history = document.querySelector('#history');
+          let last = history.scrollTop;
+          let stable = 0;
+          let frames = 0;
+          function tick() {
+            stable = history.scrollTop === last ? stable + 1 : 0;
+            last = history.scrollTop;
+            if (stable >= 3 || ++frames >= 120) resolve(); else requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        })""")
         start = history.evaluate("element => element.scrollTop")
         if gesture == "scrollbar":
           page.mouse.move(drag_x, drag_y + 28, steps=4)
