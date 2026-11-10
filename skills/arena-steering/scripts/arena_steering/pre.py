@@ -1525,6 +1525,11 @@ class SleepGuard:
         ["VIOLATION: Sleep BANNED. Run alone."],
         BLOCK,
       )
+    if ctx.pending_ids:
+      return PreResult(
+        ["VIOLATION: Sleep blocked while a violation waits for an ack. Run alone."],
+        BLOCK,
+      )
     if any(
       head in SLEEP_LOG_READERS and any(arg.endswith(".log") for arg in args)
       for head, args in commands

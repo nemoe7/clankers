@@ -1294,6 +1294,21 @@ def test_sleep_during_live_run_names_it_and_shows_bible_guidance(
   assert BIBLE_READ_PREFIX in out
 
 
+def test_sleep_exits_130_while_a_violation_waits_for_an_ack(
+  _isolate_state: Path,
+) -> None:
+  _seed(_isolate_state, "Ready", acked=True)
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  messages.flag_violation_once("bash-cadence", "VIOLATION: Bash blocked.")
+  store.close()
+
+  code, out = _run("pre", "-c", "sleep 1", "-l", "sleep 1", "-s", "bash")
+  assert code == pre.BLOCK
+  assert (
+    "VIOLATION: Sleep blocked while a violation waits for an ack." in out
+  )  # nonemo: NMT100
+
+
 def test_unknown_cwd_push_uses_nonviolation_recovery() -> None:
   line = "git push origin topic"
   result = pre.GitSafetyGuard().run(pre.PreContext(line=line, command=line))
@@ -1392,6 +1407,11 @@ def test_active_run_blocks_sleep_but_not_its_own_worker(
   monkeypatch.delenv("ARENA_STEER_ROUTE")
 
   exit_path.write_text("0", encoding="utf-8")
+  # Clear the violation the blocked call raised, because a pending one blocks sleep.
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  for pending_id in messages.pending_ids():
+    messages.ack(pending_id, "Done.")
+  store.close()
   code, _ = _run("pre", "-l", "sleep 1", "-c", "sleep 1", "-s", "bash")
   assert code == pre.CONTINUE
 
