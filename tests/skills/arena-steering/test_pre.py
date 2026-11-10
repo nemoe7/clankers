@@ -4357,7 +4357,7 @@ def test_a_quiet_note_reports_itself_without_gating(_isolate_state: Path) -> Non
 
   code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
   assert code == pre.CONTINUE
-  assert "non-blocking unread" in out
+  assert pre.QUIET_SUFFIX in out
 
 
 def test_a_quiet_note_never_blocks_a_push(_isolate_state: Path) -> None:
@@ -4382,8 +4382,10 @@ def test_a_blocking_note_keeps_the_countdown_alongside_quiet_ones(
 
   code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
   assert code == pre.CONTINUE
-  assert "bash block in" in out
-  assert "Plus 1 non-blocking unread." in out
+  # The quiet count rides the existing countdown line, not a line of its own.
+  lines = [line for line in out.splitlines() if pre.QUIET_SUFFIX.strip(" .") in line]
+  assert len(lines) == 1
+  assert pre.COUNTDOWN_PREFIX in lines[0]
 
 
 def test_recorded_activity_labels_reach_the_messages_tab(_isolate_state: Path) -> None:
@@ -4394,3 +4396,4 @@ def test_recorded_activity_labels_reach_the_messages_tab(_isolate_state: Path) -
   with pytest.raises(ValueError):
     messages.record_tool("nope")
   store.close()
+

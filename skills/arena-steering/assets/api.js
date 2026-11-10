@@ -19,8 +19,9 @@ function startFallbackPoll() {
     if (!liveSocket || liveSocket.readyState !== 1) {
       changeHandler();
     }
-    // Keep reconnecting until a transport recovers, because a failed attempt must not end the loop.
-    if (!liveSocket) connectWebSocket();
+    // Retry the upgrade whenever no socket is open or connecting. A closing
+    // socket still counts as present, so `!liveSocket` alone would stall on poll.
+    if (!liveSocket || liveSocket.readyState > 1) connectWebSocket();
   }, 3000);
 }
 

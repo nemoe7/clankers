@@ -1231,22 +1231,6 @@ function renderApp(state) {
     btn.setAttribute("aria-selected", active ? "true" : "false");
   }
 
-  const unreadMessages = (state.messages || []).filter(
-    (message) => message.status === "sent" && !message.hidden
-  );
-  const messagePip = document.getElementById("message-pip");
-  if (messagePip) {
-    messagePip.hidden = unreadMessages.length === 0;
-    const pendingUnread = unreadMessages.filter((message) => message.blocking !== false);
-    messagePip.classList.toggle("is-unseen-ack", pendingUnread.length === 0);
-    messagePip.setAttribute(
-      "aria-label",
-      unreadMessages.length === 0
-        ? "No unread messages"
-        : `${pendingUnread.length} pending and ${unreadMessages.length - pendingUnread.length} non-blocking unread`
-    );
-  }
-
   const messagesEl = document.getElementById("view-messages");
   const tasksEl = document.getElementById("view-tasks");
   const reportsEl = document.getElementById("view-reports");

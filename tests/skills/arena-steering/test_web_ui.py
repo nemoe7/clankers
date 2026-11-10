@@ -858,6 +858,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert TOPBAR_BRAND_CLASS not in index_html
 
   app_js = (ASSETS_DIR / "app.js").read_text(encoding="utf-8")
+  api_js = (ASSETS_DIR / "api.js").read_text(encoding="utf-8")
   assert STATUS_BANNER_ID not in app_js
   assert THEME_TOGGLE_ID not in app_js
 
@@ -918,6 +919,8 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "reportCache" in app_js
   assert "ensureReportCached" in app_js
   assert "connectWebSocket" in app_js
+  # A closing socket keeps liveSocket set, so the poll retry must test readyState.
+  assert "!liveSocket || liveSocket.readyState > 1" in api_js
   assert '#view-reports[data-loading="true"]:not([hidden])' in style_css
   assert "margin: -67px calc(50% - 50vw) -84px;" in style_css
   assert "hydrateMermaidBlocks" in app_js
@@ -3889,6 +3892,35 @@ def test_hidden_toggle_off_uses_the_cached_window_without_refetching() -> None:
         # A new server revision must expire the cache, or the window freezes.
         app.messages.send_message("Fresh note", msg_id="cc0001")
         page.locator('.message[data-msg-id="cc0001"]').wait_for(timeout=15000)
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
+def test_a_new_message_reaches_the_page_on_the_next_health_poll() -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store)
+  app.messages.send_message("First note", msg_id="dd0001")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"]
+      )
+      try:
+        page = browser.new_page()
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        page.locator('.message[data-msg-id="dd0001"]').wait_for()
+        app.messages.send_message("Second note", msg_id="dd0002")
+        # One health poll after the revision moves must render the new note.
+        page.locator('.message[data-msg-id="dd0002"]').wait_for(timeout=6000)
       finally:
         browser.close()
   finally:

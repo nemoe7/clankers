@@ -1321,6 +1321,10 @@ class GitSafetyGuard:
     return PreResult()
 
 
+COUNTDOWN_PREFIX = "bash block in"
+QUIET_SUFFIX = "non-blocking unread."
+
+
 class InboxGate:
   """Refuse a line once the unacked count has waited past the call budget."""
 
@@ -1352,15 +1356,14 @@ class InboxGate:
         ],
         BLOCK,
       )
-    quiet = self.quiet_ids(ctx)
+    quiet = len(self.quiet_ids(ctx))
     if not ctx.pending_ids:
-      return PreResult(
-        [f"Inbox has {len(quiet)} non-blocking unread. Read and ack them when you can."]
-      )
+      return PreResult([f"Inbox has {quiet} {QUIET_SUFFIX}"])
     remaining = GATE_THRESHOLD - ctx.call_count
     if remaining > 0:
-      extra = f" Plus {len(quiet)} non-blocking unread." if quiet else ""
-      return PreResult([f"bash block in {remaining} calls. Read and ack now.{extra}"])
+      extra = f" Plus {quiet} {QUIET_SUFFIX}" if quiet else ""
+      line = f"{COUNTDOWN_PREFIX} {remaining} calls. Read and ack now.{extra}"
+      return PreResult([line])
     return PreResult(
       [
         "VIOLATION: Bash blocked. Read and ack all NOW.",
