@@ -72,6 +72,14 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     task = tasks.finish_phase(parsed.id, commit_hash=parsed.commit)
     _, blocked = tasks.get_task(task.id)
     _print_single_task(task, blocked, out, tasks=tasks)
+    next_task, skipped = tasks.finished_task_followup(task)
+    if next_task is not None:
+      print(f"Next task: {next_task.id} | {next_task.title}", file=out)
+    if skipped is not None:
+      print(
+        f"Warning: {skipped.id} ({skipped.priority}) outranks the finished task.",
+        file=out,
+      )
     return 0
 
   if subcmd == "rm":

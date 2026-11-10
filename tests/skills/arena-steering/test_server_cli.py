@@ -6130,3 +6130,55 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   code, task_out, err = _run_cli(state_dir, "task", "first-task")
   assert (code, err) == (0, "")
   assert f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}" in task_out
+
+
+def test_task_finish_names_the_next_task(tmp_path: Path, monkeypatch) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task(
+    "first", "First", size=3, details=["One."], type="ops", priority="P1"
+  )
+  tasks.create_task("second", "Second", size=3, details=["Two."], priority="P4")
+  store.close()
+  code, out, error = _run_cli(state_dir, "task", "finish", "first")
+  assert code == 0, error
+  lines = out.splitlines()
+  assert "Next task: second | Second" in lines
+
+
+def test_task_finish_warns_when_a_higher_priority_task_waits(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("low", "Low", size=3, details=["One."], type="ops", priority="P4")
+  tasks.create_task("high", "High", size=3, details=["Two."], priority="P1")
+  store.close()
+  code, out, error = _run_cli(state_dir, "task", "finish", "low")
+  assert code == 0, error
+  lines = out.splitlines()
+  assert "Warning: high (P1) outranks the finished task." in lines
+
+def test_poll_flags_a_queue_with_several_tasks(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, messages, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("one", "One", size=3, details=["One."], priority="P1")
+  tasks.create_task("two", "Two", size=3, details=["Two."], priority="P4")
+  store.close()
+  code, out, error = _run_cli(state_dir, "poll")
+  assert code == 0, error
+  lines = out.splitlines()
+  assert any(line.startswith("VIOLATION: Poll with 2 tasks queued.") for line in lines)
+  store, messages, _, _ = cli.open_services(state_dir)
+  assert messages.pending_violation() is not None
+  store.close()
+
+
+def test_poll_with_one_task_keeps_the_continue_line(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("only", "Only", size=3, details=["One."], priority="P1")
+  store.close()
+  code, out, error = _run_cli(state_dir, "poll")
+  assert code == 0, error
+  assert "Poll with" not in out
+  assert "Only | only" in out
+

@@ -520,6 +520,18 @@ class MessageService:
         with_bible_read(body), hidden=True, blocking=True, violation_type=violation_type
       )
 
+  def flag_early_poll(self, remaining: int, live_run: bool) -> Message:
+    """Persist one blocking flag when a poll runs while several tasks remain."""
+    direction = (
+      "Continue the next task in a worktree while the run finishes."
+      if live_run
+      else "Continue the next task now."
+    )
+    return self.flag_violation_once(
+      "early-poll",
+      f"VIOLATION: Poll with {remaining} tasks queued. {direction}",
+    )
+
   def flag_dirty_finish(self) -> Message:
     """Persist one blocking flag after a dirty-tree finish attempt rolls back."""
     return self.flag_violation_once(
@@ -1000,6 +1012,24 @@ class TaskService:
       blocked = self.is_task_blocked(item, task_map=task_map, report_map=report_map)
       result.append((item, blocked))
     return result
+
+  def finished_task_followup(self, finished: Task) -> tuple[Task | None, Task | None]:
+    """Return the next runnable task and any higher-priority task left behind."""
+    candidates = [
+      (item, blocked)
+      for item, blocked in self.list_tasks()
+      if not blocked and item.id != finished.id
+    ]
+    if not candidates:
+      return (None, None)
+    next_task = candidates[0][0]
+    rank = {"P1": 1, "P2": 2, "P3": 3, "P4": 4}
+    finished_rank = rank.get(finished.priority, 4)
+    skipped = next(
+      (item for item, _ in candidates if rank.get(item.priority, 4) < finished_rank),
+      None,
+    )
+    return (next_task, skipped)
 
   def get_task(self, task_id: str) -> tuple[Task, bool]:
     validate_entity_id(task_id, "Task.id")

@@ -495,6 +495,13 @@ def main(
       initial_task = next((task for task, blocked in listed_tasks if not blocked), None)
       gate_status = FileGateStatus(resolved_state_dir)
       run_watcher = RunCompletionWatcher(resolved_state_dir)
+      open_tasks = [task for task, _ in listed_tasks]
+      if len(open_tasks) > 1:
+        flag = messages.flag_early_poll(
+          len(open_tasks), bool(gate_status.running_names())
+        )
+        print(flag.body, file=stdout)
+        return 0
       if initial_task is None and not messages.has_pending_deliverables():
         running = set(gate_status.running_names())
         linked_runs = dict.fromkeys(
