@@ -3905,7 +3905,10 @@ def test_instruction_checkpoints_wait_ten_minutes_and_deduplicate(
   assert f"`~/{old_skill.relative_to(root.parent).as_posix()}`" not in due[0].body
   citation = f"{due[0].quiz_data['file']}:{due[0].quiz_data['line']}"
   assert f"Ack this message with `{citation} <clause>`." in due[0].body
-  assert "1. Use read_file for all books of the bible in full." in due[0].body
+  assert (
+    "1. Read all books of the bible in full, batched in one read_file call."
+    in due[0].body
+  )
   assert "2. Answer the `steer survey`." in due[0].body
   assert f"3. Retry the ack with `{citation} <clause>`.\n\n- " in due[0].body
   assert "if bible missing from context:" not in due[0].body

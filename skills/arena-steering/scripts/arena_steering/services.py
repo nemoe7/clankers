@@ -71,7 +71,7 @@ POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
 POLL_IMMEDIATE_SECONDS = 1.0
 VIOLATION_ACK = "Ack this with file:ln:clause for which rule was violated then fix the cause of the violation."
-BIBLE_READ = "If cannot recall clause from memory, use read_file for {paths} and answer the `steer survey`"
+BIBLE_READ = "If cannot recall clause from memory, read all of {paths} in one batched read_file call, then answer the `steer survey`"
 _BIBLE_PATHS = (
   "AGENTS.md",
   "ARENA.md",

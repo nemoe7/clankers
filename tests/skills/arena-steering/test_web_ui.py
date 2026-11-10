@@ -2657,7 +2657,7 @@ def test_violation_flag_lifecycle_and_validation(tmp_path: Path) -> None:
       "Book: ARENA.md",
     ]
     assert BIBLE_READ == (
-      "If cannot recall clause from memory, use read_file for {paths} and answer the `steer survey`"
+      "If cannot recall clause from memory, read all of {paths} in one batched read_file call, then answer the `steer survey`"
     )
     assert violation.body.endswith(with_bible_read("").strip())
     root = Path(__file__).resolve().parents[3]

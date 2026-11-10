@@ -1060,7 +1060,7 @@ def _schedule_instruction_check(
       f"Ack this message with `{citation} <clause>`.\n"
       "Use the exact clause text, without its leading Markdown list marker.\n"
       "If you cannot recall the clause or your answer is rejected:\n"
-      "1. Use read_file for all books of the bible in full.\n"
+      "1. Read all books of the bible in full, batched in one read_file call.\n"
       "2. Answer the `steer survey`.\n"
       f"3. Retry the ack with `{citation} <clause>`.\n\n"
       f"{listed}",

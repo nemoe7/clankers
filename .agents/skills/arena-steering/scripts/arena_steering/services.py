@@ -52,7 +52,7 @@ POLL_HEARTBEAT_SECONDS = 1.0
 POLL_FRESH_SECONDS = 5.0
 POLL_REPEAT_SECONDS = 45
 POLL_IMMEDIATE_SECONDS = 1.0
-BIBLE_READ = "If full bible missing, use read_file for {paths}"
+BIBLE_READ = "If full bible missing, read all of {paths} in one batched read_file call"
 _BIBLE_PATHS = (
   "AGENTS.md",
   "ARENA.md",
