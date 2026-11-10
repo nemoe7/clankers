@@ -2867,3 +2867,25 @@ def test_measure_live_devtools_tint_and_figma_guides(tmp_path):
       assert icn_code in bad_pair_res.stdout
     finally:
       server.shutdown()
+
+
+def test_playwright_default_is_the_last_chromium_lookup_step(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  monkeypatch.delenv("CHROMIUM_BIN", raising=False)
+  monkeypatch.setattr(nuu.shutil, "which", lambda _name: None)
+  monkeypatch.setattr(nuu, "playwright_chromium_executable", lambda: "/pw/chromium")
+  assert nuu.resolve_chromium_executable() == "/pw/chromium"
+
+
+def test_path_chromium_wins_before_the_playwright_default(
+  monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  monkeypatch.delenv("CHROMIUM_BIN", raising=False)
+  monkeypatch.setattr(
+    nuu.shutil,
+    "which",
+    lambda name: "/usr/bin/chromium" if name == "chromium" else None,
+  )
+  monkeypatch.setattr(nuu, "playwright_chromium_executable", lambda: "/pw/chromium")
+  assert nuu.resolve_chromium_executable() == "/usr/bin/chromium"

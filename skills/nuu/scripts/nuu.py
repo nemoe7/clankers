@@ -328,7 +328,7 @@ def resolve_renderer(explicit: str | None = None) -> str:
 
 
 def resolve_chromium_executable(explicit: str | Path | None = None) -> str | None:
-  """Resolve Chromium strictly via -x -> $CHROMIUM_BIN -> PATH chromium/chromium-browser/google-chrome."""
+  """Resolve Chromium via -x -> $CHROMIUM_BIN -> PATH -> Playwright default."""
   if explicit is not None and str(explicit).strip():
     raw = str(explicit).strip()
     cand = Path(raw)
@@ -355,6 +355,22 @@ def resolve_chromium_executable(explicit: str | Path | None = None) -> str | Non
     found = shutil.which(binary_name)
     if found:
       return found
+  return playwright_chromium_executable()
+
+
+def playwright_chromium_executable() -> str | None:
+  """Return the Playwright-managed Chromium binary, or None when absent."""
+  try:
+    from playwright.sync_api import sync_playwright
+  except ImportError:
+    return None
+  try:
+    with sync_playwright() as pw:
+      candidate = Path(pw.chromium.executable_path)
+  except Exception:
+    return None
+  if candidate.is_file() and os.access(candidate, os.X_OK):
+    return str(candidate)
   return None
 
 
@@ -362,8 +378,9 @@ def require_chromium_executable(explicit: str | Path | None = None) -> str:
   resolved = resolve_chromium_executable(explicit)
   if not resolved:
     raise RuntimeError(
-      "RUN102: No Chromium binary found via -x, $CHROMIUM_BIN, or PATH "
-      "(chromium, chromium-browser, google-chrome). Playwright-managed browsers are disabled."
+      "RUN102: No Chromium binary found via -x, $CHROMIUM_BIN, PATH "
+      "(chromium, chromium-browser, google-chrome), or the Playwright default. "
+      "Run `playwright install chromium`."
     )
   return resolved
 
