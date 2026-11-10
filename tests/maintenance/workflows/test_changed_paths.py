@@ -484,7 +484,8 @@ def test_ci_uses_one_read_only_job_and_saves_attempt_scoped_ledger():
   assert "changed_paths.py --step record" in runs
   assert "gate_pr.py" in runs and "--pr-title" in runs and "--version-bumps" in runs
   caches = [step for step in steps if "actions/cache/save@" in step.get("uses", "")]
-  assert caches and "github.run_attempt" in caches[0]["with"]["key"]
+  ledger = next(step for step in caches if "ci-ledger" in step["with"].get("key", ""))
+  assert "github.run_attempt" in ledger["with"]["key"]
 
 
 def test_ci_keeps_pr_plugin_validation_on_matching_changes():
