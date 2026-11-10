@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import importlib.util
+import os
 from http.server import ThreadingHTTPServer
 
 import pytest
 from arena_steering import cli
+
+
+@pytest.fixture(autouse=True)
+def _require_browser_when_requested() -> None:
+  """Turn a missing browser into a failure when CI_REQUIRE_BROWSER is set."""
+  if os.environ.get("CI_REQUIRE_BROWSER") != "1":
+    return
+  if importlib.util.find_spec("playwright.sync_api") is None:
+    pytest.fail("CI_REQUIRE_BROWSER=1 but playwright is not installed")
 
 
 @pytest.fixture(autouse=True)

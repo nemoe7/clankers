@@ -40,6 +40,24 @@ jobs:
         id: dependencies
         run: uv pip install --system -r requirements.txt
 
+      - name: Read Playwright Version
+        id: playwright_version
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: printf 'version=%s\n' "$(python -c 'import importlib.metadata as m; print(m.version("playwright"))')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Browser Download
+        id: browser_cache
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright_version.outputs.version }}
+
+      - name: Install Browser
+        id: browser
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: python -m playwright install --with-deps chromium
+
       - name: Describe Runner
         run: |
           printf 'CI_ENVIRONMENT=%s\n' "${RUNNER_OS}:${ImageOS}:${ImageVersion}:$(python --version):$(node --version):$(ruff --version)" >> "$GITHUB_ENV"
@@ -159,11 +177,19 @@ jobs:
         run: python maintenance/workflows/gate_workflows.py
 
       - name: Run Uncached Module Tests
-        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.npm.outcome == 'success' && steps.collect.outcome == 'success' && steps.collect.outputs.test_surfaces != '' }}
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.npm.outcome == 'success' && steps.collect.outcome == 'success' && steps.browser.outcome != 'failure' && steps.collect.outputs.test_surfaces != '' }}
         env:
           CI_TEST_SURFACES: ${{ steps.collect.outputs.test_surfaces }}
           CI_DIGESTS: ${{ steps.collect.outputs.digests }}
+          CI_REQUIRE_BROWSER: "1"
         run: python maintenance/workflows/changed_paths.py --step test
+
+      - name: Save Browser Download
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' && steps.browser_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright_version.outputs.version }}
 
       - name: Save Pass Ledger
         if: ${{ !cancelled() && steps.collect.outcome == 'success' }}

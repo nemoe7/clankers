@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.0]
+
+### Added
+
+- Run the browser tests in CI instead of skipping them, with the download cached by Playwright version.
+
 ## [2.2.9]
 
 ### Added
