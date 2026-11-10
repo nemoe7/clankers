@@ -1654,40 +1654,31 @@ def test_hidden_messages_are_cached_across_toggles(tmp_path: Path) -> None:
         assert calls == []
         toggle.click()
         hidden.wait_for(state="detached")
-        # A refresh that advances the revision invalidates the hidden window.
-        # The next toggle refetches it instead of reusing a stale cache.
-        with page.expect_response(lambda response: "/messages?" in response.url):
-          pass
+        # A hidden seen mark moves the global revision only, so the next
+        # toggle reuses the cache instead of refetching.
         calls.clear()
         toggle.click()
         hidden.wait_for()
-        assert calls
+        assert calls == []
         toggle.click()
         hidden.wait_for(state="detached")
         app.messages.send_message("New hidden", msg_id="aa0003", hidden=True)
-        with page.expect_request(lambda request: "/messages?" in request.url):
-          pass
+        # A hidden insert leaves the visible window intact. The toggle then
+        # shows the new hidden message from the cache.
+        calls.clear()
         toggle.click()
         page.locator('.message[data-msg-id="aa0003"]').wait_for()
         page.screenshot(path=str(tmp_path / "hidden-cache.png"))
         toggle.click()
         page.locator('.message[data-msg-id="aa0003"]').wait_for(state="detached")
-        page.evaluate("""() => {
-          const original = window.fetch;
-          window.holdNextMessage = true;
-          window.fetch = async (url, options) => {
-            if (window.holdNextMessage && String(url).startsWith('/messages?')) {
-              window.holdNextMessage = false;
-              await new Promise(resolve => { window.releaseMessage = resolve; });
-            }
-            return original(url, options);
-          };
-        }""")
+        calls.clear()
         app.messages.send_message("Racing hidden", msg_id="aa0004", hidden=True)
-        page.wait_for_function("() => typeof window.releaseMessage === 'function'")
+        # A hidden insert leaves the visible window intact, so no message
+        # fetch runs and the cache survives the insert.
+        page.wait_for_timeout(500)
+        assert calls == []
         toggle.click()
         page.locator('.message[data-msg-id="aa0004"]').wait_for()
-        page.evaluate("() => window.releaseMessage()")
       finally:
         browser.close()
   finally:

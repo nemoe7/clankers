@@ -221,6 +221,8 @@ async function getHealthWithConnection() {
   try {
     const health = await api.getHealth();
     healthSeenRevision = health.message_revision;
+    healthSeenVisibleRevision = health.visible_message_revision;
+    healthSeenMessageTotal = health.message_total;
     applyConnection(requestId, health, false, startedAt);
     if (requestId === appliedHealthRequestId) {
       confirmedViolation = health;
@@ -424,6 +426,8 @@ let historyCache = null;
 let hiddenMessageCache = null;
 let visibleWindowCache = null;
 let healthSeenRevision = undefined;
+let healthSeenVisibleRevision = undefined;
+let healthSeenMessageTotal = undefined;
 let visibleQueryRevision = undefined;
 let loadedMessageRevision = null;
 let searchBase = null;
@@ -474,9 +478,10 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
   const key = messageQueryKey(state);
   if (!before && !reset && !preserve && !state.showHidden) {
     const cached = cachedVisibleWindow(key);
-    // Only the revision this pass read may expire the cache. A revision read
-    // before the fetch can be older than the server, and then it never expires.
-    const passRevision = healthSeenRevision !== undefined ? healthSeenRevision : visibleQueryRevision;
+    // Only a visible revision may expire the cache, so a hidden write cannot refetch it.
+    const passRevision = healthSeenVisibleRevision !== undefined
+      ? healthSeenVisibleRevision
+      : visibleQueryRevision;
     if (cached && passRevision !== undefined && cached.revision === passRevision) {
       loadedMessageKey = key;
       loadedMessageRevision = cached.revision;
@@ -581,11 +586,16 @@ async function refreshAll(force = false) {
       api.listReports({ stale: false, summary: true }),
     ]);
     // The fetch races the health fetch, so refetch when this poll reports a
-    // newer revision than the rendered window.
+    // newer visible revision than the rendered window.
+    const pollRevision = health.visible_message_revision !== undefined
+      ? health.visible_message_revision
+      : health.message_revision;
+    // A count change means an insert the cache cannot hold, so expire it too.
+    const countChanged = health.message_total !== undefined &&
+      healthSeenMessageTotal !== undefined &&
+      health.message_total !== healthSeenMessageTotal;
     const msgRes =
-      health.message_revision &&
-      loadedMessageRevision &&
-      health.message_revision !== loadedMessageRevision
+      countChanged || (pollRevision && loadedMessageRevision && pollRevision !== loadedMessageRevision)
         ? await fetchMessagePage()
         : firstMsgRes;
     if (epoch !== refreshEpoch || msgRes === null) return;
@@ -898,11 +908,15 @@ const handlers = {
       };
       // Visibility is gated on the visible revision, not the hidden one.
       if (visibleQueryRevision !== undefined && !state.messagesLoading && !messageRequests) {
+        const visibleRevision = healthSeenVisibleRevision !== undefined
+          ? healthSeenVisibleRevision
+          : visibleQueryRevision;
+        healthSeenMessageTotal = state.messages?.length;
         visibleWindowCache = {
           key: messageQueryKey({ ...state, showHidden: false }),
           messages: (state.messages || []).filter(message => !message.hidden),
           hasMore: state.messagesHasMore,
-          revision: visibleQueryRevision,
+          revision: visibleRevision,
         };
       }
       // Reuse the window the toggle-off already holds instead of refetching it.

@@ -943,6 +943,8 @@ class SteeringApp:
         "turn_ended_at": self.store.get_meta("turn_ended_at") or None,
         "last_tool": self.messages.tool_activity(),
         "message_revision": self.store.message_revision(),
+        "visible_message_revision": self.store.visible_message_revision(),
+        "message_total": self.store.message_count(),
         "calls_since_message": self.messages.calls_since_message(),
       },
     )
@@ -1340,6 +1342,7 @@ class SteeringApp:
       "total": total,
       "has_more": has_more,
       "revision": revision,
+      "visible_revision": self.store.visible_message_revision(),
     }
     request_id = query.get("request_id", [""])[0]
     if request_id:

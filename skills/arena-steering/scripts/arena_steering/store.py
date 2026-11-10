@@ -418,6 +418,25 @@ class SqliteStore:
       ).fetchone()
     return int(row[0])
 
+  def message_count(self) -> int:
+    """Total messages, so an insert still expires a cache the insert never touches."""
+    with self._lock:
+      row = self._conn.execute("SELECT count(*) FROM messages").fetchone()
+    return int(row[0])
+
+  def visible_message_revision(self) -> int:
+    """Revision of visible messages only, so a hidden write cannot expire them."""
+    with self._lock:
+      row = self._conn.execute(
+        """
+        SELECT COALESCE(MAX(version.revision_us), 0)
+        FROM state_row_versions version
+        JOIN messages message ON message.id = version.row_id
+        WHERE version.table_name = 'messages' AND message.hidden = 0
+        """
+      ).fetchone()
+    return int(row[0])
+
   def hidden_message_window(
     self, first: str, last: str, query: str = ""
   ) -> tuple[list[Message], int, list[str]]:
