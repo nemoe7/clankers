@@ -345,16 +345,17 @@ def test_answer_request_lookup_matches_report_and_committed_request() -> None:
     'Choice?\n- (x) A <!-- option {"label":"A"} -->\n'
     '- ( ) B <!-- option {"label":"B"} -->\n',
   )
+  request_id = store.issue_browser_write_token()
   status, result = app.dispatch(
     "POST",
     "/reports/decision/answers",
-    {"values": {"choice": "B"}, "_request_id": "req-one"},
+    {"values": {"choice": "B"}, "_request_id": request_id},
   )
   assert status == 201
-  assert app.dispatch("GET", "/reports/decision/answer-requests/req-one")[1] == {
-    "answer_id": result["answer"]["id"]
-  }
-  assert app.dispatch("GET", "/reports/other/answer-requests/req-one")[1] == {
+  assert app.dispatch(
+    "GET", f"/reports/decision/answer-requests/{request_id}"
+  )[1] == {"answer_id": result["answer"]["id"]}
+  assert app.dispatch("GET", f"/reports/other/answer-requests/{request_id}")[1] == {
     "answer_id": None
   }
   assert app.dispatch("GET", "/reports/decision/answer-requests/missing")[1] == {
