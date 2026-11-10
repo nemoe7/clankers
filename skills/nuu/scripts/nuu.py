@@ -327,39 +327,40 @@ def resolve_renderer(explicit: str | None = None) -> str:
   return raw
 
 
+def _executable_or_none(raw: str) -> str | None:
+  """Return a resolved executable for a path or PATH name."""
+  candidate = Path(raw)
+  if candidate.is_file() and os.access(candidate, os.X_OK):
+    return str(candidate.resolve())
+  return shutil.which(raw)
+
+
 def resolve_chromium_executable(explicit: str | Path | None = None) -> str | None:
-  """Resolve Chromium via -x -> $CHROMIUM_BIN -> PATH -> Playwright default."""
+  """Resolve Chromium via -x -> Playwright default -> $CHROMIUM_BIN."""
   if explicit is not None and str(explicit).strip():
     raw = str(explicit).strip()
-    cand = Path(raw)
-    if cand.is_file() and os.access(cand, os.X_OK):
-      return str(cand.resolve())
-    which_hit = shutil.which(raw)
-    if which_hit:
-      return which_hit
+    resolved = _executable_or_none(raw)
+    if resolved:
+      return resolved
     raise FileNotFoundError(f"RUN102: Chromium executable not found: {raw}")
+
+  default_bin = playwright_chromium_executable()
+  if default_bin:
+    return default_bin
 
   env_bin = (os.environ.get("CHROMIUM_BIN") or "").strip()
   if env_bin:
-    cand = Path(env_bin)
-    if cand.is_file() and os.access(cand, os.X_OK):
-      return str(cand.resolve())
-    which_hit = shutil.which(env_bin)
-    if which_hit:
-      return which_hit
+    resolved = _executable_or_none(env_bin)
+    if resolved:
+      return resolved
     raise FileNotFoundError(
       f"RUN102: $CHROMIUM_BIN is not an executable file: {env_bin}"
     )
-
-  for binary_name in ("chromium", "chromium-browser", "google-chrome"):
-    found = shutil.which(binary_name)
-    if found:
-      return found
-  return playwright_chromium_executable()
+  return None
 
 
 def playwright_chromium_executable() -> str | None:
-  """Return the Playwright-managed Chromium binary, or None when absent."""
+  """Return the Playwright default Chromium binary, or None when absent."""
   try:
     from playwright.sync_api import sync_playwright
   except ImportError:
@@ -371,6 +372,11 @@ def playwright_chromium_executable() -> str | None:
     return None
   if candidate.is_file() and os.access(candidate, os.X_OK):
     return str(candidate)
+  if sys.platform == "win32":
+    for suffix in (".exe", ".cmd", ".bat"):
+      sibling = candidate.with_name(candidate.name + suffix)
+      if sibling.is_file() and os.access(sibling, os.X_OK):
+        return str(sibling)
   return None
 
 
@@ -378,9 +384,8 @@ def require_chromium_executable(explicit: str | Path | None = None) -> str:
   resolved = resolve_chromium_executable(explicit)
   if not resolved:
     raise RuntimeError(
-      "RUN102: No Chromium binary found via -x, $CHROMIUM_BIN, PATH "
-      "(chromium, chromium-browser, google-chrome), or the Playwright default. "
-      "Run `playwright install chromium`."
+      "RUN102: No Chromium binary found via -x, the Playwright default, or "
+      "$CHROMIUM_BIN. Run `playwright install chromium`."
     )
   return resolved
 

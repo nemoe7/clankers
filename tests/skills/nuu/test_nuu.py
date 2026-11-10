@@ -3,6 +3,8 @@
 import json
 import subprocess
 import sys
+import tomllib
+import types
 from pathlib import Path
 
 import annotate
@@ -11,6 +13,9 @@ import nuu
 import pytest
 
 SCRIPT = Path(nuu.__file__).resolve()
+
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _chromium_ready() -> str | None:
@@ -79,7 +84,10 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   assert doc_res["catalog"]["files"] > 0
   assert not doc_res["catalog"]["mismatches"]
   doc_cli = run("doctor")
-  assert "# Nuu Doctor (`v0.2.1`)" in doc_cli.stdout
+  version = tomllib.loads(
+    (ROOT / "skills/nuu/pyproject.toml").read_text(encoding="utf-8")
+  )["project"]["version"]
+  assert f"# Nuu Doctor (`v{version}`)" in doc_cli.stdout
 
   exact = nuu.search("healthcare dashboard", dataset="products", limit=5)
   assert exact["results"] and not exact["fallback"]
@@ -2869,23 +2877,60 @@ def test_measure_live_devtools_tint_and_figma_guides(tmp_path):
       server.shutdown()
 
 
-def test_playwright_default_is_the_last_chromium_lookup_step(
-  monkeypatch: pytest.MonkeyPatch,
+def test_playwright_default_wins_before_chromium_bin(
+  monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-  monkeypatch.delenv("CHROMIUM_BIN", raising=False)
-  monkeypatch.setattr(nuu.shutil, "which", lambda _name: None)
+  env_bin = tmp_path / "env-chromium"
+  env_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+  env_bin.chmod(0o755)
+  monkeypatch.setenv("CHROMIUM_BIN", str(env_bin))
   monkeypatch.setattr(nuu, "playwright_chromium_executable", lambda: "/pw/chromium")
   assert nuu.resolve_chromium_executable() == "/pw/chromium"
 
 
-def test_path_chromium_wins_before_the_playwright_default(
-  monkeypatch: pytest.MonkeyPatch,
+def test_chromium_bin_is_the_last_chromium_lookup_step(
+  monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-  monkeypatch.delenv("CHROMIUM_BIN", raising=False)
-  monkeypatch.setattr(
-    nuu.shutil,
-    "which",
-    lambda name: "/usr/bin/chromium" if name == "chromium" else None,
-  )
+  env_bin = tmp_path / "env-chromium"
+  env_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+  env_bin.chmod(0o755)
+  monkeypatch.setenv("CHROMIUM_BIN", str(env_bin))
+  monkeypatch.setattr(nuu, "playwright_chromium_executable", lambda: None)
+  assert nuu.resolve_chromium_executable() == str(env_bin.resolve())
+
+
+def test_explicit_path_wins_before_the_playwright_default(
+  monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+  explicit = tmp_path / "explicit-chromium"
+  explicit.write_text("#!/bin/sh\n", encoding="utf-8")
+  explicit.chmod(0o755)
   monkeypatch.setattr(nuu, "playwright_chromium_executable", lambda: "/pw/chromium")
-  assert nuu.resolve_chromium_executable() == "/usr/bin/chromium"
+  assert nuu.resolve_chromium_executable(explicit) == str(explicit.resolve())
+
+
+def test_playwright_default_still_resolves_a_windows_executable(
+  monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+  candidate = tmp_path / "chrome"
+  sibling = tmp_path / "chrome.exe"
+  sibling.write_text("", encoding="utf-8")
+  monkeypatch.setattr(sys, "platform", "win32")
+
+  class _Chromium:
+    executable_path = str(candidate)
+
+  class _Playwright:
+    chromium = _Chromium()
+
+    def __enter__(self):
+      return self
+
+    def __exit__(self, *_exc):
+      return False
+
+  fake = types.SimpleNamespace(sync_playwright=lambda: _Playwright())
+  monkeypatch.setitem(sys.modules, "playwright.sync_api", fake)
+  monkeypatch.setattr(nuu.os, "access", lambda _path, _mode: True)
+  monkeypatch.setattr(Path, "is_file", lambda self: self.name.endswith(".exe"))
+  assert nuu.playwright_chromium_executable() == str(sibling)

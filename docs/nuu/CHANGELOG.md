@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.2.2]
+
+### Changed
+
+- **Chromium lookup (`scripts/*.py`)**: Resolve `-x`, then the Playwright default browser, then `$CHROMIUM_BIN`, and drop the PATH scan for `chromium`, `chromium-browser`, and `google-chrome`.
+- **Playwright default on Windows (`scripts/*.py`)**: Accept `.exe`, `.cmd`, and `.bat` siblings when the reported path has no extension.
+
 ## [0.2.1]
 
 ### Added

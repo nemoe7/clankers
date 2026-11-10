@@ -18,7 +18,7 @@
 
 ## Runtime Environment and Exit Codes
 
-- **Chromium lookup:** `1.` `-x, --executable <bin>` -> `2.` `$CHROMIUM_BIN` -> `3.` `shutil.which("chromium" | "chromium-browser" | "google-chrome")`. Playwright-managed browser downloads are never run.
+- **Chromium lookup:** `1.` `-x, --executable <bin>` -> `2.` the Playwright default browser at `pw.chromium.executable_path` -> `3.` `$CHROMIUM_BIN`. Playwright-managed browser downloads are never run.
 - **Native libraries & fonts:** `$CHROMIUM_LIB` prepends to child `LD_LIBRARY_PATH`, and `$CHROMIUM_FONTS` sets child `FONTCONFIG_FILE` (or generates a `fonts.conf` directory wrapper when given a font folder).
 - **Renderer override:** `$NUU_RENDERER` accepts `auto` (default), `chromium`, or `bitmap` (forces pure-Python PNG drawing in `annotate -i` and `board -T panels`).
 - **Config discovery:** `1.` `-c, --config <toml>` -> `2.` nearest `nuu.toml` walking up from `cwd` -> `3.` bundled `references/nuu.toml`. Unknown keys warn on `stderr`; invalid TOML syntax reports `<path>:<line>:<col>` (`exit 1`).
