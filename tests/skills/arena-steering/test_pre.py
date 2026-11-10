@@ -4349,6 +4349,43 @@ def test_timeline_activity_replaces_the_native_tool_label(_isolate_state: Path) 
   store.close()
 
 
+def test_a_quiet_note_reports_itself_without_gating(_isolate_state: Path) -> None:
+  _isolate_state.mkdir(parents=True, exist_ok=True)
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  messages.send_message("Quiet note.", hidden=True, blocking=False)
+  store.close()
+
+  code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  assert code == pre.CONTINUE
+  assert "non-blocking unread" in out
+
+
+def test_a_quiet_note_never_blocks_a_push(_isolate_state: Path) -> None:
+  _isolate_state.mkdir(parents=True, exist_ok=True)
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  messages.send_message("Quiet note.", hidden=True, blocking=False)
+  store.close()
+
+  code, out = _run("pre", "-c", "git push --dry-run", "-s", "bash")
+  assert code == pre.CONTINUE
+  assert "Push blocked" not in out
+
+
+def test_a_blocking_note_keeps_the_countdown_alongside_quiet_ones(
+  _isolate_state: Path,
+) -> None:
+  _isolate_state.mkdir(parents=True, exist_ok=True)
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  messages.send_message("Loud note.", blocking=True)
+  messages.send_message("Quiet note.", hidden=True, blocking=False)
+  store.close()
+
+  code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  assert code == pre.CONTINUE
+  assert "bash block in" in out
+  assert "Plus 1 non-blocking unread." in out
+
+
 def test_recorded_activity_labels_reach_the_messages_tab(_isolate_state: Path) -> None:
   store, messages, _, _ = cli.open_services(_isolate_state)
   for name in sorted(services.ACTIVITY_NAMES):

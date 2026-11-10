@@ -22,6 +22,7 @@ This log has no Unreleased section.
 - Keep retrying the browser connection after both transports drop, with no backoff, so the page recovers without a refresh.
 - Serve the cached visible window after the hidden toggle turns off, so the next polls make no `/messages` request until the message revision changes.
 - Expire that cached window when the health revision moves past it, so a new message or ack still reaches the page after a toggle.
+- Report non-blocking unread notes in the gate line even when no blocking note exists, and mark unread messages on the Messages tab.
 - Keep the standing reminder out of the finished-step list so a shell cannot skip it after the first call.
 - Share one unpushed-commit count and message between the pre-command guard and the exit reminders.
 
