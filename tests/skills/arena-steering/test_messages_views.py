@@ -1066,6 +1066,49 @@ def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
     store.close()
 
 
+@pytest.mark.parametrize("width", [390, 1200])
+def test_optimistic_row_shows_while_the_write_token_is_held(
+  tmp_path: Path, width: int
+) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  store = SqliteStore()
+  app = SteeringApp(store, repo_name="Held write token")
+  app.messages.send_message("Existing thread", msg_id="ab0201")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        page.set_default_timeout(8000)
+        # Hold the token so the send cannot start until the row must already show.
+        held: list = []
+        page.route("**/browser-write-token", lambda route: held.append(route))
+        page.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+        history = page.locator("#history")
+        history.locator(".message").first.wait_for()
+        page.locator("#msg").fill("Shown before the token arrives")
+        page.locator("#send").click()
+        # The optimistic row must be visible while the token request hangs.
+        optimistic = history.locator(".message").filter(
+          has_text="Shown before the token arrives"
+        )
+        optimistic.first.wait_for(timeout=4000)
+        assert optimistic.count() >= 1
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    store.close()
+
+
 @pytest.mark.parametrize("width,height", [(390, 844), (1200, 700)])
 def test_message_content_growth_preserves_bottom_pin(
   tmp_path: Path, width: int, height: int
