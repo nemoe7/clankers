@@ -3778,3 +3778,62 @@ def test_userscript_detects_ended_turn_through_cross_origin_steering(
     server.server_close()
     thread.join(timeout=2)
     store.close()
+
+
+def test_page_keeps_retrying_when_both_transports_drop(tmp_path: Path) -> None:
+  playwright = pytest.importorskip("playwright.sync_api")
+  path = tmp_path / "state.sqlite3"
+  server_store = SqliteStore(path)
+  writer_store = SqliteStore(path)
+  app = SteeringApp(server_store)
+  writer = SteeringApp(writer_store)
+  app.messages.send_message("Awaiting reply", msg_id="ab0123")
+  server = create_http_server(app, host="0.0.0.0", port=0)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    with playwright.sync_playwright() as runner:
+      browser = runner.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+      )
+      try:
+        page = browser.new_page()
+        # A refused socket must not end the reconnect loop.
+        page.add_init_script(
+          """(() => {
+            const RealWebSocket = window.WebSocket;
+            let attempts = 0;
+            window.__socketAttempts = () => attempts;
+            window.WebSocket = function () {
+              attempts += 1;
+              if (!window.__socketHealthy) throw new Error("socket refused");
+              return new RealWebSocket(...arguments);
+            };
+            window.WebSocket.prototype = RealWebSocket.prototype;
+          })()"""
+        )
+        page.goto(f"http://127.0.0.1:{server.server_port}/")
+        card = page.locator('[data-msg-id="ab0123"]').first
+        card.wait_for(state="visible")
+        page.route("**/health**", lambda route: route.abort())
+        page.route("**/messages?**", lambda route: route.abort())
+        first = page.evaluate("() => window.__socketAttempts()")
+        page.wait_for_function(
+          "first => window.__socketAttempts() > first", arg=first, timeout=12000
+        )
+        assert page.evaluate("() => window.__socketAttempts()") > 1
+        page.unroute("**/health**")
+        page.unroute("**/messages?**")
+        writer.messages.ack("ab0123", "Recovered without refresh")
+        card.locator(".reply").get_by_text("Recovered without refresh").wait_for(
+          timeout=15000
+        )
+      finally:
+        browser.close()
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+    writer_store.close()
+    server_store.close()

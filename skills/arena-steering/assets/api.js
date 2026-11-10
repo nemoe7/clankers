@@ -5,6 +5,8 @@ let liveSocket = null;
 let socketSequence = 0;
 let lastSocketMessage = 0;
 let socketRetry = null;
+// Bumped on every connect attempt so a superseded attempt cannot retry again.
+let connectAttempt = 0;
 const socketCalls = new Map();
 let changeHandler = () => {};
 let reloadHandler = () => {};
@@ -17,6 +19,8 @@ function startFallbackPoll() {
     if (!liveSocket || liveSocket.readyState !== 1) {
       changeHandler();
     }
+    // Keep reconnecting until a transport recovers, because a failed attempt must not end the loop.
+    if (!liveSocket) connectWebSocket();
   }, 3000);
 }
 
@@ -54,10 +58,19 @@ export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
     startFallbackPoll();
     return;
   }
+  // From here a new attempt supersedes any earlier one.
+  const attempt = ++connectAttempt;
+  clearTimeout(socketRetry);
+  socketRetry = null;
   liveSocket = socket;
+  // A half-open socket must not outlive the attempt, or the poll timer skips retrying.
   const deadline = setTimeout(() => socket.close(), 10000);
   socket.addEventListener("open", () => {
     clearTimeout(deadline);
+    if (liveSocket !== socket) {
+      socket.close();
+      return;
+    }
     lastSocketMessage = Date.now();
     stopFallbackPoll();
     changeHandler();
@@ -116,16 +129,11 @@ export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
     }
     socketCalls.clear();
     startFallbackPoll();
+    if (attempt !== connectAttempt) return;
     clearTimeout(socketRetry);
-    socketRetry = setTimeout(
-      () =>
-        connectWebSocket({
-          onChange: changeHandler,
-          onReload: reloadHandler,
-          onReportAcked: reportAckedHandler,
-        }),
-      1000
-    );
+    socketRetry = setTimeout(() => {
+      if (attempt === connectAttempt) connectWebSocket();
+    }, 1000);
   });
 }
 

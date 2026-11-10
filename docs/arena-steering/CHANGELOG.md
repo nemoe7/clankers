@@ -18,6 +18,7 @@ This log has no Unreleased section.
 
 - Write a launcher with its own library and font configuration instead of symlinking the bare binary.
 - Drop the browser test gates on `ARENA_STEERING_CHROMIUM` and `CHROMIUM_BIN` so the tests use the default browser.
+- Keep retrying the browser connection after both transports drop, with no backoff, so the page recovers without a refresh.
 - Keep the standing reminder out of the finished-step list so a shell cannot skip it after the first call.
 - Share one unpushed-commit count and message between the pre-command guard and the exit reminders.
 
