@@ -7,7 +7,7 @@ import {
 } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
-import { reconcileElement, renderParentChip } from "./dom.js";
+import { reconcileElement, renderAnswerBlock, renderParentChip } from "./dom.js";
 import { readComposerDraft, writeComposerDraft } from "./state.js";
 
 import {
@@ -359,12 +359,15 @@ export function renderMessagesView(container, state, handlers) {
             ? " message-text-multiline"
             : "";
           const acksHtml = acks.length
-            ? `<div class="answer reply message-text">${acks
+            ? acks
                 .map(
                   (_, idx) =>
-                    markdownBatch.slot(acksHtmlList[idx] ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', idx > 0 ? "reply-block" : "", query)
+                    renderAnswerBlock(
+                      markdownBatch.slot(acksHtmlList[idx] ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', idx > 0 ? "reply-block" : "", query),
+                      { first: idx === 0 }
+                    )
                 )
-                .join("")}</div>`
+                .join("")
             : "";
           const statusText = msg.optimistic ? "Sending" : msg.status === "sent" ? "Sent" : msg.status === "seen" ? "Seen" : "";
           const stateLabel = escapeHtml(`${msg.hidden ? "Hidden message. " : ""}Status: ${msg.optimistic ? "sending" : msg.status}`);

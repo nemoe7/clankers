@@ -1,6 +1,6 @@
 // Reports tab view with left TOC rail, center report column, and right report selector rail.
 
-import { reconcileView, renderParentChip } from "./dom.js";
+import { reconcileView, renderAnswerBlock, renderParentChip } from "./dom.js";
 import { escapeHtml, renderInlineCode } from "./markdown.js";
 import { relativeTime } from "./timestamps.js";
 import { createMarkdownBatch } from "./markdown-dom-cache.js";
@@ -318,7 +318,7 @@ export function renderReportsView(container, state, handlers) {
               <div class="message-heading"><strong><code class="msg-id" aria-label="Answer ${escapeHtml(ans.id)}">${escapeHtml(ans.id)}</code></strong></div>
               <div class="message-bubble">
                 <div class="message-text"><p>${escapeHtml(entries)}</p></div>
-                ${ans.pending ? `<div class="answer reply" role="status">Sending answer…</div>` : ans.ack ? `<div class="answer reply message-text">${markdownBatch.slot(ans.ack_html ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', "report-ack-markdown")}</div>` : ""}
+                ${ans.pending || ans.ack ? renderAnswerBlock(markdownBatch.slot(ans.ack_html ?? '<p role="alert">Rendered acknowledgement unavailable.</p>', "report-ack-markdown"), { pending: Boolean(ans.pending) }) : ""}
               </div>
               <p class="receipt"><time role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" datetime="${iso}" data-timestamp="${iso}" data-prefix="${status}">${status ? `${status} ` : ""}${rel}</time></p>
             </div>

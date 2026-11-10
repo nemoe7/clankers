@@ -75,6 +75,16 @@ UPLOAD_FILE_API = "uploadFile"
 SEND_MESSAGE_WITH_FILE_API = "sendMessageWithFile"
 
 
+def test_answer_blocks_share_one_renderer() -> None:
+  dom_js = (ASSETS_DIR / "dom.js").read_text(encoding="utf-8")
+  assert "export function renderAnswerBlock" in dom_js
+  assert 'class="answer reply message-text' in dom_js
+  for name in ("messages-view.js", "reports-view.js"):
+    view_js = (ASSETS_DIR / name).read_text(encoding="utf-8")
+    assert "renderAnswerBlock" in view_js, name
+    assert '<div class="answer reply message-text' not in view_js, name
+
+
 def test_multi_message_reply_assets() -> None:
   dom_js = (ASSETS_DIR / "dom.js").read_text(encoding="utf-8")
   assert REPLY_PARENT_CHIP_CLASS in dom_js

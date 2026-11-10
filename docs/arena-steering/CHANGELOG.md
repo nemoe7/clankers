@@ -15,6 +15,8 @@ This log has no Unreleased section.
 
 - Give the report ID chip the same horizontal text inset as the message and task chips.
 
+- Render report answer acknowledgements through the shared message answer block.
+
 ## [2.2.5]
 
 ### Removed

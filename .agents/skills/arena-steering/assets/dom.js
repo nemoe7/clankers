@@ -116,3 +116,10 @@ export function renderParentChip(type, id) {
   const label = escapeHtml(`${type} ${id}`);
   return `<button type="button" class="reply-parent-chip" data-reference-type="${escapeHtml(type)}" data-reference-id="${escapeHtml(id)}" aria-label="Open ${label}"><code>${escapeHtml(id)}</code></button>`;
 }
+
+export function renderAnswerBlock(content, { pending = false, first = true } = {}) {
+  const text = pending
+    ? '<div class="answer reply" role="status">Sending answer…</div>'
+    : content;
+  return `<div class="answer reply message-text${first ? "" : " reply-block"}">${text}</div>`;
+}
