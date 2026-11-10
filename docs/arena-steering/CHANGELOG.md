@@ -9,6 +9,7 @@ This log has no Unreleased section.
 ### Added
 
 - Order a `report` phase first when the code waits on an approved report.
+- Create a work message's task before starting the work it asks for.
 
 ## [2.2.8]
 
