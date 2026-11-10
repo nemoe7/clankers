@@ -4598,6 +4598,20 @@
       timerFor = null;
     }
 
+    function markerAbsentState() {
+      var frame = previewFrame(document);
+      if (!frame || frame !== knownFrame || frame.src !== knownSrc) return null;
+      var doc;
+      try {
+        doc = frame.contentDocument;
+      } catch (_) {
+        return null;
+      }
+      // A readable frame with no marker proves the poll state is absent.
+      if (!doc || !doc.documentElement || doc.querySelector("#steering-poll-state")) return null;
+      return {available: "true", updatedAt: String(Date.now()), polling: "false", pollingGate: "false", pollCompleted: "false", markerAbsent: "true"};
+    }
+
     function target() {
       var editor = document.querySelector('div.tiptap.ProseMirror[contenteditable="true"]');
       if (!editor) return null;
@@ -4611,6 +4625,7 @@
           editor.getAttribute("aria-disabled") === "true") return null;
       if (editor.textContent === "" && endedAt) {
         var state = pollState();
+        if (!state) state = markerAbsentState();
         if (state && state.available === "true" && Number(state.updatedAt) >= endedAt) {
           violationSince = endedAt;
           endedAt = 0;
@@ -4645,7 +4660,7 @@
           autoWakeSentFor === location.href) return null;
       if (generatedViolation !== null && draft === generatedViolation) {
         var latestRow = lastMessageRow(lastMessageRoot(document));
-        var latestState = pollState();
+        var latestState = pollState() || markerAbsentState();
         if (!latestRow || !hasClassToken(latestRow, "prose") || !latestState ||
             latestState.available !== "true" || !(Number(latestState.updatedAt) >= violationSince) ||
             (latestState.polling === "true" && latestState.pollingGate !== "true") ||

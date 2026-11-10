@@ -438,8 +438,9 @@ runBundle("arena");
     let keepWorkingClicks = 0;
     let pollState = null;
     let crossOrigin = false;
+    let markerless = false;
     const frameWindow = { postMessage() {} };
-    const frame = {src: "https://example.test/", contentWindow: frameWindow, getAttribute(name) { return name === "title" ? "App preview on port 8000" : null; }, get contentDocument() { return !crossOrigin && pollState ? {querySelector() { return {dataset: pollState}; }} : null; }};
+    const frame = {src: "https://example.test/", contentWindow: frameWindow, getAttribute(name) { return name === "title" ? "App preview on port 8000" : null; }, get contentDocument() { if (crossOrigin) return null; if (markerless) return {documentElement: {}, querySelector() { return null; }}; return pollState ? {documentElement: {}, querySelector() { return {dataset: pollState}; }} : null; }};
     const spinnerRow = {
       tagName: "DIV",
       className: "flex w-fit items-center justify-start gap-1.5",
@@ -520,7 +521,7 @@ runBundle("arena");
           return null;
         },
         querySelectorAll(selector) {
-          if (selector === "iframe[title]") return pollState ? [frame] : [];
+          if (selector === "iframe[title]") return pollState || markerless ? [frame] : [];
           if (selector === "button[aria-label]" || selector === "button") return generating ? [{ getAttribute() { return "Stop generating"; } }, button] : [button];
           if (selector === "[data-agent-transcript-message]") return roots;
           if (selector.includes("border-red-500")) return alerts;
@@ -734,22 +735,30 @@ runBundle("arena");
     fire(); flush();
     assert.equal(clicks, 6, "the same turn is sent once");
     editor.innerText = ""; fire();
+    markerless = true;
+    roots = [messageRoot("ended-markerless", false, [proseRow])];
+    generating = true; fire();
+    editor.innerText = "";
+    generating = false; fire(); flush();
+    assert.equal(clicks, 7, "an absent poll marker is a violation, not a silent pass");
+    markerless = false;
+    editor.innerText = ""; fire();
     editor.innerText = "Resume now"; fire(); flush();
-    assert.equal(clicks, 7, "the configured wake text also auto-sends");
+    assert.equal(clicks, 8, "the configured wake text also auto-sends");
     editor.innerText = ""; fire();
     roots = [messageRoot("cross-origin", false, [proseRow])];
     crossOrigin = true;
     generating = true; fire();
     generating = false; fire(); flush();
-    assert.equal(clicks, 7, "without a reply, no automatic message is sent");
+    assert.equal(clicks, 8, "without a reply, no automatic message is sent");
     const reply = { type: "clankers:steering-poll-state", available: "true", polling: "false", pollingGate: "false", pollCompleted: "false", updatedAt: "9999999999999" };
     emit("message", {source: {}, origin: "https://example.test", data: reply});
     emit("message", {source: frameWindow, origin: "https://wrong.test", data: reply});
     flush();
-    assert.equal(clicks, 7, "untrusted frames and origins are ignored");
+    assert.equal(clicks, 8, "untrusted frames and origins are ignored");
     emit("message", {source: frameWindow, origin: "https://example.test", data: reply});
     flush();
-    assert.equal(clicks, 8, "a fresh reply from the Steering frame triggers the violation");
+    assert.equal(clicks, 9, "a fresh reply from the Steering frame triggers the violation");
     editor.innerText = ""; fire();
     crossOrigin = true;
     present = false;
@@ -765,7 +774,7 @@ runBundle("arena");
     emit("message", {source: frameWindow, origin: "https://example.test", data: {...pollState, type: "clankers:steering-poll-state"}});
     fire(); flush();
     assert.equal(editor.innerText, "Resume now", "a non-prose last row uses the normal wake");
-    assert.equal(clicks, 9);
+    assert.equal(clicks, 10);
     editor.innerText = ""; fire();
     present = false; keepWorkingVisible = true;
     roots = [messageRoot("unreachable-steering", false, [proseRow, actionRow])];
@@ -783,7 +792,7 @@ runBundle("arena");
     generating = false; fire(); flush();
     keepWorkingVisible = false; present = true; fire(); flush();
     assert.equal(editor.innerText, "Resume now", "unrecognized previews preserve the existing wake flow");
-    assert.equal(clicks, 11);
+    assert.equal(clicks, 12);
   });
 }
 
