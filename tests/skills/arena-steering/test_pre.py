@@ -2226,6 +2226,8 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   )
   assert refreshed.returncode == 0, refreshed.stderr
   assert profile.read_text(encoding="utf-8") == profile_text
+  global_ignore = home / ".config" / "git" / "ignore"
+  assert global_ignore.read_text(encoding="utf-8").splitlines() == [".worktrees/"]
   with sqlite3.connect(database) as connection:
     assert connection.execute("SELECT body FROM messages").fetchall() == [
       ("Keep this note through reinstall.",)

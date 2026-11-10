@@ -237,6 +237,13 @@ if updated != original:
   profile.write_text(updated, encoding="utf-8")
 PY
 
+GLOBAL_IGNORE="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
+mkdir -p "$(dirname -- "$GLOBAL_IGNORE")" || fail "cannot create $(dirname -- "$GLOBAL_IGNORE")"
+touch "$GLOBAL_IGNORE" || fail "cannot create $GLOBAL_IGNORE"
+if ! grep -qxF ".worktrees/" "$GLOBAL_IGNORE"; then
+  printf '%s\n' ".worktrees/" >> "$GLOBAL_IGNORE" || fail "cannot update $GLOBAL_IGNORE"
+fi
+
 mkdir -p "$GIT_HOOKS" || fail "cannot create $GIT_HOOKS"
 cat > "$GIT_HOOK" <<'COMMIT_MSG_HOOK' || fail "cannot write $GIT_HOOK"
 #!/bin/sh
