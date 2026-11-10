@@ -1560,7 +1560,7 @@ class BibleReadGuard:
 
   name = "bible"
 
-  VERBS = ("cat", "grep", "head", "tail", "rg")
+  VERBS = ("awk", "cat", "grep", "head", "sed", "tail", "rg")
   INSTALLED_SKILL = Path(".agents/skills/arena-steering/SKILL.md")
 
   def applies(self, ctx: PreContext) -> bool:

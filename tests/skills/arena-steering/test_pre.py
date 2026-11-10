@@ -1637,6 +1637,9 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "find skills -name AGENTS.md -print && rg -n gate AGENTS.md",
     "rg -n gate AGENTS.md && find skills -name ARENA.md -print",
     "rg --files -g AGENTS.md && rg -n gate AGENTS.md",
+    "awk 'NR>=105 && NR<=113' ARENA.md",
+    "sed -n '1,20p' AGENTS.md",
+    "sed -n '100,120p' .agents/skills/arena-steering/SKILL.md",
   ):
     ctx = pre.PreContext(line=line, shell="bash")
     assert guard.applies(ctx), line
@@ -1654,6 +1657,8 @@ def test_a_partial_read_of_the_bible_blocks_every_verb() -> None:
     "rg --files .agents/skills/arena-steering -g SKILL.md",
     "rg --files -g ARENA.md -g AGENTS.md",
     "printf AGENTS.md | head -n 1",
+    "awk 'NR>=1 && NR<=5' assets/app.js",
+    "sed -n '1,20p' tests/skills/arena-steering/test_pre.py",
   ):
     assert not guard.applies(pre.PreContext(line=line, shell="bash")), line
 
