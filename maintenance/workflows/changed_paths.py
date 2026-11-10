@@ -209,6 +209,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_reports_ui.py",
     "tests/skills/arena-steering/test_pre.py",
     "tests/skills/arena-steering/test_browser_requirement.py",
+    "tests/skills/arena-steering/test_browser_retry.py",
   ),
   "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
   "UI/UX": (
