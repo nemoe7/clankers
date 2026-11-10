@@ -3202,7 +3202,6 @@ def test_new_blocker_still_blocks_push_after_gate_step_done() -> None:
     ("go test ./...", "go-tests"),
     ("cargo test", "cargo-tests"),
     ("gh pr checks 124 --watch", "pr-checks"),
-    ("gh pr checks 124 --json name,state", "pr-checks"),
     ("gh run watch 123", "run-watch"),
   ),
 )
@@ -3289,6 +3288,13 @@ def test_mixed_shell_routing_block_is_not_a_violation(_isolate_state: Path) -> N
   store.close()
 
 
+def test_a_plain_check_listing_never_detaches() -> None:
+  line = "gh pr checks 124 --json name,state"
+  result = pre.run_pipeline(pre.PreContext(line=line, command=line))
+  assert result.verdict == pre.CONTINUE
+  assert result.route is None
+
+
 @pytest.mark.parametrize(
   "line",
   (
@@ -3363,8 +3369,8 @@ def test_mixed_route_exit_status_reaches_shell(tmp_path: Path) -> None:
     ("printf ready && gh pr checks 124 --watch", "gh pr checks 124 --watch"),
     ("gh pr checks 124 --watch | tee checks.log", "gh pr checks 124 --watch"),
     (
-      "steer run logs pr-checks -n 8; gh pr checks 124 --json name,state",
-      "gh pr checks 124 --json name,state",
+      "steer run logs pr-checks -n 8; gh pr checks 124 --watch",
+      "gh pr checks 124 --watch",
     ),
   ),
 )

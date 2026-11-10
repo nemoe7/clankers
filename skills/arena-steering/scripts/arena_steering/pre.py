@@ -1563,8 +1563,10 @@ def _test_route(words: list[str]) -> RouteRequest | None:
     return RouteRequest("run", ("pytest",))
   if head == "node" and args[:1] == ["--test"]:
     return RouteRequest("run", ("node-tests",))
-  if head == "gh" and args[:2] in (["pr", "checks"], ["run", "watch"]):
-    return RouteRequest("run", ("pr-checks" if args[0] == "pr" else "run-watch",))
+  if head == "gh" and args[:2] == ["pr", "checks"] and "--watch" in args:
+    return RouteRequest("run", ("pr-checks",))
+  if head == "gh" and args[:2] == ["run", "watch"]:
+    return RouteRequest("run", ("run-watch",))
   for command, name in TEST_COMMANDS:
     if head != command[0]:
       continue
