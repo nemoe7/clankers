@@ -127,7 +127,7 @@ def test_cli_inbox_message_header_omits_status_metadata(
     code, out, err = _run_cli(state_dir, *args)
     assert (code, err) == (0, "")
     header = next(line for line in out.splitlines() if line.startswith("`a1b2c3`"))
-    assert header == "`a1b2c3`"
+    assert header == "`a1b2c3` (no ack needed)"
     assert "Hidden context" in out
   finally:
     store.close()
