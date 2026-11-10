@@ -2564,6 +2564,7 @@
     };
   });
 
+  var BUTTON_GAP = "6px";
   var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
   var SETTINGS_TOGGLE_MARK = "data-clankers-settings-toggle";
   var SETTINGS_DRAG_MARK = "data-clankers-settings-drag";
@@ -3625,6 +3626,11 @@
       if (!autoBtn) {
         autoBtn = createButton();
         row.insertBefore(autoBtn, settingsBtn);
+      }
+      // The wrapper span carries no gap, so injected buttons need their own.
+      var buttons = [autoBtn, settingsBtn, actionButton];
+      for (var b = 0; b < buttons.length; b += 1) {
+        if (b && buttons[b] && buttons[b].style) buttons[b].style.marginLeft = BUTTON_GAP;
       }
     }
     syncSettingsButtonHook = ensureButton;

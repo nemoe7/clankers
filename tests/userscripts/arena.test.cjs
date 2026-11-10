@@ -1285,6 +1285,16 @@ runBundle("arena");
     assert.equal(stopIndex, settingsIndex + 1, "settings button sits before Stop generating");
 
     const autoButton = row.children[autoIndex];
+    assert.equal(
+      row.children[settingsIndex].style.marginLeft,
+      "6px",
+      "the settings button keeps a gap from the auto-scroll button",
+    );
+    assert.equal(
+      stopButton.style.marginLeft,
+      "6px",
+      "Stop generating keeps a gap from the injected buttons",
+    );
     const autoSvg = autoButton.children[0];
     assert.equal(
       autoSvg.attrs.class,
