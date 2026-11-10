@@ -1047,6 +1047,8 @@ def test_task_status_api_and_cli_reject_noncanonical_values(
     "3",
     "another",
     "Another",
+    "-S",
+    "Another scope",
     "-d",
     "Do work",
     "-s",
@@ -2417,7 +2419,9 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
     _run_cli(state_dir, "msg", "show", MSG_ID_CLI)
   assert invalid_args.value.code == 2
 
-  code, _, err = _run_cli(state_dir, "task", "new", "-z", "3", "empty-task", "Empty")
+  code, _, err = _run_cli(
+    state_dir, "task", "new", "-z", "3", "-S", "Empty scope", "empty-task", "Empty"
+  )
   expected_error = "at least one detail"
   assert code != 0 and expected_error in err
   code, out, _ = _run_cli(
@@ -2430,6 +2434,8 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
     "Base task",
     "-T",
     "ops",
+    "-S",
+    "Base scope",
     "-d",
     "Build the base.",
   )
@@ -2951,6 +2957,8 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
     "new",
     "-z",
     "3",
+    "-S",
+    "Scope text",
     "base-task",
     "Base task",
     "-T",
@@ -2966,6 +2974,8 @@ def test_cli_rename_task_unlink_and_timezone_endpoint(tmp_path: Path) -> None:
     "new",
     "-z",
     "3",
+    "-S",
+    "Scope text",
     "child-task",
     "Child task",
     "-d",
@@ -3673,6 +3683,8 @@ def test_ack_task_rolls_back_both_on_failure(
     "3",
     "ab7701",
     "Received",
+    "-S",
+    "Scope text",
     "-i",
     "new-task",
     "-t",
@@ -3710,6 +3722,8 @@ def test_ack_answer_creates_task_with_report_link(tmp_path: Path) -> None:
     "3",
     answer.id,
     "Received",
+    "-S",
+    "Scope text",
     "-i",
     "new-task",
     "-t",
@@ -4029,6 +4043,8 @@ def test_cli_ack_batch_rejects_task_creation_without_changes(tmp_path: Path) -> 
     "ab1001",
     "ab1003",
     "One shared reply",
+    "-S",
+    "Scope text",
     "-i",
     "batch-task",
     "-t",
@@ -4065,6 +4081,8 @@ def test_concurrent_ack_task_creation_preserves_both(tmp_path: Path) -> None:
       "3",
       msg_id,
       "Received",
+      "-S",
+      "Scope text",
       "-i",
       task_id,
       "-t",
@@ -4253,7 +4271,17 @@ def test_run_start_rolls_back_link_on_launch_failure(
   state_dir = cli.resolve_state_dir()
   assert (
     _run_cli(
-      state_dir, "task", "new", "-z", "3", "gate-task", "Gate task", "-d", "Check it"
+      state_dir,
+      "task",
+      "new",
+      "-z",
+      "3",
+      "-S",
+      "Gate scope",
+      "gate-task",
+      "Gate task",
+      "-d",
+      "Check it",
     )[0]
     == 0
   )
@@ -4280,7 +4308,17 @@ def test_linked_run_blocks_until_verdict(tmp_path: Path, exit_code: int) -> None
   release = tmp_path / "release"
   assert (
     _run_cli(
-      state_dir, "task", "new", "-z", "3", "gate-task", "Gate task", "-d", "Check it"
+      state_dir,
+      "task",
+      "new",
+      "-z",
+      "3",
+      "-S",
+      "Gate scope",
+      "gate-task",
+      "Gate task",
+      "-d",
+      "Check it",
     )[0]
     == 0
   )
@@ -4330,7 +4368,17 @@ def test_gate_links_survive_concurrent_task_edits() -> None:
   state_dir = cli.resolve_state_dir()
   assert (
     _run_cli(
-      state_dir, "task", "new", "-z", "3", "gate-task", "Gate task", "-d", "Check it"
+      state_dir,
+      "task",
+      "new",
+      "-z",
+      "3",
+      "-S",
+      "Gate scope",
+      "gate-task",
+      "Gate task",
+      "-d",
+      "Check it",
     )[0]
     == 0
   )
@@ -5078,6 +5126,8 @@ def test_cli_chain_creation_and_phase_finish() -> None:
     "new",
     "-z",
     "3",
+    "-S",
+    "Scope text",
     "chain",
     "Review then operate",
     "-d",
@@ -6168,6 +6218,58 @@ def test_task_finish_names_no_task_when_the_queue_empties(tmp_path: Path) -> Non
   assert code == 0, error
   assert "Next task:" not in out
   assert "outranks" not in out
+
+
+def test_task_new_requires_a_scope(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, _, _ = cli.open_services(state_dir)
+  store.close()
+  with pytest.raises(SystemExit) as missing_scope:
+    cli_main(
+      ["task", "new", "-z", "3", "scopeless", "Scopeless", "-d", "Work."],
+      out=io.StringIO(),
+      err=io.StringIO(),
+    )
+  assert missing_scope.value.code == 2
+  store, _, tasks, _ = cli.open_services(state_dir)
+  assert [task.id for task, _ in tasks.list_tasks()] == []
+  store.close()
+
+
+def test_ack_task_creation_requires_a_scope(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, messages, _, _ = cli.open_services(state_dir)
+  message = messages.send_message("Do the work", msg_id="ac9f01")
+  store.close()
+  code, _, error = _run_cli(
+    state_dir,
+    "ack",
+    message.id,
+    "Noted.",
+    "-i",
+    "scoped-later",
+    "-t",
+    "Scoped later",
+    "-z",
+    "3",
+    "-d",
+    "Work.",
+  )
+  assert code != 0
+  assert "--scope" in error
+
+
+def test_backfill_open_task_scopes_fills_only_blanks(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, _ = cli.open_services(state_dir)
+  tasks.create_task("open", "Open work", size=3, details=["Open."], scope="")
+  tasks.create_task("set", "Set work", size=3, details=["Set."], scope="Kept")
+  assert tasks.backfill_open_task_scopes() == 1
+  by_id = {task.id: task for task, _ in tasks.list_tasks(include_finished=True)}
+  assert by_id["open"].scope == "Open work"
+  assert by_id["set"].scope == "Kept"
+  assert tasks.backfill_open_task_scopes() == 0
+  store.close()
 
 
 def test_poll_flags_a_queue_with_several_tasks(tmp_path: Path) -> None:

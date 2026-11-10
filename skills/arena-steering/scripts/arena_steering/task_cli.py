@@ -34,7 +34,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
     new_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES, required=True)
     new_p.add_argument("-T", "--type", dest="types", action="append", default=[])
     new_p.add_argument("-s", "--status", default="upcoming")
-    new_p.add_argument("-S", "--scope", default="")
+    new_p.add_argument("-S", "--scope", required=True)
     new_p.add_argument("-d", "--detail", action="append", default=[])
     new_p.add_argument("-m", "--msg", action="append", default=[])
     new_p.add_argument("-r", "--report", action="append", default=[])

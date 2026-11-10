@@ -1187,6 +1187,20 @@ class TaskService:
     )
     return task
 
+  def backfill_open_task_scopes(self) -> int:
+    """Give every open task without a scope a scope drawn from its own title."""
+    with self._reports.transaction():
+      queue = self._tasks.list_tasks()
+      updated = {
+        task.id: self._copy_task(task, scope=task.title)
+        for task in queue
+        if task.status != "finished" and not task.scope.strip()
+      }
+      if not updated:
+        return 0
+      self._tasks.save_task_queue([updated.get(task.id, task) for task in queue])
+      return len(updated)
+
   def _copy_task(self, task: Task, **changes: Any) -> Task:
     data = task.to_dict()
     data.update(changes)

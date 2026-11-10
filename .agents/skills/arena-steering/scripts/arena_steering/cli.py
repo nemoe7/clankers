@@ -612,6 +612,8 @@ def _run_ack(
         raise ValueError("Task creation on ack requires -t/--title")
       if parsed.size is None:
         raise ValueError("Task creation on ack requires -z/--size")
+      if not (parsed.task_scope or "").strip():
+        raise ValueError("Task creation on ack requires -S/--scope")
       target_type, target = messages.resolve_ack_target(target_ids[0])
       created = tasks.create_task(
         parsed.task_id,
