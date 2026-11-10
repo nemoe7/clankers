@@ -971,9 +971,16 @@ const handlers = {
     };
     const cached = hiddenMessageCache?.query === query ? hiddenMessageCache : null;
     if (cached) loadedMessageRevision = cached.revision;
+    // The cache never holds a message written after it was stored, so merge it
+    // into the current window instead of replacing the window with it.
+    const seed = cached
+      ? [...(state.messages || []), ...cached.messages.filter(
+        (item) => !(state.messages || []).some((message) => message.id === item.id)
+      )]
+      : null;
     store.setState({
       showHidden: true,
-      ...(cached ? { messages: cached.messages, messagesHasMore: cached.hasMore } : {}),
+      ...(seed ? { messages: seed, messagesHasMore: cached.hasMore || state.messagesHasMore } : {}),
       messagesLoading: false,
     });
     loadedMessageKey = messageQueryKey(store.getState());
