@@ -485,10 +485,16 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
     if (cached && passRevision !== undefined && cached.revision === passRevision) {
       loadedMessageKey = key;
       loadedMessageRevision = cached.revision;
-      if (JSON.stringify(state.messages) !== JSON.stringify(cached.messages)) {
-        store.setState({ messages: cached.messages, messagesHasMore: cached.hasMore, messagesError: "", messagesLoading: false });
+      // Merge so a message written after the cache was stored still shows.
+      const live = state.messages || [];
+      const merged = [
+        ...cached.messages,
+        ...live.filter((item) => !cached.messages.some((message) => message.id === item.id)),
+      ];
+      if (JSON.stringify(state.messages) !== JSON.stringify(merged)) {
+        store.setState({ messages: merged, messagesHasMore: cached.hasMore, messagesError: "", messagesLoading: false });
       }
-      return cached.messages;
+      return merged;
     }
   }
   // Refresh the latest page now. Keep loaded history until the older-page retry completes.
@@ -955,9 +961,14 @@ const handlers = {
       const visibleKey = messageQueryKey({ ...state, showHidden: false });
       const cached = visibleWindowCache?.key === visibleKey ? visibleWindowCache : null;
       if (!cached) visibleWindowCache = null;
+      // A message written after the cache was stored is missing from it, so
+      // merge the live window instead of dropping newer visible messages.
+      const live = (state.messages || []).filter(message => !message.hidden);
       const visible = cached
-        ? cached.messages
-        : (state.messages || []).filter(message => !message.hidden);
+        ? [...live, ...cached.messages.filter(
+          (item) => !live.some((message) => message.id === item.id)
+        )]
+        : live;
       store.setState({
         showHidden: false,
         messages: visible,
