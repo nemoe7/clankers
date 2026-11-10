@@ -1003,8 +1003,15 @@ def test_messages_stay_at_bottom_after_send_and_reply_only_when_already_there(
           history.evaluate("el => el.scrollHeight - el.scrollTop - el.clientHeight")
           <= 24
         )
-        sent_id = sent.get_attribute("data-msg-id")
-        assert sent_id
+        # The optimistic row also matches. Only the confirmed row carries a
+        # server id, so pick that one.
+        sent_ids = [
+          value
+          for value in sent.evaluate_all("els => els.map(el => el.dataset.msgId)")
+          if not value.startswith("pending-")
+        ]
+        assert len(sent_ids) == 1
+        sent_id = sent_ids[0]
         app.messages.ack(sent_id, "Reply at bottom. " + "Long reply content. " * 40)
         sent.locator(".reply").get_by_text("Reply at bottom", exact=False).wait_for()
         assert (
