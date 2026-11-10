@@ -3886,6 +3886,9 @@ def test_hidden_toggle_off_uses_the_cached_window_without_refetching() -> None:
         )
         page.wait_for_timeout(500)
         assert page.evaluate("() => window.__messageFetches.length") == 0
+        # A new server revision must expire the cache, or the window freezes.
+        app.messages.send_message("Fresh note", msg_id="cc0001")
+        page.locator('.message[data-msg-id="cc0001"]').wait_for(timeout=15000)
       finally:
         browser.close()
   finally:

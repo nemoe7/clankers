@@ -474,7 +474,9 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
   if (!before && !reset && !preserve && !state.showHidden) {
     const cached = cachedVisibleWindow(key);
     // An unchanged server revision means the cached view is still exact.
-    if (cached && (cached.revision === visibleQueryRevision || cached.revision === healthSeenRevision)) {
+    // The health revision is the only expiry clock: the message revision cannot
+    // agree with itself forever, or the window would never refresh.
+    if (cached && healthSeenRevision !== undefined && cached.revision === healthSeenRevision) {
       loadedMessageKey = key;
       loadedMessageRevision = cached.revision;
       if (JSON.stringify(state.messages) !== JSON.stringify(cached.messages)) {
