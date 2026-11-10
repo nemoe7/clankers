@@ -2988,7 +2988,10 @@ def test_job_log_guard_redirects_run_view_log_reads(flag: str) -> None:
   line = f"gh run view 42739739541 {flag}"
   ctx = pre.PreContext(line=line, command=line, shell="bash")
   result = pre.JobLogRedirectGuard().run(ctx)
-  assert result.verdict == pre.BLOCK
+  # An egress redirect is a capability limit, so it reminds instead of raising
+  # a violation flag.
+  assert result.verdict == pre.CONTINUE
+  assert "egress" in result.messages[0]
   assert "steer job-log -j" in result.messages[1]
 
 

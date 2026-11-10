@@ -25,6 +25,7 @@ This log has no Unreleased section.
 - Retry the websocket upgrade while a socket is still closing, so a dropped socket does not leave the page on poll for good.
 - Block `awk` and `sed` line-range extraction of bible files, which slipped past the verb list and defeated the full-read rule.
 - Refetch the message page when a poll reports a newer revision than its rendered window, so an ack lands on that poll.
+- Remind instead of flagging a violation when `gh run view` log reads meet an egress redirect the shell cannot follow.
 - Report non-blocking unread notes in the gate line even when no blocking note exists.
 - Keep the standing reminder out of the finished-step list so a shell cannot skip it after the first call.
 - Share one unpushed-commit count and message between the pre-command guard and the exit reminders.

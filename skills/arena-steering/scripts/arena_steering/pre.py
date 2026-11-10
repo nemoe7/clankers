@@ -1958,15 +1958,17 @@ class JobLogRedirectGuard:
     return False
 
   def run(self, ctx: PreContext) -> PreResult:
+    # A redirect the shell cannot follow is a capability limit, so this reminds
+    # and lets the command run.
     return PreResult(
       [
-        "VIOLATION: `gh run view` log reads hit an egress redirect that the shell cannot follow.",
+        "Reminder: `gh run view` log reads hit an egress redirect that the shell cannot follow.",
         (
           "Use the job-log recipe: `gh pr checks <PR>` for the job ID, then "
           "`steer job-log -j <job-id>`, then `functions.fetch_page` on the printed URL."
         ),
       ],
-      BLOCK,
+      CONTINUE,
     )
 
 
