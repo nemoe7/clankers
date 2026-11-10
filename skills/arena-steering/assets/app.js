@@ -776,6 +776,10 @@ const handlers = {
       store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false, composerError: response.reconciliation_error ? "Message sent, but its current state could not be loaded." : null });
     } catch (error) {
       const restoreRefs = clearRefs && replySelectionRevision === selectedRevision;
+      // Retries are exhausted, so the recovery record would replay a send the
+      // page already reports as failed.
+      sessionStorage.removeItem(PENDING_MESSAGE_RETRY_KEY);
+      pendingMessageRetry = null;
       store.setState({ sending: false, optimisticMessage: null, composerError: String(error.message || error), ...(restoreRefs ? { replyParentRefs: selectedRefs } : {}) });
       throw error;
     }
