@@ -1155,8 +1155,13 @@ def test_an_unfielded_report_ages_out_on_its_publish_time() -> None:
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "fieldless-report"
   ]
-  # An unseen ack does not restart the clock for a report that carries no fields.
-  reports.mark_ack_seen("fieldless-report")
+  # A recorded view of the ack restarts the clock, as it does for a fielded report.
+  seen = reports.get_report("fieldless-report")
+  seen.ack_seen = True
+  seen.ack_seen_at = clock.now_iso()
+  store.save_report(seen)
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(minutes=30)
   assert [report.id for report in reports.list_reports(stale_only=True)] == [
     "fieldless-report"
   ]

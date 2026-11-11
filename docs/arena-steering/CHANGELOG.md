@@ -14,7 +14,7 @@ This log has no Unreleased section.
 
 ### Fixed
 
-- Age out an unfielded report on its publish time instead of waiting for an acknowledgement it never needs.
+- Age out an unfielded report on its publish time, or on its seen acknowledgement when one exists.
 
 ## [2.3.2]
 
