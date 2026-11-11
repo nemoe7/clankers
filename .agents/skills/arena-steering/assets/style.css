@@ -2237,6 +2237,44 @@ code.msg-id {
   padding-inline-start: 2ch;
 }
 
+.task-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.task-attachment {
+  border: 1px solid hsl(var(--border-faint));
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.8em;
+  line-height: 1.2;
+}
+
+.task-attachment.lost {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.task-attachment-thumb {
+  display: block;
+  width: 84px;
+  height: 60px;
+  object-fit: cover;
+}
+
+.task-attachment-name {
+  display: block;
+  max-width: 16ch;
+  overflow: hidden;
+  padding: 4px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Reports tab (`#view-reports`) */
 .reports-layout {
   width: min(900px, 90vw);

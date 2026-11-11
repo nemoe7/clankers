@@ -7,6 +7,7 @@ registry, so adding, dropping, or reordering a check is one line here.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -629,6 +630,7 @@ class PreContext:
   call_count: int = 0
   active_runs: tuple[str, ...] = ()
   active_run_ids: tuple[tuple[str, str], ...] = ()
+  runs_dir: Path | None = None
   seen_live_run_log_ids: tuple[str, ...] = ()
   routed: bool = False
   cwd: Path | None = None
@@ -973,6 +975,100 @@ LIVE_RUN_LOG_VIOLATION = (
   "with the next upcoming task using `steer worktree add <name>`. The live "
   "run will send its verdict in the inbox."
 )
+
+
+MANUAL_RUN_READ_VERBS = (
+  "awk",
+  "cat",
+  "egrep",
+  "fgrep",
+  "grep",
+  "head",
+  "less",
+  "more",
+  "rg",
+  "sed",
+  "tail",
+)
+RUN_FILE_SUFFIXES = (".log", ".exit")
+READER_PATH_PATTERN = re.compile(r'^path = ("(?:\\.|[^"\\])*")$', flags=re.MULTILINE)
+
+
+def native_read_paths(line: str) -> list[str]:
+  """List absolute paths passed to the native read_file script."""
+  text = line.replace("\r\n", "\n").strip()
+  if not text.startswith("/bin/bash -l -c python3 -I - <<'PY'"):
+    return []
+  paths: list[str] = []
+  for encoded in READER_PATH_PATTERN.findall(text):
+    try:
+      path = json.loads(encoded)
+    except json.JSONDecodeError:
+      continue
+    if isinstance(path, str) and Path(path).is_absolute():
+      paths.append(path)
+  return paths
+
+
+def live_run_file_names(ctx: PreContext) -> dict[str, set[str]]:
+  """Map each live run name to its log and exit file names."""
+  if ctx.runs_dir is None:
+    return {}
+  runs_dir = Path(os.path.abspath(ctx.runs_dir))
+  live: dict[str, set[str]] = {}
+  for name, exit_name in ctx.active_run_ids:
+    if (runs_dir / exit_name).exists():
+      continue
+    log_name = f"{Path(exit_name).stem}.log"
+    live.setdefault(name, set()).update({exit_name, log_name})
+  return live
+
+
+def manual_live_run_read(ctx: PreContext) -> tuple[str, str] | None:
+  """Name a manual read of a live run's log or exit file in this line."""
+  live = live_run_file_names(ctx)
+  if not live:
+    return None
+  runs_dir = Path(os.path.abspath(ctx.runs_dir or "."))
+  cwd = Path(os.path.abspath(ctx.cwd or repo_root()))
+  targets = native_read_paths(ctx.line or ctx.command)
+  for words in _line_commands(ctx, unwrap_timeout=True):
+    if not words or Path(words[0]).name not in MANUAL_RUN_READ_VERBS:
+      continue
+    targets.extend(word for word in words[1:] if Path(word).suffix in RUN_FILE_SUFFIXES)
+  for token in targets:
+    path = Path(token)
+    target = Path(os.path.abspath(path if path.is_absolute() else cwd / path))
+    if target.parent != runs_dir:
+      continue
+    for name, names in live.items():
+      if any(fnmatch.fnmatch(name_, target.name) for name_ in names):
+        return name, target.name
+  return None
+
+
+def manual_live_run_read_violation(name: str, file_name: str) -> str:
+  """Offer the three legal routes for a live run's files."""
+  return (
+    f"VIOLATION: Manual read of live run {name} file {file_name}. "
+    f"Use `steer run logs {name}`, `steer run rerun {name}` after it exits, "
+    "or `steer worktree add <name>` for the next task."
+  )
+
+
+class ManualLiveRunReadGuard:
+  """Block shell reads of a live run's log or exit file."""
+
+  name = "manual-live-run-read"
+
+  def applies(self, ctx: PreContext) -> bool:
+    return manual_live_run_read(ctx) is not None
+
+  def run(self, ctx: PreContext) -> PreResult:
+    found = manual_live_run_read(ctx) or ("a live run", "its log")
+    return PreResult(
+      [manual_live_run_read_violation(*found)], BLOCK, blocked_by=self.name
+    )
 
 
 def live_run_log_read_ids(ctx: PreContext) -> tuple[str, ...]:
@@ -1321,10 +1417,6 @@ class GitSafetyGuard:
     return PreResult()
 
 
-COUNTDOWN_PREFIX = "bash block in"
-QUIET_SUFFIX = "non-blocking unread."
-
-
 class InboxGate:
   """Refuse a line once the unacked count has waited past the call budget."""
 
@@ -1338,12 +1430,8 @@ class InboxGate:
     if ctx.is_arena_maintenance():
       return False
     if not ctx.pending_ids:
-      return bool(self.quiet_ids(ctx)) and not ctx.is_push()
+      return False
     return bash_command_policy(ctx)[1]
-
-  def quiet_ids(self, ctx: PreContext) -> list[str]:
-    """Return the unread notes that never gate a command."""
-    return [i for i in ctx.unread_ids if i not in ctx.pending_ids]
 
   def run(self, ctx: PreContext) -> PreResult:
     if ctx.is_push():
@@ -1356,14 +1444,8 @@ class InboxGate:
         ],
         BLOCK,
       )
-    quiet = len(self.quiet_ids(ctx))
-    if not ctx.pending_ids:
-      return PreResult([f"Inbox has {quiet} {QUIET_SUFFIX}"])
-    remaining = GATE_THRESHOLD - ctx.call_count
-    if remaining > 0:
-      extra = f" Plus {quiet} {QUIET_SUFFIX}" if quiet else ""
-      line = f"{COUNTDOWN_PREFIX} {remaining} calls. Read and ack now.{extra}"
-      return PreResult([line])
+    if GATE_THRESHOLD - ctx.call_count > 0:
+      return PreResult()
     return PreResult(
       [
         "VIOLATION: Bash blocked. Read and ack all NOW.",
@@ -1983,6 +2065,7 @@ STANDING_STEPS = frozenset({"unpushed"})
 
 PIPELINE: tuple[PreStep, ...] = (
   StartProcessTitleGuard(),
+  ManualLiveRunReadGuard(),
   LiveRunLogGuard(),
   SleepGuard(),
   InboxPipeGuard(),

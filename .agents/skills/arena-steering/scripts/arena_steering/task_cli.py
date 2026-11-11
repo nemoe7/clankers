@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import TextIO
 
+from .display_paths import home_relative
 from .models import TASK_PRIORITIES, TASK_SIZES, Task
 from .services import TaskService
 
@@ -169,6 +171,24 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
       updated = tasks.mod_deets_rm(task_id, int(detail_args[1]), size=size)
     else:
       updated = tasks.mod_deets(task_id, " ".join(detail_args), size=size)
+  elif field == "attach":
+    size, attach_args = _extract_size_flag(rest)
+    if not attach_args:
+      raise ValueError(
+        "Usage: steer task mod <id> attach add <path> -z <size> | attach rm <number> -z <size>"
+      )
+    if attach_args[0] == "rm":
+      if len(attach_args) != 2:
+        raise ValueError("Usage: steer task mod <id> attach rm <number> -z <size>")
+      updated = tasks.mod_attachments_rm(task_id, size=size, number=int(attach_args[1]))
+    elif attach_args[0] == "add":
+      if len(attach_args) != 2:
+        raise ValueError("Usage: steer task mod <id> attach add <path> -z <size>")
+      updated = tasks.mod_attachments_add(task_id, attach_args[1], size=size)
+    else:
+      raise ValueError(
+        "Usage: steer task mod <id> attach add <path> -z <size> | attach rm <number> -z <size>"
+      )
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
@@ -198,6 +218,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
           "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> "
           "[-A detail] [--delete number] [-z size]"
         )
+      before = set(tasks.get_task(task_id)[0].details)
       updated = tasks.mod_links_add(
         task_id,
         link_id,
@@ -206,6 +227,17 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         remove_detail=parsed.remove_detail,
         size=parsed.size,
       )
+      if link_type and link_type.lower() == "report":
+        added = [detail for detail in updated.details if detail not in before]
+        if added:
+          print(f"Added to task {updated.id}:", file=out)
+          for detail in added:
+            print(f"- {detail}", file=out)
+          print(
+            f"Remove any of these from task {updated.id} if they add nothing: "
+            f"steer task mod {updated.id} deets rm <index> -z <size>",
+            file=out,
+          )
   elif field == "deps":
     if rest[0] == "rm":
       if len(rest) != 2:
@@ -294,3 +326,5 @@ def _print_single_task(
     )
     for idx, line in enumerate(rendered_details, 1):
       print(f"- [{idx}] {line}", file=out)
+    for idx, item in enumerate(task.attachments, 1):
+      print(f"- ({idx}) {item.name} - {home_relative(Path(item.path))}", file=out)

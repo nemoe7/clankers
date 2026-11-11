@@ -349,6 +349,7 @@ class Task:
   status: str
   scope: str
   details: list[str]
+  attachments: list[Attachment]
   links: dict[str, list[str]]
   priority: str
   priority_explicit: bool
@@ -367,6 +368,7 @@ class Task:
     status: str = "upcoming",
     scope: str = "",
     details: list[str] | None = None,
+    attachments: list[Attachment] | None = None,
     links: dict[str, list[str]] | None = None,
     *,
     size: int,
@@ -456,6 +458,10 @@ class Task:
         )
       cleaned_details.append(text)
     self.details = _dedupe_strings(cleaned_details)
+    self.attachments = [
+      item if isinstance(item, Attachment) else Attachment.from_dict(item)
+      for item in attachments or []
+    ]
 
     raw_links = dict(links) if isinstance(links, dict) else {}
     resolved_msgs = (
@@ -554,6 +560,7 @@ class Task:
       "status": self.status,
       "scope": self.scope,
       "details": list(self.details),
+      "attachments": [item.to_dict() for item in self.attachments],
       "priority": self.priority,
       "priority_explicit": self.priority_explicit,
       "size": self.size,
@@ -585,6 +592,7 @@ class Task:
       status=str(data.get("status", "upcoming")),
       scope=str(data.get("scope", "")),
       details=[str(item) for item in data.get("details", [])],
+      attachments=list(data.get("attachments", [])),
       priority=data.get("priority", "P3"),
       priority_explicit=data.get(
         "priority_explicit", data.get("priority", "P3") != "P3"

@@ -1730,6 +1730,9 @@ class SteeringApp:
   def _serialize_task(self, task: Task, blocked: bool) -> dict[str, Any]:
     payload = task.to_dict(blocked=blocked)
     payload["details"] = self.tasks.format_task_details(task)
+    payload["attachments"] = [
+      self._serialize_attachment(item) for item in task.attachments
+    ]
     payload["effective_priority"] = task.effective_priority
     payload["running_gate"] = self.tasks.has_running_gate(task)
     return payload

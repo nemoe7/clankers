@@ -691,6 +691,11 @@ def _run_ack(
         print(f"Added to task {task_id}:", file=out)
         for detail in details:
           print(f"- {detail}", file=out)
+        print(
+          f"Remove any of these from task {task_id} if they add nothing: "
+          f"steer task mod {task_id} deets rm <index> -z <size>",
+          file=out,
+        )
   if created:
     _, blocked = tasks.get_task(created.id)
     _print_single_task(created, blocked, out, tasks=tasks)
@@ -1264,6 +1269,7 @@ def _run_pre(
     call_count=count,
     active_runs=tuple(name for name, _run_id in active_run_ids),
     active_run_ids=active_run_ids,
+    runs_dir=Path(store.db_path).parent / "runs",
     seen_live_run_log_ids=seen_live_run_log_ids,
     routed=routed,
     cwd=Path.cwd(),
@@ -1487,6 +1493,18 @@ def _runs_dir(state_dir: Path) -> Path:
   return runs
 
 
+def _log_page(
+  lines: list[str], *, lines_limit: int = 50, page: int | None, search: str | None
+) -> list[str]:
+  """Filter log lines by a query, then return one numbered page of the tail."""
+  if search:
+    lines = [line for line in lines if search in line]
+  if page is None or page < 1:
+    return lines[-lines_limit:]
+  start = max(len(lines) - page * lines_limit, 0)
+  return lines[start : start + lines_limit]
+
+
 def _start_detached_run(
   state_dir: Path,
   name: str,
@@ -1645,6 +1663,23 @@ def _slow_call_hint(line: str, elapsed: float) -> str:
   )
 
 
+def _counted(count: int, noun: str) -> str:
+  """Render one count with its singular or plural noun."""
+  return f"{count} {noun}{'' if count == 1 else 's'}"
+
+
+def _inbox_status(*, call_count: int, counts: list[str], unseen: int) -> str:
+  """Render the single exit line that carries every inbox count."""
+  parts: list[str] = []
+  if counts:
+    remaining = max(pre_mod.GATE_THRESHOLD - call_count, 0)
+    parts.append(f"bash block in {remaining}.")
+    parts.append("unacked " + ", ".join(counts) + ".")
+  if unseen:
+    parts.append(f"unseen {_counted(unseen, 'msg')}.")
+  return " ".join(parts)
+
+
 def _exit_state_reminders(state_dir: Path) -> list[str]:
   """Read pending, stale, and unpushed work without changing the inbox."""
   if not (state_dir / "state.sqlite3").is_file():
@@ -1652,22 +1687,35 @@ def _exit_state_reminders(state_dir: Path) -> list[str]:
   store, messages, _, reports = open_services(state_dir)
   try:
     pending = messages.read_pending(mark_seen=False)
+    unread_ids = messages.unread_ids()
     pending_messages = [
       msg for msg in pending["messages"] if msg.type == "message" and msg.requires_ack
     ]
     violations = sum(bool(msg.violation_type) for msg in pending_messages)
     msgs = len(pending_messages) - violations
     answers = len(pending["report_answers"])
+    pending_ids = [msg.id for msg in pending_messages] + [
+      answer_id
+      for answer_id in messages.pending_ids()
+      if answer_id not in {msg.id for msg in pending_messages}
+    ]
     parts = []
     counts = []
     if violations:
-      counts.append(f"{violations} violation{'s' if violations != 1 else ''}")
+      counts.append(_counted(violations, "violation"))
     if msgs:
-      counts.append(f"{msgs} msg{'s' if msgs != 1 else ''}")
+      counts.append(_counted(msgs, "msg"))
     if answers:
-      counts.append(f"{answers} answer{'s' if answers != 1 else ''}")
-    if counts:
-      parts.append("unacked " + ", ".join(counts))
+      counts.append(_counted(answers, "answer"))
+    quiet = [item for item in unread_ids if item not in set(pending_ids)]
+    if pending_ids or counts or quiet:
+      parts.append(
+        _inbox_status(
+          call_count=_call_count(store),
+          counts=counts,
+          unseen=len(quiet),
+        )
+      )
     if len(reports.list_reports()) >= 10:
       stale = len(reports.list_reports(stale_only=True))
       if stale:
@@ -1778,6 +1826,8 @@ def _run_run(
     logs_p = argparse.ArgumentParser(prog="steer run logs")
     logs_p.add_argument("name")
     logs_p.add_argument("-n", "--lines", type=int, default=50)
+    logs_p.add_argument("-p", "--page", type=int, default=None)
+    logs_p.add_argument("-s", "--search", default=None)
     parsed = logs_p.parse_args(args[1:])
     name = _safe_local_name(parsed.name)
     runs = _runs_dir(state_dir)
@@ -1792,10 +1842,31 @@ def _run_run(
     print(f"run {name} {status}", file=out)
     log_path = Path(record["log_path"])
     if log_path.is_file():
-      lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-      for line in lines[-parsed.lines :]:
+      lines = _log_page(
+        log_path.read_text(encoding="utf-8", errors="replace").splitlines(),
+        lines_limit=parsed.lines,
+        page=parsed.page,
+        search=parsed.search,
+      )
+      for line in lines:
         print(line, file=out)
     return 0
+  if subcmd == "rerun":
+    rerun_p = argparse.ArgumentParser(prog="steer run rerun")
+    rerun_p.add_argument("name")
+    parsed = rerun_p.parse_args(args[1:])
+    name = _safe_local_name(parsed.name)
+    runs = _runs_dir(state_dir)
+    record_path = runs / f"{name}.json"
+    if not record_path.is_file():
+      raise KeyError(f"Unknown run: {name}")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    if run_is_running(record):
+      raise ValueError(f"Run {name} is still live; read its logs instead")
+    command = [str(word) for word in record.get("command", [])]
+    if not command:
+      raise ValueError(f"Run {name} recorded no command to reuse")
+    return _start_detached_run(state_dir, name, command, out=out)
   if subcmd == "pr-checks":
     checks_p = argparse.ArgumentParser(prog="steer run pr-checks")
     checks_p.add_argument("-n", "--number", type=int, default=None)
