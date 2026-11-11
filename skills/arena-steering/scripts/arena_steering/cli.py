@@ -387,7 +387,7 @@ def main(
   if cmd == "post-exit":
     parsed = post_exit_p.parse_args(cmd_args)
     try:
-      return _run_post_exit(parsed, preflight_state_dir or resolve_state_dir(), stdout)
+      return _run_post_exit(parsed, preflight_state_dir or resolve_state_dir(), stderr)
     except (OSError, sqlite3.Error, ValueError):
       return 0  # The exit hook must never change the completed line's status.
   group_parsers = {
