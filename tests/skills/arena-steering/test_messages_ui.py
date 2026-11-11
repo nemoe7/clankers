@@ -1428,6 +1428,11 @@ def test_message_bubble_reference_across_required_viewports(tmp_path: Path) -> N
           for card in (short, long, middle, sent, seen):
             card.scroll_into_view_if_needed()
             shape = boxes(card)
+            if not shape["row"]["width"]:
+              # A re-render can detach the card after the scroll. Scroll again
+              # and measure the fresh node.
+              card.scroll_into_view_if_needed()
+              shape = boxes(card)
             assert shape["bubble"] and shape["id"] and shape["receipt"], shape
             assert abs(shape["bubble"]["right"] - shape["row"]["right"]) <= 1, shape
             assert abs(shape["id"]["right"] - shape["body"]["right"]) <= 1, shape
@@ -2217,9 +2222,14 @@ def test_message_edge_fades_in_both_motion_preferences() -> None:
               "() => { const e = document.querySelector('#history'); "
               "return e.scrollHeight > e.clientHeight && !e.hasAttribute('data-scrolled-end'); }"
             )
-            page.locator("#history").evaluate("el => { el.scrollTop = 0; }")
+            # Re-apply the scroll on every poll: a re-render can restore the
+            # bottom-pinned position before the edge attribute settles.
             page.wait_for_function(
-              "() => document.querySelector('#history').hasAttribute('data-scrolled-end')"
+              """() => {
+                const el = document.querySelector('#history');
+                if (el.scrollTop !== 0) el.scrollTop = 0;
+                return el.hasAttribute('data-scrolled-end');
+              }"""
             )
           else:
             assert "edge-start" in str(top["animation"]), top
@@ -2480,6 +2490,12 @@ def test_messages_links_bullet_hierarchy_mobile_offset_and_portrait_lock(
       )
       desktop = browser.new_page(viewport={"width": 1372, "height": 883})
       desktop.goto(f"http://127.0.0.1:{server.server_port}/?transport=poll")
+      # A scroll set while the history is short reads as pinned. The next
+      # render then jumps to the bottom and marks the reply seen.
+      desktop.wait_for_function(
+        "() => { const log = document.querySelector('#history');"
+        " return log.scrollHeight > log.clientHeight + 1; }"
+      )
       desktop.locator("#history").evaluate("el => { el.scrollTop = 0; }")
       desktop.wait_for_function(
         "() => document.querySelector('#history').scrollTop === 0"
@@ -2707,20 +2723,24 @@ def test_timestamps_use_regular_proportional_one(tmp_path: Path, width: int) -> 
     page.locator("#send").click()
     stamp = page.locator("#history .message time[datetime]").first
     stamp.wait_for()
-    stamp.evaluate("el => { el.textContent = '1 minute ago'; }")
     page.screenshot(path=str(tmp_path / f"timestamp-regular-{width}.png"))
     assert stamp.evaluate("el => getComputedStyle(el).fontVariantNumeric") == "normal"
     assert "mono" not in stamp.evaluate("el => getComputedStyle(el).fontFamily").lower()
-    regular = stamp.evaluate("""el => {
-      const range = document.createRange(); range.selectNodeContents(el);
-      return range.getBoundingClientRect().width;
+    # Measure one numeral sample in a single round trip. A poll re-render can
+    # restore the relative label before the second read.
+    measured = stamp.evaluate("""el => {
+      const width = () => {
+        const range = document.createRange(); range.selectNodeContents(el);
+        return range.getBoundingClientRect().width;
+      };
+      el.textContent = '1 minute ago';
+      const regular = width();
+      el.style.fontVariantNumeric = 'tabular-nums';
+      const tabular = width();
+      el.style.fontVariantNumeric = '';
+      return {regular, tabular};
     }""")
-    stamp.evaluate("el => { el.style.fontVariantNumeric = 'tabular-nums'; }")
-    tabular = stamp.evaluate("""el => {
-      const range = document.createRange(); range.selectNodeContents(el);
-      return range.getBoundingClientRect().width;
-    }""")
-    assert regular < tabular
+    assert measured["regular"] < measured["tabular"], measured
     page.screenshot(path=str(tmp_path / f"timestamp-tabular-{width}.png"))
 
 

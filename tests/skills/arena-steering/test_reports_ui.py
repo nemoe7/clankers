@@ -650,6 +650,12 @@ def test_submit_and_scroll_top_clear_report_at_required_viewports() -> None:
             if toc_available:
               page.locator('#report-picker [data-report-id="no-toc"]').click()
               page.locator("#report-toc").wait_for(state="hidden")
+              # The swapped report must lay out before the scroll lands. A
+              # scroll set while the pane is short stays at 0.
+              page.wait_for_function(
+                "() => { const pane = document.querySelector('#view-reports');"
+                " return pane.scrollHeight > pane.clientHeight + 161; }"
+              )
               pane.evaluate("el => { el.scrollTop = Math.floor(el.scrollHeight / 2); }")
               top_button.wait_for(state="visible")
               assert top_button.text_content().strip() == ""
