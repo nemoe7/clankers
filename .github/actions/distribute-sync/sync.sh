@@ -76,7 +76,6 @@ for repo in $REPOS; do
     for skill in $SKILLS; do
       files=$(skill_files "$skill")
       [ -n "$files" ] || continue
-      # Delete the old skill directory, copy the new skill tree, and prune repo-only files.
       rm -rf "$work/$SKILL_DEST_ROOT/$skill"
       mkdir -p "$work/$SKILL_DEST_ROOT"
       cp -R "$GITHUB_WORKSPACE/$SKILL_ROOT/$skill" "$work/$SKILL_DEST_ROOT/$skill"
