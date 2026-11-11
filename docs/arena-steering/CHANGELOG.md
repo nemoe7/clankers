@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.4]
+
+### Fixed
+
+- Wait for the task detail panel to render before measuring it, removing a search-highlight test race.
+
 ## [2.3.3]
 
 ### Fixed

@@ -167,6 +167,7 @@ def test_task_search_highlights_matches_and_clear_collapses_details() -> None:
 
           def suffix_x(target: object = detail) -> float:
             """Return the x of "detail", wherever the highlight splits text."""
+            playwright.expect(target).to_be_visible()
             return target.evaluate("""el => {
               const offset = el.textContent.indexOf('detail');
               const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -186,6 +187,9 @@ def test_task_search_highlights_matches_and_clear_collapses_details() -> None:
           original_suffix_x = suffix_x()
 
           search.fill("Alpha")
+          playwright.expect(row.locator(".task-title mark.search-hit")).to_have_text(
+            ["Alpha"]
+          )
           highlighted_title_width = title.evaluate(
             "el => el.getBoundingClientRect().width"
           )
