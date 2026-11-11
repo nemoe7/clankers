@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.7]
+
+### Fixed
+
+- Print the exit footer to stderr, so the reminder no longer lands in the command's stdout.
+
 ## [2.3.6]
 
 ### Added

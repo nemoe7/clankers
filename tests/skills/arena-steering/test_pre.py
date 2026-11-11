@@ -44,6 +44,12 @@ def _run(*args: str) -> tuple[int, str]:
   return code, out.getvalue()
 
 
+def _run_err(*args: str) -> tuple[int, str]:
+  err = io.StringIO()
+  code = cli_main(list(args), out=io.StringIO(), err=err)
+  return code, err.getvalue()
+
+
 def _finish_outer(line: str, *, rc: int = 0) -> None:
   code, out = _run("post-exit", "--line", line, "--rc", str(rc))
   assert code == 0, out
@@ -3918,7 +3924,7 @@ def test_exit_warns_on_slow_unrouted_calls(
   _isolate_state: Path, line: str, elapsed: str, warn: bool
 ) -> None:
   _seed(_isolate_state, "Acknowledged", acked=True)
-  code, out = _run("post-exit", "--line", line, "--rc", "0", "--elapsed", elapsed)
+  code, out = _run_err("post-exit", "--line", line, "--rc", "0", "--elapsed", elapsed)
   assert code == 0
   assert (">= 10s" in out) == warn
 
@@ -3932,7 +3938,7 @@ def test_exit_reminds_without_acking_and_counts_pending_items_once(
   store.set_meta(pre.CALL_COUNT_META, "3")
   store.close()
 
-  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  code, out = _run_err("post-exit", "--line", "printf ok", "--rc", "0")
   assert code == 0
   assert "unacked 1 msg" in out
   store, messages, _, _ = cli.open_services(_isolate_state)
@@ -3952,7 +3958,7 @@ def test_exit_counts_latest_report_answer_with_notes(_isolate_state: Path) -> No
   )
   reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1004")
   store.close()
-  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  code, out = _run_err("post-exit", "--line", "printf ok", "--rc", "0")
   assert code == 0 and "1 msg" in out and "1 answer" in out
 
 
@@ -3976,7 +3982,7 @@ def test_exit_labels_hidden_violation_separately_from_note_and_answer(
   reports.submit_answer("choice", {"pick": "Yes"}, answer_id="ab1007")
   store.close()
 
-  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  code, out = _run_err("post-exit", "--line", "printf ok", "--rc", "0")
   assert code == 0
   assert "1 violation" in out
   assert "1 msg" in out
@@ -3999,7 +4005,7 @@ def test_exit_reminds_about_stale_reports(_isolate_state: Path) -> None:
   store.save_report(stale)
   store.close()
 
-  code, out = _run("post-exit", "--line", "printf ok", "--rc", "0")
+  code, out = _run_err("post-exit", "--line", "printf ok", "--rc", "0")
   assert code == 0
   assert "1 stale report" in out
 
@@ -4023,10 +4029,10 @@ def test_exit_reminds_about_unpushed_commits(
   (_git_checkout / "note.md").write_text("second\n", encoding="utf-8")
   git("add", "note.md")
   git("commit", "-m", "second")
-  code, out = _run("post-exit", "--line", "git commit -m second", "--rc", "0")
+  code, out = _run_err("post-exit", "--line", "git commit -m second", "--rc", "0")
   assert code == 0 and "1 commit/s unpushed" in out
   git("push", "origin", "main")
-  code, out = _run("post-exit", "--line", "git push origin main", "--rc", "0")
+  code, out = _run_err("post-exit", "--line", "git push origin main", "--rc", "0")
   assert code == 0 and "unpushed" not in out
 
 
@@ -4468,6 +4474,24 @@ def test_a_quiet_note_stays_out_of_the_gate_and_rides_the_footer(
   code, _out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
   assert code == pre.CONTINUE
   assert cli._exit_state_reminders(_isolate_state) == ["unseen 1 msg."]
+
+
+def test_the_exit_footer_prints_to_stderr_not_stdout(_isolate_state: Path) -> None:
+  _isolate_state.mkdir(parents=True, exist_ok=True)
+  store, messages, _tasks, _reports = cli.open_services(_isolate_state)
+  messages.send_message("Quiet note.", hidden=True, blocking=False)
+  store.close()
+
+  out = io.StringIO()
+  err = io.StringIO()
+  code = cli.main(
+    ["post-exit", "--line", "printf ok", "--rc", "0"],
+    out=out,
+    err=err,
+  )
+  assert code == 0
+  assert out.getvalue() == ""
+  assert "unseen 1 msg." in err.getvalue()
 
 
 def test_a_quiet_note_never_blocks_a_push(_isolate_state: Path) -> None:
