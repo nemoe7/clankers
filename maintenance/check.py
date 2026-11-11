@@ -512,6 +512,32 @@ def check_refs_parity(errors: list[str]) -> None:
       )
 
 
+def check_skill_refs_parity(errors: list[str]) -> None:
+  """Check each skill file against its refs baseline.
+
+  Live skill files compress the refs wording, so a live line count above the
+  refs count means a rule landed only in live.
+  """
+  refs_root = SKILLS / "refs"
+  if not refs_root.is_dir():
+    return
+  for baseline in sorted(refs_root.rglob("*")):
+    if not baseline.is_file() or baseline.suffix not in {".md", ".txt"}:
+      continue
+    live = SKILLS / baseline.relative_to(refs_root)
+    shown = live.relative_to(ROOT)
+    if not live.is_file():
+      errors.append(f"{shown}: refs counterpart exists without a live file")
+      continue
+    ref_lines = rule_line_count(baseline)
+    live_lines = rule_line_count(live)
+    if live_lines > ref_lines:
+      errors.append(
+        f"{shown}: {live_lines} lines vs {ref_lines} in "
+        f"{baseline.relative_to(ROOT)}; compression may merge lines but never add them"
+      )
+
+
 def check_root_copies(errors: list[str]) -> None:
   for name in ROOT_COPIES:
     source = RULES / name
@@ -684,6 +710,7 @@ def check_budgets(errors: list[str]) -> None:
 def check_parity(errors: list[str]) -> None:
   check_refs_parity(errors)
   check_system_prompt_parity(errors)
+  check_skill_refs_parity(errors)
   check_root_copies(errors)
 
 

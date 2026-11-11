@@ -124,6 +124,41 @@ def test_core_source_installs_to_agents(tmp_path):
   assert not (base / ".agents" / core.name).exists()
 
 
+def test_skill_refs_parity_accepts_compressed_live_files(tmp_path, monkeypatch):
+  skills = tmp_path / "skills"
+  (skills / "refs" / "sample").mkdir(parents=True)
+  (skills / "sample").mkdir(parents=True)
+  (skills / "refs" / "sample" / "SKILL.md").write_text(
+    "Name\n\nFirst rule.\nSecond rule.\n", encoding="utf-8"
+  )
+  (skills / "sample" / "SKILL.md").write_text(
+    "Name\n\nFirst and second rule.\n", encoding="utf-8"
+  )
+  monkeypatch.setattr(check, "SKILLS", skills)
+  monkeypatch.setattr(check, "ROOT", tmp_path)
+  errors: list[str] = []
+  check.check_skill_refs_parity(errors)
+  assert errors == []
+
+
+def test_skill_refs_parity_rejects_a_live_only_line(tmp_path, monkeypatch):
+  skills = tmp_path / "skills"
+  (skills / "refs" / "sample").mkdir(parents=True)
+  (skills / "sample").mkdir(parents=True)
+  (skills / "refs" / "sample" / "SKILL.md").write_text(
+    "Name\n\nFirst rule.\nSecond rule.\n", encoding="utf-8"
+  )
+  (skills / "sample" / "SKILL.md").write_text(
+    "Name\n\nFirst rule.\nSecond rule.\nThird rule.\n", encoding="utf-8"
+  )
+  monkeypatch.setattr(check, "SKILLS", skills)
+  monkeypatch.setattr(check, "ROOT", tmp_path)
+  errors: list[str] = []
+  check.check_skill_refs_parity(errors)
+  assert len(errors) == 1
+  assert "compression may merge lines but never add them" in errors[0]
+
+
 def test_validation_stages_continue_after_stale_budget(monkeypatch, capsys):
   budgets = check.read_budget_table()
   row = next(iter(budgets))
