@@ -3399,6 +3399,91 @@ def test_cli_run_start_logs_and_after_chaining(tmp_path: Path) -> None:
   assert "exit 125" in never_log
 
 
+def test_run_logs_page_and_search_flags_combine(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir()
+  runs = state_dir / "runs"
+  runs.mkdir()
+  process = subprocess.Popen([sys.executable, "-c", "pass"])
+  process.wait(timeout=5)
+  lines = [f"line-{index}" for index in range(1, 11)]
+  log_path = runs / "paged-abc.log"
+  log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+  exit_path = runs / "paged-abc.exit"
+  exit_path.write_text("0\n", encoding="utf-8")
+  (runs / "paged.json").write_text(
+    json.dumps(
+      {"pid": process.pid, "exit_path": str(exit_path), "log_path": str(log_path)}
+    ),
+    encoding="utf-8",
+  )
+
+  code, out, err = _run_cli(state_dir, "run", "logs", "paged")
+  assert code == 0, err
+  assert out.splitlines()[0] == "run paged exit 0"
+  assert [line for line in out.splitlines()[1:]] == lines[-50:]
+
+  code, out, _ = _run_cli(state_dir, "run", "logs", "paged", "-n", "3", "-p", "1")
+  assert code == 0
+  assert out.splitlines()[1:] == ["line-8", "line-9", "line-10"]
+
+  code, out, _ = _run_cli(state_dir, "run", "logs", "paged", "-n", "3", "-p", "3")
+  assert code == 0
+  assert out.splitlines()[1:] == ["line-2", "line-3", "line-4"]
+
+  code, out, _ = _run_cli(state_dir, "run", "logs", "paged", "-s", "line-1")
+  assert code == 0
+  assert out.splitlines()[1:] == ["line-1", "line-10"]
+
+  code, out, _ = _run_cli(
+    state_dir, "run", "logs", "paged", "-s", "line-1", "-n", "1", "-p", "2"
+  )
+  assert code == 0
+  assert out.splitlines()[1:] == ["line-1"]
+
+
+def test_run_rerun_reuses_the_recorded_command(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir()
+  script = tmp_path / "stamp.sh"
+  counter = tmp_path / "count"
+  script.write_text(f"printf 'x' >> {counter}\necho rerun-body\n", encoding="utf-8")
+
+  code, _, err = _run_cli(state_dir, "run", "start", "stamp", "--", "sh", str(script))
+  assert code == 0, err
+  assert "rerun-body" in _wait_for_run(state_dir, "stamp")
+  assert counter.read_text(encoding="utf-8") == "x"
+
+  code, out, err = _run_cli(state_dir, "run", "rerun", "stamp")
+  assert code == 0, err
+  assert out.startswith(f"{cli.RUN_STARTED_PREFIX} stamp (pid ")
+  assert "rerun-body" in _wait_for_run(state_dir, "stamp")
+  assert counter.read_text(encoding="utf-8") == "xx"
+
+
+def test_run_rerun_refuses_a_live_run(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  state_dir.mkdir()
+  runs = state_dir / "runs"
+  runs.mkdir()
+  exit_path = runs / "busy-abc.exit"
+  (runs / "busy.json").write_text(
+    json.dumps(
+      {
+        "pid": os.getpid(),
+        "exit_path": str(exit_path),
+        "log_path": str(runs / "busy-abc.log"),
+        "command": ["sh", "-c", "echo again"],
+      }
+    ),
+    encoding="utf-8",
+  )
+  code, _, err = _run_cli(state_dir, "run", "rerun", "busy")
+  assert code != 0
+  assert "still live" in err
+  assert not (runs / "busy-abc.log").exists()
+
+
 @pytest.mark.parametrize("exit_code", [0, 7])
 def test_detached_run_delivers_hidden_verdict_without_poll(
   tmp_path: Path, exit_code: int

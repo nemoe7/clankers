@@ -4,6 +4,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.1]
+
+### Added
+
+- Paginate and search `steer run logs` with `-p` and `-s`.
+- Rerun a finished run from its recorded command with `steer run rerun NAME`.
+
+### Fixed
+
+- Block shell and native reads of a live run's log or exit file.
+
 ## [2.3.0]
 
 ### Added

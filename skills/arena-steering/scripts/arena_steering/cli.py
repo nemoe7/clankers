@@ -1264,6 +1264,7 @@ def _run_pre(
     call_count=count,
     active_runs=tuple(name for name, _run_id in active_run_ids),
     active_run_ids=active_run_ids,
+    runs_dir=Path(store.db_path).parent / "runs",
     seen_live_run_log_ids=seen_live_run_log_ids,
     routed=routed,
     cwd=Path.cwd(),
@@ -1485,6 +1486,18 @@ def _runs_dir(state_dir: Path) -> Path:
   runs = state_dir / "runs"
   runs.mkdir(parents=True, exist_ok=True)
   return runs
+
+
+def _log_page(
+  lines: list[str], *, lines_limit: int = 50, page: int | None, search: str | None
+) -> list[str]:
+  """Filter log lines by a query, then return one numbered page of the tail."""
+  if search:
+    lines = [line for line in lines if search in line]
+  if page is None or page < 1:
+    return lines[-lines_limit:]
+  start = max(len(lines) - page * lines_limit, 0)
+  return lines[start : start + lines_limit]
 
 
 def _start_detached_run(
@@ -1778,6 +1791,8 @@ def _run_run(
     logs_p = argparse.ArgumentParser(prog="steer run logs")
     logs_p.add_argument("name")
     logs_p.add_argument("-n", "--lines", type=int, default=50)
+    logs_p.add_argument("-p", "--page", type=int, default=None)
+    logs_p.add_argument("-s", "--search", default=None)
     parsed = logs_p.parse_args(args[1:])
     name = _safe_local_name(parsed.name)
     runs = _runs_dir(state_dir)
@@ -1792,10 +1807,31 @@ def _run_run(
     print(f"run {name} {status}", file=out)
     log_path = Path(record["log_path"])
     if log_path.is_file():
-      lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-      for line in lines[-parsed.lines :]:
+      lines = _log_page(
+        log_path.read_text(encoding="utf-8", errors="replace").splitlines(),
+        lines_limit=parsed.lines,
+        page=parsed.page,
+        search=parsed.search,
+      )
+      for line in lines:
         print(line, file=out)
     return 0
+  if subcmd == "rerun":
+    rerun_p = argparse.ArgumentParser(prog="steer run rerun")
+    rerun_p.add_argument("name")
+    parsed = rerun_p.parse_args(args[1:])
+    name = _safe_local_name(parsed.name)
+    runs = _runs_dir(state_dir)
+    record_path = runs / f"{name}.json"
+    if not record_path.is_file():
+      raise KeyError(f"Unknown run: {name}")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    if run_is_running(record):
+      raise ValueError(f"Run {name} is still live; read its logs instead")
+    command = [str(word) for word in record.get("command", [])]
+    if not command:
+      raise ValueError(f"Run {name} recorded no command to reuse")
+    return _start_detached_run(state_dir, name, command, out=out)
   if subcmd == "pr-checks":
     checks_p = argparse.ArgumentParser(prog="steer run pr-checks")
     checks_p.add_argument("-n", "--number", type=int, default=None)

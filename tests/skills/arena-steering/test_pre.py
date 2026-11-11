@@ -3829,6 +3829,82 @@ def test_live_run_log_guard_blocks_second_read_in_mixed_line() -> None:
   assert "The live run will send its verdict in the inbox." in text
 
 
+def _live_run_context(tmp_path: Path, line: str, *, live: bool) -> pre.PreContext:
+  runs = tmp_path / "arena-state" / "runs"
+  runs.mkdir(parents=True, exist_ok=True)
+  (runs / "gate-abc.log").write_text("started\n", encoding="utf-8")
+  (runs / "gate-abc.exit").unlink(missing_ok=True)
+  if not live:
+    (runs / "gate-abc.exit").write_text("0\n", encoding="utf-8")
+  return pre.PreContext(
+    line=line,
+    command=line,
+    shell="bash",
+    active_run_ids=(("gate", "gate-abc.exit"),),
+    runs_dir=runs,
+    cwd=tmp_path,
+  )
+
+
+@pytest.mark.parametrize("verb", pre.MANUAL_RUN_READ_VERBS)
+def test_live_run_file_guard_blocks_each_manual_verb(tmp_path: Path, verb: str) -> None:
+  line = f"{verb} arena-state/runs/gate-abc.log"
+  result = pre.run_pipeline(_live_run_context(tmp_path, line, live=True))
+  assert result.verdict == pre.BLOCK, (verb, line)
+  assert result.blocked_by == "manual-live-run-read"
+  text = " ".join(result.messages)
+  assert "Manual read of live run gate" in text
+  assert "steer run logs gate" in text
+  assert "steer run rerun gate" in text
+  assert "steer worktree add <name>" in text
+
+
+def test_live_run_file_guard_blocks_the_exit_marker(tmp_path: Path) -> None:
+  result = pre.run_pipeline(
+    _live_run_context(tmp_path, "cat arena-state/runs/gate-abc.exit", live=True)
+  )
+  assert result.verdict == pre.BLOCK
+  assert "gate-abc.exit" in " ".join(result.messages)
+
+
+def test_live_run_file_guard_blocks_the_native_read_script(tmp_path: Path) -> None:
+  template = (
+    Path(__file__)
+    .with_name("fixtures")
+    .joinpath("reader_tool_template.sh")
+    .read_text(encoding="utf-8")
+    .strip()
+  )
+  runs = (tmp_path / "arena-state" / "runs").resolve()
+  line = template.replace(
+    'path = "/checkout/target.txt"', f"path = {json.dumps(str(runs / 'gate-abc.log'))}"
+  )
+  ctx = _live_run_context(tmp_path, line, live=True)
+  ctx.command = line.removeprefix("/bin/bash -l -c ")
+  result = pre.run_pipeline(ctx)
+  assert result.verdict == pre.BLOCK
+  assert result.blocked_by == "manual-live-run-read"
+  assert "gate-abc.log" in " ".join(result.messages)
+
+
+@pytest.mark.parametrize(
+  ("line", "live"),
+  (
+    ("cat arena-state/runs/gate-abc.log", False),
+    ("cat arena-state/runs/other-abc.log", True),
+    ("cat arena-state/runs/notes.txt", True),
+    ("cat README.md", True),
+    ("cat arena-state/elsewhere/gate-abc.log", True),
+    ("cat README.md arena-state/runs/gate-abc.log.bak", True),
+  ),
+)
+def test_live_run_file_guard_leaves_other_reads_alone(
+  tmp_path: Path, line: str, live: bool
+) -> None:
+  result = pre.run_pipeline(_live_run_context(tmp_path, line, live=live))
+  assert result.verdict == pre.CONTINUE, (line, result.messages)
+
+
 @pytest.mark.parametrize(
   ("line", "elapsed", "warn"),
   (
