@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-from arena_steering import __version__, blocked_bash, cli, pre, server
+from arena_steering import __version__, blocked_bash, cli, gates, pre, server
 from arena_steering.blocked_bash import (
   append_blocked_bash,
   dismiss_blocked_bash,
@@ -4246,6 +4246,51 @@ def test_zombie_run_is_marked_failed(
   }
   assert not gates.run_is_running(record)
   assert exit_path.read_text(encoding="utf-8").strip() == "1"
+
+
+def test_pruned_run_files_disappear_after_the_retention_window(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  runs = state_dir / "runs"
+  runs.mkdir(parents=True)
+  log_path = runs / "checks-abc.log"
+  exit_path = runs / "checks-abc.exit"
+  log_path.write_text("output\n", encoding="utf-8")
+  exit_path.write_text("0\n", encoding="utf-8")
+  (runs / "checks.json").write_text(
+    json.dumps(
+      {
+        "name": "checks",
+        "pid": 0,
+        "log_path": str(log_path),
+        "exit_path": str(exit_path),
+      }
+    ),
+    encoding="utf-8",
+  )
+
+  assert gates.prune_finished_runs(state_dir, now=time.time()) == ()
+
+  later = exit_path.stat().st_mtime + gates.RUN_RETENTION_SECONDS + 1
+  assert gates.prune_finished_runs(state_dir, now=later) == ("checks",)
+  assert not log_path.exists()
+  assert not exit_path.exists()
+  assert not (runs / "checks.json").exists()
+
+
+def test_pruning_unlinks_the_task_that_pointed_at_the_run(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, _ = cli.open_services(state_dir)
+  try:
+    tasks.create_task("gated", "Gated", size=1, details=["Gate"], gate_names=["checks"])
+  finally:
+    store.close()
+  cli.drop_finished_run_task_links(state_dir, ("checks",))
+  store, _, tasks, _ = cli.open_services(state_dir)
+  try:
+    listing = tasks.list_tasks(include_finished=True)
+    assert [name for task, _blocked in listing for name in task.gate_names] == []
+  finally:
+    store.close()
 
 
 def test_detached_run_followup_keeps_original_exit_status(tmp_path: Path) -> None:

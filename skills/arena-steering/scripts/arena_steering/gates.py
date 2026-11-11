@@ -56,6 +56,36 @@ def run_is_running(record: dict) -> bool:
   return False
 
 
+RUN_RETENTION_SECONDS = 30 * 60
+
+
+def prune_finished_runs(
+  state_dir: str | Path, *, now: float, retention: float = RUN_RETENTION_SECONDS
+) -> tuple[str, ...]:
+  """Delete finished run files older than the retention window.
+
+  Returns the names whose files went away, so the caller can drop the task
+  entry that pointed at them.
+  """
+  runs = Path(state_dir) / "runs"
+  pruned: list[str] = []
+  for record_path in sorted(runs.glob("*.json")):
+    if record_path.name.startswith("."):
+      continue
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    exit_path = Path(str(record.get("exit_path", "")))
+    if not exit_path.is_file():
+      continue
+    if now - exit_path.stat().st_mtime < retention:
+      continue
+    for path in (record.get("log_path"), record.get("exit_path")):
+      if path:
+        Path(str(path)).unlink(missing_ok=True)
+    record_path.unlink(missing_ok=True)
+    pruned.append(record_path.stem)
+  return tuple(pruned)
+
+
 class FileGateStatus:
   """Use the run record and exit marker in the state directory."""
 
