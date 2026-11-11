@@ -515,8 +515,7 @@ def check_refs_parity(errors: list[str]) -> None:
 def check_skill_refs_parity(errors: list[str]) -> None:
   """Check each skill file against its refs baseline.
 
-  Live skill files compress the refs wording, so a live line count above the
-  refs count means a rule landed only in live.
+  Live files compress the refs wording, so a higher live line count flags a live-only rule.
   """
   refs_root = SKILLS / "refs"
   if not refs_root.is_dir():
