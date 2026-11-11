@@ -6425,9 +6425,7 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   assert all(
     Path(item.path).parent == first_folder for item in updated_first.attachments
   )
-  assert all(
-    Path(item.path).is_file() for item in updated_first.attachments
-  )
+  assert all(Path(item.path).is_file() for item in updated_first.attachments)
   assert all("uploads" not in d for d in updated_first.details)
 
   # Linking a second task copies into uploads/{secondTaskID}/ while preserving first.
@@ -6437,9 +6435,7 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   second_folder = state_dir / "uploads" / "second-task"
   assert (first_folder / "ca1001-diagram.png").is_file()
   assert (second_folder / "ca1001-diagram.png").is_file()
-  assert all(
-    Path(item.path).parent == second_folder for item in second.attachments
-  )
+  assert all(Path(item.path).parent == second_folder for item in second.attachments)
   assert (second_folder / "ca1001-diagram.png") in {
     Path(item.path) for item in second.attachments
   }
