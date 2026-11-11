@@ -45,6 +45,8 @@ function updateNode(current, next) {
   const checkedWasDirty = checkControl && current.checked !== current.defaultChecked;
 
   for (const attribute of Array.from(current.attributes)) {
+    // A transient highlight outlives the render that follows a reference jump.
+    if (attribute.name === "data-highlight") continue;
     if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
   }
   for (const attribute of next.attributes) {

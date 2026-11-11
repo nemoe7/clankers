@@ -32,6 +32,16 @@ function stopFallbackPoll() {
   }
 }
 
+// Background tabs throttle timers, so a dead socket can leave the pill stale.
+// Returning to the tab refreshes at once and retries the upgrade.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    changeHandler();
+    if (!liveSocket || liveSocket.readyState > 1) connectWebSocket();
+  });
+}
+
 export function connectWebSocket({ onChange, onReload, onReportAcked } = {}) {
   if (typeof onChange === "function") changeHandler = onChange;
   if (typeof onReload === "function") reloadHandler = onReload;
@@ -173,6 +183,17 @@ function socketRequest(method, path, bodyStr, timeoutMs = 15000) {
   });
 }
 
+export function transportState() {
+  // `attempted` keeps a page that never opened a transport out of the fault state.
+  const mode = new URL(window.location.href).searchParams.get("transport") === "poll" ? "poll" : "ws";
+  return {
+    socket: Boolean(liveSocket && liveSocket.readyState === 1),
+    poll: Boolean(disconnectPollTimer),
+    attempted: Boolean(liveSocket || disconnectPollTimer),
+    mode,
+  };
+}
+
 export const AUTOMATIC_WRITE_RETRIES = 3;
 const WRITE_RETRY_DELAYS_MS = [50, 100, 200];
 
@@ -193,9 +214,24 @@ async function parseJsonPayload(response) {
   }
 }
 
-async function requestJson(method, path, body = undefined, retryOnFailure = false, onRequestId = null) {
+async function issueWriteToken() {
+  const response = await fetch("/browser-write-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const payload = await parseJsonPayload(response);
+  if (!response.ok || typeof payload.request_id !== "string") {
+    const error = new Error(payload.error || "Could not obtain a browser write token");
+    error.status = response.status;
+    throw error;
+  }
+  return payload.request_id;
+}
+
+async function performJsonRequest(method, path, body = undefined, retryOnFailure = false, onRequestId = null) {
   const write = ["POST", "PATCH", "DELETE"].includes(method) && path !== "/markdown";
-  const id = write ? (body?.request_id || crypto.randomUUID()) : null;
+  const id = write ? (body?.request_id || await issueWriteToken()) : null;
   const requestBody = write
     ? { ...(body || {}), ...(body && "request_id" in body ? { request_id: id } : {}), _request_id: id }
     : body;
@@ -244,8 +280,26 @@ async function requestJson(method, path, body = undefined, retryOnFailure = fals
   throw new Error("Request failed");
 }
 
+async function requestJson(method, path, body = undefined, retryOnFailure = false, onRequestId = null) {
+  const receipt = await performJsonRequest(method, path, body, retryOnFailure, onRequestId);
+  if (!receipt._receipt) return receipt;
+  const result = { ...receipt, _operation_result: receipt };
+  for (const [key, route] of [["message", "messages"], ["task", "tasks"], ["report", "reports"]]) {
+    const id = receipt[key]?.id;
+    if (!id) continue;
+    try {
+      const current = await performJsonRequest("GET", `/${route}/${encodeURIComponent(id)}`);
+      result[key] = current[key] || null;
+    } catch (error) {
+      result[key] = null;
+      result.reconciliation_error = String(error.message || error);
+    }
+  }
+  return result;
+}
+
 async function requestForm(path, buildFormData) {
-  const id = crypto.randomUUID();
+  const id = await issueWriteToken();
   const maxAttempts = AUTOMATIC_WRITE_RETRIES + 1;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (attempt > 0) await waitRetryDelay(attempt);
@@ -292,6 +346,7 @@ async function blockedBashRequest(method, path) {
 }
 
 export const api = {
+  newRequestId: issueWriteToken,
   getHealth() {
     return requestJson("GET", "/health");
   },

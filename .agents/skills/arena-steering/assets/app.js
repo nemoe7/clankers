@@ -2,7 +2,7 @@ import { createComposerUploads } from "./composer-uploads.js";
 import { copyText } from "./copy.js";
 // Main ES module controller for Arena Steering.
 
-import { api, connectWebSocket } from "./api.js";
+import { api, connectWebSocket, transportState } from "./api.js";
 import { expandMessageHistory, messageQueryKey, paintConnection, renderMessagesView, trackMessageAcks } from "./messages-view.js";
 import {
   escapeHtml,
@@ -186,6 +186,7 @@ function applyConnection(requestId, health, error = false, startedAt = Date.now(
     polling_since: health.polling_since,
     agent_seen_at: health.agent_seen_at,
     turn_ended_at: health.turn_ended_at,
+    transport: transportState(),
   };
   store.getState().connection = connection;
   if (!error && store.getState().skipPollArmed !== Boolean(health.skip_poll)) {
@@ -220,6 +221,8 @@ async function getHealthWithConnection() {
   try {
     const health = await api.getHealth();
     healthSeenRevision = health.message_revision;
+    healthSeenVisibleRevision = health.visible_message_revision;
+    healthSeenMessageTotal = health.message_total;
     applyConnection(requestId, health, false, startedAt);
     if (requestId === appliedHealthRequestId) {
       confirmedViolation = health;
@@ -423,6 +426,8 @@ let historyCache = null;
 let hiddenMessageCache = null;
 let visibleWindowCache = null;
 let healthSeenRevision = undefined;
+let healthSeenVisibleRevision = undefined;
+let healthSeenMessageTotal = undefined;
 let visibleQueryRevision = undefined;
 let loadedMessageRevision = null;
 let searchBase = null;
@@ -473,14 +478,23 @@ async function fetchMessagePage({ before = "", reset = false, preserve = false }
   const key = messageQueryKey(state);
   if (!before && !reset && !preserve && !state.showHidden) {
     const cached = cachedVisibleWindow(key);
-    // The health revision expires the cache. A self-comparison never would.
-    if (cached && healthSeenRevision !== undefined && cached.revision === healthSeenRevision) {
+    // Only a visible revision may expire the cache, so a hidden write cannot refetch it.
+    const passRevision = healthSeenVisibleRevision !== undefined
+      ? healthSeenVisibleRevision
+      : visibleQueryRevision;
+    if (cached && passRevision !== undefined && cached.revision === passRevision) {
       loadedMessageKey = key;
       loadedMessageRevision = cached.revision;
-      if (JSON.stringify(state.messages) !== JSON.stringify(cached.messages)) {
-        store.setState({ messages: cached.messages, messagesHasMore: cached.hasMore, messagesError: "", messagesLoading: false });
+      // Merge so a message written after the cache was stored still shows.
+      const live = state.messages || [];
+      const merged = [
+        ...cached.messages,
+        ...live.filter((item) => !cached.messages.some((message) => message.id === item.id)),
+      ];
+      if (JSON.stringify(state.messages) !== JSON.stringify(merged)) {
+        store.setState({ messages: merged, messagesHasMore: cached.hasMore, messagesError: "", messagesLoading: false });
       }
-      return cached.messages;
+      return merged;
     }
   }
   // Refresh the latest page now. Keep loaded history until the older-page retry completes.
@@ -578,11 +592,16 @@ async function refreshAll(force = false) {
       api.listReports({ stale: false, summary: true }),
     ]);
     // The fetch races the health fetch, so refetch when this poll reports a
-    // newer revision than the rendered window.
+    // newer visible revision than the rendered window.
+    const pollRevision = health.visible_message_revision !== undefined
+      ? health.visible_message_revision
+      : health.message_revision;
+    // A count change means an insert the cache cannot hold, so expire it too.
+    const countChanged = health.message_total !== undefined &&
+      healthSeenMessageTotal !== undefined &&
+      health.message_total !== healthSeenMessageTotal;
     const msgRes =
-      health.message_revision &&
-      loadedMessageRevision &&
-      health.message_revision !== loadedMessageRevision
+      countChanged || (pollRevision && loadedMessageRevision && pollRevision !== loadedMessageRevision)
         ? await fetchMessagePage()
         : firstMsgRes;
     if (epoch !== refreshEpoch || msgRes === null) return;
@@ -677,6 +696,20 @@ let replySelectionRevision = 0;
 let reportSelectionRevision = 0;
 let confirmedReportId = null;
 let referenceNavigationRevision = 0;
+const PENDING_MESSAGE_RETRY_KEY = "steer:pendingSend";
+let pendingMessageRetry = null;
+try {
+  const saved = sessionStorage.getItem(PENDING_MESSAGE_RETRY_KEY);
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    if (typeof parsed?.payloadKey !== "string" || typeof parsed?.request?.request_id !== "string") {
+      throw new Error("Invalid pending message recovery data");
+    }
+    pendingMessageRetry = parsed;
+  }
+} catch {
+  pendingMessageRetry = { payloadKey: null };
+}
 
 const handlers = {
   onRenderDraft(markdown) {
@@ -684,7 +717,13 @@ const handlers = {
   },
   async onSendMessage(payload) {
     if (store.getState().sending) throw new Error("A send is already in progress");
-    const requestId = crypto.randomUUID();
+    const payloadKey = JSON.stringify(payload);
+    if (pendingMessageRetry && pendingMessageRetry.payloadKey !== payloadKey) {
+      const error = new Error("Resolve the previous message before sending a different one.");
+      store.setState({ composerError: error.message });
+      throw error;
+    }
+    const pendingId = `pending-${crypto.randomUUID()}`;
     // A page requested before this send cannot reconcile its optimistic row.
     messageEpoch += 1;
     const selectedRefs = store.getState().replyParentRefs || [];
@@ -692,7 +731,7 @@ const handlers = {
     const selectedRevision = replySelectionRevision;
     const staged = store.getState().composerAttachments || [];
     const optimisticMessage = {
-      id: `pending-${requestId}`, requestId, optimistic: true,
+      id: pendingId, requestId: null, optimistic: true,
       body: payload.body, parent_ids: payload.parent_ids || [], parent_refs: payload.parent_refs || [],
       attachments: (payload.attachmentIds || []).map(id => {
         const item = staged.find(entry => entry.id === id);
@@ -703,8 +742,11 @@ const handlers = {
     };
     store.setState({ sending: true, composerError: "", optimisticMessage, optimisticConfirmation: null, ...(clearRefs ? { replyParentRefs: [] } : {}) });
     try {
+      const requestId = pendingMessageRetry?.request.request_id || await api.newRequestId();
+      optimisticMessage.requestId = requestId;
+      store.setState({ optimisticMessage: { ...optimisticMessage } });
       const attachmentIds = payload.attachmentIds || [];
-      const attachments = await composerUploads.readyForSend(attachmentIds);
+      const attachments = pendingMessageRetry?.request.attachments || await composerUploads.readyForSend(attachmentIds);
       const parentRefs = payload.parent_refs || [];
       const request = {
         body: payload.body,
@@ -715,6 +757,9 @@ const handlers = {
         request_id: requestId,
       };
       if (parentRefs.length) request.parent_refs = parentRefs;
+      const pending = { payloadKey, request };
+      sessionStorage.setItem(PENDING_MESSAGE_RETRY_KEY, JSON.stringify(pending));
+      pendingMessageRetry = pending;
       let response;
       if (request.attachments.length) {
         response = await api.sendMessageWithFile(request);
@@ -722,6 +767,8 @@ const handlers = {
       } else {
         response = await api.sendMessage(request);
       }
+      sessionStorage.removeItem(PENDING_MESSAGE_RETRY_KEY);
+      pendingMessageRetry = null;
       // Ignore page responses started before this confirmed send.
       messageEpoch += 1;
       const current = store.getState();
@@ -732,9 +779,13 @@ const handlers = {
       const messages = confirmed && messageMatchesQuery(confirmed, current.searchQuery) && !confirmed.hidden
         ? [...(current.messages || []).filter(item => item.id !== confirmed.id), confirmed]
         : current.messages;
-      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false });
+      store.setState({ messages, optimisticMessage: null, optimisticConfirmation: message ? { pendingId: optimisticMessage.id, serverId: message.id } : null, sending: false, composerError: response.reconciliation_error ? "Message sent, but its current state could not be loaded." : null });
     } catch (error) {
       const restoreRefs = clearRefs && replySelectionRevision === selectedRevision;
+      // Retries are exhausted, so the recovery record would replay a send the
+      // page already reports as failed.
+      sessionStorage.removeItem(PENDING_MESSAGE_RETRY_KEY);
+      pendingMessageRetry = null;
       store.setState({ sending: false, optimisticMessage: null, composerError: String(error.message || error), ...(restoreRefs ? { replyParentRefs: selectedRefs } : {}) });
       throw error;
     }
@@ -885,13 +936,38 @@ const handlers = {
     searchBase = null;
     const epoch = ++messageEpoch;
     if (!nextHidden) {
+      // Keep the hidden window so the next toggle reuses it instead of refetching.
+      hiddenMessageCache = {
+        query,
+        messages: state.messages || [],
+        hasMore: state.messagesHasMore,
+        revision: loadedMessageRevision,
+        dirty: Boolean(state.messagesLoading || messageRequests) || loadedMessageRevision == null,
+      };
+      // Visibility is gated on the visible revision, not the hidden one.
+      if (visibleQueryRevision !== undefined && !state.messagesLoading && !messageRequests) {
+        const visibleRevision = healthSeenVisibleRevision !== undefined
+          ? healthSeenVisibleRevision
+          : visibleQueryRevision;
+        healthSeenMessageTotal = state.messages?.length;
+        visibleWindowCache = {
+          key: messageQueryKey({ ...state, showHidden: false }),
+          messages: (state.messages || []).filter(message => !message.hidden),
+          hasMore: state.messagesHasMore,
+          revision: visibleRevision,
+        };
+      }
       // Reuse the window the toggle-off already holds instead of refetching it.
       const visibleKey = messageQueryKey({ ...state, showHidden: false });
       const cached = visibleWindowCache?.key === visibleKey ? visibleWindowCache : null;
       if (!cached) visibleWindowCache = null;
+      // The cache misses later writes, so merge the live window into it.
+      const live = (state.messages || []).filter(message => !message.hidden);
       const visible = cached
-        ? cached.messages
-        : (state.messages || []).filter(message => !message.hidden);
+        ? [...live, ...cached.messages.filter(
+          (item) => !live.some((message) => message.id === item.id)
+        )]
+        : live;
       store.setState({
         showHidden: false,
         messages: visible,
@@ -907,8 +983,21 @@ const handlers = {
       hasMore: state.messagesHasMore,
       revision: visibleQueryRevision,
     };
-    store.setState({ showHidden: true, messagesLoading: false });
+    const cached = hiddenMessageCache?.query === query ? hiddenMessageCache : null;
+    if (cached) loadedMessageRevision = cached.revision;
+    // The cache misses later writes, so merge it into the current window.
+    const seed = cached
+      ? [...(state.messages || []), ...cached.messages.filter(
+        (item) => !(state.messages || []).some((message) => message.id === item.id)
+      )]
+      : null;
+    store.setState({
+      showHidden: true,
+      ...(seed ? { messages: seed, messagesHasMore: cached.hasMore || state.messagesHasMore } : {}),
+      messagesLoading: false,
+    });
     loadedMessageKey = messageQueryKey(store.getState());
+    if (cached && !cached.dirty && !messageRequests) return;
     const messages = state.messages || [];
     if (!messages.length) return;
     try {

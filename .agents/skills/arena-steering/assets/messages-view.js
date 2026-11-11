@@ -61,9 +61,17 @@ export function connectionPresentation(connection = {}, now = Date.now()) {
   const ended = connectionStamp(connection.turn_ended_at);
   const seen = connectionStamp(connection.agent_seen_at);
   const idle = ended !== null ? now - ended > AGENT_QUIET_MS : seen !== null && now - seen > AGENT_CALL_MS;
-  return idle
-    ? { state: "idle", label: "No agent", text: "Agent 404" }
-    : { state: "ok", label: "Connected", text: "Connected" };
+  if (idle) return { state: "idle", label: "No agent", text: "Agent 404" };
+  // A live connection with no socket names the poll, so the loss shows in the pill.
+  if (connection.transport?.mode === "poll" && !connection.transport.socket) {
+    return { state: "ok", label: "Connected (poll)", text: "Connected (poll)" };
+  }
+  // A transport that opened and then died is a fault, so it shows amber.
+  if (connection.transport?.mode === "ws" && connection.transport.attempted &&
+      !connection.transport.socket && !connection.transport.poll) {
+    return { state: "fault", label: "No transport", text: "Something went wrong" };
+  }
+  return { state: "ok", label: "Connected", text: "Connected" };
 }
 
 export function paintConnection(container, connection) {
@@ -254,6 +262,10 @@ function updateHistory(history, nextHistory, signatures, confirmation) {
       old = pending;
     }
     const use = pending || (old && renderedMessageSignatures.get(old) === signature ? old : node);
+    // A transient highlight outlives the render that follows a reference jump.
+    if (old && use !== old && old.getAttribute("data-highlight")) {
+      use.setAttribute("data-highlight", "true");
+    }
     if (old && use === node) {
       const previous = Array.from(old.querySelectorAll("[data-markdown-key]"));
       for (const next of node.querySelectorAll("[data-markdown-key]")) {
@@ -429,7 +441,7 @@ export function renderMessagesView(container, state, handlers) {
                 ${markdownBatch.slot(msg.optimistic ? renderMarkdownBlock(msg.body) : (msg.body_html ?? '<p role="alert">Rendered message unavailable.</p>'), `message-text${bodyClass}`, query)}
                 ${acksHtml}
               </div>
-              ${acks.length && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
+              ${(acks.length || Boolean(msg.hidden && msg.body)) && !msg.replies_seen ? `<span class="reply-seen-sentinel" data-reply-id="${escapeHtml(msg.id)}" data-revision="${escapeHtml(msg.replies_revision || "")}" aria-hidden="true"></span>` : ""}
               <p class="receipt">
                 ${tasksSuffix}
                 <time class="receipt-bottom receipt-status" role="img" aria-label="${stateLabel}, ${rel}" data-state-label="${stateLabel}" data-prefix="${statusText}" datetime="${iso}" data-timestamp="${iso}">${statusText ? `${statusText} ` : ""}${rel}</time>

@@ -31,6 +31,7 @@ from urllib.parse import parse_qs, urlparse, urlsplit
 
 from . import __version__
 from .blocked_bash import dismiss_blocked_bash, read_blocked_bash
+from .browser_retry import RetryCapacityError
 from .display_paths import home_relative
 from .gates import FileGateStatus
 from .git_safety import DirtyTreeError, completion_tree_check
@@ -388,6 +389,7 @@ class SteeringApp:
     self.router.add(
       "POST", "/messages/with-file", self._handle_create_message_with_file
     )
+    self.router.add("POST", "/browser-write-token", self._handle_browser_write_token)
     self.router.add("POST", "/uploads", self._handle_upload_file)
     self.router.add("GET", "/messages/hidden", self._handle_hidden_message_window)
     self.router.add("GET", "/messages/{id}", self._handle_get_message)
@@ -465,35 +467,61 @@ class SteeringApp:
         )
         fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
+        created_files: list[Path] = []
+        overwritten_files: dict[Path, bytes | None] = {}
+
+        def rollback_files() -> None:
+          for file_path in created_files:
+            file_path.unlink(missing_ok=True)
+          for file_path, contents in overwritten_files.items():
+            if contents is None:
+              file_path.unlink(missing_ok=True)
+            else:
+              file_path.write_bytes(contents)
+
+        deferred_flag = False
+
         def perform() -> tuple[int, dict[str, Any]]:
+          nonlocal deferred_flag
           self._browser_write.request_id = request_id
-          self._browser_write.files = []
+          self._browser_write.files = created_files
+          self._browser_write.overwritten_files = overwritten_files
           try:
             try:
               status, payload = handler(params, query, request_body)
             except DirtyTreeError as exc:
-              # Commit the flag after the task savepoint rolls back.
+              # The browser-write savepoint rolls a failed action back, so the
+              # flag is recorded after that rollback, never inside the action.
+              deferred_flag = True
               status, payload = int(HTTPStatus.BAD_REQUEST), {"error": str(exc)}
             if not 200 <= status < 300:
-              for file_path in self._browser_write.files:
-                file_path.unlink(missing_ok=True)
+              rollback_files()
+            if 200 <= status < 300:
+              payload = self._compact_browser_result(payload)
             return status, payload
           except BaseException:
-            for file_path in self._browser_write.files:
-              file_path.unlink(missing_ok=True)
+            rollback_files()
             raise
           finally:
             del self._browser_write.request_id
             del self._browser_write.files
+            del self._browser_write.overwritten_files
 
-        status, payload = self.store.execute_browser_write_once(
-          request_id, fingerprint, perform
-        )
+        try:
+          status, payload = self.store.execute_browser_write_once(
+            request_id, fingerprint, perform
+          )
+        except BaseException:
+          rollback_files()
+          raise
+        finally:
+          if deferred_flag:
+            self.messages.flag_dirty_finish()
       else:
         status, payload = handler(params, query, request_body)
       if (
         method.upper() in {"POST", "PATCH", "DELETE"}
-        and path != "/mermaid-cache"
+        and path not in {"/mermaid-cache", "/browser-write-token", "/timezone"}
         and 200 <= status < 300
       ):
         self._state_version = getattr(self, "_state_version", 0) + 1
@@ -507,8 +535,40 @@ class SteeringApp:
       )
     except (TypeError, ValueError) as exc:
       return (int(HTTPStatus.BAD_REQUEST), {"error": str(exc)})
+    except RetryCapacityError as exc:
+      return (
+        int(HTTPStatus.SERVICE_UNAVAILABLE),
+        {"error": str(exc), "retryable": True},
+      )
     except RuntimeError as exc:
       return (int(HTTPStatus.INTERNAL_SERVER_ERROR), {"error": str(exc)})
+
+  @staticmethod
+  def _compact_browser_result(payload: dict[str, Any]) -> dict[str, Any]:
+    fields = {
+      "message": (
+        "id",
+        "modified_at",
+        "status",
+        "attachments",
+        "replies_revision",
+        "replies_seen",
+      ),
+      "task": ("id", "modified_at", "status", "finished_at"),
+      "report": ("id", "modified_at", "status", "seen_at", "ack_seen"),
+      "answer": ("id", "report_id", "created_at", "modified_at", "status"),
+    }
+    result = {"_receipt": True, **payload}
+    for key, names in fields.items():
+      resource = payload.get(key)
+      if not isinstance(resource, dict):
+        continue
+      result[key] = {name: resource[name] for name in names if name in resource}
+      if "acks" in resource:
+        result[key]["reply_revision"] = hashlib.sha256(
+          json.dumps(resource["acks"], ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+    return result
 
   def data_version(self) -> tuple[int, int, int]:
     """Return a version tuple covering SQLite, in-process writes, runs, and uploads."""
@@ -713,9 +773,16 @@ class SteeringApp:
         hashlib.sha256(request_id.encode("utf-8")).hexdigest()
         for request_id in self.store.browser_write_ids()
       }
-      for file_path in self._uploads_dir().glob("request-*"):
+      candidates = list(self._uploads_dir().glob("request-*"))
+      references = {path: f"uploads/{path.name}" for path in candidates}
+      referenced = self.store.referenced_uploads(list(references.values()))
+      for file_path in candidates:
         match = re.fullmatch(r"request-([0-9a-f]{64})-[0-9]+-.*", file_path.name)
-        if match and match.group(1) not in committed:
+        if (
+          match
+          and match.group(1) not in committed
+          and references[file_path] not in referenced
+        ):
           file_path.unlink(missing_ok=True)
 
   @staticmethod
@@ -943,6 +1010,8 @@ class SteeringApp:
         "turn_ended_at": self.store.get_meta("turn_ended_at") or None,
         "last_tool": self.messages.tool_activity(),
         "message_revision": self.store.message_revision(),
+        "visible_message_revision": self.store.visible_message_revision(),
+        "message_total": self.store.message_count(),
         "calls_since_message": self.messages.calls_since_message(),
       },
     )
@@ -1111,6 +1180,10 @@ class SteeringApp:
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == digest:
       return (int(HTTPStatus.OK), {"path": rel, "sha256": digest, "stored": False})
+    if hasattr(self._browser_write, "overwritten_files"):
+      self._browser_write.overwritten_files[target] = (
+        target.read_bytes() if target.is_file() else None
+      )
     target.write_bytes(data)
     self._state_version = int(getattr(self, "_state_version", 0)) + 1
     return (int(HTTPStatus.OK), {"path": rel, "sha256": digest, "stored": True})
@@ -1340,6 +1413,7 @@ class SteeringApp:
       "total": total,
       "has_more": has_more,
       "revision": revision,
+      "visible_revision": self.store.visible_message_revision(),
     }
     request_id = query.get("request_id", [""])[0]
     if request_id:
@@ -1348,13 +1422,14 @@ class SteeringApp:
       result["pending_message_id"] = self.store.message_id_for_request(request_id)
     return (int(HTTPStatus.OK), result)
 
-  @staticmethod
   def _message_request_identity(
-    body: dict[str, Any], route: str
+    self, body: dict[str, Any], route: str
   ) -> tuple[str | None, str]:
     request_id = body.get("request_id")
     if request_id is None:
       return None, ""
+    if request_id != getattr(self._browser_write, "request_id", None):
+      raise ValueError("Message retry ID requires its signed browser write token")
     if not isinstance(request_id, str) or not re.fullmatch(
       r"[a-zA-Z0-9_-]{1,128}", request_id
     ):
@@ -1380,6 +1455,14 @@ class SteeringApp:
       fingerprint=fingerprint,
     )
     return (int(HTTPStatus.CREATED), {"message": self._serialize_message(msg)})
+
+  def _handle_browser_write_token(
+    self, _params: dict[str, str], _query: dict[str, list[str]], _body: Any
+  ) -> tuple[int, dict[str, str]]:
+    return (
+      int(HTTPStatus.CREATED),
+      {"request_id": self.store.issue_browser_write_token()},
+    )
 
   def _handle_upload_file(
     self, _params: dict[str, str], _query: dict[str, list[str]], body: dict[str, Any]

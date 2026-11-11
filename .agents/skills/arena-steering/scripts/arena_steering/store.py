@@ -428,13 +428,25 @@ class SqliteStore:
     fingerprint: str,
     action: Callable[[], tuple[int, dict]],
   ) -> tuple[int, dict]:
-    """Commit a browser action and its bounded replay result together."""
+    try:
+      return self._execute_browser_write_once(request_id, fingerprint, action)
+    except BaseException:
+      self._browser_retry_time()
+      raise
+
+  def _execute_browser_write_once(
+    self,
+    request_id: str,
+    fingerprint: str,
+    action: Callable[[], tuple[int, dict]],
+  ) -> tuple[int, dict]:
     now = self._browser_retry_time()
     with self.transaction():
       secret, generation = self._browser_retry_signing_state()
       browser_retry.verify_token(request_id, secret, generation, now)
       self._cleanup_browser_write_receipts(now)
     with self.transaction():
+      now = self._browser_retry_time()
       secret, generation = self._browser_retry_signing_state()
       token = browser_retry.verify_token(request_id, secret, generation, now)
       row = self._conn.execute(
@@ -522,6 +534,25 @@ class SqliteStore:
     with self._lock:
       row = self._conn.execute(
         "SELECT COALESCE(MAX(revision_us), 0) FROM state_row_versions WHERE table_name = 'messages'"
+      ).fetchone()
+    return int(row[0])
+
+  def message_count(self) -> int:
+    """Total messages, so an insert still expires a cache the insert never touches."""
+    with self._lock:
+      row = self._conn.execute("SELECT count(*) FROM messages").fetchone()
+    return int(row[0])
+
+  def visible_message_revision(self) -> int:
+    """Revision of visible messages only, so a hidden write cannot expire them."""
+    with self._lock:
+      row = self._conn.execute(
+        """
+        SELECT COALESCE(MAX(version.revision_us), 0)
+        FROM state_row_versions version
+        JOIN messages message ON message.id = version.row_id
+        WHERE version.table_name = 'messages' AND message.hidden = 0
+        """
       ).fetchone()
     return int(row[0])
 

@@ -34,6 +34,7 @@ from .gates import (
   FileGateStatus,
   RunCompletionWatcher,
   process_identity,
+  prune_finished_runs,
   run_is_running,
 )
 from .git_safety import DirtyTreeError, completion_tree_check
@@ -1503,6 +1504,24 @@ def _start_detached_run(
     )
 
 
+def drop_finished_run_task_links(state_dir: Path, run_names: tuple[str, ...]) -> None:
+  """Unlink tasks from runs whose files were pruned."""
+  if not run_names or not (state_dir / "state.sqlite3").is_file():
+    return
+  store, _, tasks, _ = open_services(state_dir)
+  try:
+    pruned = set(run_names)
+    for task, _blocked in tasks.list_tasks(include_finished=True):
+      for gate in tuple(task.gate_names):
+        if gate in pruned:
+          try:
+            tasks.unlink_task(task.id, gate)
+          except ValueError:
+            continue
+  finally:
+    store.close()
+
+
 def _notify_run_completion(
   state_dir: Path, name: str, run_id: str, exit_code: int
 ) -> None:
@@ -1529,6 +1548,8 @@ def _start_locked_run(
   on_finish: list[str] | None,
   out: TextIO,
 ) -> int:
+  for stale in prune_finished_runs(runs.parent, now=time.time()):
+    drop_finished_run_task_links(runs.parent, stale)
   record_path = runs / f"{name}.json"
   if record_path.exists():
     previous = json.loads(record_path.read_text(encoding="utf-8"))
