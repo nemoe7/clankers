@@ -2151,11 +2151,14 @@ class ReportService:
           if now - latest_finish >= REPORT_TASK_FINISH_GRACE:
             stale.append(report)
         continue
-      if (
-        report.ack_seen
-        and report.ack_seen_at
-        and now - _report_timestamp(report.ack_seen_at) >= REPORT_IDLE_INTERVAL
-      ):
+      if report.fields:
+        if (
+          report.ack_seen
+          and report.ack_seen_at
+          and now - _report_timestamp(report.ack_seen_at) >= REPORT_IDLE_INTERVAL
+        ):
+          stale.append(report)
+      elif now - _report_timestamp(report.pub_at) >= REPORT_IDLE_INTERVAL:
         stale.append(report)
     return stale
 

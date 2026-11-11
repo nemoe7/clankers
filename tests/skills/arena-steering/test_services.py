@@ -1109,7 +1109,6 @@ def test_unlinked_report_staleness_starts_when_ack_is_seen() -> None:
     'Pick\n- (x) Yes <!-- option {"label":"Yes"} -->\n'
     '- ( ) No <!-- option {"label":"No"} -->\n',
   )
-  reports.publish_report("fieldless-report", "Fieldless report", "# Fieldless")
   clock.advance(hours=2)
   reports.mark_seen("idle-report")
   assert reports.list_reports(stale_only=True) == []
@@ -1142,6 +1141,25 @@ def test_unlinked_report_staleness_starts_when_ack_is_seen() -> None:
   reports.submit_answer("idle-report", {"pick": "No"}, answer_id="aa1006")
   assert reports.get_report("idle-report").ack_seen_at == ""
   assert reports.list_reports(stale_only=True) == []
+  store.close()
+
+
+def test_an_unfielded_report_ages_out_on_its_publish_time() -> None:
+  store = SqliteStore(":memory:")
+  clock = _ReportTestClock()
+  reports = ReportService(store, store, clock=clock)
+  reports.publish_report("fieldless-report", "Fieldless report", "# Fieldless")
+  clock.advance(minutes=29, seconds=59)
+  assert reports.list_reports(stale_only=True) == []
+  clock.advance(seconds=1)
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "fieldless-report"
+  ]
+  # An unseen ack does not restart the clock for a report that carries no fields.
+  reports.mark_ack_seen("fieldless-report")
+  assert [report.id for report in reports.list_reports(stale_only=True)] == [
+    "fieldless-report"
+  ]
   store.close()
 
 
