@@ -486,8 +486,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.throws(() => allOff.menus.values().next().value.callback(), /Storage write failed/);
   assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labelsBefore);
   assert.ok([...stored.values()].every((value) => value === false));
-// The global pause stops every feature where it stands.
-    // With no reload, the resume brings back the features whose own switch is ON.
+  // The global pause stops every feature where it stands.
+  // With no reload, the resume brings back the features whose own switch is ON.
   if (domain === "arena") {
     // Storage-failure check above keeps write rejection active. Pause writes again.
     refuseWrite = false;

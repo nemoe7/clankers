@@ -129,8 +129,6 @@ runBundle("arena");
 
 {
   const { test } = require("node:test");
-// The tab title reads the last message root: the newest row's type carries the mark.
-// A user root carries none, and every row mark ends with the stop control.
   test("tab title row mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };
@@ -1949,7 +1947,6 @@ runBundle("arena");
       const betaBefore = baseBoard.sessions.find(s => s.branch === "beta2222-clankers");
       assert.equal(betaBefore.updated_at, "", "corrupted non-ISO updated_at string is stripped by normalizeBoard");
 
-      // boardMaterialSignature ignores updated_at churn and tracks agent_call_ended_at:
       const sigA = boardApi.boardMaterialSignature({
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
@@ -1982,7 +1979,6 @@ runBundle("arena");
       assert.equal(sigB, sigC, "boardMaterialSignature ignores non-material heartbeat call counters and timestamps");
       assert.notEqual(sigB, sigD, "boardMaterialSignature changes when turn_ended_at advances");
 
-      // normalizeBoard strips unpublished worker_reports via report_ops:
       const withUnpubOp = boardApi.normalizeBoard({
         allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
         main_session_id: "alpha111-clankers",
@@ -1998,7 +1994,6 @@ runBundle("arena");
       });
       assert.deepEqual(Array.from(withUnpubOp.worker_reports["beta2222-clankers"] || []), [], "report_ops unpublish strips stale worker report immediately");
 
-      // scopeBoardForTarget strips board entries/queues for unopted chats and prunes unopted queues for opted-in chats:
       const scopedUnopted = boardApi.scopeBoardForTarget(
         {
           allowed_sessions: ["alpha111-clankers", "beta2222-clankers"],
