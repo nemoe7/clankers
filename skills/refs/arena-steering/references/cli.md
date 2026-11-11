@@ -108,7 +108,8 @@ Use `steer run start` for supported long-running jobs and task gates; keep persi
 | --- | --- | --- |
 | `steer run start -t TASK NAME -- COMMAND ...` | `Started run NAME (pid N)` and linked gate | 0 on launch, 1 on error |
 | `steer run start -a PREVIOUS NAME -- COMMAND ...` | Started dependent run | 0 on launch, 1 on error |
-| `steer run logs NAME [-n LINES]` | `run NAME running` or `run NAME exit N` with log tail | 0 on known run, 1 on lookup error |
+| `steer run logs NAME [-n LINES] [-p PAGE] [-s QUERY]` | `run NAME running` or `run NAME exit N` with log tail | 0 on known run, 1 on lookup error |
+| `steer run rerun NAME` | `Started run NAME (pid N)` from the recorded command | 0 on launch, 1 on error or live run |
 | `steer run pr-checks [-n PR]` | Starts latest-head PR watch | 0 on launch, 1 on error |
 | `steer pr-update -n PR -t TITLE -f BODY_FILE` | Verified PR update | 0 on parity, 1 on error |
 | `steer job-log -j JOB_ID` | Fetchable signed job-log URL | 0 on success, 1 on error |
@@ -116,6 +117,8 @@ Use `steer run start` for supported long-running jobs and task gates; keep persi
 | `steer worktree <add|list|remove|prune|collect> ...` | Worktree result or collected patch | 0 on success, 1 on error |
 
 A launched run has not passed. Its `run logs` exit line gives the verdict. An absent PR check list reports `no checks reported`, not a pass.
+
+`-s` filters lines before `-n` and `-p` apply; `-p 1` is the newest page. `rerun` refuses while the run is live.
 
 Job-log URLs are signed and temporary. `worktree add NAME [-b BRANCH]` uses `.worktrees/NAME`. The remaining worktree actions list, remove, prune, or collect work under this checkout.
 
