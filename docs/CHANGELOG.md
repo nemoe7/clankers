@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-11
+
+### Changed
+
+#### rules
+
+- Restrict `steer poll` gate waits to a sole task and empty-queue work waits to no remaining tasks (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+
 ## 2026-11-09
 
 ### Changed

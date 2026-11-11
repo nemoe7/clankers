@@ -60,6 +60,7 @@
 - Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 - Work while tasks remain; end when verified and stopped.
+- MUST run `steer poll` only to wait for gates when one task remains, or for new work when no tasks remain.
 - NEVER sleep during a background gate.
 - NEVER call `get_process_output` to wait for a run.
 - Read the verdict line before any push.
