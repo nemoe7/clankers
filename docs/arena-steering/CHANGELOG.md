@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.8]
+
+### Fixed
+
+- Record the `run logs` paging and search flags, the `run rerun` command, and the merged survey clause in the refs baseline.
+
 ## [2.3.7]
 
 ### Fixed
