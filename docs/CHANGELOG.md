@@ -15,6 +15,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Read and acknowledge blocking inbox messages before starting or resuming queued work (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 - Restrict `steer poll` gate waits to a sole task and empty-queue work waits to no remaining tasks (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 
+#### arena-steering
+
+- Require a report phase before approved feature or documentation work, followed by each required code or docs phase (`.agents/skills/arena-steering/SKILL.md`).
+
 ## 2026-11-09
 
 ### Changed
