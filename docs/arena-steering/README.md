@@ -98,7 +98,7 @@ The `steer` entry point wraps `skills/arena-steering/scripts/steer` against the 
 
 `steer pre` implements the Bash `DEBUG` hook in [`pre.py`](../../skills/arena-steering/scripts/arena_steering/pre.py). `install.sh` registers a shell trap that passes each command line to `steer pre` before execution. Return status `0` lets the command run, `2` routes long commands into detached runs and exits cleanly, and `130` blocks the command.
 
-`PIPELINE` runs `start-title`, `manual-live-run-read`, `live-run-logs`, `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `job-log-redirect`, `push-refs`, `wireframe`, `gate`, `git-safe`, `bible`, `route`, `ack-quote`, `unpushed`, and `bare` in order. With blocking messages or unacknowledged latest report answers, `gate` blocks `git push` at once and ordinary commands after six counted calls. 
+`PIPELINE` runs `start-title`, `manual-live-run-read`, `live-run-logs`, `sleep`, `inbox-pipe`, `poll-timeout`, `pr-state`, `job-log-redirect`, `push-refs`, `wireframe`, `gate`, `git-safe`, `bible`, `route`, `ack-quote`, `unpushed`, and `bare` in order. With blocking messages or unacknowledged latest report answers, `gate` blocks `git push` at once and ordinary commands after six counted calls.
 
 Each exit prints one footer line with the calls left, the unacked counts, and the unseen notes. Inbox reads, polls, and acknowledgements stay open. `manual-live-run-read` blocks shell and native reads of a live run's log or exit file.
 
