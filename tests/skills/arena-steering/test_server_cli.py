@@ -155,6 +155,46 @@ def test_cli_task_reminders_for_ack_and_nonempty_read(tmp_path: Path) -> None:
     store.close()
 
 
+def test_the_exit_footer_carries_the_countdown_and_every_count(
+  tmp_path: Path,
+) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.messages.send_message("Please fix this", msg_id=MSG_ID_CLI)
+    app.messages.send_message(
+      "A violation to ack",
+      msg_id="b1c2d3",
+      hidden=True,
+      violation_type=VIOLATION_ACK,
+    )
+    app.messages.send_message("Just an update", msg_id="c2d3e4", blocking=False)
+    store.set_meta(pre.CALL_COUNT_META, "2")
+    line = cli._exit_state_reminders(state_dir)[0]
+  finally:
+    store.close()
+  assert line == (
+    f"bash block in {pre.GATE_THRESHOLD - 2}. unacked 1 violation, 1 msg. unseen 1 msg."
+  )
+
+
+def test_the_exit_footer_keeps_only_the_counts_that_are_live(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store = SqliteStore(state_dir / "state.sqlite3")
+  try:
+    app = SteeringApp(store)
+    app.messages.send_message("Just an update", msg_id="d3e4f5", blocking=False)
+    assert cli._exit_state_reminders(state_dir) == ["unseen 1 msg."]
+    app.messages.send_message("Please fix this", msg_id="e4f5a6")
+    store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+    assert cli._exit_state_reminders(state_dir) == [
+      "bash block in 0. unacked 1 msg. unseen 1 msg."
+    ]
+  finally:
+    store.close()
+
+
 def test_cli_inbox_header_uses_browser_timezone_and_utc_fallback(
   tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

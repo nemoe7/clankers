@@ -2126,7 +2126,7 @@ def test_the_gate_reads_the_stored_count_and_the_done_list_skips_steps(
   assert code == pre.CONTINUE
   assert second == ""
   assert _count(_isolate_state) == "1"
-  assert "bash block in" in first
+  assert "bash block in" not in first
 
 
 def test_a_pass_through_reports_the_finished_steps(_isolate_state: Path) -> None:
@@ -4457,15 +4457,17 @@ def test_timeline_activity_replaces_the_native_tool_label(_isolate_state: Path) 
   store.close()
 
 
-def test_a_quiet_note_reports_itself_without_gating(_isolate_state: Path) -> None:
+def test_a_quiet_note_stays_out_of_the_gate_and_rides_the_footer(
+  _isolate_state: Path,
+) -> None:
   _isolate_state.mkdir(parents=True, exist_ok=True)
   store, messages, _tasks, _reports = cli.open_services(_isolate_state)
   messages.send_message("Quiet note.", hidden=True, blocking=False)
   store.close()
 
-  code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  code, _out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
   assert code == pre.CONTINUE
-  assert pre.QUIET_SUFFIX in out
+  assert cli._exit_state_reminders(_isolate_state) == ["unseen 1 msg."]
 
 
 def test_a_quiet_note_never_blocks_a_push(_isolate_state: Path) -> None:
@@ -4479,7 +4481,7 @@ def test_a_quiet_note_never_blocks_a_push(_isolate_state: Path) -> None:
   assert "Push blocked" not in out
 
 
-def test_a_blocking_note_keeps_the_countdown_alongside_quiet_ones(
+def test_a_blocking_note_keeps_the_footer_line_and_gates_at_the_budget(
   _isolate_state: Path,
 ) -> None:
   _isolate_state.mkdir(parents=True, exist_ok=True)
@@ -4488,12 +4490,17 @@ def test_a_blocking_note_keeps_the_countdown_alongside_quiet_ones(
   messages.send_message("Quiet note.", hidden=True, blocking=False)
   store.close()
 
-  code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  code, _out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
   assert code == pre.CONTINUE
-  # The quiet count rides the existing countdown line, not a line of its own.
-  lines = [line for line in out.splitlines() if pre.QUIET_SUFFIX.strip(" .") in line]
-  assert len(lines) == 1
-  assert pre.COUNTDOWN_PREFIX in lines[0]
+  footer = cli._exit_state_reminders(_isolate_state)
+  assert footer == [f"bash block in {pre.GATE_THRESHOLD}. unacked 1 msg. unseen 1 msg."]
+
+  store, _, _, _ = cli.open_services(_isolate_state)
+  store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
+  store.close()
+  code, out = _run("pre", "-c", "ls", "-s", "bash", "-l", "ls")
+  assert code == pre.BLOCK
+  assert out.startswith("VIOLATION: Bash blocked.")
 
 
 def test_recorded_activity_labels_reach_the_messages_tab(_isolate_state: Path) -> None:

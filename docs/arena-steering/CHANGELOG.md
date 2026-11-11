@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.2]
+
+### Changed
+
+- Print one exit footer line with the calls left, the unacked counts, and the unseen notes. It replaces the per-command countdown and the non-blocking line.
+
 ## [2.3.1]
 
 ### Added

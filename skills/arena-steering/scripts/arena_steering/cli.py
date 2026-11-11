@@ -1658,6 +1658,23 @@ def _slow_call_hint(line: str, elapsed: float) -> str:
   )
 
 
+def _counted(count: int, noun: str) -> str:
+  """Render one count with its singular or plural noun."""
+  return f"{count} {noun}{'' if count == 1 else 's'}"
+
+
+def _inbox_status(*, call_count: int, counts: list[str], unseen: int) -> str:
+  """Render the single exit line that carries every inbox count."""
+  parts: list[str] = []
+  if counts:
+    remaining = max(pre_mod.GATE_THRESHOLD - call_count, 0)
+    parts.append(f"bash block in {remaining}.")
+    parts.append("unacked " + ", ".join(counts) + ".")
+  if unseen:
+    parts.append(f"unseen {_counted(unseen, 'msg')}.")
+  return " ".join(parts)
+
+
 def _exit_state_reminders(state_dir: Path) -> list[str]:
   """Read pending, stale, and unpushed work without changing the inbox."""
   if not (state_dir / "state.sqlite3").is_file():
@@ -1665,22 +1682,35 @@ def _exit_state_reminders(state_dir: Path) -> list[str]:
   store, messages, _, reports = open_services(state_dir)
   try:
     pending = messages.read_pending(mark_seen=False)
+    unread_ids = messages.unread_ids()
     pending_messages = [
       msg for msg in pending["messages"] if msg.type == "message" and msg.requires_ack
     ]
     violations = sum(bool(msg.violation_type) for msg in pending_messages)
     msgs = len(pending_messages) - violations
     answers = len(pending["report_answers"])
+    pending_ids = [msg.id for msg in pending_messages] + [
+      answer_id
+      for answer_id in messages.pending_ids()
+      if answer_id not in {msg.id for msg in pending_messages}
+    ]
     parts = []
     counts = []
     if violations:
-      counts.append(f"{violations} violation{'s' if violations != 1 else ''}")
+      counts.append(_counted(violations, "violation"))
     if msgs:
-      counts.append(f"{msgs} msg{'s' if msgs != 1 else ''}")
+      counts.append(_counted(msgs, "msg"))
     if answers:
-      counts.append(f"{answers} answer{'s' if answers != 1 else ''}")
-    if counts:
-      parts.append("unacked " + ", ".join(counts))
+      counts.append(_counted(answers, "answer"))
+    quiet = [item for item in unread_ids if item not in set(pending_ids)]
+    if pending_ids or counts or quiet:
+      parts.append(
+        _inbox_status(
+          call_count=_call_count(store),
+          counts=counts,
+          unseen=len(quiet),
+        )
+      )
     if len(reports.list_reports()) >= 10:
       stale = len(reports.list_reports(stale_only=True))
       if stale:
