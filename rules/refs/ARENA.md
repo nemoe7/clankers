@@ -56,6 +56,7 @@
 
 ## Inbox
 
+- Before starting or resuming queued work, MUST run `steer read` and acknowledge each pending blocking message before continuing.
 - For a corrected routine slip with no impact, give one short receipt line.
 - Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
 - When arena-steering is unavailable, acknowledge delivered messages in chat with literal `ACK:` and your interpretation.

@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Read and acknowledge blocking inbox messages before starting or resuming queued work (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 - Restrict `steer poll` gate waits to a sole task and empty-queue work waits to no remaining tasks (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
 
 ## 2026-11-09

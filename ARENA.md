@@ -51,6 +51,7 @@
 
 ## Inbox
 
+- Before starting or resuming queued work, MUST run `steer read` and acknowledge each pending blocking message before continuing.
 - Give one short receipt for a corrected routine no-impact slip.
 - Corrected routine command-input/process slips (e.g. late read) alone are not rule violations.
 - Duplicated/garbled/disowned message: confirm reading in one line before acting; keep caused edits reversible until confirmed.
