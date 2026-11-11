@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.9]
+
+### Changed
+
+- Order approved report work affecting features or documentation with report first, then each required code and docs phase.
+
 ## [2.3.8]
 
 ### Added
