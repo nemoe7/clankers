@@ -314,8 +314,7 @@ def _reseed_demo_store(store: SqliteStore) -> SteeringApp:
       f"Completed checkpoint `{mid}` and updated validation fixtures (`core-models-store`).",
     )
 
-  # 1. Messages covering sent, seen, acked (single + multi-ack), attachments (present PNG/GIF/JSON + missing),
-  #    inline images/GIFs, fenced code blocks (bash, python, json, diff), GFM tables, blockquotes, and hidden notes.
+  # Every message state and body format one fixture must cover: sent, seen, acked, attachments, code, tables, notes.
   m1 = app.messages.send_message(
     "Establish the **Messages**, **Tasks**, and **Reports** contracts before implementation.",
     blocking=True,
@@ -495,8 +494,7 @@ def _reseed_demo_store(store: SqliteStore) -> SteeringApp:
     msg_id="a00010",
   )
 
-  # 2. Reports cover steering-architecture (unseen, unanswered), ui-layout-audit (mixed acks),
-  #    visual-diff-gallery (acked), runtime-metrics (read-only), legacy-migration-draft (dismissed).
+  # Every report state one fixture must cover: unseen, unanswered, mixed acks, acked, read-only, and dismissed.
   app.reports.publish_report(
     "steering-architecture",
     "Arena Steering: Architecture & Storage Config",
