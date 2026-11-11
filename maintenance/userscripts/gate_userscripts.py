@@ -51,9 +51,7 @@ def parse_version_string(value: str) -> tuple[int, ...] | None:
 
 def _display_path(path: Path) -> str:
   try:
-    # If path is relative, try to resolve against ROOT for display, else keep as is
     if not path.is_absolute():
-      # For relative paths like userscripts/arena.user.js, keep relative
       return str(path)
     return str(path.relative_to(ROOT))
   except ValueError:
@@ -67,12 +65,10 @@ def check_file(path: Path, errors: list[str]) -> tuple[int, ...] | None:
   text = path.read_text(encoding="utf-8")
   ver = parse_userscript_version(text)
   if ver is None:
-    # Try to display raw
     m = VERSION_RE.search(text)
     raw = m.group(1) if m else "<not found>"
     errors.append(f"{_display_path(path)}: version {raw!r} is not dotted integers")
     return None
-  # Also check @name contains same version if present
   name_re = re.compile(r"//\s*@name\s+.*v([0-9]+(?:\.[0-9]+)+)")
   for line in text.splitlines():
     nm = name_re.search(line)
@@ -157,7 +153,6 @@ def run_self_check() -> None:
   assert parse_version_string("") is None
   assert parse_version_string("1.2.a") is None
   assert valid_single_bumps((1, 10, 16)) == ((1, 10, 17), (1, 11, 0), (2, 0, 0))
-  # version bump
   import tempfile
 
   with tempfile.TemporaryDirectory() as td:
@@ -209,15 +204,12 @@ def main() -> int:
   errors: list[str] = []
 
   if args.file and args.base_file:
-    # Single file comparison mode
-    # Report affected file first
     print(f"Affected file: {_display_path(args.file)}")
     check_version_bump(args.base_file, args.file, errors)
   elif args.file:
     print(f"Affected file: {_display_path(args.file)}")
     check_file(args.file, errors)
   else:
-    # Default: check all versioned files, report list first
     existing = [p for p in VERSIONED_FILES if p.is_file()]
     if existing:
       print("Versioned modules checked:")
