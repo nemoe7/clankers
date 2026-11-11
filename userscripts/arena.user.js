@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.13.15
+// @name         Arena.ai | NemoUtils | v1.13.16
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.13.15
+// @version      1.13.16
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -5577,16 +5577,7 @@
         };
       });
     }
-    var probeBase = typeof previewBaseUrl === "string" ? previewBaseUrl.replace(/\/+$/, "") : "";
-    if (!probeBase) {
-      return fetchNeededFiles();
-    }
-    return stateJson(probeBase + "/api/board").then(function (probeAns) {
-      if (!probeAns || probeAns.status !== 200 || !probeAns.body) {
-        return { board: scopedBoard, keys: [], unreachable: probeAns || { status: 0, body: null } };
-      }
-      return fetchNeededFiles();
-    });
+    return fetchNeededFiles();
   }
 
   function shouldAutoSyncBoard(board, doc) {

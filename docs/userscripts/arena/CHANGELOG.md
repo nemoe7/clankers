@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [1.13.16]
+
+### Changed
+
+- Fetch needed board files directly instead of probing the retired preview board endpoint first.
+
 ## [1.13.15]
 
 ### Added
