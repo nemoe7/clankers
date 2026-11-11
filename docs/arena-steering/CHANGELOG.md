@@ -6,6 +6,10 @@ This log has no Unreleased section.
 
 ## [2.3.8]
 
+### Added
+
+- Fail the parity stage when a skill file carries more lines than its refs baseline.
+
 ### Fixed
 
 - Record the `run logs` paging and search flags, the `run rerun` command, and the merged survey clause in the refs baseline.
