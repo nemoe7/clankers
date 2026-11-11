@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import TextIO
 
+from .display_paths import home_relative
 from .models import TASK_PRIORITIES, TASK_SIZES, Task
 from .services import TaskService
 
@@ -169,6 +171,24 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
       updated = tasks.mod_deets_rm(task_id, int(detail_args[1]), size=size)
     else:
       updated = tasks.mod_deets(task_id, " ".join(detail_args), size=size)
+  elif field == "attach":
+    size, attach_args = _extract_size_flag(rest)
+    if not attach_args:
+      raise ValueError(
+        "Usage: steer task mod <id> attach add <path> -z <size> | attach rm <number> -z <size>"
+      )
+    if attach_args[0] == "rm":
+      if len(attach_args) != 2:
+        raise ValueError("Usage: steer task mod <id> attach rm <number> -z <size>")
+      updated = tasks.mod_attachments_rm(task_id, size=size, number=int(attach_args[1]))
+    elif attach_args[0] == "add":
+      if len(attach_args) != 2:
+        raise ValueError("Usage: steer task mod <id> attach add <path> -z <size>")
+      updated = tasks.mod_attachments_add(task_id, attach_args[1], size=size)
+    else:
+      raise ValueError(
+        "Usage: steer task mod <id> attach add <path> -z <size> | attach rm <number> -z <size>"
+      )
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
@@ -306,3 +326,5 @@ def _print_single_task(
     )
     for idx, line in enumerate(rendered_details, 1):
       print(f"- [{idx}] {line}", file=out)
+    for idx, item in enumerate(task.attachments, 1):
+      print(f"- ({idx}) {item.name} - {home_relative(Path(item.path))}", file=out)

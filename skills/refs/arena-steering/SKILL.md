@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.3.5"
+  version: "2.3.6"
 ---
 
 # Arena Steering
@@ -76,6 +76,8 @@ steer task new <id> "<title>" -z <size> [-T <type>]... [-p <priority>] [-S <scop
 steer task finish <id> [-c <full-commit>]
 steer task mod <id> deets <text> -z <size>
 steer task mod <id> deets rm <1-based-index> -z <size>
+steer task mod <id> attach add <path> -z <size>
+steer task mod <id> attach rm <1-based-index> -z <size>
 steer task mod <id> links [msg|report|task] <id> [-A "<detail>"] [--delete <number>] [-z <size>]
 steer task mod <id> links rm msg|report|task <id>
 steer task mod <id> status|title|type|scope <value>

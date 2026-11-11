@@ -129,6 +129,28 @@ function highlightTaskText(text) {
   return parts.join("");
 }
 
+const TASK_IMAGE_PATTERN = /\.(?:png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+
+function renderTaskAttachments(task) {
+  const attachments = task.attachments || [];
+  if (!attachments.length) return "";
+  const cells = attachments
+    .map((item) => {
+      const label = escapeHtml(item.name || item.path || "attachment");
+      const lost = Boolean(item.lost) || item.present === false;
+      const thumb =
+        !lost &&
+        typeof item.url === "string" &&
+        TASK_IMAGE_PATTERN.test(String(item.name || ""));
+      const inner = thumb
+        ? `<img class="task-attachment-thumb" src="${escapeHtml(item.url)}" alt="${label}" loading="lazy" decoding="async">`
+        : `<span class="task-attachment-name">${label}${lost ? " (lost)" : ""}</span>`;
+      return `<li class="task-attachment${lost ? " lost" : ""}" title="${label}">${inner}</li>`;
+    })
+    .join("");
+  return `<ul class="task-attachments">${cells}</ul>`;
+}
+
 function renderTaskRow(task, selectedParentRefs) {
   const details = taskDetailLines(task);
   const count = details.length;
@@ -151,10 +173,13 @@ function renderTaskRow(task, selectedParentRefs) {
     `
     : "";
 
+  const attachmentsHtml = renderTaskAttachments(task);
+
   return `
     <li class="task" data-task-id="${escapeHtml(task.id)}">
       <button type="button" class="task-title" data-blocked="${task.blocked ? "true" : "false"}" data-gate-running="${task.status === "upcoming" && task.running_gate === true ? "true" : "false"}" data-parent-type="task" data-parent-id="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.title)}: task ${escapeHtml(task.id)} as message parent" aria-pressed="${selected ? "true" : "false"}" title="${escapeHtml(task.id)}">${highlightTaskText(task.title)}</button>
       ${formatTaskPhases(task)}
+      ${attachmentsHtml}
       ${detailsHtml}
     </li>
   `;

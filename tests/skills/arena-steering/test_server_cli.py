@@ -6406,11 +6406,13 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   # Validation failure on task mod must NOT move files on disk.
   app.tasks.create_task("first-task", "First task", size=3, details=["Initial"])
   with pytest.raises(ValueError, match="size"):
-    app.tasks.mod_links_add("first-task", "ca1001", link_type="msg")
+    app.tasks.mod_links_add(
+      "first-task", "ca1001", link_type="msg", append_detail="Linked."
+    )
   assert (state_dir / "uploads" / "ca1001-diagram.png").is_file()
   assert not (state_dir / "uploads" / "first-task").exists()
 
-  # Linking moves files into uploads/{taskID}/ and updates message paths + details.
+  # Linking moves files into uploads/{taskID}/ and updates message paths + attachments.
   updated_first = app.tasks.mod_links_add(
     "first-task", "ca1001", link_type="msg", size=5
   )
@@ -6419,9 +6421,14 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   assert not (state_dir / "uploads" / "ca1001-diagram.png").exists()
   reloaded_msg = app.messages.get_message("ca1001")
   assert Path(reloaded_msg.attachments[0].path) == first_folder / "ca1001-diagram.png"
-  assert any(
-    "uploads/first-task/ca1001-diagram.png" in d for d in updated_first.details
+  assert len(updated_first.attachments) == len(atts)
+  assert all(
+    Path(item.path).parent == first_folder for item in updated_first.attachments
   )
+  assert all(
+    Path(item.path).is_file() for item in updated_first.attachments
+  )
+  assert all("uploads" not in d for d in updated_first.details)
 
   # Linking a second task copies into uploads/{secondTaskID}/ while preserving first.
   second = app.tasks.create_task(
@@ -6430,7 +6437,12 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   second_folder = state_dir / "uploads" / "second-task"
   assert (first_folder / "ca1001-diagram.png").is_file()
   assert (second_folder / "ca1001-diagram.png").is_file()
-  assert any("uploads/second-task/ca1001-diagram.png" in d for d in second.details)
+  assert all(
+    Path(item.path).parent == second_folder for item in second.attachments
+  )
+  assert (second_folder / "ca1001-diagram.png") in {
+    Path(item.path) for item in second.attachments
+  }
 
   # Dynamic (lost) detection when a task/message file disappears on disk.
   version_before = app.data_version()
@@ -6450,11 +6462,10 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
   second_serialized = next(
     item for item in tasks_payload["tasks"] if item["id"] == "second-task"
   )
-  assert any(
-    d.endswith(f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}")
-    for d in first_serialized["details"]
-  )
-  assert not any(d.endswith(LOST_MARKER) for d in second_serialized["details"])
+  assert first_serialized["attachments"][0]["lost"] is True
+  assert second_serialized["attachments"][0]["lost"] is False
+  assert "url" in second_serialized["attachments"][0]
+  assert all(LOST_MARKER not in d for d in first_serialized["details"])
   store.close()
 
   code, msg_out, err = _run_cli(state_dir, "msg", "ca1001")
@@ -6463,7 +6474,9 @@ def test_upload_templates_task_relocation_and_dynamic_lost(tmp_path: Path) -> No
 
   code, task_out, err = _run_cli(state_dir, "task", "first-task")
   assert (code, err) == (0, "")
-  assert f"uploads/first-task/ca1001-diagram.png{LOST_MARKER}" in task_out
+  assert "- (1) diagram.png - " in task_out
+  assert "uploads/first-task/ca1001-diagram.png" in task_out
+  assert "- [1] Initial" in task_out
 
 
 def test_task_finish_names_the_next_task(tmp_path: Path, monkeypatch) -> None:

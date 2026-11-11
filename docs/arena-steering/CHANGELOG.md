@@ -4,11 +4,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
-## [2.3.5]
+## [2.3.6]
 
 ### Added
 
+- Give tasks a dedicated attachment list, so linked files no longer appear as regular details.
+- Show attachment thumbnails in the browser task list and name attachments in `steer task <id>`.
 - Name the details a report answer adds to a task, and how to remove the ones that add nothing.
+
+### Changed
+
+- Move `steer task mod <id> attach add|rm` under the explicit size flag, matching other detail changes.
+
+### Fixed
+
+- Add the task attachment column to existing state databases on open.
+
+## [2.3.5]
 
 ### Fixed
 

@@ -1661,32 +1661,30 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   plain = tasks.create_task("plain", "Plain", size=2, details=["Inspect."])
   assert (plain.priority, plain.priority_explicit) == ("P4", False)
 
-  paths = ["~/steer-fixture/first.txt", "~/steer-fixture/missing.png"]
+  names = ["first.txt", "missing.png"]
   created = tasks.create_task(
     "linked", "Linked", size=2, details=["Inspect."], msg_ids=["ab1020"]
   )
   assert (created.priority, created.priority_explicit) == ("P4", False)
-  assert created.details == ["Inspect.", *paths]
+  assert created.details == ["Inspect."]
+  assert [item.name for item in created.attachments] == names
 
   tasks.create_task("explicit", "Explicit", size=2, priority="P4", details=["Inspect."])
   tasks.mod_links_add("explicit", "ab1020", link_type="msg", size=2)
-  assert (
-    tasks.get_task("explicit")[0].priority,
-    tasks.get_task("explicit")[0].details,
-  ) == ("P4", ["Inspect.", *paths])
+  explicit = tasks.get_task("explicit")[0]
+  assert (explicit.priority, explicit.details) == ("P4", ["Inspect."])
+  assert [item.name for item in explicit.attachments] == names
   tasks.mod_links_add("plain", "ab1020", link_type="msg", size=2)
   tasks.mod_links_add("plain", "ab1020", link_type="msg")
-  assert (tasks.get_task("plain")[0].priority, tasks.get_task("plain")[0].details) == (
-    "P4",
-    ["Inspect.", *paths],
-  )
+  plain_linked = tasks.get_task("plain")[0]
+  assert (plain_linked.priority, plain_linked.details) == ("P4", ["Inspect."])
+  assert [item.name for item in plain_linked.attachments] == names
 
   patched = tasks.create_task("patched", "Patched", size=2, details=["Inspect."])
   tasks.patch_task(patched.id, {"msg_ids": ["ab1020"], "size": 2})
-  assert (
-    tasks.get_task("patched")[0].priority,
-    tasks.get_task("patched")[0].details,
-  ) == ("P4", ["Inspect.", *paths])
+  patched_task = tasks.get_task("patched")[0]
+  assert (patched_task.priority, patched_task.details) == ("P4", ["Inspect."])
+  assert [item.name for item in patched_task.attachments] == names
   tasks.patch_task("plain", {"priority": "P5"})
   assert tasks.get_task("plain")[0].priority_explicit
   store.close()
@@ -1701,10 +1699,8 @@ def test_task_defaults_and_linked_messages_preserve_explicit_priority(
   tasks.mod_links_add(
     "plain", "ab1020", link_type="msg", append_detail="Relinked.", size=2
   )
-  assert (tasks.get_task("plain")[0].priority, tasks.get_task("plain")[0].details) == (
-    "P5",
-    ["Inspect.", *paths, "Relinked."],
-  )
+  relinked = tasks.get_task("plain")[0]
+  assert (relinked.priority, relinked.details) == ("P5", ["Inspect.", "Relinked."])
   reopened.close()
 
 
@@ -1743,10 +1739,11 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
 
   store = SqliteStore(tmp_path / "state.sqlite3")
   assert store.get_message("ab1021").acks == ["Read"]
-  assert store.get_task("via-ack").details == [
-    "Inspect.",
-    "~/steer-fixture/first.txt",
-    "~/steer-fixture/missing.png",
+  ack_task = store.get_task("via-ack")
+  assert ack_task.details == ["Inspect."]
+  assert [item.name for item in ack_task.attachments] == [
+    "first.txt",
+    "missing.png",
   ]
   assert (
     store.get_task("via-ack").priority,
@@ -1762,10 +1759,12 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
   )
   assert status == HTTPStatus.CREATED
   assert payload["task"]["priority"] == "P4"
-  assert payload["task"]["details"] == [
-    "~/steer-fixture/first.txt",
-    "~/steer-fixture/missing.png (lost)",
+  assert payload["task"]["details"] == []
+  assert [item["name"] for item in payload["task"]["attachments"]] == [
+    "first.txt",
+    "missing.png",
   ]
+  assert payload["task"]["attachments"][1]["lost"] is True
   status, payload = app.dispatch(
     "POST",
     "/tasks",
@@ -1786,9 +1785,10 @@ def test_long_missing_attachment_path_is_kept_without_truncation() -> None:
     msg_id="ab1025",
   )
   task = app.tasks.create_task("long-path", "Long path", size=2, msg_ids=["ab1025"])
-  assert (task.priority, task.details) == ("P4", [f"~/steer-fixture/{long_path.name}"])
+  assert (task.priority, task.details) == ("P4", [])
+  assert [item.path for item in task.attachments] == [str(long_path)]
   app.tasks.patch_task("long-path", {"title": "Long path retained"})
-  assert app.tasks.get_task("long-path")[0].details == task.details
+  assert app.tasks.get_task("long-path")[0].attachments == task.attachments
   store.close()
 
 
@@ -2045,6 +2045,46 @@ def test_http_task_create_and_patch_expose_phase_progress(tmp_path: Path) -> Non
   status, listed = app.dispatch("GET", "/tasks")
   assert listed["tasks"][0]["phase_index"] == 2
   store.close()
+
+
+def test_task_view_renders_attachment_thumbnails_and_lost_names() -> None:
+  repo = Path(__file__).resolve().parents[3]
+  script = r"""
+import assert from 'node:assert/strict';
+import { renderTasksView } from './skills/arena-steering/assets/tasks-view.js';
+const container = {
+  innerHTML: '', scrollTop: 0,
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+};
+renderTasksView(container, { tasks: [{
+  id: 'files', title: 'Files', status: 'upcoming',
+  type: 'code', types: ['code'], phase_index: 0,
+  details: ['One line only.'], links: {}, blocked: false,
+  attachments: [
+    { name: 'shot.png', path: '/u/shot.png', url: '/static/uploads/shot.png', lost: false },
+    { name: 'gone.png', path: '/u/gone.png', lost: true },
+    { name: 'notes.txt', path: '/u/notes.txt', url: '/static/uploads/notes.txt', lost: false },
+  ],
+}] });
+const row = container.innerHTML;
+assert.match(row, /class="task-attachments"/);
+assert.equal((row.match(/<img/g) || []).length, 1);
+assert.match(row, /src="\/static\/uploads\/shot\.png"/);
+assert.match(row, /class="task-attachment lost" title="gone\.png"><span class="task-attachment-name">gone\.png \(lost\)/);
+assert.match(row, /notes\.txt/);
+assert.match(row, /1 detail/);
+assert.ok(!row.includes('/u/shot.png'));
+"""
+  result = subprocess.run(
+    ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+    cwd=repo,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
 
 
 def test_task_view_renders_all_phase_chips_in_order() -> None:

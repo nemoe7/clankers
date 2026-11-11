@@ -860,6 +860,48 @@ def test_message_revision_tracks_only_message_changes() -> None:
     store.close()
 
 
+def test_task_attachments_survive_a_store_round_trip(tmp_path):
+  from arena_steering.models import Attachment
+
+  path = tmp_path / "attachments.sqlite3"
+  store = SqliteStore(path)
+  store.save_task_queue(
+    [
+      Task(
+        size=3,
+        id="attach",
+        title="Attach",
+        attachments=[Attachment("shot.png", "/tmp/shot.png", size_bytes=2048)],
+      )
+    ]
+  )
+  store.close()
+
+  reopened = SqliteStore(path)
+  task = reopened.get_task("attach")
+  assert [(item.name, item.size_bytes) for item in task.attachments] == [
+    ("shot.png", 2048)
+  ]
+  assert task.details == []
+  assert reopened.list_tasks()[0].attachments == task.attachments
+  reopened.close()
+
+
+def test_existing_database_gains_the_task_attachment_column(tmp_path):
+  import sqlite3
+
+  path = tmp_path / "legacy.sqlite3"
+  store = SqliteStore(path)
+  store.save_task_queue([Task(size=3, id="legacy", title="Legacy")])
+  store.close()
+  with sqlite3.connect(path) as conn:
+    conn.execute("ALTER TABLE tasks DROP COLUMN attachments_json")
+
+  reopened = SqliteStore(path)
+  assert reopened.get_task("legacy").attachments == []
+  reopened.close()
+
+
 def test_fresh_schema_needs_no_column_upgrades(tmp_path, monkeypatch):
   import sqlite3
 

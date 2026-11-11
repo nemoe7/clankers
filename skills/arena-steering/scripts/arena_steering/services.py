@@ -1037,6 +1037,9 @@ class TaskService:
   def format_task_details(self, task: Task) -> list[str]:
     """Return task details with dynamic `(lost)` markers for missing task files."""
     attachment_paths: set[str] = set()
+    for item in task.attachments:
+      if item.path:
+        attachment_paths.add(home_relative(Path(item.path).expanduser()))
     if self._messages is not None:
       for msg_id in task.msg_ids:
         message = self._messages.get_message(msg_id)
@@ -1232,8 +1235,8 @@ class TaskService:
   ) -> tuple[Task, list[Callable[[], None]]]:
     if self._messages is None:
       return task, []
-    details = list(task.details)
-    attached = False
+    attachments = list(task.attachments)
+    known_paths = {item.path for item in attachments}
     commit_ops: list[Callable[[], None]] = []
     uploads_root = (
       self._uploads_dir.resolve(strict=False) if self._uploads_dir is not None else None
@@ -1247,7 +1250,6 @@ class TaskService:
       new_attachments: list[Attachment] = []
       msg_changed = False
       for attachment in message.attachments:
-        attached = True
         src = Path(attachment.path).expanduser() if attachment.path else None
         dest: Path | None = src
         if uploads_root is not None and src is not None:
@@ -1278,9 +1280,15 @@ class TaskService:
                   s.replace(d)
 
               commit_ops.append(_move_op)
-              path_line = home_relative(dest)
-              if path_line not in details:
-                details.append(path_line)
+              if str(dest) not in known_paths:
+                known_paths.add(str(dest))
+                attachments.append(
+                  Attachment(
+                    name=attachment.name,
+                    path=str(dest),
+                    size_bytes=attachment.size_bytes,
+                  )
+                )
               continue
             elif (
               src_resolved.parent.parent == uploads_root
@@ -1296,10 +1304,15 @@ class TaskService:
 
               commit_ops.append(_copy_op)
         new_attachments.append(attachment)
-        if dest is not None:
-          path_line = home_relative(dest)
-          if path_line not in details:
-            details.append(path_line)
+        if dest is not None and str(dest) not in known_paths:
+          known_paths.add(str(dest))
+          attachments.append(
+            Attachment(
+              name=attachment.name,
+              path=str(dest),
+              size_bytes=attachment.size_bytes,
+            )
+          )
       if msg_changed:
         updated_msg = Message.from_dict(
           {
@@ -1313,11 +1326,9 @@ class TaskService:
             self._messages.save_message(msg_obj)
 
         commit_ops.append(_save_msg_op)
-    if not attached:
+    if len(attachments) == len(task.attachments):
       return task, commit_ops
-    if details == task.details:
-      return task, commit_ops
-    return self._copy_task(task, details=details), commit_ops
+    return self._copy_task(task, attachments=attachments), commit_ops
 
   @staticmethod
   def _reserve_task_file(task_folder: Path, filename: str, reserved: set[Path]) -> Path:
@@ -1495,6 +1506,48 @@ class TaskService:
         "Adding or removing task details requires an explicit size (-z/--size)"
       )
     updated = self._copy_task(target, details=[*target.details, detail], size=size)
+    self._replace_in_queue(queue, updated)
+    return updated
+
+  @_transactional_task_write
+  def mod_attachments_add(
+    self, task_id: str, path: str, *, size: int | None = None, name: str = ""
+  ) -> Task:
+    queue, target = self._load_queue_and_target(task_id)
+    if size is None:
+      raise ValueError(
+        "Adding or removing task attachments requires an explicit size (-z/--size)"
+      )
+    resolved = Path(path).expanduser()
+    if not resolved.is_file():
+      raise ValueError(f"Attachment path is not a file: {path}")
+    attachment = Attachment(
+      name=name or resolved.name,
+      path=str(resolved),
+      size_bytes=resolved.stat().st_size,
+    )
+    attachments = [item for item in target.attachments if item.path != attachment.path]
+    attachments.append(attachment)
+    updated = self._copy_task(target, attachments=attachments, size=size)
+    self._replace_in_queue(queue, updated)
+    return updated
+
+  @_transactional_task_write
+  def mod_attachments_rm(
+    self, task_id: str, number: int, *, size: int | None = None
+  ) -> Task:
+    queue, target = self._load_queue_and_target(task_id)
+    idx = number - 1 if number >= 1 else number
+    if idx < 0 or idx >= len(target.attachments):
+      raise IndexError(
+        f"Attachment number {number} out of range (1..{len(target.attachments)})"
+      )
+    if size is None:
+      raise ValueError(
+        "Adding or removing task attachments requires an explicit size (-z/--size)"
+      )
+    attachments = [item for i, item in enumerate(target.attachments) if i != idx]
+    updated = self._copy_task(target, attachments=attachments, size=size)
     self._replace_in_queue(queue, updated)
     return updated
 
@@ -1846,7 +1899,14 @@ class TaskService:
   def _validate_message_link_details(
     previous: Task, updated: Task, added_msg_ids: list[str]
   ) -> None:
-    if added_msg_ids and Counter(previous.details) == Counter(updated.details):
+    attachments_changed = [item.path for item in previous.attachments] != [
+      item.path for item in updated.attachments
+    ]
+    if (
+      added_msg_ids
+      and Counter(previous.details) == Counter(updated.details)
+      and not attachments_changed
+    ):
       raise ValueError(
         "Adding a message link requires an added or deleted task detail. "
         "Are you sure this message needs to be linked? "
@@ -1869,7 +1929,7 @@ class TaskService:
 
   @staticmethod
   def _validate_details(task: Task) -> None:
-    if not task.details:
+    if not task.details and not task.attachments:
       raise ValueError("Task requires at least one detail")
 
   @staticmethod

@@ -32,7 +32,7 @@ from .models import (
 )
 
 STATE_TABLES = ("messages", "tasks", "reports")
-SCHEMA_REVISION = 4  # Bump when current schema setup changes.
+SCHEMA_REVISION = 5  # Bump when current schema setup changes.
 _STATE_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
@@ -119,6 +119,12 @@ class SqliteStore:
         ).fetchone()
         if ready is not None and ready[0] == f"{SCHEMA_REVISION}:{schema_version}":
           return
+      has_tasks_table = (
+        self._conn.execute(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tasks'"
+        ).fetchone()
+        is not None
+      )
       self._conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS messages (
@@ -156,6 +162,7 @@ class SqliteStore:
           status TEXT NOT NULL,
           scope TEXT NOT NULL,
           details_json TEXT NOT NULL DEFAULT '[]',
+          attachments_json TEXT NOT NULL DEFAULT '[]',
           links_json TEXT NOT NULL DEFAULT '{"msg_ids":[],"report_ids":[],"task_ids":[]}',
           msg_ids_json TEXT NOT NULL DEFAULT '[]',
           report_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -209,6 +216,15 @@ class SqliteStore:
         """
       )
       self._conn.execute("BEGIN IMMEDIATE")
+      if has_tasks_table:
+        task_cols = {
+          row["name"]
+          for row in self._conn.execute("PRAGMA table_info(tasks)").fetchall()
+        }
+        if "attachments_json" not in task_cols:
+          self._conn.execute(
+            "ALTER TABLE tasks ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'"
+          )
       self._conn.execute(
         "CREATE INDEX IF NOT EXISTS messages_written_at ON messages(written_at, id)"
       )
@@ -912,6 +928,7 @@ class SqliteStore:
           "status": task.status,
           "scope": task.scope,
           "details_json": json.dumps(task.details),
+          "attachments_json": json.dumps([item.to_dict() for item in task.attachments]),
           "links_json": json.dumps(task.links),
           "msg_ids_json": json.dumps(task.msg_ids),
           "report_ids_json": json.dumps(task.report_ids),
@@ -1438,6 +1455,10 @@ class SqliteStore:
       "status": status,
       "scope": str(row["scope"]),
       "details": [str(item) for item in json.loads(row["details_json"] or "[]")],
+      "attachments": [
+        Attachment.from_dict(item)
+        for item in json.loads(row["attachments_json"] or "[]")
+      ],
       "priority": row["priority"],
       "priority_explicit": bool(row["priority_explicit"]),
       "size": row["size"],
