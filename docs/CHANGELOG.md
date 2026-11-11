@@ -17,7 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena-steering
 
-- Require a report phase before approved feature or documentation work, followed by each required code or docs phase (`.agents/skills/arena-steering/SKILL.md`).
+- Require a report phase first for approved report work affecting features or documentation (`skills/arena-steering/SKILL.md`, `.agents/skills/arena-steering/SKILL.md`).
 
 ## 2026-11-09
 
