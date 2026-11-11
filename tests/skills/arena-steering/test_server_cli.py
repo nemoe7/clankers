@@ -5386,6 +5386,7 @@ def test_cli_ack_reports_only_actual_task_detail_additions(tmp_path: Path) -> No
   code, first, error = _run_cli(state_dir, "ack", answer.id, "Received")
   assert code == 0, error
   assert "work" in first and "Note: Yes" in first
+  assert "deets rm <index> -z <size>" in first
   store, _, tasks, _ = cli.open_services(state_dir)
   tasks.mod_deets_rm("work", 2, size=3)
   store.close()
@@ -6245,6 +6246,38 @@ def test_cli_message_link_changes_details_atomically(tmp_path: Path) -> None:
   assert task.msg_ids == ["ab1234", "ab1235"]
   assert task.details == ["First", "Follow up"]
   store.close()
+
+
+def test_cli_report_link_names_backfilled_details_and_removal(tmp_path: Path) -> None:
+  state_dir = tmp_path / "arena-state"
+  store, _, tasks, reports = cli.open_services(state_dir)
+  reports.publish_report(
+    "decision",
+    "Decision",
+    '<!-- question {"id":"note","label":"Note"} -->\nNote: ___\n',
+  )
+  answer = reports.submit_answer("decision", {"note": "Yes"}, answer_id="fd0002")
+  reports.ack_answer("decision", answer.id, "Read")
+  tasks.create_task("work", "Work", size=3, details=["Review"])
+  store.close()
+
+  code, out, err = _run_cli(
+    state_dir, "task", "mod", "work", "links", "report", "decision"
+  )
+  assert (code, err) == (0, "")
+  lines = out.splitlines()
+  assert "Added to task work:" in lines
+  assert "- Note: Yes" in lines
+  assert any("deets rm <index> -z <size>" in line for line in lines)
+  store, _, tasks, _ = cli.open_services(state_dir)
+  assert tasks.get_task("work")[0].details == ["Review", "Note: Yes"]
+  store.close()
+
+  code, repeat, error = _run_cli(
+    state_dir, "task", "mod", "work", "links", "report", "decision"
+  )
+  assert (code, error) == (0, "")
+  assert "Added to task" not in repeat
 
 
 def test_cli_task_detail_changes_require_size_flag(tmp_path: Path) -> None:

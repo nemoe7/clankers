@@ -4,6 +4,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.5]
+
+### Added
+
+- Name the details a report answer adds to a task, and how to remove the ones that add nothing.
+
+### Fixed
+
+- Remove a trailing space that failed markdownlint in the Bash hook section.
+
 ## [2.3.4]
 
 ### Fixed

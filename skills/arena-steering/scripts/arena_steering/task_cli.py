@@ -198,6 +198,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
           "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> "
           "[-A detail] [--delete number] [-z size]"
         )
+      before = set(tasks.get_task(task_id)[0].details)
       updated = tasks.mod_links_add(
         task_id,
         link_id,
@@ -206,6 +207,17 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         remove_detail=parsed.remove_detail,
         size=parsed.size,
       )
+      if link_type and link_type.lower() == "report":
+        added = [detail for detail in updated.details if detail not in before]
+        if added:
+          print(f"Added to task {updated.id}:", file=out)
+          for detail in added:
+            print(f"- {detail}", file=out)
+          print(
+            f"Remove any of these from task {updated.id} if they add nothing: "
+            f"steer task mod {updated.id} deets rm <index> -z <size>",
+            file=out,
+          )
   elif field == "deps":
     if rest[0] == "rm":
       if len(rest) != 2:

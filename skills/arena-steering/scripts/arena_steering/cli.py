@@ -691,6 +691,11 @@ def _run_ack(
         print(f"Added to task {task_id}:", file=out)
         for detail in details:
           print(f"- {detail}", file=out)
+        print(
+          f"Remove any of these from task {task_id} if they add nothing: "
+          f"steer task mod {task_id} deets rm <index> -z <size>",
+          file=out,
+        )
   if created:
     _, blocked = tasks.get_task(created.id)
     _print_single_task(created, blocked, out, tasks=tasks)
