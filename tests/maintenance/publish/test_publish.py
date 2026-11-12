@@ -18,7 +18,6 @@ EXPECTED = {
   "ARENA.md",
   "CHATGPT-CUSTOM.txt",
   "CHATGPT-MORE.txt",
-  "CLINE.md",
   "COMMIT-SPEC.txt",
   "KILO.md",
   "#clankers-rules.md",

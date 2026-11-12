@@ -47,7 +47,6 @@ EXPECTED_BUDGETS = {
   "rules/ARENA.md": "o200k_base",
   "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
   "rules/CHATGPT-MORE.txt": "Unicode chars",
-  "rules/CLINE.md": "o200k_base",
   "rules/KILO.md": "o200k_base",
   "rules/kilo/code.md": "o200k_base",
   "rules/kilo/debug.md": "o200k_base",
@@ -84,7 +83,7 @@ BUDGET_LINK_RE = re.compile(r"^\[([^\]]+)\]\([^)]+\)$")
 
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
-SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "CLINE.md", "KILO.md")
+SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "KILO.md")
 # Kilo mode overrides and both ChatGPT fields compare plain non-empty line counts.
 PLAIN_PAIRS = (
   *((f"kilo/{name}", f"kilo/{name}") for name in ("plan.md", "code.md", "debug.md")),

@@ -11,7 +11,6 @@ The installer uses only the Python standard library.
 | File or directory | Purpose |
 | --- | --- |
 | [rules/CORE.md](CORE.md) | Generic core rules |
-| [rules/CLINE.md](CLINE.md) | Cline-specific overlay |
 | [rules/KILO.md](KILO.md) | Kilo Code overlay |
 | [rules/ARENA.md](ARENA.md) | Self-contained Arena rules, optimized for file size |
 | [rules/CHATGPT-CUSTOM.txt](CHATGPT-CUSTOM.txt) | ChatGPT Personalization: `Custom Instructions` |
@@ -51,55 +50,6 @@ Platform constraints shape three distinct rule surfaces, and each row summarizes
 | Platform Specific | <ul><li>Checks the active shell first. </li></ul> | <ul><li>Opens the first reply with a 10-4 confirmation. </li><li>Runs the Steering preview server, task queue, and fielded reports. </li><li>Works smallest unblocked tasks first until the queue clears. </li><li>Protects rule and Steering files unless waived. </li></ul> | <ul><li>Uses extended thinking by default. </li></ul> |
 
 <!-- markdownlint-enable MD033 -->
-
-## Install rules
-
-From the repository root, with Python 3:
-
-```bash
-python3 rules/apply.py
-```
-
-```mermaid
-flowchart TB
-  S[rules/CORE.md] --> A[apply.py: diff, confirm, copy]
-  C[rules/CLINE.md] --> A
-  A --> G[.agents/AGENTS.md]
-  A --> K[Documents/Cline/Rules/CLINE.md]
-```
-
-On Windows, run `python rules\apply.py` or `apply.bat` from the root. The script shows unified diffs, asks once, copies two files, and creates needed directories.
-
-| Answer or flag | Result |
-| --- | --- |
-| `y` or `yes` | applies the copies |
-| any other answer | aborts |
-| `--yes` or `-y` | skips the prompt |
-| `--dry-run` | shows the diffs only |
-
-Current destinations cause an exit without a prompt.
-
-| Source | Destination relative to the base directory |
-| --- | --- |
-| `rules/CORE.md` | `.agents/AGENTS.md` |
-| `rules/CLINE.md` | `Documents/Cline/Rules/CLINE.md` |
-
-The base is `Path.home()` unless `APPLY_RULES_BASE` is nonempty. The script does not need `USERPROFILE`. An empty override uses home. Check these installer paths against your agent setup.
-
-To install under another base directory:
-
-```bash
-APPLY_RULES_BASE=/path/to/profile python3 rules/apply.py
-```
-
-PowerShell:
-
-```powershell
-$env:APPLY_RULES_BASE = "C:\path\to\profile"
-python .\rules\apply.py
-```
-
-**The installer overwrites destination files.** Copy any local changes elsewhere first. Skills, ARENA.md, and ChatGPT files use separate setup steps, and agent rule folders omit this specification.
 
 ## Markdown lint scope
 

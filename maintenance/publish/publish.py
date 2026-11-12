@@ -17,8 +17,6 @@ INDEX_SOURCE = "README.md"
 REPO_ONLY_HEADINGS = {"Install rules", "Markdown lint scope"}
 _OUTSIDE = (
   "CHANGELOG",
-  "apply.py",
-  "apply.bat",
   "maintenance/",
   "refs/",
   "installation",

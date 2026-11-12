@@ -10,14 +10,12 @@ Rules, skills, and workflows for AI agents.
 - [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines.
 - [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines.
 
-`rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
 ## Rules flow
 
 ```mermaid
 flowchart TB
   R[rules/refs baselines] --> L[rules live files]
-  L --> A[rules/apply.py]
   L --> D[distribute.yml]
   A --> H[agent rule folders]
   D --> T[target repositories]
@@ -36,7 +34,6 @@ flowchart TB
 | [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 3,864 `tok` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,498 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,499 `chars` |
-| [`rules/CLINE.md`](rules/CLINE.md) | `o200k_base` | 335 `tok` |
 | [`rules/COMMIT-SPEC.txt`](rules/COMMIT-SPEC.txt) | `o200k_base` | 84 `tok` |
 | [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,812 `tok` |
 | [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 76 `tok` |

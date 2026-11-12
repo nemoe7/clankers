@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -97,31 +96,6 @@ def test_root_arena_is_regular_copy_of_rule_source():
   assert root.is_file()
   assert not root.is_symlink()
   assert root.read_bytes() == (check.RULES / "ARENA.md").read_bytes()
-
-
-def test_core_source_installs_to_agents(tmp_path):
-  rules = tmp_path / "rules"
-  rules.mkdir()
-  shutil.copy2(check.RULES / "apply.py", rules / "apply.py")
-  core = rules / "CORE.md"
-  core.write_text("Generic rules\n", encoding="utf-8")
-  overlay = rules / "CLINE.md"
-  overlay.write_text("Cline rules\n", encoding="utf-8")
-  base = tmp_path / "profile"
-  result = subprocess.run(
-    [sys.executable, str(rules / "apply.py"), "--yes"],
-    env={**os.environ, "APPLY_RULES_BASE": str(base)},
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    check=False,
-  )
-  assert result.returncode == 0, result.stdout + result.stderr
-  assert (base / ".agents" / "AGENTS.md").read_bytes() == core.read_bytes()
-  assert (
-    base / "Documents" / "Cline" / "Rules" / "CLINE.md"
-  ).read_bytes() == overlay.read_bytes()
-  assert not (base / ".agents" / core.name).exists()
 
 
 def test_skill_refs_parity_accepts_compressed_live_files(tmp_path, monkeypatch):

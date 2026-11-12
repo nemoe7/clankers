@@ -4,7 +4,7 @@
 
 1. Rule changes land in `rules/refs/` first, and maintainers compress only the new or changed line into the live counterpart.
 2. `rules/ARENA.md` optimizes UTF-8 file size and matches `rules/CORE.md` in meaning except for push, PR, and merge rules (see Arena file).
-3. `rules/CLINE.md`, `rules/KILO.md`, and `rules/kilo/` hold platform-specific rules, and Kilo mode overrides stay outside markdownlint (`MD001`, `MD041`).
+3. `rules/KILO.md`, and `rules/kilo/` hold platform-specific rules, and Kilo mode overrides stay outside markdownlint (`MD001`, `MD041`).
 4. Rule files keep filename headings, while `rules/CHATGPT-CUSTOM.txt` and `rules/CHATGPT-MORE.txt` extract plain-text lines from `rules/refs/CHATGPT.txt` within 1,500 Unicode characters each.
 5. Deployed rule files reserve `MUST` and `NEVER` for hard rules and bold at most two clauses per file (see Emphasis).
 6. Skills specialize defaults without weakening explicit user requirements, project conventions, or acceptance criteria.
@@ -19,7 +19,7 @@ Arena sessions use `arena-steering` for the Messages, Reports, and Tasks preview
 
 `rules/ARENA.md` compresses wording rather than meaning, preserving negations, conditions, commands, numbers, and caveats. Unlike `rules/CORE.md`, which forbids unrequested pushes and PRs without a merge clause, `rules/ARENA.md` requires pushing, keeping a PR open, and never merging a PR.
 
-`rules/ARENA.md` duplicates core rules intentionally because Arena does not load `AGENTS.md` or `ARENA.md` automatically. `.github/workflows/distribute.yml` copies `ARENA.md` into target repos, while `rules/apply.py` omits it from local workstation installs.
+`rules/ARENA.md` duplicates core rules intentionally because Arena does not load `AGENTS.md` or `ARENA.md` automatically. `.github/workflows/distribute.yml` copies `ARENA.md` into target repos.
 
 Session activation uses the Arena prompt-fill template in [`userscripts/arena-prompt-fill.txt`](../userscripts/arena-prompt-fill.txt) or manual startup text. That prompt directs the agent to read `AGENTS.md`, `ARENA.md`, and `.agents/skills/arena-steering/SKILL.md` before work.
 
@@ -33,7 +33,6 @@ A deployed rule file keeps two bold clauses at most, so the emphasis keeps its m
 | --- | --- |
 | `CORE.md` | the honesty rule |
 | `ARENA.md` | the planned final commit list, the `-f body=@path` ban |
-| `CLINE.md` | `STOP`, the self-assignment ban |
 | root `AGENTS.md` | the two markdownlint settings |
 
 `MUST` and `NEVER` stay on the irreversible, the dangerous, and the honesty rules. Every other rule reads positively, because a negated rule that guards nothing costs emphasis (see [refs/GUIDELINES.md](../rules/refs/GUIDELINES.md) section 4.7).
@@ -70,7 +69,7 @@ Rule files keep one rule per line, per [refs/GUIDELINES.md](../rules/refs/GUIDEL
 | --- | --- |
 | Markdown rule files | bullets, and a `When in doubt` closer |
 | core and `ARENA.md` | a `Use` opener and a constitution |
-| `CLINE.md` and `KILO.md` | no opener, and they inherit the core constitution instead of copying it |
+| `KILO.md` | no opener, and they inherit the core constitution instead of copying it |
 | `KILO.md` | no closer, because the core settles the doubts it would restate |
 | ChatGPT files | one plain line per rule, free of headings and bullets, per item 4 |
 | `COMMIT-SPEC.txt` | its set format, per its single-purpose scope |
