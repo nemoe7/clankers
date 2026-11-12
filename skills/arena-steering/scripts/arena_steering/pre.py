@@ -30,17 +30,22 @@ CALL_COUNT_META = "pre_call_count"
 WIREFRAME_SUFFIX = "-wireframe.png"
 SHELL_NAMES = {"bash", "sh", "dash", "zsh", "ksh"}
 COMMAND_WRAPPERS = {"env", "command", "nice", "nohup", "stdbuf", "sudo", "time"}
-INBOX_RECOVERY_COMMANDS = frozenset({"read", "poll", "ack", "ren"})
+INBOX_RECOVERY_COMMANDS = frozenset(
+  {
+    ("inbox", "read"),
+    ("inbox", "ack"),
+    ("poll",),
+    ("ren",),
+  }
+)
 STEERING_BOOKKEEPING_COMMANDS = frozenset(
   {
-    "msg",
+    "inbox",
     "survey",
     "skills",
     "ren",
     "serve",
-    "tasks",
     "task",
-    "reports",
     "report",
     "worktree",
   }
@@ -95,7 +100,7 @@ ARENA_PROBE_COMMANDS = {"source ~/.profile"}
 PROFILE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c mkdir -p '[^'\r\n]+'")
 NATIVE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c (mkdir -p '(/[^'\r\n]+)')")
 LOGIN_ACK_WRAPPER = re.compile(
-  r"""PATH="\$HOME/\.local/bin:\$PATH" steer ack [0-9a-f]{6} '[^'\r\n]+'"""
+  r"""PATH="\$HOME/\.local/bin:\$PATH" steer inbox ack [0-9a-f]{6} '[^'\r\n]+'"""
 )
 ARENA_PORT_PROBE = (
   "(command -v ss >/dev/null 2>&1 && ss -ltnH) || netstat -ltn 2>/dev/null || true"
@@ -555,7 +560,7 @@ def arena_maintenance_step(
   return False
 
 
-TASK_SUBCOMMANDS = frozenset({"task", "tasks", "ren"})
+TASK_SUBCOMMANDS = frozenset({"task", "ren"})
 
 
 def command_activity(line: str, command: str) -> str:
@@ -577,15 +582,19 @@ def command_activity(line: str, command: str) -> str:
   if head != "steer" or not args:
     return ""
   verb = args[0]
-  if verb == "read":
+  if verb in {"read", "inbox"}:
     return "inbox"
   if verb == "run":
     return "run"
   if verb in TASK_SUBCOMMANDS:
     action = args[1] if verb == "task" and len(args) > 1 else ""
-    return {"mod": "task-mod", "finish": "task-finish"}.get(action, "task")
+    return {"edit": "task-mod", "mod": "task-mod", "finish": "task-finish"}.get(
+      action, "task"
+    )
   if verb == "report" and args[1:2] == ["pub"]:
     return "pub"
+  if verb == "report":
+    return "report"
   return ""
 
 
@@ -761,7 +770,15 @@ class PreContext:
     def verb(words: list[str]) -> str:
       if len(words) < 2 or words[0] != "steer":
         return ""
-      return words[1] if words[1] in INBOX_RECOVERY_COMMANDS else ""
+      args = words[1:]
+      return next(
+        (
+          candidate[-1]
+          for candidate in INBOX_RECOVERY_COMMANDS
+          if tuple(args[: len(candidate)]) == candidate
+        ),
+        "",
+      )
 
     def has_redirection(text: str) -> bool:
       lexer = shlex.shlex(text, posix=False, punctuation_chars="<>")
@@ -819,7 +836,7 @@ class PreContext:
       ]
       if not punctuation:
         return True
-      if words[1] != "ack" or punctuation != ["|"]:
+      if verb(words) != "ack" or punctuation != ["|"]:
         return False
       return not (self.is_push() or PreContext(line=self.command).is_push())
     if len(pieces) == 1 and pieces[0][1] == ";":
@@ -944,7 +961,7 @@ class InboxPipeGuard:
       return (
         len(words) >= 2
         and Path(words[0]).name == "steer"
-        and words[1] in {"read", "poll"}
+        and (words[1] in {"read", "poll"} or words[1:3] == ["inbox", "read"])
       )
 
     for words, separator in ctx.pieces():
@@ -962,7 +979,7 @@ class InboxPipeGuard:
     return PreResult(
       [
         "VIOLATION: Inbox piped.",
-        "Run `steer read` or `steer poll` alone to keep the full output visible.",
+        "Run `steer inbox read` or `steer poll` alone to keep the full output visible.",
       ],
       BLOCK,
     )
@@ -1485,7 +1502,7 @@ class InboxGate:
       return PreResult(
         [
           "VIOLATION: Push blocked. Inbox has pending. Read and ack all. Retry.",
-          "Nothing left the sandbox. Use `steer read`, then `steer ack` for each item.",
+          "Nothing left the sandbox. Use `steer inbox read`, then `steer inbox ack` for each item.",
           "Pending: " + ", ".join(ctx.pending_ids),
           f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
         ],
@@ -1496,7 +1513,7 @@ class InboxGate:
     return PreResult(
       [
         "VIOLATION: Bash blocked. Read and ack all NOW.",
-        f"Threshold: {GATE_THRESHOLD} calls. Use `steer read`, then `steer ack` for each item.",
+        f"Threshold: {GATE_THRESHOLD} calls. Use `steer inbox read`, then `steer inbox ack` for each item.",
         f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
       ],
       BLOCK,
@@ -1521,7 +1538,7 @@ class WireframeGuard:
     )
 
 
-ACK_QUOTE = re.compile(r'(?:^|[;&|]\s*)\s*(?:\S*/)?steer\s+ack\b[^;|]*?"')
+ACK_QUOTE = re.compile(r'(?:^|[;&|]\s*)\s*(?:\S*/)?steer\s+inbox\s+ack\b[^;|]*?"')
 
 
 class AckQuoteReminder:
