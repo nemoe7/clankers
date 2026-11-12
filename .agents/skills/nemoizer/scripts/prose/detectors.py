@@ -2,8 +2,8 @@
 
 import re
 
-from nemo_config import MIN_THE_COUNT, THE_DENSITY_CAP
-from nemo_markdown import (
+from config import MIN_THE_COUNT, THE_DENSITY_CAP
+from prose.markdown import (
   prose_block_matches,
   prose_blocks,
   prose_line_matches,
@@ -627,7 +627,7 @@ def prose_the_density(text, cap=THE_DENSITY_CAP, min_the=MIN_THE_COUNT):
   return rows
 
 
-# Rule keys in nemo_rules.PROSE_RULE_IDS. Findings come out in this order.
+# Rule keys in rules.PROSE_RULE_IDS. Findings come out in this order.
 DETECTORS = (
   ("dangling_conjunction", prose_dangling_conjunctions),
   ("nominalization", prose_nominalizations),

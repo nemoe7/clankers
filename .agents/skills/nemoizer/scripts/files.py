@@ -4,8 +4,8 @@ import re
 import subprocess
 from pathlib import Path
 
-import nemo_config
-from nemo_config import match_glob
+import config
+from config import match_glob
 
 SKIP_DIRS = {
   ".pytest_cache",
@@ -71,7 +71,7 @@ def skipped(path, root, ignores):
   """True when a path sits under a skipped directory or an ignored prefix."""
   if is_license_file(path):
     return True
-  custom_exclude = nemo_config.ACTIVE_CONFIG.get("exclude")
+  custom_exclude = config.ACTIVE_CONFIG.get("exclude")
   if custom_exclude is None and path.suffix.lower() in SKIP_SUFFIXES:
     return True
   try:
@@ -84,7 +84,7 @@ def skipped(path, root, ignores):
   base_skips = custom_exclude if custom_exclude is not None else SKIP_PATHS
   all_ignores = (
     *base_skips,
-    *nemo_config.ACTIVE_CONFIG.get("extend_exclude", ()),
+    *config.ACTIVE_CONFIG.get("extend_exclude", ()),
     *ignores,
   )
   excluded = False
@@ -103,7 +103,7 @@ def skipped(path, root, ignores):
 
 def git_ignored(root, candidates):
   """Return the subset of candidate Paths that git check-ignore marks as ignored."""
-  if not candidates or not nemo_config.ACTIVE_CONFIG.get("respect_gitignore", True):
+  if not candidates or not config.ACTIVE_CONFIG.get("respect_gitignore", True):
     return set()
   base = root.resolve()
   rel_map = {}
@@ -143,7 +143,7 @@ def walk(targets, ignores):
     root = path
     # Exclusion patterns start at the config's project root, never at the walk target.
     # A subdirectory target keeps the same relative paths.
-    skip_root = nemo_config.ACTIVE_CONFIG.get("root") or root
+    skip_root = config.ACTIVE_CONFIG.get("root") or root
     candidates = [
       candidate
       for candidate in sorted(root.rglob("*"))

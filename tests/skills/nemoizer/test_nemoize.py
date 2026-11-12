@@ -8,17 +8,17 @@ import sys
 import tomllib
 from pathlib import Path, PureWindowsPath
 
-import nemo_assertions
-import nemo_config
-import nemo_detectors
-import nemo_files
-import nemo_report
-import nemo_review
-import nemo_rotate
-import nemo_rules
+import assertions
+import config
+import files
 import nemoize
-import prose
+import prose.detectors
+import prose.extract
+import prose.review
+import prose.rotate
 import pytest
+import report
+import rules
 
 SCRIPT = Path(nemoize.__file__).resolve()
 SKIPPED_MESSAGE = "Skipped (no result within 10s)"
@@ -74,7 +74,7 @@ def test_a_rotation_matches_the_stem_and_prose():
     assert "code.py:1:" not in result.stdout
     assert "\n    He names the tool. Do not transmit this." in result.stdout
     assert (
-      nemo_report.format_summary(
+      report.format_summary(
         [
           "note.md:1: [NMO100] (violation) transmit -> send",
           "note.md:1: [NMO901] (review) names -> specify",
@@ -330,8 +330,8 @@ def test_audit_markers_skip_inline_code_and_test_fixture_strings(tmp_path):
     "// nonemo: NMO100\n",
     encoding="utf-8",
   )
-  _, raw_marks = nemo_review.scan([tmp_path], [])
-  _, audit_marks = nemo_review.scan([tmp_path], [], audit=True)
+  _, raw_marks = prose.review.scan([tmp_path], [])
+  _, audit_marks = prose.review.scan([tmp_path], [], audit=True)
   assert any(mark.startswith(f"{note}:1:") for mark in raw_marks)
   assert any(mark.startswith(f"{python_fixture}:2:") for mark in raw_marks)
   assert any(mark.startswith(f"{javascript_fixture}:1:") for mark in raw_marks)
@@ -388,16 +388,16 @@ def test_format_keeps_each_file_line_ending_bytes(tmp_path):
   crlf.write_bytes(b"kind one\r\nkind two\r\n")
   lf = tmp_path / "lf.md"
   lf.write_bytes(b"kind one\nkind two\n")
-  assert nemo_review.format_paths([crlf, lf], []) == 4
+  assert prose.review.format_paths([crlf, lf], []) == 4
   assert crlf.read_bytes() == b"type one\r\ntype two\r\n"
   assert lf.read_bytes() == b"type one\ntype two\n"
 
 
 def test_javascript_parsers_count_crlf_as_one_line_break():
   source = "// one\r\n// two\r\nassert.equal(panel.width, 320);\r\n"
-  assert [first for _, first, _ in prose.javascript_comments(source)] == [1, 2]
-  assert [span[0][0] for span in prose.javascript_comment_spans(source)] == [1, 2]
-  pairs = nemo_assertions.javascript_pairs(source)["pairs"]
+  assert [first for _, first, _ in prose.extract.javascript_comments(source)] == [1, 2]
+  assert [span[0][0] for span in prose.extract.javascript_comment_spans(source)] == [1, 2]
+  pairs = assertions.javascript_pairs(source)["pairs"]
   assert [pair["line"] for pair in pairs] == [3]
 
 
@@ -688,7 +688,7 @@ def test_nmt200_zero_measurements_are_exempt(tmp_path):
     "assert panel.width == 0\nassert panel.width == 0.0\nassert panel.width == 1\n",
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 3)]
 
 
@@ -709,7 +709,7 @@ def test_nmt200_zero_measurements_are_exempt(tmp_path):
 def test_nmt200_measurement_forms(tmp_path, suffix, assertion):
   source = tmp_path / f"test_measurements.{suffix}"
   source.write_text(assertion + "\n", encoding="utf-8")
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert not reviewed["errors"]
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 1)]
 
@@ -735,7 +735,7 @@ def test_nmt200_measurement_forms_keep_relations_and_constants(
 ):
   source = tmp_path / f"test_measurements.{suffix}"
   source.write_text(assertion + "\n", encoding="utf-8")
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert not reviewed["errors"]
   assert not reviewed["findings"]
 
@@ -761,7 +761,7 @@ def test_nmt200_explicit_measurement_setup(tmp_path, setup, assertion, flagged):
     "  " + line for line in (setup + "\nassert " + assertion).splitlines()
   )
   source.write_text("def test_size():\n" + body + "\n", encoding="utf-8")
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert not reviewed["errors"]
   assert bool(reviewed["findings"]) is flagged
 
@@ -773,7 +773,7 @@ def test_nmt200_explicit_setup_stays_local_and_precedes_assertion(tmp_path):
     "def test_other():\n  assert height == 200\n  set_height(200)\n",
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 4)]
 
 
@@ -794,7 +794,7 @@ def test_nmt200_explicit_javascript_setup(tmp_path, setup, assertion, flagged):
     "test('size', () => { " + setup + " expect(" + assertion + ").toBe(200); });\n",
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert not reviewed["errors"]
   assert bool(reviewed["findings"]) is flagged
 
@@ -805,7 +805,7 @@ def test_nmt200_setup_does_not_leak_between_conditional_branches(tmp_path):
     "def test_size():\n  if flag:\n    set_height(200)\n  else:\n    assert height == 200\n",
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 5)]
 
 
@@ -836,7 +836,7 @@ def test_nmt300_detects_real_sleeps_and_exempts_bounded_polling(tmp_path):
     "  page.wait_for_timeout(4000)\n",
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [
     ("NMT300", 6),
     ("NMT300", 8),
@@ -880,7 +880,7 @@ def test_nmt300_javascript_exempts_fake_timers_and_bounded_polling(tmp_path):
     "});\n",
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [
     ("NMT300", 3),
     ("NMT300", 6),
@@ -893,10 +893,10 @@ def test_ignore_prefixes_accept_windows_paths():
       return self
 
   root = WindowsPath("C:/repo")
-  assert nemo_files.skipped(root / "vendor" / "file.txt", root, ["vendor"])
-  assert nemo_files.skipped(root / ".agents" / "skills" / "tool" / "SKILL.md", root, [])
-  assert nemo_files.skipped(root / "node_modules" / "lib" / "file.js", root, [])
-  assert not nemo_files.skipped(root / "app" / "code.py", root, ["vendor"])
+  assert files.skipped(root / "vendor" / "file.txt", root, ["vendor"])
+  assert files.skipped(root / ".agents" / "skills" / "tool" / "SKILL.md", root, [])
+  assert files.skipped(root / "node_modules" / "lib" / "file.js", root, [])
+  assert not files.skipped(root / "app" / "code.py", root, ["vendor"])
 
 
 def test_generated_pytest_cache_is_not_scanned(tmp_path):
@@ -911,21 +911,21 @@ def test_generated_pytest_cache_is_not_scanned(tmp_path):
 
 
 def test_rule_registry_has_unique_codes_and_family_keys():
-  codes = [rule.code for rule in nemo_rules.RULES]
+  codes = [rule.code for rule in rules.RULES]
   assert len(codes) == len(set(codes))
-  family_keys = [(rule.family, key) for rule in nemo_rules.RULES for key in rule.keys]
+  family_keys = [(rule.family, key) for rule in rules.RULES for key in rule.keys]
   assert len(family_keys) == len(set(family_keys))
-  for rule in nemo_rules.RULES:
+  for rule in rules.RULES:
     assert bool(rule.keys) == (rule.family != "reserved"), rule.code
     assert not rule.line_scoped or rule.family == "prose", rule.code
-  detector_keys = [key for key, _ in nemo_detectors.DETECTORS]
+  detector_keys = [key for key, _ in prose.detectors.DETECTORS]
   assert len(detector_keys) == len(set(detector_keys))
-  assert set(detector_keys) <= set(nemo_rules.PROSE_RULE_IDS)
+  assert set(detector_keys) <= set(rules.PROSE_RULE_IDS)
 
 
 def test_prose_and_test_ids_have_separate_domains():
-  assert set(nemo_rules.RULE_IDS.values()) == {"NMO100", "NMO901"}
-  assert nemo_rules.PROSE_RULE_IDS == {
+  assert set(rules.RULE_IDS.values()) == {"NMO100", "NMO901"}
+  assert rules.PROSE_RULE_IDS == {
     "dangling_conjunction": "STE001",
     "semicolon": "STE100",
     "sentence": "STE200",
@@ -963,16 +963,16 @@ def test_prose_and_test_ids_have_separate_domains():
     "serial_comma": "NMO003",
     "the_density": "NMO902",
   }
-  assert nemo_rules.TEST_RULE_IDS == {
+  assert rules.TEST_RULE_IDS == {
     "output_text": "NMT100",
     "measurement": "NMT200",
     "timing_wait": "NMT300",
     "numeric_setting": "NMT400",
   }
-  assert "NMT300" in nemo_rules.KNOWN_RULE_IDS
-  assert "NMT300" in nemo_rules.ADVISORY_RULE_IDS
-  assert nemo_rules.RESERVED_RULE_IDS == {"HMN000"}
-  assert "HMN000" in nemo_rules.KNOWN_RULE_IDS
+  assert "NMT300" in rules.KNOWN_RULE_IDS
+  assert "NMT300" in rules.ADVISORY_RULE_IDS
+  assert rules.RESERVED_RULE_IDS == {"HMN000"}
+  assert "HMN000" in rules.KNOWN_RULE_IDS
   assert not (
     {
       "P001",
@@ -994,32 +994,32 @@ def test_prose_and_test_ids_have_separate_domains():
       "NMT001",
       "NMT002",
     }
-    & nemo_rules.KNOWN_RULE_IDS
+    & rules.KNOWN_RULE_IDS
   )
 
 
 def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "note.md"
   source.write_text(
     sentence
     + "\n\n"
-    + "Short. " * (nemo_config.PARAGRAPH_CAP + 1)
+    + "Short. " * (config.PARAGRAPH_CAP + 1)
     + "\n\nFirst; second.\n",
     encoding="utf-8",
   )
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert (
-    f"note.md:1: [STE200] (violation) {nemo_report.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
+    f"note.md:1: [STE200] (violation) {report.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
     in result.stdout
   )
   assert (
-    f"note.md:3: [NMP100] (violation) {nemo_report.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
+    f"note.md:3: [NMP100] (violation) {report.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
     in result.stdout
   )
   assert (
-    f"note.md:5: [STE100] (violation) {nemo_rules.RULE_DESCRIPTIONS['STE100']}"
+    f"note.md:5: [STE100] (violation) {rules.RULE_DESCRIPTIONS['STE100']}"
     in result.stdout
   )
   description = run("--context", "description", cwd=tmp_path)
@@ -1033,7 +1033,7 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   comment_res = run(str(code_file), cwd=tmp_path)
   assert comment_res.returncode == 1, comment_res.stderr
   assert (
-    f"{code_file}:1: [NMP101] (violation) {nemo_report.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
+    f"{code_file}:1: [NMP101] (violation) {report.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
     in comment_res.stdout
   )
 
@@ -1050,7 +1050,7 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
   result = run(str(cmd), cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert (
-    f"{cmd}:3: [STE100] (violation) {nemo_rules.RULE_DESCRIPTIONS['STE100']}"
+    f"{cmd}:3: [STE100] (violation) {rules.RULE_DESCRIPTIONS['STE100']}"
     in result.stdout
   )
   assert f"{cmd}:2:" not in result.stdout
@@ -1058,7 +1058,7 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
 
 
 def test_default_prose_checks_extract_python_comments_not_literals(tmp_path):
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   source.write_text(f'value = "{sentence}"\n', encoding="utf-8")
   assert run(cwd=tmp_path).returncode == 0
@@ -1147,7 +1147,7 @@ def test_default_javascript_test_scope_uses_declarations_not_string_examples(tmp
 def test_explicit_prose_mode_uses_shared_source_extraction(tmp_path):
   import json
 
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   source.write_text(f'value = "{sentence}"\n', encoding="utf-8")
   result = run("prose", str(source), cwd=tmp_path)
@@ -1170,7 +1170,7 @@ def test_unreadable_detected_test_is_not_silently_checked(tmp_path):
 
 
 def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.js"
   prefix = "\n" * 4
   source.write_text(prefix + "/*\n * " + sentence + "\n */\n", encoding="utf-8")
@@ -1189,7 +1189,7 @@ def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
 
 
 def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   for prefix in ("Short.\\n", "\\n", "\\nShort.\\n"):
     source.write_text('"""' + prefix + sentence + '"""\n', encoding="utf-8")
@@ -1199,7 +1199,7 @@ def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
 
 
 def test_source_extractors_skip_module_and_yaml_data_literals(tmp_path):
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   for filename, code in (
     ("example.mjs", 'const value = "' + sentence + '";\n'),
     ("example.yaml", 'value: "' + sentence + '"\n'),
@@ -1232,7 +1232,7 @@ def test_explicit_prose_reports_parser_runtime_failures(tmp_path, monkeypatch, c
 
 
 def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_path):
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "note.md"
   lines = [
     "# Note",
@@ -1253,7 +1253,7 @@ def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_p
 
 
 def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
-  cap = nemo_config.SENTENCE_CAPS["instruction"]
+  cap = config.SENTENCE_CAPS["instruction"]
   for filename, prefix in (("note.md", ""), ("note.py", "# ")):
     source = tmp_path / filename
     first = 5
@@ -1302,7 +1302,7 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   assert result.returncode == 0, result.stderr
   assert "[NMO901] (review) Repository -> repo" in result.stdout
   assert "[NMO901] (review) repositories -> repo" in result.stdout
-  assert f"[STE901] (review) {nemo_rules.RULE_DESCRIPTIONS['STE901']}" in result.stdout
+  assert f"[STE901] (review) {rules.RULE_DESCRIPTIONS['STE901']}" in result.stdout
   formatted = run("--format", str(source), cwd=tmp_path)
   assert formatted.returncode == 0
   assert (
@@ -1319,16 +1319,16 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   advisory = run(str(source), cwd=tmp_path)
   assert advisory.returncode == 0, advisory.stderr
   assert (
-    f"[STE902] (review) {nemo_rules.RULE_DESCRIPTIONS['STE902']}" in advisory.stdout
+    f"[STE902] (review) {rules.RULE_DESCRIPTIONS['STE902']}" in advisory.stdout
   )
   assert (
-    f"[STE903] (review) {nemo_rules.RULE_DESCRIPTIONS['STE903']}" in advisory.stdout
+    f"[STE903] (review) {rules.RULE_DESCRIPTIONS['STE903']}" in advisory.stdout
   )
   source.write_text("Check red, green and blue.\n", encoding="utf-8")
   serial = run(str(source), cwd=tmp_path)
   assert serial.returncode == 1, serial.stderr
   assert (
-    f"[NMO003] (violation) {nemo_rules.RULE_DESCRIPTIONS['NMO003']}" in serial.stdout
+    f"[NMO003] (violation) {rules.RULE_DESCRIPTIONS['NMO003']}" in serial.stdout
   )
   assert "review" not in serial.stdout or "review finding" in serial.stdout
   test_sample = tmp_path / "test_sample.py"
@@ -1336,7 +1336,7 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
     'def test_sample():\n  assert "three plain words" in result.stderr.strip()\n  assert check.measure(path) == 2\n',
     encoding="utf-8",
   )
-  reviewed = nemo_assertions.review_tests([test_sample])
+  reviewed = assertions.review_tests([test_sample])
   assert {row["rule"] for row in reviewed["findings"]} == {"NMT100", "NMT200"}
 
 
@@ -1460,7 +1460,7 @@ def test_references_follow_markdownlint_doc_layout():
   refs_dir = SCRIPT.parent.parent / "references"
   rules_md = (refs_dir / "rules.md").read_text(encoding="utf-8")
   assert "\n# Rules\n" in rules_md
-  for code in sorted(nemo_rules.KNOWN_RULE_IDS - nemo_rules.RESERVED_RULE_IDS):
+  for code in sorted(rules.KNOWN_RULE_IDS - rules.RESERVED_RULE_IDS):
     assert f"\n## `{code}` - " in rules_md
     rule_file = refs_dir / f"{code.lower()}.md"
     assert rule_file.is_file(), f"missing {rule_file.name}"
@@ -1486,7 +1486,7 @@ def test_adopted_ste_rules_pull_request_and_license_exemption(tmp_path):
   for code in ("STE400", "STE401", "STE909", "STE910", "NMO901"):
     assert code in result.stdout
   assert (
-    nemo_rotate.rotate("Open a pull request and merge Pull Requests.")
+    prose.rotate.rotate("Open a pull request and merge Pull Requests.")
     == "Open a PR and merge PRs."
   )
   for license_name in (
@@ -1517,7 +1517,7 @@ def test_nemoizer_toml_and_pyproject_config_discovery(tmp_path):
   vendor.mkdir()
   (vendor / "skipped.md").write_text("Transmit this kind.\n", encoding="utf-8")
   note = tmp_path / "note.md"
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + "."
   note.write_text(f"{sentence}\nStart; stop.\n", encoding="utf-8")
   code = tmp_path / "app.py"
   code.write_text("# One.\n# Two.\n# Three.\nx = 1\n", encoding="utf-8")
@@ -1569,16 +1569,16 @@ def test_nmp100_counts_lists_tables_headings_and_blockquotes(tmp_path):
   )
   res = run(str(doc), cwd=tmp_path)
   assert res.returncode == 1, res.stderr
-  heading_msg = nemo_report.describe_finding(
+  heading_msg = report.describe_finding(
     {"rule": "NMP100", "count": 2, "cap": 1, "kind": "heading"}
   )
-  list_msg = nemo_report.describe_finding(
+  list_msg = report.describe_finding(
     {"rule": "NMP100", "count": 3, "cap": 2, "kind": "list"}
   )
-  table_msg = nemo_report.describe_finding(
+  table_msg = report.describe_finding(
     {"rule": "NMP100", "count": 5, "cap": 4, "kind": "table"}
   )
-  quote_msg = nemo_report.describe_finding(
+  quote_msg = report.describe_finding(
     {"rule": "NMP100", "count": 5, "cap": 4, "kind": "blockquote"}
   )
   assert f"[NMP100] (violation) {heading_msg}" in res.stdout
@@ -1604,16 +1604,16 @@ def test_nmp100_counts_lists_tables_headings_and_blockquotes(tmp_path):
 def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   default_toml = SCRIPT.parent.parent / "references" / "nemoizer.toml"
   assert default_toml.is_file()
-  cfg = nemo_config.load_config(config_path=default_toml)
+  cfg = config.load_config(config_path=default_toml)
   assert cfg["respect_gitignore"] is True
-  assert cfg["instruction_sentence_cap"] == nemo_config.SENTENCE_CAPS["instruction"]
-  assert cfg["description_sentence_cap"] == nemo_config.SENTENCE_CAPS["description"]
-  assert cfg["paragraph_cap"] == nemo_config.PARAGRAPH_CAP
-  assert cfg["list_sentence_cap"] == nemo_config.LIST_SENTENCE_CAP
-  assert cfg["heading_sentence_cap"] == nemo_config.HEADING_SENTENCE_CAP
-  assert cfg["comment_block_cap"] == prose.COMMENT_BLOCK_CAP
-  assert cfg["the_density_cap"] == nemo_config.THE_DENSITY_CAP
-  assert cfg["min_the_count"] == nemo_config.MIN_THE_COUNT
+  assert cfg["instruction_sentence_cap"] == config.SENTENCE_CAPS["instruction"]
+  assert cfg["description_sentence_cap"] == config.SENTENCE_CAPS["description"]
+  assert cfg["paragraph_cap"] == config.PARAGRAPH_CAP
+  assert cfg["list_sentence_cap"] == config.LIST_SENTENCE_CAP
+  assert cfg["heading_sentence_cap"] == config.HEADING_SENTENCE_CAP
+  assert cfg["comment_block_cap"] == prose.extract.COMMENT_BLOCK_CAP
+  assert cfg["the_density_cap"] == config.THE_DENSITY_CAP
+  assert cfg["min_the_count"] == config.MIN_THE_COUNT
   for expected_item in ("AGENTS.md", "**/AGENTS.md", "ARENA.md", "**/ARENA.md"):
     assert expected_item in cfg["exclude"]
 
@@ -1705,15 +1705,15 @@ def test_subcommands_apply_discovered_config_exclusions(tmp_path, subcommand, na
 
 def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path):
   assert (
-    nemo_rotate.rotate("Use the nemoizer, The Nemoizer, THE NEMOIZER, and Nemoizer.")
+    prose.rotate.rotate("Use the nemoizer, The Nemoizer, THE NEMOIZER, and Nemoizer.")
     == "Use nemoizer, nemoizer, nemoizer, and nemoizer."
   )
   assert (
-    nemo_rotate.rotate("The prose linter runs the nemoizer rules.")
+    prose.rotate.rotate("The prose linter runs the nemoizer rules.")
     == "The prose linter runs the nemoizer rules."
   )
   assert (
-    nemo_rotate.collapse_list_articles(
+    prose.rotate.collapse_list_articles(
       "Supply the source text, the target, and the unit for the worker."
     )
     == "Supply the source text, target, and unit for the worker."
@@ -1723,17 +1723,17 @@ def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path
     "Use The Nemoizer on the source text, the target, and the unit.\n",
     encoding="utf-8",
   )
-  findings, _ = nemo_review.scan([doc], [])
+  findings, _ = prose.review.scan([doc], [])
   assert any(
     "NMO100" in item and "The Nemoizer -> nemoizer" in item for item in findings
   )
-  changed = nemo_review.format_paths([doc], [])
+  changed = prose.review.format_paths([doc], [])
   assert changed == 1
   assert (
     doc.read_text(encoding="utf-8")
     == "Use nemoizer on the source text, target, and unit.\n"
   )
-  assert "--format" in nemo_rules.RULE_DESCRIPTIONS["NMO902"]
+  assert "--format" in rules.RULE_DESCRIPTIONS["NMO902"]
 
 
 def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
@@ -1749,18 +1749,18 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
     "This section\n"
     "covers the API.\n"
   )
-  assert nemo_detectors.prose_the_density(wrapped) == [(1, 1, 33), (4, 1, 33)]
-  assert nemo_detectors.prose_repeated_openers(wrapped) == [(4, 1, 1)]
-  assert [row[0] for row in nemo_detectors.prose_wordy_phrases(wrapped)] == [8]
-  assert [row[0] for row in nemo_detectors.prose_serial_commas(wrapped)] == [8]
-  assert [row[0] for row in nemo_detectors.prose_self_narration(wrapped)] == [12]
+  assert prose.detectors.prose_the_density(wrapped) == [(1, 1, 33), (4, 1, 33)]
+  assert prose.detectors.prose_repeated_openers(wrapped) == [(4, 1, 1)]
+  assert [row[0] for row in prose.detectors.prose_wordy_phrases(wrapped)] == [8]
+  assert [row[0] for row in prose.detectors.prose_serial_commas(wrapped)] == [8]
+  assert [row[0] for row in prose.detectors.prose_self_narration(wrapped)] == [12]
 
   doc = tmp_path / "wrapped.md"
   doc.write_text(
     "Check the source, the target,\nand the unit for the worker.\n",
     encoding="utf-8",
   )
-  assert nemo_review.format_paths([doc], []) == 1
+  assert prose.review.format_paths([doc], []) == 1
   assert (
     doc.read_text(encoding="utf-8")
     == "Check the source, target,\nand the unit for the worker.\n"
@@ -1778,7 +1778,7 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
   )
   html_rows = [
     (row["line"], row["rule"])
-    for row in nemo_review.source_prose(
+    for row in prose.review.source_prose(
       html_doc, html_doc.read_text(encoding="utf-8"), "instruction", 4
     )
   ]
@@ -1794,6 +1794,38 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
   assert set(pyproject_data["tool"]["setuptools"]["py-modules"]) == {
     path.stem for path in SCRIPT.parent.glob("*.py")
   }
+  assert pyproject_data["tool"]["setuptools"]["packages"] == ["prose"]
+  assert "*.cjs" in pyproject_data["tool"]["setuptools"]["package-data"]["prose"]
+
+
+def test_prose_extract_package_ships_javascript_parser(tmp_path):
+  from prose.extract import javascript_comments, javascript_comment_spans
+
+  source = "// comment line\ncode;\n"
+  comments = list(javascript_comments(source))
+  assert comments == [("comment line", 1, 1)]
+  spans = list(javascript_comment_spans(source))
+  assert spans[0][0] == (1, 0) and spans[0][1] == (1, 15)
+
+  # Verify CLI works from copied tree (full scan)
+  portable = tmp_path / "portable"
+  copy_shipped_scripts(portable / "scripts")
+  test_md = portable / "test.md"
+  test_md.write_text("transmit the report.\n", encoding="utf-8")
+  result = subprocess.run(
+    [sys.executable, str(portable / "scripts/nemoizer"), str(test_md)],
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    check=False,
+    cwd=tmp_path,
+  )
+  if result.returncode != 1:
+    print(f"stdout: {result.stdout}")
+    print(f"stderr: {result.stderr}")
+  assert result.returncode == 1
+  assert "[NMO100]" in result.stdout
+  assert "transmit -> send" in result.stdout
 
 
 def test_workflow_name_spans_identifier_boundaries_and_mixed_determiner_lists(tmp_path):
@@ -1947,7 +1979,7 @@ def test_sql_dbml_env_and_jinja_comment_extractors_and_ste903_guard(tmp_path):
   assert "STE903" not in res.stdout
   assert "NMO100" not in res.stdout
   assert (
-    nemo_rotate.rotate(
+    prose.rotate.rotate(
       "- Name a relationship and the sheet names the single size, keeping role names."
     )
     == "- Specify a relationship and the sheet specifies the single size, keeping role names."
@@ -2082,7 +2114,7 @@ def test_nmu100_padded_ui_labels_and_cap_config(tmp_path):
   r1 = run(str(page), cwd=tmp_path)
   assert r1.returncode == 1, r1.stderr
   assert r1.stdout.count("[NMU100]") == 5
-  expected = nemo_report.describe_finding(
+  expected = report.describe_finding(
     {
       "rule": "NMU100",
       "text": "Open the repo",
@@ -2138,7 +2170,7 @@ def test_nmu100_padded_ui_labels_and_cap_config(tmp_path):
   r4 = run(str(cap_js), cwd=tmp_path)
   assert r4.returncode == 1, r4.stderr
   assert r4.stdout.count("[NMU100]") == 1
-  expected_cap = nemo_report.describe_finding(
+  expected_cap = report.describe_finding(
     {
       "rule": "NMU100",
       "text": "Open the repo",
@@ -2173,7 +2205,7 @@ def test_js_ui_prose_checks_run_beyond_nmu100_word_cap(tmp_path):
 
 
 def _nmu200_rows(path, source):
-  findings = nemo_review.source_prose(Path(path), source, "unknown", 4)
+  findings = prose.review.source_prose(Path(path), source, "unknown", 4)
   return [row for row in findings if row["rule"] == "NMU200"]
 
 
@@ -2264,7 +2296,7 @@ def test_files_globs_scope_caps_rules_and_context(tmp_path):
   (tmp_path / "tight.md").write_text(list_item, encoding="utf-8")
   (tmp_path / "quiet.md").write_text("Alpha; beta.\n", encoding="utf-8")
   (tmp_path / "semi.md").write_text("Alpha; beta.\n", encoding="utf-8")
-  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + ".\n"
+  sentence = " ".join(["term"] * (config.SENTENCE_CAPS["instruction"] + 1)) + ".\n"
   (tmp_path / "long.md").write_text(sentence, encoding="utf-8")
   (tmp_path / "brief.md").write_text(sentence, encoding="utf-8")
   result = run(cwd=tmp_path)
@@ -2353,9 +2385,9 @@ def test_pyproject_files_table_scopes_rules(tmp_path):
 
 
 def test_file_config_merges_a_glob_entry_then_a_file_header(tmp_path, monkeypatch):
-  config = tmp_path / "nemoizer.toml"
+  config_file = tmp_path / "nemoizer.toml"
   (tmp_path / "docs").mkdir()
-  config.write_text(
+  config_file.write_text(
     "list-sentence-cap = 2\n"
     "\n"
     "[[files]]\n"
@@ -2364,72 +2396,72 @@ def test_file_config_merges_a_glob_entry_then_a_file_header(tmp_path, monkeypatc
     'context = "description"\n',
     encoding="utf-8",
   )
-  loaded = nemo_config.load_config(config_path=config)
+  loaded = config.load_config(config_path=config_file)
   assert loaded["files"] == (
     {
       "paths": ("docs/*.md",),
       "overrides": {"list_sentence_cap": 3, "context": "description"},
     },
   )
-  monkeypatch.setattr(nemo_config, "BASE_CONFIG", loaded)
+  monkeypatch.setattr(config, "BASE_CONFIG", loaded)
   page = tmp_path / "docs" / "page.md"
-  merged = nemo_config.file_config(page)
+  merged = config.file_config(page)
   assert merged["list_sentence_cap"] == 3
   assert merged["context"] == "description"
-  headed = nemo_config.file_config(page, "# nemoizer: list-sentence-cap=5\n\nText.\n")
+  headed = config.file_config(page, "# nemoizer: list-sentence-cap=5\n\nText.\n")
   assert headed["list_sentence_cap"] == 5
   assert headed["context"] == "description"
-  elsewhere = nemo_config.file_config(tmp_path / "elsewhere.md")
-  assert elsewhere["list_sentence_cap"] == nemo_config.LIST_SENTENCE_CAP
+  elsewhere = config.file_config(tmp_path / "elsewhere.md")
+  assert elsewhere["list_sentence_cap"] == config.LIST_SENTENCE_CAP
   assert elsewhere["context"] is None
 
 
 def test_a_file_header_reads_lines_one_to_three_only(tmp_path):
-  assert nemo_config.header_config("# nemoizer: list-sentence-cap=4\n") == {
+  assert config.header_config("# nemoizer: list-sentence-cap=4\n") == {
     "list_sentence_cap": 4
   }
-  assert nemo_config.header_config("<!-- nemoizer: list-sentence-cap=4 --!>\n") == {
+  assert config.header_config("<!-- nemoizer: list-sentence-cap=4 --!>\n") == {
     "list_sentence_cap": 4
   }
   assert (
-    nemo_config.header_config(
+    config.header_config(
       "Return overrides from a `nemoizer:` header on lines 1-3.\n"
     )
     == {}
   )
-  assert nemo_config.header_config(
+  assert config.header_config(
     "One.\nTwo.\nThree.\n# nemoizer: list-sentence-cap=4\n"
   ) == ({})
   with pytest.raises(ValueError):
-    nemo_config.header_config("# nemoizer: paragraph-cap=9\n")
+    config.header_config("# nemoizer: paragraph-cap=9\n")
   with pytest.raises(ValueError):
-    nemo_config.header_config("# nemoizer: select=STE100\n")
+    config.header_config("# nemoizer: select=STE100\n")
 
 
 def test_extend_exclude_supports_globstar_and_negation(tmp_path, monkeypatch):
   monkeypatch.setitem(
-    nemo_config.ACTIVE_CONFIG,
+    config.ACTIVE_CONFIG,
     "extend_exclude",
     ("skills/**/*.md", "!skills/**/README.md", "rules/**"),
   )
-  assert nemo_files.skipped(tmp_path / "skills" / "demo" / "SKILL.md", tmp_path, ())
-  assert not nemo_files.skipped(tmp_path / "skills" / "README.md", tmp_path, ())
-  assert not nemo_files.skipped(
+  assert files.skipped(tmp_path / "skills" / "demo" / "SKILL.md", tmp_path, ())
+  assert not files.skipped(tmp_path / "skills" / "README.md", tmp_path, ())
+  assert not files.skipped(
     tmp_path / "skills" / "demo" / "README.md", tmp_path, ()
   )
-  assert not nemo_files.skipped(
+  assert not files.skipped(
     tmp_path / "skills" / "demo" / "scripts" / "tool.py", tmp_path, ()
   )
-  assert nemo_files.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
+  assert files.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
 
 
 def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
   import tomllib
 
   root = SCRIPT.parents[3]
-  config = tomllib.loads((root / "nemoizer.toml").read_text(encoding="utf-8"))
+  config_data = tomllib.loads((root / "nemoizer.toml").read_text(encoding="utf-8"))
   monkeypatch.setitem(
-    nemo_config.ACTIVE_CONFIG, "extend_exclude", tuple(config["extend-exclude"])
+    config.ACTIVE_CONFIG, "extend_exclude", tuple(config_data["extend-exclude"])
   )
   for name in (
     "app.min.js",
@@ -2445,14 +2477,14 @@ def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
     "vendored/module.py",
     "files/source.tar.gz",
   ):
-    assert nemo_files.skipped(tmp_path / name, tmp_path, ()), name
+    assert files.skipped(tmp_path / name, tmp_path, ()), name
   for name in (
     "src/app.js",
     "docs/README.md",
     "src/archive_helper.py",
     "src/vendor_helper.py",
   ):
-    assert not nemo_files.skipped(tmp_path / name, tmp_path, ()), name
+    assert not files.skipped(tmp_path / name, tmp_path, ()), name
 
 
 def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
@@ -2463,8 +2495,8 @@ def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
     "}\n"
   )
   view.write_text(source, encoding="utf-8")
-  rows = nemo_review.source_prose(
-    view, source, "description", nemo_config.PARAGRAPH_CAP
+  rows = prose.review.source_prose(
+    view, source, "description", config.PARAGRAPH_CAP
   )
   assert any(row["rule"] == "HMN905" and row["line"] == 2 for row in rows)
 
@@ -2483,7 +2515,7 @@ def test_missing_targets_fail_before_scanning_or_formatting(tmp_path):
     assert f"target does not exist: {missing}" in result.stderr
     assert note.read_text(encoding="utf-8") == original
   with pytest.raises(ValueError, match="target does not exist"):
-    list(nemo_files.walk([missing], ()))
+    list(files.walk([missing], ()))
 
 
 def test_timed_out_worker_does_not_block_process_exit(tmp_path):
@@ -2542,11 +2574,11 @@ def test_wrapped_rotation_and_name_contexts(tmp_path):
     "Review the pull\nrequests before merging.\n",
     encoding="utf-8",
   )
-  findings, _ = nemo_review.scan([doc], [])
+  findings, _ = prose.review.scan([doc], [])
   assert any("name -> specify" in item for item in findings)
   assert any("names -> specify" in item for item in findings)
   assert any("pull requests -> PR" in item for item in findings)
-  nemo_review.format_paths([doc], [])
+  prose.review.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "Please specify tasks. The widget specifies the item.\n"
     "Review the pull\nrequests before merging.\n"
@@ -2559,7 +2591,7 @@ def test_rotation_irregular_forms_and_false_friends(tmp_path):
     "Data was transmitted by the transmitter. Pickle and picky. Be kind.\n",
     encoding="utf-8",
   )
-  nemo_review.format_paths([doc], [])
+  prose.review.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "Data was sent by the sender. Pickle and picky. Be kind.\n"
   )
@@ -2573,10 +2605,10 @@ def test_rotation_respects_fences_links_tables_and_code(tmp_path):
     "| `check.py` | Transmit the kind of repository |\n",
     encoding="utf-8",
   )
-  findings, _ = nemo_review.scan([doc], [])
+  findings, _ = prose.review.scan([doc], [])
   assert any("NMO100" in item and "kind" in item for item in findings)
   assert any("NMO100" in item and "Transmit" in item for item in findings)
-  nemo_review.format_paths([doc], [])
+  prose.review.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "```python\ndef pick(x): pass\n```\n"
     "[API](https://example.com?kind=full&pick=1)\n"
@@ -2584,7 +2616,7 @@ def test_rotation_respects_fences_links_tables_and_code(tmp_path):
   )
   code = tmp_path / "example.py"
   code.write_text("item = pick(items)  # Transmit the kind.\n", encoding="utf-8")
-  nemo_review.format_paths([code], [])
+  prose.review.format_paths([code], [])
   assert code.read_text(encoding="utf-8") == ("item = pick(items)  # Send the type.\n")
 
 
@@ -2603,7 +2635,7 @@ def test_nmt200_module_defaults_are_not_explicit_test_inputs(
 ):
   source = tmp_path / f"test_defaults.{suffix}"
   source.write_text(source_text, encoding="utf-8")
-  reviewed = nemo_assertions.review_tests([source])
+  reviewed = assertions.review_tests([source])
   assert not reviewed["errors"]
   assert [row["rule"] for row in reviewed["findings"]] == ["NMT200"]
 
@@ -2640,7 +2672,7 @@ def test_source_numeric_advisory_boundary(tmp_path, setup, expression, expected)
     + f"  assert {expression}\n",
     encoding="utf-8",
   )
-  findings = nemo_assertions.review_tests([source])["findings"]
+  findings = assertions.review_tests([source])["findings"]
   numeric = [row for row in findings if row["category"] == "numeric_setting"]
   assert bool(numeric) == expected
   if expected:
@@ -2663,7 +2695,7 @@ def test_source_numeric_advisory_skips_uncertain_scope(tmp_path, prefix):
     + "def test_setting(settings=None):\n  assert settings.LIMIT == 42\n",
     encoding="utf-8",
   )
-  assert not nemo_assertions.numeric_setting_findings(source, source.read_text())
+  assert not assertions.numeric_setting_findings(source, source.read_text())
 
 
 @pytest.mark.parametrize("language", ["py", "js"])
@@ -2699,12 +2731,12 @@ test('aliases', async () => {
 """
   )
   parsed = (
-    nemo_assertions.python_pairs(source)
+    assertions.python_pairs(source)
     if language == "py"
-    else nemo_assertions.javascript_pairs(source)
+    else assertions.javascript_pairs(source)
   )
   found = [
-    pair for pair in parsed["pairs"] if nemo_assertions.category(pair) == "output_text"
+    pair for pair in parsed["pairs"] if assertions.category(pair) == "output_text"
   ]
   assert [pair["value"] for pair in found] == ["Copied output prose here"]
 
@@ -2740,10 +2772,10 @@ test('shadow', (expected) => {
 """
   )
   parsed = (
-    nemo_assertions.python_pairs(source)
+    assertions.python_pairs(source)
     if language == "py"
-    else nemo_assertions.javascript_pairs(source)
+    else assertions.javascript_pairs(source)
   )
   assert not [
-    pair for pair in parsed["pairs"] if nemo_assertions.category(pair) == "output_text"
+    pair for pair in parsed["pairs"] if assertions.category(pair) == "output_text"
   ]

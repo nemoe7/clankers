@@ -47,7 +47,7 @@ def test_comment_spans(path, lines):
       return None
     return spans
   if path.suffix.lower() in {".js", ".cjs", ".mjs"}:
-    from prose import javascript_comment_spans
+    from prose.extract import javascript_comment_spans
 
     return list(javascript_comment_spans(source))
   return None

@@ -1,7 +1,7 @@
 """Format findings, their messages, and the summary footer."""
 
 from markers import is_advisory_finding
-from nemo_rules import ADVISORY_RULE_IDS, RULE_DESCRIPTIONS
+from rules import ADVISORY_RULE_IDS, RULE_DESCRIPTIONS
 
 NMP100_LABELS = {
   "paragraph": "paragraph",

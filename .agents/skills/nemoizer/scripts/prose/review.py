@@ -7,9 +7,9 @@ import tokenize
 from itertools import pairwise
 from pathlib import Path
 
-import nemo_config
+import config
 from markers import MARKER, MARKER_SPAN
-from nemo_config import (
+from config import (
   HEADING_SENTENCE_CAP,
   LIST_SENTENCE_CAP,
   MIN_THE_COUNT,
@@ -19,22 +19,22 @@ from nemo_config import (
   file_scope,
   suppressed,
 )
-from nemo_detectors import (
+from prose.detectors import (
   DETECTORS,
   UI_STRING_DASH_RE,
   prose_semicolons,
   prose_the_density,
 )
-from nemo_files import text_file, walk
-from nemo_markdown import (
+from files import text_file, walk
+from prose.markdown import (
   blank_inline_comments,
   fence_states,
   fenced_lines,
   prose_blocks,
   prose_counts,
 )
-from nemo_report import format_finding
-from nemo_rotate import (
+from report import format_finding
+from prose.rotate import (
   KEEP_LOWER,
   ROTATIONS,
   collapse_list_articles,
@@ -42,15 +42,15 @@ from nemo_rotate import (
   rotate,
   rotation_legend,
 )
-from nemo_rules import (
+from rules import (
   ADVISORY_RULE_IDS,
   LINE_PROSE_RULE_IDS,
   NMU_RULE_IDS,
   PROSE_RULE_IDS,
   RULE_IDS,
 )
-from nemo_ui import NMU100_MAX_WORDS, NMU200_SUFFIXES, nmu100_findings, nmu200_findings
-from prose import (
+from prose.ui import NMU100_MAX_WORDS, NMU200_SUFFIXES, nmu100_findings, nmu200_findings
+from prose.extract import (
   COMMENT_BLOCK_CAP,
   comment_blocks,
   html_attr_spans,
@@ -183,8 +183,8 @@ def format_paths(targets, ignores, out=None):
     lines = text.split("\n")
     with file_scope(path, text):
       file_ids, line_ids, _ = exclusions(path, lines)
-      the_cap = nemo_config.ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
-      min_the = nemo_config.ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
+      the_cap = config.ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
+      min_the = config.ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
     is_code = is_code_file(path)
     prose_map = _prose_line_map(path, text) if is_code else None
     block_lines = {}
@@ -279,10 +279,10 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
           }
         )
   sentence_caps = {
-    "instruction": nemo_config.ACTIVE_CONFIG.get(
+    "instruction": config.ACTIVE_CONFIG.get(
       "instruction_sentence_cap", SENTENCE_CAPS["instruction"]
     ),
-    "description": nemo_config.ACTIVE_CONFIG.get(
+    "description": config.ACTIVE_CONFIG.get(
       "description_sentence_cap", SENTENCE_CAPS["description"]
     ),
   }
@@ -324,12 +324,12 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
     for item in paragraphs:
       number, count, kind = item if len(item) == 3 else (*item, "paragraph")
       if kind == "heading":
-        cap = nemo_config.ACTIVE_CONFIG.get(
+        cap = config.ACTIVE_CONFIG.get(
           "heading_sentence_cap", HEADING_SENTENCE_CAP
         )
         status = "review"
       elif kind == "list":
-        cap = nemo_config.ACTIVE_CONFIG.get("list_sentence_cap", LIST_SENTENCE_CAP)
+        cap = config.ACTIVE_CONFIG.get("list_sentence_cap", LIST_SENTENCE_CAP)
         status = "review"
       elif kind == "blockquote":
         cap = paragraph_cap
@@ -351,11 +351,11 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
           }
         )
   code = PROSE_RULE_IDS["the_density"]
-  the_cap = nemo_config.ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
+  the_cap = config.ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
   min_the = (
     min_the_override
     if min_the_override is not None
-    else nemo_config.ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
+    else config.ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
   )
   if not suppressed(code, file_ids):
     for number, column, density in prose_the_density(
@@ -451,7 +451,7 @@ def _source_prose(path, text, context, paragraph_cap):
   findings = []
   if code_file:
     code = PROSE_RULE_IDS["comment_block"]
-    comment_cap = nemo_config.ACTIVE_CONFIG.get("comment_block_cap", COMMENT_BLOCK_CAP)
+    comment_cap = config.ACTIVE_CONFIG.get("comment_block_cap", COMMENT_BLOCK_CAP)
     if not suppressed(code, file_ids):
       for start, count in comment_blocks(path, text):
         if count > comment_cap and not suppressed(
@@ -532,7 +532,7 @@ def _source_prose(path, text, context, paragraph_cap):
           seen_ui.add((label_text, first))
           ui_spans.append((label_text, first, last))
       nmu_cap = int(
-        nemo_config.ACTIVE_CONFIG.get("nmu100_max_words") or NMU100_MAX_WORDS
+        config.ACTIVE_CONFIG.get("nmu100_max_words") or NMU100_MAX_WORDS
       )
       for ln, label_text, word, word_count in nmu100_findings(ui_spans, cap=nmu_cap):
         if 0 < ln <= len(line_ids) and suppressed(code, line_ids[ln - 1]):

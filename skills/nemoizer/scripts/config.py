@@ -1,6 +1,6 @@
 """Load nemoizer config, apply per-file overrides, and hold the active config.
 
-Read `ACTIVE_CONFIG` and `BASE_CONFIG` as `nemo_config.<name>`: `file_scope` rebinds them.
+Read `ACTIVE_CONFIG` and `BASE_CONFIG` as `config.<name>`: `file_scope` rebinds them.
 """
 
 import contextlib
@@ -10,10 +10,10 @@ import tomllib
 from pathlib import Path
 
 from markers import collect_markers
-from nemo_rotate import ROTATIONS, mask_protected_spans
-from nemo_rules import KNOWN_RULE_IDS
-from nemo_ui import NMU100_MAX_WORDS
-from prose import COMMENT_BLOCK_CAP
+from rules import KNOWN_RULE_IDS
+from prose.rotate import ROTATIONS, mask_protected_spans
+from prose.ui import NMU100_MAX_WORDS
+from prose.extract import COMMENT_BLOCK_CAP
 
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 

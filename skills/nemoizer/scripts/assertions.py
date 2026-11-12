@@ -10,10 +10,10 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-from nemo_config import exclusions, file_scope, suppressed
-from nemo_files import text_file, walk
-from nemo_rules import TEST_RULE_IDS
-from prose import run_node
+from config import exclusions, file_scope, suppressed
+from files import text_file, walk
+from rules import TEST_RULE_IDS
+from prose.extract import run_node
 
 MEASUREMENTS = {
   "width",

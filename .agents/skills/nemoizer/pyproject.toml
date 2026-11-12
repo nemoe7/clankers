@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemoizer"
-version = "0.1.18"
+version = "0.1.19"
 description = "Prose, terminology, and test-assertion linter."
 requires-python = ">=3.11"
 
@@ -14,18 +14,16 @@ nemoizer = "nemoize:main"
 [tool.setuptools]
 package-dir = {"" = "scripts"}
 py-modules = [
-  "nemoize",
-  "prose",
+  "assertions",
+  "config",
+  "files",
   "markers",
-  "nemo_markdown",
-  "nemo_rules",
-  "nemo_report",
-  "nemo_rotate",
-  "nemo_ui",
-  "nemo_config",
-  "nemo_files",
-  "nemo_detectors",
-  "nemo_assertions",
-  "nemo_review",
-  "nemo_runner",
+  "nemoize",
+  "report",
+  "rules",
+  "runner",
 ]
+packages = ["prose"]
+
+[tool.setuptools.package-data]
+prose = ["*.cjs"]

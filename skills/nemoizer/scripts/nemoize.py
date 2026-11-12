@@ -12,39 +12,39 @@ import tokenize
 import tomllib
 from pathlib import Path
 
-import nemo_config
+import config
 from markers import (
   audit_lines,
 )
-from nemo_assertions import is_test_file, review_tests
-from nemo_config import (
+from assertions import is_test_file, review_tests
+from config import (
   PARAGRAPH_CAP,
   SENTENCE_CAPS,
   file_config,
   load_config,
 )
-from nemo_files import text_file, walk
-from nemo_report import (
+from files import text_file, walk
+from report import (
   describe_finding,
   format_finding,
   format_summary,
   is_review,
 )
-from nemo_review import (
+from prose.review import (
   docs_drift_findings,
   format_paths,
   prose_review,
   scan,
   source_prose,
 )
-from nemo_rotate import (
+from prose.rotate import (
   rotate,
 )
-from nemo_rules import (
+from rules import (
   ADVISORY_RULE_IDS,
   TEST_RULE_IDS,
 )
-from nemo_runner import run_with_timeouts
+from runner import run_with_timeouts
 
 
 def add_config_arguments(parser):
@@ -55,10 +55,10 @@ def add_config_arguments(parser):
 def activate_config(parser, targets, config_path, no_config):
   """Load the discovered or named config as the active config, or exit with usage."""
   try:
-    nemo_config.BASE_CONFIG = load_config(targets, config_path, no_config)
+    config.BASE_CONFIG = load_config(targets, config_path, no_config)
   except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
     parser.error(str(error))
-  nemo_config.ACTIVE_CONFIG = nemo_config.BASE_CONFIG
+  config.ACTIVE_CONFIG = config.BASE_CONFIG
 
 
 def prose_main(argv=None):
@@ -197,17 +197,17 @@ def main(argv=None):
   context = (
     arguments.context
     if arguments.context is not None
-    else (nemo_config.ACTIVE_CONFIG.get("context") or "unknown")
+    else (config.ACTIVE_CONFIG.get("context") or "unknown")
   )
   paragraph_cap = (
     arguments.paragraph_cap
     if arguments.paragraph_cap is not None
-    else (nemo_config.ACTIVE_CONFIG.get("paragraph_cap") or PARAGRAPH_CAP)
+    else (config.ACTIVE_CONFIG.get("paragraph_cap") or PARAGRAPH_CAP)
   )
   if not 0 < paragraph_cap <= PARAGRAPH_CAP:
     parser.error(f"--paragraph-cap must be between 1 and {PARAGRAPH_CAP}")
   test_helpers = [
-    *nemo_config.ACTIVE_CONFIG.get("test_helpers", ()),
+    *config.ACTIVE_CONFIG.get("test_helpers", ()),
     *arguments.test_helper,
   ]
   for helper in test_helpers:
@@ -301,7 +301,7 @@ def main(argv=None):
     )
     if arguments.audit:
       findings.extend(
-        docs_drift_findings(path, text, nemo_config.ACTIVE_CONFIG.get("root"))
+        docs_drift_findings(path, text, config.ACTIVE_CONFIG.get("root"))
       )
   try:
     result = review_tests(tests)

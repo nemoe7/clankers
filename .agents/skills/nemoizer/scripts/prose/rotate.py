@@ -2,7 +2,7 @@
 
 import re
 
-from nemo_rules import PROSE_RULE_IDS, RULE_IDS
+from rules import PROSE_RULE_IDS, RULE_IDS
 
 # Exact inflections and their replacements.
 ROTATION_FORMS = {

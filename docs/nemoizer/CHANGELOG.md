@@ -12,6 +12,7 @@ This log has no Unreleased section.
 
 - Rename CLI severity labels: `(advisory-free)` to `(violation)` for findings failing the check and `(advisory)` plus `(manual review)` to `(review)` for findings needing human judgment. Drop redundant `(manual review)` suffix.
 - Update summary footer to count "violations" and "review findings" instead of "hard violations" and "advisory findings".
+- Group linter modules by concern: small shared modules at `scripts/` root, prose modules under `scripts/prose/`, drop `nemo_` prefixes from internal Python files.
 
 ## [0.1.18]
 
