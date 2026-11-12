@@ -211,7 +211,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_browser_requirement.py",
     "tests/skills/arena-steering/test_browser_retry.py",
   ),
-  "Nemoizer": ("tests/skills/nemoizer/test_nemoize.py",),  # nonemo: NMO100
+  "nemoize": ("tests/skills/nemoizer/test_nemoize.py",),
   "UI/UX": (
     "tests/skills/nuu/test_nuu.py",
     "tests/skills/nuu/test_measure.py",
@@ -241,7 +241,7 @@ MODULE_PATHS = {
     "tests/skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
   ),
-  "Nemoizer": (  # nonemo: NMO100
+  "nemoize": (
     "skills/*nemoizer/*",
     ".agents/skills/nemoizer/*",
     "tests/skills/nemoizer/*",

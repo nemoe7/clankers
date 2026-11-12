@@ -19,6 +19,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Exclude amendment proposal templates from Markdown lint (`.markdownlint-cli2.jsonc`).
+- Rename the Nemoize stage in `check.py` and its summary, replacing the "domains" wording, and rename the Nemoize module key (`maintenance/check.py`, `maintenance/workflows/changed_paths.py`).
 
 ### Added
 

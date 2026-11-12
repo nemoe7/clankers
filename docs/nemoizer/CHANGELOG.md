@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.17]
+
+### Changed
+
+- Name the default scan "prose and test candidates" in the command-line help.
+
 ## [0.1.16]
 
 ### Added

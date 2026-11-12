@@ -146,7 +146,7 @@ def check_nemoizer(errors: list[str]) -> None:
   )
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
-    errors.append(f"Nemoizer domains failed:\n{output}")  # nonemo: NMO100
+    errors.append(f"nemoize failed:\n{output}")
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
@@ -792,7 +792,7 @@ def main() -> int:
   errors: list[str] = []
   skills = validate(errors)
   run_check(
-    "Nemoizer domains",  # nonemo: NMO100
+    "nemoize",
     errors,
     lambda: check_nemoizer(errors),
   )
@@ -808,8 +808,8 @@ def main() -> int:
 
   print(
     f"Validation passed in {span:.2f}s: {skills} skills, "
-    "README measurements, refs/live parity and the "
-    "nemoizer prose domains checked."
+    "README measurements, refs/live parity and "
+    "nemoize checked."
   )
 
   return 0

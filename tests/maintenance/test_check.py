@@ -227,7 +227,7 @@ def test_nemoizer_scope_is_root_config_and_one_stage(monkeypatch, capsys):
   monkeypatch.setattr(check, "check_nemoizer", lambda errors: calls.append(True))
   assert check.main() == 0
   assert calls == [True]
-  assert capsys.readouterr().out.count("== Nemoizer") == 1  # nonemo: NMO100
+  assert capsys.readouterr().out.count("== nemoize ...") == 1
 
 
 def test_budget_updates_handle_additions_removals_and_measurements(
