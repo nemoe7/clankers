@@ -29,6 +29,10 @@ This log has no Unreleased section.
 
 - Name the default scan "prose and test candidates" in the command-line help.
 
+### Removed
+
+- Retire the pick-to-select rotation.
+
 ## [0.1.16]
 
 ### Added
