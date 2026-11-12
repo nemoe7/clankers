@@ -295,18 +295,20 @@ def run_nemoizer(text: str) -> tuple[bool, str]:
   return result.returncode == 0, output
 
 
+def _decode(output: bytes) -> str:
+  # Windows decodes text pipes in reader threads that swallow UnicodeDecodeError.
+  return output.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _git(*arguments: str) -> str:
   result = subprocess.run(
-    ["git", *arguments],
-    cwd=ROOT,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    check=False,
+    ["git", *arguments], cwd=ROOT, capture_output=True, check=False
   )
   if result.returncode:
-    raise SystemExit(f"git {' '.join(arguments)} failed: {result.stderr.strip()}")
-  return result.stdout
+    raise SystemExit(
+      f"git {' '.join(arguments)} failed: {_decode(result.stderr).strip()}"
+    )
+  return _decode(result.stdout)
 
 
 def commits_in_range(revision_range: str) -> list[tuple[str, str]]:

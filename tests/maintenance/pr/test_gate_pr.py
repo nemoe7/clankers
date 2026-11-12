@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import sys
@@ -451,6 +450,7 @@ def run_hook(hook, repo, message_path, message):
   return result, message_path.read_text(encoding="utf-8")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the hook is a POSIX sh script")
 def test_installed_commit_hook():
   hook_source = installed_hook_source()
   with tempfile.TemporaryDirectory() as directory:
@@ -517,14 +517,21 @@ def test_installed_commit_hook():
 def test_git_pipe_rejects_invalid_utf8_and_main_reconfigures_streams(
   monkeypatch, tmp_path: Path
 ) -> None:
-  fake_bin = tmp_path / "bin"
-  fake_bin.mkdir()
-  fake_git = fake_bin / "git"
-  fake_git.write_bytes(b"#!/bin/sh\nprintf '\\377\\376'\n")
-  fake_git.chmod(0o755)
-  monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
-  with pytest.raises(UnicodeDecodeError):
-    gate_pr._git("status")
+  fake_git = tmp_path / "fake_git.py"
+  fake_git.write_text(
+    "import sys\nsys.stdout.buffer.write(b'\\xff\\xfe')\n", encoding="utf-8"
+  )
+  real_run = subprocess.run
+
+  def run_fake_git(command, *arguments, **options):
+    if command[0] == "git":
+      command = [sys.executable, str(fake_git), *command[1:]]
+    return real_run(command, *arguments, **options)
+
+  with monkeypatch.context() as patch:
+    patch.setattr(gate_pr.subprocess, "run", run_fake_git)
+    with pytest.raises(UnicodeDecodeError):
+      gate_pr._git("status")
 
   calls: list[tuple[str, str]] = []
 
