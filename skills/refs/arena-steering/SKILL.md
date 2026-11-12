@@ -113,11 +113,9 @@ steer task rm <id>
 - NEVER run `steer poll` as a gate wait unless the sole remaining task is blocked for that gate.
 - Continue independent work and poll when no unblocked work remains.
 - Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports.
-- ALWAYS end every turn with `steer poll` on the final Bash call, unless the listing carries a `skip_poll` stamp.
-- Call `functions.bash` with `{"command":"steer poll","timeout":1800}` for the final poll.
-- NEVER wrap the final poll in a shell timeout.
-- MUST NOT substitute sleep for the final poll.
-- NEVER treat a bounded no-result poll as a successful wait.
+- NEVER end a turn with unblocked tasks. Continue them in queue order.
+- Run `steer poll` last only with one task waiting on a gate or no tasks waiting for new work.
+- NEVER poll with multiple tasks queued.
 
 ## Reports (`Reports`)
 

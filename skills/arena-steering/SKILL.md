@@ -94,7 +94,7 @@ steer task rm <id>
 - After one diagnosis, resume unblocked work and use a worktree if the gate freezes its files. Recheck logs only after meaningful progress, never just to wait.
 - Continue independent work and poll when no unblocked work remains.
 - Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports.
-- ALWAYS end every turn with `steer poll` on the final Bash call unless the listing carries a `skip_poll` stamp, calling Bash with `{"command":"steer poll","timeout":1800}`; NEVER wrap it in a shell timeout, substitute sleep, or treat a bounded no-result poll as a successful wait.
+- NEVER end a turn with unblocked tasks; continue in queue order. Run `steer poll` last only when one task waits on a gate or none wait for new work. NEVER poll with multiple tasks queued.
 
 ## Reports (`Reports`)
 

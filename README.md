@@ -39,7 +39,7 @@ flowchart TB
 | [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 235 `tok` |
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 284 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
-| [`skills/arena-steering/SKILL.md`](skills/arena-steering/SKILL.md) | `o200k_base` | 2,333 `tok` |
+| [`skills/arena-steering/SKILL.md`](skills/arena-steering/SKILL.md) | `o200k_base` | 2,322 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,479 `tok` |
 | [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 2,962 `tok` |
 | [`skills/squash/SKILL.md`](skills/squash/SKILL.md) | `o200k_base` | 1,407 `tok` |

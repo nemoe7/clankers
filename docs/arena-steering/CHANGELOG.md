@@ -10,6 +10,10 @@ This log has no Unreleased section.
 
 - Require report approval before completing a report phase.
 
+### Changed
+
+- Replace unconditional polling with queue-order completion and gate-aware polling.
+
 ## [2.3.10]
 
 ### Changed
