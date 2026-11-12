@@ -14,6 +14,14 @@ SCRIPT = Path(nemoize.__file__).resolve()
 SKIPPED_MESSAGE = "Skipped (no result within 10s)"
 
 
+def copy_shipped_scripts(destination):
+  import shutil
+
+  shutil.copytree(
+    SCRIPT.parent, destination, ignore=shutil.ignore_patterns("__pycache__")
+  )
+
+
 def run(*arguments, cwd):
   return subprocess.run(
     [sys.executable, str(SCRIPT), *arguments],
@@ -460,17 +468,9 @@ def test_prose_context_counts_and_rule_exclusions(tmp_path):
     "term" * (csv.field_size_limit() + 1) + " | term\n", encoding="utf-8"
   )
   assert not inspect("instruction")["findings"]
-  import shutil
 
   portable = tmp_path / "portable"
-  (portable / "scripts").mkdir(parents=True)
-  for entry in (
-    SCRIPT,
-    SCRIPT.with_name("nemoizer"),
-    SCRIPT.with_name("prose.py"),
-    SCRIPT.with_name("javascript-comments.cjs"),
-  ):
-    shutil.copy2(entry, portable / "scripts" / entry.name)
+  copy_shipped_scripts(portable / "scripts")
   source.write_text("Run.\n", encoding="utf-8")
   shipped = subprocess.run(
     [
@@ -614,7 +614,6 @@ cls.assertEqual(panel.clientWidth, 320.5)
   assert invalid_bytes.read_bytes() == b"\xff"
 
   import os
-  import shutil
 
   missing_parser = subprocess.run(
     [sys.executable, str(SCRIPT), "review-tests", str(js)],
@@ -631,9 +630,7 @@ cls.assertEqual(panel.clientWidth, 320.5)
   )
 
   portable = tmp_path / "portable"
-  portable.mkdir()
-  for filename in ("nemoizer", "nemoize.py", "prose.py", "javascript-comments.cjs"):
-    shutil.copy2(SCRIPT.with_name(filename), portable / filename)
+  copy_shipped_scripts(portable)
   shipped = subprocess.run(
     [sys.executable, str(portable / "nemoizer"), "review-tests", str(source)],
     cwd=tmp_path,
