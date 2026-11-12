@@ -365,6 +365,26 @@ def test_format_preserves_invalid_utf8_and_still_formats_valid_text(tmp_path):
   assert valid.read_text(encoding="utf-8") == "caf\u00e9 type\n"
 
 
+def test_format_keeps_each_file_line_ending_bytes(tmp_path):
+  crlf = tmp_path / "crlf.md"
+  crlf.write_bytes(b"kind one\r\nkind two\r\n")
+  lf = tmp_path / "lf.md"
+  lf.write_bytes(b"kind one\nkind two\n")
+  assert nemoize.format_paths([crlf, lf], []) == 4
+  assert crlf.read_bytes() == b"type one\r\ntype two\r\n"
+  assert lf.read_bytes() == b"type one\ntype two\n"
+
+
+def test_javascript_parsers_count_crlf_as_one_line_break():
+  import prose
+
+  source = "// one\r\n// two\r\nassert.equal(panel.width, 320);\r\n"
+  assert [first for _, first, _ in prose.javascript_comments(source)] == [1, 2]
+  assert [span[0][0] for span in prose.javascript_comment_spans(source)] == [1, 2]
+  pairs = nemoize.javascript_pairs(source)["pairs"]
+  assert [pair["line"] for pair in pairs] == [3]
+
+
 def test_prose_context_counts_and_rule_exclusions(tmp_path):
   import importlib.util
   import json

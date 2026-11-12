@@ -140,6 +140,7 @@ from prose import (
   is_jinja_file,
   is_workflow_yaml,
   prose_spans,
+  run_node,
   slash_comments,
   ui_label_spans,
   workflow_name_spans,
@@ -1280,7 +1281,7 @@ def format_paths(targets, ignores, out=None):
         touched = True
       rewritten.append(rotated)
     if touched:
-      path.write_text("\n".join(rewritten), encoding="utf-8")
+      path.write_text("\n".join(rewritten), encoding="utf-8", newline="")
   return changed
 
 
@@ -3398,19 +3399,15 @@ def javascript_pairs(text):
   """Parse JavaScript assertions and test declarations through the bundled resolver."""
   if not shutil.which("node"):
     return {"reason": "parser_unavailable"}
-  result = subprocess.run(
-    ["node", "-e", JS_REVIEW, str(Path(__file__).resolve().parent)],
-    input=text,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    errors="replace",
+  returncode, stdout = run_node(
+    ["-e", JS_REVIEW, str(Path(__file__).resolve().parent)],
+    text,
     timeout=NODE_TIMEOUT,
     check=False,
   )
-  if result.returncode:
+  if returncode:
     raise RuntimeError("parser_process_failed")
-  return json.loads(result.stdout)
+  return json.loads(stdout)
 
 
 def numeric_setting_findings(path, text):
