@@ -5,6 +5,7 @@
 
 import subprocess
 import sys
+import tomllib
 from pathlib import Path, PureWindowsPath
 
 import nemo_assertions
@@ -12,6 +13,7 @@ import nemo_config
 import nemo_detectors
 import nemo_files
 import nemo_report
+import nemo_review
 import nemo_rotate
 import nemo_rules
 import nemoize
@@ -328,8 +330,8 @@ def test_audit_markers_skip_inline_code_and_test_fixture_strings(tmp_path):
     "// nonemo: NMO100\n",
     encoding="utf-8",
   )
-  _, raw_marks = nemoize.scan([tmp_path], [])
-  _, audit_marks = nemoize.scan([tmp_path], [], audit=True)
+  _, raw_marks = nemo_review.scan([tmp_path], [])
+  _, audit_marks = nemo_review.scan([tmp_path], [], audit=True)
   assert any(mark.startswith(f"{note}:1:") for mark in raw_marks)
   assert any(mark.startswith(f"{python_fixture}:2:") for mark in raw_marks)
   assert any(mark.startswith(f"{javascript_fixture}:1:") for mark in raw_marks)
@@ -386,7 +388,7 @@ def test_format_keeps_each_file_line_ending_bytes(tmp_path):
   crlf.write_bytes(b"kind one\r\nkind two\r\n")
   lf = tmp_path / "lf.md"
   lf.write_bytes(b"kind one\nkind two\n")
-  assert nemoize.format_paths([crlf, lf], []) == 4
+  assert nemo_review.format_paths([crlf, lf], []) == 4
   assert crlf.read_bytes() == b"type one\r\ntype two\r\n"
   assert lf.read_bytes() == b"type one\ntype two\n"
 
@@ -1688,11 +1690,11 @@ def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path
     "Use The Nemoizer on the source text, the target, and the unit.\n",
     encoding="utf-8",
   )
-  findings, _ = nemoize.scan([doc], [])
+  findings, _ = nemo_review.scan([doc], [])
   assert any(
     "NMO100" in item and "The Nemoizer -> nemoizer" in item for item in findings
   )
-  changed = nemoize.format_paths([doc], [])
+  changed = nemo_review.format_paths([doc], [])
   assert changed == 1
   assert (
     doc.read_text(encoding="utf-8")
@@ -1725,7 +1727,7 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
     "Check the source, the target,\nand the unit for the worker.\n",
     encoding="utf-8",
   )
-  assert nemoize.format_paths([doc], []) == 1
+  assert nemo_review.format_paths([doc], []) == 1
   assert (
     doc.read_text(encoding="utf-8")
     == "Check the source, target,\nand the unit for the worker.\n"
@@ -1743,7 +1745,7 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
   )
   html_rows = [
     (row["line"], row["rule"])
-    for row in nemoize.source_prose(
+    for row in nemo_review.source_prose(
       html_doc, html_doc.read_text(encoding="utf-8"), "instruction", 4
     )
   ]
@@ -1753,7 +1755,7 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
 
   pyproject_toml = SCRIPT.parent.parent / "pyproject.toml"
   assert pyproject_toml.is_file()
-  pyproject_data = nemoize.tomllib.loads(pyproject_toml.read_text(encoding="utf-8"))
+  pyproject_data = tomllib.loads(pyproject_toml.read_text(encoding="utf-8"))
   assert pyproject_data["project"]["name"] == "nemoizer"
   assert pyproject_data["project"]["scripts"]["nemoizer"] == "nemoize:main"
   assert set(pyproject_data["tool"]["setuptools"]["py-modules"]) == {
@@ -2138,7 +2140,7 @@ def test_js_ui_prose_checks_run_beyond_nmu100_word_cap(tmp_path):
 
 
 def _nmu200_rows(path, source):
-  findings = nemoize.source_prose(Path(path), source, "unknown", 4)
+  findings = nemo_review.source_prose(Path(path), source, "unknown", 4)
   return [row for row in findings if row["rule"] == "NMU200"]
 
 
@@ -2428,7 +2430,9 @@ def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
     "}\n"
   )
   view.write_text(source, encoding="utf-8")
-  rows = nemoize.source_prose(view, source, "description", nemo_config.PARAGRAPH_CAP)
+  rows = nemo_review.source_prose(
+    view, source, "description", nemo_config.PARAGRAPH_CAP
+  )
   assert any(row["rule"] == "HMN905" and row["line"] == 2 for row in rows)
 
 
@@ -2505,11 +2509,11 @@ def test_wrapped_rotation_and_name_contexts(tmp_path):
     "Review the pull\nrequests before merging.\n",
     encoding="utf-8",
   )
-  findings, _ = nemoize.scan([doc], [])
+  findings, _ = nemo_review.scan([doc], [])
   assert any("name -> specify" in item for item in findings)
   assert any("names -> specify" in item for item in findings)
   assert any("pull requests -> PR" in item for item in findings)
-  nemoize.format_paths([doc], [])
+  nemo_review.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "Please specify tasks. The widget specifies the item.\n"
     "Review the pull\nrequests before merging.\n"
@@ -2522,7 +2526,7 @@ def test_rotation_irregular_forms_and_false_friends(tmp_path):
     "Data was transmitted by the transmitter. Pickle and picky. Be kind.\n",
     encoding="utf-8",
   )
-  nemoize.format_paths([doc], [])
+  nemo_review.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "Data was sent by the sender. Pickle and picky. Be kind.\n"
   )
@@ -2536,10 +2540,10 @@ def test_rotation_respects_fences_links_tables_and_code(tmp_path):
     "| `check.py` | Transmit the kind of repository |\n",
     encoding="utf-8",
   )
-  findings, _ = nemoize.scan([doc], [])
+  findings, _ = nemo_review.scan([doc], [])
   assert any("NMO100" in item and "kind" in item for item in findings)
   assert any("NMO100" in item and "Transmit" in item for item in findings)
-  nemoize.format_paths([doc], [])
+  nemo_review.format_paths([doc], [])
   assert doc.read_text(encoding="utf-8") == (
     "```python\ndef pick(x): pass\n```\n"
     "[API](https://example.com?kind=full&pick=1)\n"
@@ -2547,7 +2551,7 @@ def test_rotation_respects_fences_links_tables_and_code(tmp_path):
   )
   code = tmp_path / "example.py"
   code.write_text("item = pick(items)  # Transmit the kind.\n", encoding="utf-8")
-  nemoize.format_paths([code], [])
+  nemo_review.format_paths([code], [])
   assert code.read_text(encoding="utf-8") == ("item = pick(items)  # Send the type.\n")
 
 
