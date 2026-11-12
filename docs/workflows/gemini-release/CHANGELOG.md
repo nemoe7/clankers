@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.2]
+
+### Changed
+
+- Reword two comments in `gemini_release.py`, with no behavior change.
+
 ## [0.1.1]
 
 ### Fixed
