@@ -1726,14 +1726,16 @@ def test_ack_and_api_add_multiple_attachment_paths_without_opt_in(
     return code, out.getvalue(), err.getvalue()
 
   args = ("-t", "New work", "-z", "2", "-S", "New work", "-d", "Inspect.")
-  code, output, error = run("ack", "ab1021", "Read", "-i", "via-ack", *args)
+  code, output, error = run("inbox", "ack", "ab1021", "Read", "-i", "via-ack", *args)
   assert code == 0, error
   assert "Priority: P4" in output
 
-  code, _, error = run("ack", "ab1022", "Read", "-i", "explicit-ack", *args, "-p", "P5")
+  code, _, error = run(
+    "inbox", "ack", "ab1022", "Read", "-i", "explicit-ack", *args, "-p", "P5"
+  )
   assert code == 0, error
   code, _, error = run(
-    "task", "new", "-z", "2", "-S", "Plain", "plain", "Plain", "-d", "Inspect."
+    "task", "new", "plain", "-t", "Plain", "-z", "2", "-S", "Plain", "-d", "Inspect."
   )
   assert code == 0, error
 
@@ -2531,7 +2533,7 @@ def test_finished_history_is_newest_first_when_active_rank_changes(
   )
   out = io.StringIO()
   err = io.StringIO()
-  assert cli.main(["tasks", "--finished"], out=out, err=err) == 0, err.getvalue()
+  assert cli.main(["task", "list", "--finished"], out=out, err=err) == 0, err.getvalue()
   assert [
     line.split(" - ", 1)[0] for line in out.getvalue().splitlines()
   ] == expected_history
@@ -2607,20 +2609,32 @@ def test_cli_requires_size_and_displays_values_only_in_details(
 
   for options in ((), ("-z", "4"), ("-z", "5", "-p", "P0")):
     with pytest.raises(SystemExit) as exc:
-      run("task", "new", "work", "Work", "-d", "Build.", "-S", "Scope", *options)
+      run("task", "new", "work", "-t", "Work", "-d", "Build.", "-S", "Scope", *options)
     assert exc.value.code == 2
   code, created, err = run(
-    "task", "new", "work", "Work", "-d", "Build.", "-z", "5", "-p", "P2", "-S", "Scope"
+    "task",
+    "new",
+    "work",
+    "-t",
+    "Work",
+    "-d",
+    "Build.",
+    "-z",
+    "5",
+    "-p",
+    "P2",
+    "-S",
+    "Scope",
   )
   assert code == 0, err
   assert "Priority: P2" in created and "Size: 5" in created
-  assert run("tasks")[1].strip() == "work - Work"
+  assert run("task", "list")[1].strip() == "work - Work"
   assert "Priority: P2" not in run("task")[1]
-  assert "Priority: P2" in run("task", "-d")[1]
-  assert run("task", "mod", "work", "size", "8")[0] == 0
-  assert run("task", "mod", "work", "priority", "P1")[0] == 0
-  assert "Priority: P1" in run("task", "work")[1]
-  assert "Size: 8" in run("task", "work")[1]
+  assert "Priority: P2" in run("task", "show", "work")[1]
+  assert run("task", "edit", "work", "size", "8")[0] == 0
+  assert run("task", "edit", "work", "priority", "P1")[0] == 0
+  assert "Priority: P1" in run("task", "show", "work")[1]
+  assert "Size: 8" in run("task", "show", "work")[1]
 
 
 def test_acknowledgement_task_creation_requires_a_size(
@@ -2638,6 +2652,7 @@ def test_acknowledgement_task_creation_requires_a_size(
     return code, out.getvalue(), err.getvalue()
 
   options = (
+    "inbox",
     "ack",
     "ab1200",
     "Read",

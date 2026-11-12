@@ -629,7 +629,7 @@ def test_cli_poll_repeat_uses_v1_timing_and_resets_after_read(
   assert poll() == 0
   now[0] += 46
   assert poll() == 0
-  assert cli.main(["read"], out=io.StringIO(), err=io.StringIO()) == 0
+  assert cli.main(["inbox", "read"], out=io.StringIO(), err=io.StringIO()) == 0
   now[0] += 1
   assert poll() == 0
   now[0] += 45

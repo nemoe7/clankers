@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.12]
+
+### Changed
+
+- Group inbox, task, and report commands under explicit subcommands.
+
 ## [2.3.11]
 
 ### Added
