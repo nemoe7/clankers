@@ -1,5 +1,5 @@
-# Copies the files a session loads at runtime into one target repository, then proves the copy after the push.
-# Each domain keeps its own repository list. Group payloads only where those lists overlap.
+# Copies the files a session loads at runtime into one target repo, then proves the copy after the push.
+# Each domain keeps its own repo list. Group payloads only where those lists overlap.
 name: Distribute Sync
 description: Copy the rules, the skills and the release workflow into each target repository and verify the copy after the push.
 inputs:

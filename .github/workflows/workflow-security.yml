@@ -31,12 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check Out Repository
+      - name: Check Out Repo
         uses: actions/checkout@v7
 
       - name: Install actionlint
         env:
-          # The release tarball carries the pinned tool. The workflow needs no Go toolchain.
+          # The release tarball carries the pinned tool, so the workflow needs no Go toolchain.
           ACTIONLINT_VERSION: "1.7.12"
         run: |
           set -eu

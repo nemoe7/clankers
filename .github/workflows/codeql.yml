@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: ['**']
   schedule:
-    # A weekly scan keeps the analysis current when no pull request changes the code.
+    # A weekly scan keeps the analysis current when no PR changes the code.
     - cron: '42 3 * * 1'
   workflow_dispatch:
 
@@ -25,21 +25,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      # The analysis reads the repository and uploads one SARIF file.
+      # The analysis reads the repo and uploads one SARIF file.
       contents: read
       actions: read
       security-events: write
     strategy:
       fail-fast: false
       matrix:
-        # Only the languages this repository holds: Python tooling, JavaScript
+        # Only the languages this repo holds: Python tooling, JavaScript
         # userscripts, and the workflow YAML itself.
         include:
           - language: python
           - language: javascript
           - language: actions
     steps:
-      - name: Check Out Repository
+      - name: Check Out Repo
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -54,7 +54,7 @@ jobs:
           LANGUAGE: ${{ matrix.language }}
         run: |
           if [ "$EVENT_NAME" = pull_request ]; then
-            # Use the base copy, not code supplied by a pull request.
+            # Use the base copy, not code supplied by a PR.
             if git show "$PR_BASE_SHA:maintenance/workflows/codeql_filter.py" > "$RUNNER_TEMP/codeql_filter.py"; then
               python3 "$RUNNER_TEMP/codeql_filter.py"
             else

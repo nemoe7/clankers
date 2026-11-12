@@ -55,7 +55,7 @@ jobs:
       NUU_REPOS: ${{ inputs.nuu_repos }}
       NEMOIZER_REPOS: ${{ inputs.nemoizer_repos }}
     steps:
-      - name: Check Out Source Repository
+      - name: Check Out Source Repo
         uses: actions/checkout@v7
         with:
           persist-credentials: false

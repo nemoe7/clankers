@@ -55,16 +55,16 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      # The summary comment on a failing review needs the pull request scope.
+      # The summary comment on a failing review needs the PR scope.
       pull-requests: write
     steps:
-      - name: Check Out Repository
+      - name: Check Out Repo
         uses: actions/checkout@v7
 
       - name: Review Dependency Changes
         uses: actions/dependency-review-action@v5
         with:
-          # Repository threshold: high and critical advisories fail the review. The
+          # Repo threshold: high and critical advisories fail the review. The
           # dependency graph covers package-lock.json and the workflow action pins.
           fail-on-severity: high
           comment-summary-in-pr: on-failure
