@@ -47,6 +47,15 @@ from nemo_rules import (
 from nemo_runner import run_with_timeouts
 
 
+def activate_config(parser, targets, config_path=None, no_config=False):
+  """Load the discovered or named config as the active config, or exit with usage."""
+  try:
+    nemo_config.BASE_CONFIG = load_config(targets, config_path, no_config)
+  except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
+    parser.error(str(error))
+  nemo_config.ACTIVE_CONFIG = nemo_config.BASE_CONFIG
+
+
 def prose_main(argv=None):
   parser = argparse.ArgumentParser(description="Review explicitly scoped prose counts.")
   parser.add_argument("targets", nargs="+")
@@ -60,6 +69,7 @@ def prose_main(argv=None):
   for target in arguments.targets:
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
+  activate_config(parser, arguments.targets)
   findings, coverage, errors = [], [], []
   for path in walk(arguments.targets, []):
     text = text_file(path)
@@ -106,6 +116,7 @@ def review_tests_main(argv=None):
   for target in args.targets:
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
+  activate_config(parser, args.targets)
   try:
     result = review_tests(args.targets)
   except ValueError as error:
@@ -176,13 +187,7 @@ def main(argv=None):
   for target in targets:
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
-  try:
-    nemo_config.BASE_CONFIG = load_config(
-      targets, arguments.config, arguments.no_config
-    )
-  except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
-    parser.error(str(error))
-  nemo_config.ACTIVE_CONFIG = nemo_config.BASE_CONFIG
+  activate_config(parser, targets, arguments.config, arguments.no_config)
   context = (
     arguments.context
     if arguments.context is not None

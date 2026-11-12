@@ -7,7 +7,6 @@ from pathlib import Path
 import nemo_config
 from nemo_config import match_glob
 
-# The rotation table names the avoided words, so its own rows never flag.
 SKIP_DIRS = {
   ".pytest_cache",
   ".git",
