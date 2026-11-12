@@ -1,10 +1,10 @@
 # V2 state backup and clear contract
 
-This document defines planned behavior. The v2 userscript, container backup, and clear flow are not implemented yet.
+This document defines planned behavior. The v2 userscript, container backup, and clear flow do not exist yet.
 
 ## Discovery and backup
 
-1. The userscript discovers the active steering URL and sends it to the Docker container.
+1. The userscript discovers the active steering URL and sends it to a Docker container.
 2. The container connects to steering and copies a full state snapshot with its cursor.
 3. The container uses WebSocket to receive notifications and copy every state change, including deletions.
 4. After reconnecting, it reconciles a full snapshot so missed changes and deletions do not leave an inconsistent copy.
@@ -12,7 +12,7 @@ This document defines planned behavior. The v2 userscript, container backup, and
 
 ## Clear and restore
 
-- Keep a pre-clear restore point when a backup can be made. Do not replace that point with the empty post-clear state.
+- Keep a pre-clear restore point when a backup is possible. Do not replace that point with the empty post-clear state.
 - If Docker cannot confirm a complete backup, warn but still allow clear. Causes include disconnection, full storage, and failed file verification.
 - Restore uses an explicitly selected backup. A backup does not automatically replace live state.
 

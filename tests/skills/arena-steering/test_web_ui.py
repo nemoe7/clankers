@@ -932,7 +932,7 @@ def test_assets_bundle_fonts_styles_and_es_modules() -> None:
   assert "node.textContent !== text" in timestamps_js
   assert "setInterval" not in timestamps_js
 
-  # Finished runs arrive as a server change event. Only agent health is polled.
+  # Finished runs arrive as a server change event. The UI polls only agent health.
   intervals = re.findall(r"setInterval\(\(\) => \{(.*?)\},\s*\d+\)", app_js, re.DOTALL)
   assert len(intervals) == 1
   assert "getHealthWithConnection" in intervals[0]

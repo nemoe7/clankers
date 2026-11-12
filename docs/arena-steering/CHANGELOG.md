@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.10]
+
+### Changed
+
+- Reword code comments and docstrings in `assets/` and `scripts/` to plain style, with no behavior change.
+
 ## [2.3.9]
 
 ### Changed
@@ -18,7 +24,7 @@ This log has no Unreleased section.
 
 ### Fixed
 
-- Record the `run logs` paging and search flags, the `run rerun` command, and the merged survey clause in the refs baseline.
+- Record `run logs` paging and search flags, the `run rerun` command, and the merged survey clause in the refs baseline.
 
 ## [2.3.7]
 
@@ -64,7 +70,7 @@ This log has no Unreleased section.
 
 ### Changed
 
-- Print one exit footer line with the calls left, the unacked counts, and the unseen notes. It replaces the per-command countdown and the non-blocking line.
+- Print one exit footer line with calls left, unacked counts, and unseen notes. It replaces the per-command countdown and the non-blocking line.
 
 ## [2.3.1]
 
@@ -115,7 +121,7 @@ This log has no Unreleased section.
 ### Fixed
 
 - Write a launcher with its own library and font configuration instead of symlinking the bare binary.
-- Drop the browser test gates on `ARENA_STEERING_CHROMIUM` and `CHROMIUM_BIN` so the tests use the default browser.
+- Drop browser test gates on `ARENA_STEERING_CHROMIUM` and `CHROMIUM_BIN` so tests use the default browser.
 - Keep retrying the browser connection after both transports drop, with no backoff, so the page recovers without a refresh.
 - Serve the cached visible window after the hidden toggle turns off, so the next polls make no `/messages` request until the message revision changes.
 - Expire that cached window when the health revision moves past it, so a new message or ack still reaches the page after a toggle.
@@ -230,7 +236,7 @@ This log has no Unreleased section.
 - `SKILL.md`, `references/cli.md`, `docs/arena-steering/README.md`: Use `steer run start` for supported long-running jobs and task gates, and keep persistent services on the platform's `start_process` path.
 - Remove field ID chips from report input cards.
 - Check the violation form's optional reason control and label focus without a prose assertion suppression.
-- Preserve report source paths and message parent links when task or report IDs are renamed.
+- Preserve report source paths and message parent links when a rename changes task or report IDs.
 
 ## [2.2.4]
 
@@ -297,7 +303,7 @@ This log has no Unreleased section.
 
 - Enforce `{repo} - Steering` as the `start_process` name for `steer serve`.
 
-- Require an explicit task size whenever task details are added or removed.
+- Require an explicit task size whenever a change adds or removes task details.
 
 - Follow Steering's returned task order. Require `-z` and the 120-character cap for every task-detail change.
 
@@ -689,7 +695,7 @@ This log has no Unreleased section.
 
 - `store.py`: Order messages and pages by write time and ID. Keep old insertion order when replacing legacy sequences, and retain write times across state sync.
 
-- `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references, and retain staged files that were never referenced.
+- `server.py`: List only uploads referenced by surviving state. After an accepted synced deletion, remove orphaned files with no surviving references, and retain staged files that no state ever referenced.
 
 ### Fixed
 
@@ -757,7 +763,7 @@ This log has no Unreleased section.
 
 - `pre.py`: Block `cat`, `grep`, `head`, `tail`, and `rg` on the bible, because those commands read a file in part.
 
-- `pre.py`, `cli.py`: Run the shell hook through a step registry. Each check is its own class, and `PIPELINE` orders them, so a check can be added, dropped, or tweaked in one line.
+- `pre.py`, `cli.py`: Run the shell hook through a step registry. Each check is its own class, and `PIPELINE` orders them, so one line adds, drops, or tweaks a check.
 
 - `services.py`: List pending message and answer IDs without marking them seen.
 

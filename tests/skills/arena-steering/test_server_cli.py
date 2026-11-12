@@ -2555,7 +2555,7 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   assert code == 0
   assert REPORT_ID_PORT in out
 
-  # Dismissed report is evicted from active store while answers survive on republish.
+  # Dismissal evicts the report from the active store while answers survive republish.
   recheck_store = SqliteStore(state_dir / "state.sqlite3")
   assert recheck_store.get_report(REPORT_ID_PORT) is None
   recheck_store.close()
