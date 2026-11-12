@@ -71,15 +71,10 @@
 - MUST name the failure each proposed amendment prevents.
 - Apply this section's AGENTS.md proposal and approval requirements to all agent-facing files.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing any clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause with a fenced `diff` block per changed clause.
-  - Put `Final clause:` with the exact final clause verbatim below its `diff` block, without diff markup, backticks, or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
-  - In each `diff` block, prefix removed lines with `-` and inserted lines with `+`; keep unchanged context verbatim, and omit change labels.
-  - Omit only unchanged context; never replace changed clause text with `...`.
-  - Never wrap clauses in backticks in proposals, acks, and reports.
-  - Each clause takes approve, reject, or custom (rendered as fielded report options on Arena).
-  - Put its options directly under its clause, and start a new fenced `diff` block for the next clause under the same file heading.
-  - Put each clause's `diff` block, Reason, and Final clause above the form fields; a form without them is not a proposal.
-  - List per-clause Citations: sub-items as `<rules/GUIDELINES.md or system-prompts/GUIDELINES.md>, Section <N> <Title>: "<guideline rule text>"` and `Failure:`.
+- Before editing any clause, use [Kilo amendment template](maintenance/amendment-template.md) on Kilo or other harnesses, or [Arena amendment template](maintenance/amendment-template-arena.md) on Arena; wait for approval before editing.
+  - Keep the existing code-change exception.
+  - For prose-only changes, structural validators and Markdown lint replace red/green executable tests.
+  - Kilo/Plannotator uses annotations and approval; Arena uses Steering fielded reports.
   - Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.

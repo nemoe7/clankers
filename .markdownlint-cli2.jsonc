@@ -9,6 +9,8 @@
     "!gpt-plugins/refs/**/!(README).md",
     "!system-prompts/**/!(README).md",
     "!docs/archive/**/!(README).md",
+    "!maintenance/amendment-template.md",
+    "!maintenance/amendment-template-arena.md",
     "!.agents/**",
     "!.kilo/**"
   ],

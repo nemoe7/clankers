@@ -12,7 +12,20 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Require a TODO list for every implementation task through `todowrite` (`rules/refs/KILO.md`, `rules/KILO.md`).
+- Route amendments to platform-specific templates (`AGENTS.md`).
+- Split amendment templates by review surface (`maintenance/amendment-template.md`, `maintenance/amendment-template-arena.md`).
+- Use Kilo/Plannotator annotations and approval, and use Arena Steering fielded reports.
+
+#### maintenance
+
+- Exclude amendment proposal templates from Markdown lint (`.markdownlint-cli2.jsonc`).
+
+### Added
+
+#### maintenance
+
+- Introduce Kilo/Plannotator amendment proposal template (`maintenance/amendment-template.md`).
+- Introduce Arena Steering amendment proposal template with the final clause verbatim as the approval option label (`maintenance/amendment-template-arena.md`).
 
 ## 2026-11-11
 
