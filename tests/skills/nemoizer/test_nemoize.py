@@ -1705,9 +1705,10 @@ def test_subcommands_apply_discovered_config_exclusions(tmp_path, subcommand, na
     Path(row["path"]).as_posix() for row in json.loads(configured.stdout)["coverage"]
   } == {f"docs/archive/{name}"}
 
-  missing = run(subcommand, "--config", "missing.toml", "docs", cwd=tmp_path)
+  absent = "missing.toml"
+  missing = run(subcommand, "--config", absent, "docs", cwd=tmp_path)
   assert missing.returncode == 2
-  assert "config file does not exist" in missing.stderr
+  assert absent in missing.stderr
 
 
 def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path):
