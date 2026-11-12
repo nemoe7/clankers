@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-12
+
+### Changed
+
+#### rules
+
+- Require a TODO list for every implementation task through `todowrite` (`rules/refs/KILO.md`, `rules/KILO.md`).
+
 ## 2026-11-11
 
 ### Changed
