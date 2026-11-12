@@ -5,24 +5,16 @@
 - MUST apply these repository rules to every task and session here unless explicit user chat instructions override them.
 - A bare imperative is a hard rule. MUST, NEVER, and ALWAYS restate the hardest ones; prefer marks a soft rule.
 
-## Arena-specific instructions
-
-- ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
-- Read maintenance/README.md for the general procedure, the token-measurement note and the steering history.
-- Only Arena agents MUST publish a proposal through the `arena-steering` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
-- Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
-
 ## Constitution
 
 - Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
-- NEVER claim a check you did not run.
 - For each dependency advisory, check whether a later dependency version fixes it; report it only when a fix is available, and otherwise ignore it.
 - Compression removes words, NEVER rules.
 - New clause: squash only that new line.
 - Amended clause: squash only the affected line.
-- Deleted clause: attempt one squash and keep whichever budget is lower.
+- Deleted clause: attempt one full squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
-- Stage only task-related files; leave unrelated and user-owned files unstaged.
+- Stage only task-related files; leave unrelated files unstaged.
 - Keep one dated entry per date in `docs/CHANGELOG.md` for `rules/`, `automations/`, `system-prompts/`, and `maintenance/`, extending it while the date holds.
 - Use dates as versions in `docs/CHANGELOG.md` (`## YYYY-MM-DD`, with no bracket and no repeated date), following `docs/archive/CHANGELOG.md`, and use SemVer headings without dates (`## [X.Y.Z]`) in every module changelog, anywhere it lives.
 - Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
@@ -31,24 +23,20 @@
 
 ## Precedence
 
-- Guide for agents working in this repository: these rules apply to every task and session here, whether or not a prompt repeats them.
 - They outrank skill and plugin instructions.
 - An explicit user instruction in chat outranks this file, confirmed in one line.
 
 ## Setup
 
-- Your first action in a new session is to read this file end-to-end.
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
-  - Mirror task-related source changes into installed copies in this repository without separate user authorization.
-  - Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
+- Mirror task-related source changes into installed copies in this repository without separate user authorization.
+- Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
 
 ## Glossary
 
 - arena = [ARENA.md](ARENA.md)
 - house = this repository; house rules = root AGENTS.md
 - arena suite = ARENA.md and arena-steering files
-
-Read these first:
 
 - [README.md](README.md) — budgets, compression procedure, layout
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — rule, prompt, automation, and maintenance history
@@ -57,20 +45,11 @@ Read these first:
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
 
-## Repository type
-
-- Treat this as a rules/skills/workflows repository with maintenance build tooling and tests.
-- `maintenance/check.py` needs `markdown-it-py` and the npm package `gpt-tokenizer`.
-- It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
-  - It also checks refs/live rule parity and the root `ARENA.md` copy.
-- `.github/workflows/ci.yml` runs `python maintenance/check.py --update` on PRs targeting any branch, except changes limited to its `paths-ignore` list, and after every push to `main`.
-- It runs Ruff at the version `pyproject.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
-
 ## Verification
 
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `pyproject.toml` pins.
-3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute.yml` pushes to the target repositories.
+3. `maintenance/check.py`; add `--update` to refresh README measurements.
 4. Run only the tests and validators that cover the changed files instead of a repository-wide validation.
 
 ## Rules
@@ -81,8 +60,7 @@ Read these first:
   - Keep compressed live copies in `rules/kilo/`, each with a blank first line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 
 - Amend rules/refs/ first, then use [squash](skills/squash/SKILL.md) for the new or affected live line. Apply the result to rules/ and, for ChatGPT fields, rules/wenyan/.
-  - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
-- The `docs/` changelogs are the only ledgers, with no separate amendment file.
+  - On a deletion, attempt one full file squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - No size diffs or budget changes in `docs/CHANGELOG.md` or `docs/**/CHANGELOG.md`.
 - Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md), cite at least one of its sections in the proposal, and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
 
@@ -93,7 +71,7 @@ Read these first:
 - MUST name the failure each proposed amendment prevents.
 - Apply this section's AGENTS.md proposal and approval requirements to all agent-facing files.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing a clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause with a fenced `diff` block per changed clause.
+- Before editing any clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause with a fenced `diff` block per changed clause.
   - Put `Final clause:` with the exact final clause verbatim below its `diff` block, without diff markup, backticks, or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
   - In each `diff` block, prefix removed lines with `-` and inserted lines with `+`; keep unchanged context verbatim, and omit change labels.
   - Omit only unchanged context; never replace changed clause text with `...`.
@@ -156,16 +134,10 @@ Read these first:
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
 - Merges MUST be rebase merges: rebase onto the target, then merge; no merge commit.
-- A commit call NEVER shares a shell line with the gates that judge it.
 
 ## Boundaries
 
 - Add no further CI workflows, dependency manifests, test scaffolding, or tooling installs unless explicitly requested.
-- Treat installed rule copies as read-only; installing them is human maintenance.
+- Treat installed rule copies as read-only.
 - Review changes directly in the diff; every changed file belongs to the task.
 - Keep scratch files, scripts, and generated plan files out of every commit.
-
-## When in doubt
-
-- Smallest change that holds: make the requested change, run the gates above, and stop.
-- When that does not settle it, stop and ask rather than improvise.
