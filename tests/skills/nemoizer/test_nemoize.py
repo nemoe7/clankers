@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path, PureWindowsPath
 
+import nemo_assertions
 import nemo_config
 import nemo_detectors
 import nemo_files
@@ -394,7 +395,7 @@ def test_javascript_parsers_count_crlf_as_one_line_break():
   source = "// one\r\n// two\r\nassert.equal(panel.width, 320);\r\n"
   assert [first for _, first, _ in prose.javascript_comments(source)] == [1, 2]
   assert [span[0][0] for span in prose.javascript_comment_spans(source)] == [1, 2]
-  pairs = nemoize.javascript_pairs(source)["pairs"]
+  pairs = nemo_assertions.javascript_pairs(source)["pairs"]
   assert [pair["line"] for pair in pairs] == [3]
 
 
@@ -685,7 +686,7 @@ def test_nmt200_zero_measurements_are_exempt(tmp_path):
     "assert panel.width == 0\nassert panel.width == 0.0\nassert panel.width == 1\n",
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 3)]
 
 
@@ -706,7 +707,7 @@ def test_nmt200_zero_measurements_are_exempt(tmp_path):
 def test_nmt200_measurement_forms(tmp_path, suffix, assertion):
   source = tmp_path / f"test_measurements.{suffix}"
   source.write_text(assertion + "\n", encoding="utf-8")
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert not reviewed["errors"]
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 1)]
 
@@ -732,7 +733,7 @@ def test_nmt200_measurement_forms_keep_relations_and_constants(
 ):
   source = tmp_path / f"test_measurements.{suffix}"
   source.write_text(assertion + "\n", encoding="utf-8")
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert not reviewed["errors"]
   assert not reviewed["findings"]
 
@@ -758,7 +759,7 @@ def test_nmt200_explicit_measurement_setup(tmp_path, setup, assertion, flagged):
     "  " + line for line in (setup + "\nassert " + assertion).splitlines()
   )
   source.write_text("def test_size():\n" + body + "\n", encoding="utf-8")
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert not reviewed["errors"]
   assert bool(reviewed["findings"]) is flagged
 
@@ -770,7 +771,7 @@ def test_nmt200_explicit_setup_stays_local_and_precedes_assertion(tmp_path):
     "def test_other():\n  assert height == 200\n  set_height(200)\n",
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 4)]
 
 
@@ -791,7 +792,7 @@ def test_nmt200_explicit_javascript_setup(tmp_path, setup, assertion, flagged):
     "test('size', () => { " + setup + " expect(" + assertion + ").toBe(200); });\n",
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert not reviewed["errors"]
   assert bool(reviewed["findings"]) is flagged
 
@@ -802,7 +803,7 @@ def test_nmt200_setup_does_not_leak_between_conditional_branches(tmp_path):
     "def test_size():\n  if flag:\n    set_height(200)\n  else:\n    assert height == 200\n",
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [("NMT200", 5)]
 
 
@@ -833,7 +834,7 @@ def test_nmt300_detects_real_sleeps_and_exempts_bounded_polling(tmp_path):
     "  page.wait_for_timeout(4000)\n",
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [
     ("NMT300", 6),
     ("NMT300", 8),
@@ -877,7 +878,7 @@ def test_nmt300_javascript_exempts_fake_timers_and_bounded_polling(tmp_path):
     "});\n",
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert [(row["rule"], row["line"]) for row in reviewed["findings"]] == [
     ("NMT300", 3),
     ("NMT300", 6),
@@ -1339,7 +1340,7 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
     'def test_sample():\n  assert "three plain words" in result.stderr.strip()\n  assert check.measure(path) == 2\n',
     encoding="utf-8",
   )
-  reviewed = nemoize.review_tests([test_sample])
+  reviewed = nemo_assertions.review_tests([test_sample])
   assert {row["rule"] for row in reviewed["findings"]} == {"NMT100", "NMT200"}
 
 
@@ -2565,7 +2566,7 @@ def test_nmt200_module_defaults_are_not_explicit_test_inputs(
 ):
   source = tmp_path / f"test_defaults.{suffix}"
   source.write_text(source_text, encoding="utf-8")
-  reviewed = nemoize.review_tests([source])
+  reviewed = nemo_assertions.review_tests([source])
   assert not reviewed["errors"]
   assert [row["rule"] for row in reviewed["findings"]] == ["NMT200"]
 
@@ -2602,7 +2603,7 @@ def test_source_numeric_advisory_boundary(tmp_path, setup, expression, expected)
     + f"  assert {expression}\n",
     encoding="utf-8",
   )
-  findings = nemoize.review_tests([source])["findings"]
+  findings = nemo_assertions.review_tests([source])["findings"]
   numeric = [row for row in findings if row["category"] == "numeric_setting"]
   assert bool(numeric) == expected
   if expected:
@@ -2625,7 +2626,7 @@ def test_source_numeric_advisory_skips_uncertain_scope(tmp_path, prefix):
     + "def test_setting(settings=None):\n  assert settings.LIMIT == 42\n",
     encoding="utf-8",
   )
-  assert not nemoize.numeric_setting_findings(source, source.read_text())
+  assert not nemo_assertions.numeric_setting_findings(source, source.read_text())
 
 
 @pytest.mark.parametrize("language", ["py", "js"])
@@ -2661,11 +2662,13 @@ test('aliases', async () => {
 """
   )
   parsed = (
-    nemoize.python_pairs(source)
+    nemo_assertions.python_pairs(source)
     if language == "py"
-    else nemoize.javascript_pairs(source)
+    else nemo_assertions.javascript_pairs(source)
   )
-  found = [pair for pair in parsed["pairs"] if nemoize.category(pair) == "output_text"]
+  found = [
+    pair for pair in parsed["pairs"] if nemo_assertions.category(pair) == "output_text"
+  ]
   assert [pair["value"] for pair in found] == ["Copied output prose here"]
 
 
@@ -2700,10 +2703,10 @@ test('shadow', (expected) => {
 """
   )
   parsed = (
-    nemoize.python_pairs(source)
+    nemo_assertions.python_pairs(source)
     if language == "py"
-    else nemoize.javascript_pairs(source)
+    else nemo_assertions.javascript_pairs(source)
   )
   assert not [
-    pair for pair in parsed["pairs"] if nemoize.category(pair) == "output_text"
+    pair for pair in parsed["pairs"] if nemo_assertions.category(pair) == "output_text"
   ]

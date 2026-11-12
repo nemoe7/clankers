@@ -25,4 +25,5 @@ py-modules = [
   "nemo_config",
   "nemo_files",
   "nemo_detectors",
+  "nemo_assertions",
 ]

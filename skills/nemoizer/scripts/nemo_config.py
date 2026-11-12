@@ -9,6 +9,7 @@ import re
 import tomllib
 from pathlib import Path
 
+from markers import collect_markers
 from nemo_rotate import ROTATIONS, mask_protected_spans
 from nemo_rules import KNOWN_RULE_IDS
 from nemo_ui import NMU100_MAX_WORDS
@@ -369,3 +370,16 @@ def config_file_exclusions(path, config=None):
           code for code in KNOWN_RULE_IDS if _match_selectors(code, rules)
         )
   return disabled
+
+
+def exclusions(path, lines, audit=False):
+  """Collect every marker and the known rule IDs it suppresses."""
+  file_ids, line_ids, marks = collect_markers(
+    path, lines, KNOWN_RULE_IDS, ROTATIONS, audit=audit
+  )
+  return file_ids | config_file_exclusions(path), line_ids, marks
+
+
+def suppressed(code, ids, name=None):
+  """Return whether the active marker set suppresses a rule ID."""
+  return code in ids
