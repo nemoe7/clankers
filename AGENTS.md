@@ -2,24 +2,19 @@
 
 ## Use
 
-- MUST apply these repository rules to every task and session here unless explicit user chat instructions override them.
+- MUST apply these repository rules to every task and session here.
 - A bare imperative is a hard rule. MUST, NEVER, and ALWAYS restate the hardest ones; prefer marks a soft rule.
 
 ## Constitution
 
-- Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
 - For each dependency advisory, check whether a later dependency version fixes it; report it only when a fix is available, and otherwise ignore it.
 - Compression removes words, NEVER rules.
-- New clause: squash only that new line.
-- Amended clause: squash only the affected line.
-- Deleted clause: attempt one full squash and keep whichever budget is lower.
-- Use a Conventional Commit subject, no body.
+- Squash only the new or amended line; on a deletion, attempt one full squash and keep whichever budget is lower.
 - Stage only task-related files; leave unrelated files unstaged.
 - Keep one dated entry per date in `docs/CHANGELOG.md` for `rules/`, `automations/`, `system-prompts/`, and `maintenance/`, extending it while the date holds.
-- Use dates as versions in `docs/CHANGELOG.md` (`## YYYY-MM-DD`, with no bracket and no repeated date), following `docs/archive/CHANGELOG.md`, and use SemVer headings without dates (`## [X.Y.Z]`) in every module changelog, anywhere it lives.
+- Use dates as versions in `docs/CHANGELOG.md` (`## YYYY-MM-DD`, with no bracket, no repeated date, and no version numbers in entries), following `docs/archive/CHANGELOG.md`, and use SemVer headings without dates (`## [X.Y.Z]`) in every module changelog, anywhere it lives.
 - Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
 - Omit Unreleased.
-- Omit version numbers from `docs/CHANGELOG.md` entries.
 
 ## Precedence
 
@@ -48,8 +43,8 @@
 ## Verification
 
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
-2. `ruff check .` and `ruff format --diff .` at the version `pyproject.toml` pins.
-3. `maintenance/check.py`; add `--update` to refresh README measurements.
+2. `ruff format .`, then `ruff check .` and `ruff format --diff .` at the version `pyproject.toml` pins.
+3. `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets; add `--update` to refresh README measurements.
 4. Run only the tests and validators that cover the changed files instead of a repository-wide validation.
 
 ## Rules
@@ -60,7 +55,7 @@
   - Keep compressed live copies in `rules/kilo/`, each with a blank first line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 
 - Amend rules/refs/ first, then use [squash](skills/squash/SKILL.md) for the new or affected live line. Apply the result to rules/ and, for ChatGPT fields, rules/wenyan/.
-  - On a deletion, attempt one full file squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
+  - Keep refs uncompressed as the baseline.
 - No size diffs or budget changes in `docs/CHANGELOG.md` or `docs/**/CHANGELOG.md`.
 - Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md), cite at least one of its sections in the proposal, and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
 
@@ -71,22 +66,18 @@
 - MUST name the failure each proposed amendment prevents.
 - Apply this section's AGENTS.md proposal and approval requirements to all agent-facing files.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing any clause, use [Kilo amendment template](maintenance/amendment-template.md) on Kilo or other harnesses, or [Arena amendment template](maintenance/amendment-template-arena.md) on Arena; wait for approval before editing.
+- Before editing any clause, use [Kilo amendment template](maintenance/amendment-template.md) on Kilo or other harnesses, or [Arena amendment template](maintenance/amendment-template-arena.md) on Arena.
   - Keep the existing code-change exception.
   - For prose-only changes, structural validators and Markdown lint replace red/green executable tests.
   - Kilo/Plannotator uses annotations and approval; Arena uses Steering fielded reports.
   - Code changes need no proposal; keep them lean.
-- Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
-- Run an amendment proposal task first, before any other queued work.
-- NEVER commit or push report artifacts.
-- Ledger prose: neutral wording — actions, files, numbers; no narrative, rationale or story.
-- Every entry terse: one entry per event, no story between facts.
-- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST use `nemoizer`, falling back to ASD-STE100 and Humanizer when unavailable.
-- Chat text and reports: at most 3 sentences per block; keep terse.
+- Proposals come before any other task or queued work: in a turn that holds both, show every proposal first, then start tasks.
+- Ledger prose: neutral wording — actions, files, numbers; one terse entry per event; no narrative, rationale or story.
+- Chat text and reports: at most 3 sentences per block; concise on phone and vertical monitors; no essays unless strictly necessary; digestible.
 - No clause in a rule, skill, workflow or system-prompt file is added, amended, or deleted until the user approves the report; hold the work and say so in one line.
 - Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
 - For skills, restrict this section's clause-proposal and approval requirements to first-party agent-facing text; unchanged third-party copies are exempt.
-- Propose every clause from refs, including owner text, then squash approved wording into live and platform copies via [squash](skills/squash/SKILL.md).
+- Propose every clause from refs, including owner text.
 - A custom answer on a clause takes a fresh proposal of the new wording; the line lands only after that proposal is approved.
 - Report at the level the user approves from — the clause change and why, not a full implementation patch; the fenced `diff` block describes only the proposed clause.
 - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are NEVER pushed.
@@ -109,16 +100,15 @@
 - `name` matches its directory.
 - Record `metadata.upstream` for adapted skills.
 - The file stays under 500 lines.
-- A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to `docs/<skill>/CHANGELOG.md` or [docs/arena-quirks.md](docs/arena-quirks.md).
+- A skill holds only what an agent needs to use it; design decisions, background, rationale, and history go to `docs/<skill>/CHANGELOG.md` or [docs/arena-quirks.md](docs/arena-quirks.md).
 
 ## Style
 
 - 2-space indentation, overriding formatter defaults.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- Run `npx --yes markdownlint-cli2` from the repository root.
-  - **MD060 enabled**, **MD013 disabled**.
-- Python: Ruff, configured by `pyproject.toml`, which owns the selection and the pinned version; run `ruff format` before other local gates.
-- Prose style: write and edit the documentation prose of this repository (`docs/` and every `README.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
+- Markdownlint: **MD060 enabled**, **MD013 disabled**.
+- Python: Ruff, configured by `pyproject.toml`, which owns the selection and the pinned version.
+- Prose style: write and edit chat reports and the documentation prose of this repository (`docs/` and every `README.md`) with `nemoizer` (`skills/nemoizer/scripts/nemoizer`), falling back to ASD-STE100 and Humanizer when `nemoizer` is unavailable; both linters MUST pass on changed text.
   - Rules, skills and agent-facing files such as this one stay outside the linter's scope.
   - A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 
