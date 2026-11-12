@@ -2531,7 +2531,7 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
     state_dir, "task", "new", "-z", "3", "-S", "Empty scope", "empty-task", "Empty"
   )
   expected_error = "at least one detail"
-  assert code != 0 and expected_error in err
+  assert code != 0 and expected_error in err  # nonemo: NMT100
   code, out, _ = _run_cli(
     state_dir,
     "task",

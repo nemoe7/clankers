@@ -199,6 +199,7 @@ MODULE_TESTS = {
     "tests/skills/arena-steering/test_store.py",
     "tests/skills/arena-steering/test_services.py",
     "tests/skills/arena-steering/test_server_cli.py",
+    "tests/skills/arena-steering/test_cli_restructure.py",
     "tests/skills/arena-steering/test_survey.py",
     "tests/skills/arena-steering/test_web_ui.py",
     "tests/skills/arena-steering/test_messages_views.py",

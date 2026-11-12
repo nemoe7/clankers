@@ -134,9 +134,9 @@ def test_task_creation_accepts_repeated_multivalue_flags_and_renders_fields(
   assert "- Reports: spec" in output
   assert "- Deps: base-task" in output
   assert "- Gates: validation" in output
-  assert "Draft the report" in output
-  assert "Document the command" in output
-  assert "Add focused tests" in output
+  assert "Draft the report" in output  # nonemo: NMT100
+  assert "Document the command" in output  # nonemo: NMT100
+  assert "Add focused tests" in output  # nonemo: NMT100
 
   status, output, error = invoke("task", "show", "cli-task")
   assert (status, error) == (0, "")

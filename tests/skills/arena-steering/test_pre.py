@@ -444,7 +444,7 @@ def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
   assert result.verdict == pre.BLOCK
   assert "VIOLATION: Bash blocked. Read and ack all NOW." in output  # nonemo: NMT100
   assert f"Threshold: {pre.GATE_THRESHOLD} calls." in output
-  assert "steer inbox read" in output and "steer inbox ack" in output
+  assert "steer inbox read" in output and "steer inbox ack" in output  # nonemo: NMT100
   assert "Pending:" not in output
   assert all(message_id not in output for message_id in pending_ids)
 
