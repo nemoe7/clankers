@@ -1645,8 +1645,8 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   assert "ignored.md" in custom_run.stdout
   assert "AGENTS.md" in custom_run.stdout
   assert "ARENA.md" in custom_run.stdout
-  assert "sub/AGENTS.md" in custom_run.stdout
-  assert "sub/ARENA.md" in custom_run.stdout
+  assert str(Path("sub", "AGENTS.md")) in custom_run.stdout
+  assert str(Path("sub", "ARENA.md")) in custom_run.stdout
   assert "NMP100" not in custom_run.stdout
   assert "NMO902" not in custom_run.stdout
 
