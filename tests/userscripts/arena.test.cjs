@@ -3947,7 +3947,7 @@ function checkStateDownload(api, session, logging) {
   var counts = { notes: 12, tasks: 4 };
   var repo = "clankers";
   var branch = "main";
-  // The name carries the repository, then the branch, then the server's stamp and the record
+  // The name carries the repo, then the branch, then the server's stamp and the record
   // counts. Two repos and their branches never collide in one folder.
   assert.equal(
     stateFileName(repo, branch, "2026-10-06T06:12:33.123456+00:00", counts),
@@ -4112,8 +4112,8 @@ function checkStateDownload(api, session, logging) {
     stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
     "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
   );
-  // An ongoing session renders the repository as a bare chip without its owner. A slash-less slug-like span in the
-  // bar still names the repository for the selector and the fill. It never falls through to a header session token.
+  // An ongoing session renders the repo as a bare chip without its owner. A slash-less slug-like span in the
+  // bar still names the repo for the selector and the fill. It never falls through to a header session token.
   var bareBar = {
     querySelectorAll: function (selector) {
       if (selector === "span.truncate") return [{ textContent: "daedalus" }];
@@ -4153,7 +4153,7 @@ function checkStateDownload(api, session, logging) {
   };
   assert.equal(readSlug(promptDoc), "previous");
   // A new chat on /agent has no session bar. The composer's own selector row carries the
-  // repository chip ahead of the branch chip, and the fill reads it there.
+  // repo chip ahead of the branch chip, and the fill reads it there.
   var composerDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -4163,7 +4163,7 @@ function checkStateDownload(api, session, logging) {
   };
   assert.equal(readSlug(composerDoc), "clankers");
   assert.equal(stateRepo(composerDoc), "clankers");
-  // The leading chip is the repository, so a chip that is not the owner/repo form never
+  // The leading chip is the repo, so a chip that is not the owner/repo form never
   // answers. The title still carries the read.
   var branchChipDoc = {
     querySelector: function () { return null; },
@@ -4185,8 +4185,8 @@ function checkStateDownload(api, session, logging) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(branchFirstDoc), "clankers");
-  // A selected diff branch puts the session branch beside the repository chip. The tab title stays bare on that page.
-  // The branch wears the platform namespace. The chip read still names the repository with nothing else to fall back on.
+  // A selected diff branch puts the session branch beside the repo chip. The tab title stays bare on that page.
+  // The branch wears the platform namespace. The chip read still names the repo with nothing else to fall back on.
   var diffBranchDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -4219,7 +4219,7 @@ function checkStateDownload(api, session, logging) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(staleTitleDoc), "daedalus");
-  // While dialog holds page, header disappears and fill's saved slug names repository.
+  // While dialog holds page, header disappears and fill's saved slug names repo.
   // Branch stays empty.
   session.value = "clankers";
   assert.equal(stateRepo({ querySelector: function () { return null; } }), "clankers");
@@ -4249,7 +4249,7 @@ function checkStateDownload(api, session, logging) {
     JSON.stringify({ repo: "", branch: "" }),
   );
   // The bar leaves the page while a dialog holds it. With no saved slug either, the title
-  // still carries the repository this script wrote.
+  // still carries the repo this script wrote.
   session.value = null;
   assert.equal(
     stateRepo({ querySelector: function () { return null; }, title: "Arena | clankers \uD83D\uDCA4" }),
@@ -4259,7 +4259,7 @@ function checkStateDownload(api, session, logging) {
     stateRepo({ querySelector: function () { return null; }, title: "ChatGPT" }),
     "",
   );
-  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish. The conversation header still opens with the repository name, and its first word is the repository.
+  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish. The conversation header still opens with the repo name, and its first word is the repo.
   // The tab title is the reliable read, so it comes before the greppier header read.
   var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
   var headerDoc = {
@@ -4270,7 +4270,7 @@ function checkStateDownload(api, session, logging) {
     title: "Arena | other",
   };
   assert.equal(stateRepo(headerDoc), "other");
-  // With no title at all, the header read names the repository.
+  // With no title at all, the header read names the repo.
   var headerOnlyDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -4291,7 +4291,7 @@ function checkStateDownload(api, session, logging) {
   assert.equal(panelNeeded(true, false), true);
   assert.equal(panelNeeded(false, false), true);
   assert.equal(panelNeeded(false, true), false);
-  // The panel keeps its text, but the console carries only the error code and status.
+  // The panel keeps its text, but the console carries only error code and status.
   var errorLines = [];
   var restoreLog = console.error;
   console.error = function () { errorLines.push(JSON.stringify(Array.from(arguments))); };
@@ -4477,7 +4477,7 @@ function checkStateDownload(api, session, logging) {
 
   console.log("ok state download 32");
   // The session bar names an unpushed branch in a titled span. A pushed branch also has an
-  // anchor with a /tree/ href. The repository anchor carries no branch.
+  // anchor with a /tree/ href. The repo anchor carries no branch.
   const element = (tag, title, href) => ({
     tag: tag,
     getAttribute: (name) => (name === "title" ? title || null : name === "href" ? href || null : null),

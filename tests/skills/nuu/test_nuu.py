@@ -134,7 +134,7 @@ def test_ui_workflow_preserves_sources_and_reports_missing_evidence(tmp_path):
   design_doc.write_text("# Design\n", encoding="utf-8")
   assert not nuu.lint(root)["findings"]
 
-  # Retired NU* codes are rejected as unknown suppression codes.
+  # The linter rejects retired NU* codes as unknown suppression codes.
   page.write_text('<img src="art.svg"> <!-- nonuu: NUL0010 -->\n', encoding="utf-8")
   assert nuu.lint(root)["findings"]
   page.write_text('<img src="art.svg"> <!-- nonuu: ACC001 -->\n', encoding="utf-8")
