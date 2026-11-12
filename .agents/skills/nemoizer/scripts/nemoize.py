@@ -13,9 +13,6 @@ import tomllib
 from pathlib import Path
 
 import config
-from markers import (
-  audit_lines,
-)
 from assertions import is_test_file, review_tests
 from config import (
   PARAGRAPH_CAP,
@@ -24,11 +21,8 @@ from config import (
   load_config,
 )
 from files import text_file, walk
-from report import (
-  describe_finding,
-  format_finding,
-  format_summary,
-  is_review,
+from markers import (
+  audit_lines,
 )
 from prose.review import (
   docs_drift_findings,
@@ -40,11 +34,18 @@ from prose.review import (
 from prose.rotate import (
   rotate,
 )
+from report import (
+  describe_finding,
+  format_finding,
+  format_summary,
+  is_review,
+)
+from runner import run_with_timeouts
+
 from rules import (
   ADVISORY_RULE_IDS,
   TEST_RULE_IDS,
 )
-from runner import run_with_timeouts
 
 
 def add_config_arguments(parser):
@@ -300,9 +301,7 @@ def main(argv=None):
       for row in result["rows"]
     )
     if arguments.audit:
-      findings.extend(
-        docs_drift_findings(path, text, config.ACTIVE_CONFIG.get("root"))
-      )
+      findings.extend(docs_drift_findings(path, text, config.ACTIVE_CONFIG.get("root")))
   try:
     result = review_tests(tests)
   except ValueError as error:

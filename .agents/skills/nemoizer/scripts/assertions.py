@@ -12,8 +12,9 @@ from pathlib import Path
 
 from config import exclusions, file_scope, suppressed
 from files import text_file, walk
-from rules import TEST_RULE_IDS
 from prose.extract import run_node
+
+from rules import TEST_RULE_IDS
 
 MEASUREMENTS = {
   "width",

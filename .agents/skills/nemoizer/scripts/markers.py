@@ -9,7 +9,7 @@ from pathlib import Path
 
 MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 MARKER_SPAN = re.compile(r"\bnonemo:[ \t]*.*?(?=-->|\*/|;|\s|$|\bnonemo:)[ \t]*;?")
-INLINE_CODE = re.compile(r"(?P<fence>`+)(?!`).*?(?P=fence)(?!`)") 
+INLINE_CODE = re.compile(r"(?P<fence>`+)(?!`).*?(?P=fence)(?!`)")
 
 
 def head_marker(line, position=None, rotations=()):
@@ -99,9 +99,7 @@ def is_advisory_finding(finding, advisory_rule_ids):
   first = finding.splitlines()[0]
   parts = first.rsplit(": ", 1)[-1].split()
   token = parts[0].strip("[]") if parts else ""
-  return (
-    token in advisory_rule_ids or "(review)" in first
-  )
+  return token in advisory_rule_ids or "(review)" in first
 
 
 def audit_lines(marks, findings, advisory_rule_ids):

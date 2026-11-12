@@ -1,1 +1,1 @@
-"""Nemoizer prose modules."""
+"""nemoizer prose modules."""

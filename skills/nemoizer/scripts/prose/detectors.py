@@ -3,6 +3,7 @@
 import re
 
 from config import MIN_THE_COUNT, THE_DENSITY_CAP
+
 from prose.markdown import (
   prose_block_matches,
   prose_blocks,

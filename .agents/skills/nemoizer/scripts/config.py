@@ -9,10 +9,12 @@ import re
 import tomllib
 from pathlib import Path
 
-from rules import KNOWN_RULE_IDS
+from markers import collect_markers
+from prose.extract import COMMENT_BLOCK_CAP
 from prose.rotate import ROTATIONS, mask_protected_spans
 from prose.ui import NMU100_MAX_WORDS
-from prose.extract import COMMENT_BLOCK_CAP
+
+from rules import KNOWN_RULE_IDS
 
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 

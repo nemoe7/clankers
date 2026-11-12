@@ -8,7 +8,6 @@ from itertools import pairwise
 from pathlib import Path
 
 import config
-from markers import MARKER, MARKER_SPAN
 from config import (
   HEADING_SENTENCE_CAP,
   LIST_SENTENCE_CAP,
@@ -19,37 +18,16 @@ from config import (
   file_scope,
   suppressed,
 )
+from files import text_file, walk
+from markers import MARKER, MARKER_SPAN
+from report import format_finding
+
 from prose.detectors import (
   DETECTORS,
   UI_STRING_DASH_RE,
   prose_semicolons,
   prose_the_density,
 )
-from files import text_file, walk
-from prose.markdown import (
-  blank_inline_comments,
-  fence_states,
-  fenced_lines,
-  prose_blocks,
-  prose_counts,
-)
-from report import format_finding
-from prose.rotate import (
-  KEEP_LOWER,
-  ROTATIONS,
-  collapse_list_articles,
-  mask_protected_spans,
-  rotate,
-  rotation_legend,
-)
-from rules import (
-  ADVISORY_RULE_IDS,
-  LINE_PROSE_RULE_IDS,
-  NMU_RULE_IDS,
-  PROSE_RULE_IDS,
-  RULE_IDS,
-)
-from prose.ui import NMU100_MAX_WORDS, NMU200_SUFFIXES, nmu100_findings, nmu200_findings
 from prose.extract import (
   COMMENT_BLOCK_CAP,
   comment_blocks,
@@ -62,6 +40,29 @@ from prose.extract import (
   slash_comments,
   ui_label_spans,
   workflow_name_spans,
+)
+from prose.markdown import (
+  blank_inline_comments,
+  fence_states,
+  fenced_lines,
+  prose_blocks,
+  prose_counts,
+)
+from prose.rotate import (
+  KEEP_LOWER,
+  ROTATIONS,
+  collapse_list_articles,
+  mask_protected_spans,
+  rotate,
+  rotation_legend,
+)
+from prose.ui import NMU100_MAX_WORDS, NMU200_SUFFIXES, nmu100_findings, nmu200_findings
+from rules import (
+  ADVISORY_RULE_IDS,
+  LINE_PROSE_RULE_IDS,
+  NMU_RULE_IDS,
+  PROSE_RULE_IDS,
+  RULE_IDS,
 )
 
 
@@ -324,9 +325,7 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
     for item in paragraphs:
       number, count, kind = item if len(item) == 3 else (*item, "paragraph")
       if kind == "heading":
-        cap = config.ACTIVE_CONFIG.get(
-          "heading_sentence_cap", HEADING_SENTENCE_CAP
-        )
+        cap = config.ACTIVE_CONFIG.get("heading_sentence_cap", HEADING_SENTENCE_CAP)
         status = "review"
       elif kind == "list":
         cap = config.ACTIVE_CONFIG.get("list_sentence_cap", LIST_SENTENCE_CAP)
@@ -531,9 +530,7 @@ def _source_prose(path, text, context, paragraph_cap):
         if (label_text, first) not in seen_ui:
           seen_ui.add((label_text, first))
           ui_spans.append((label_text, first, last))
-      nmu_cap = int(
-        config.ACTIVE_CONFIG.get("nmu100_max_words") or NMU100_MAX_WORDS
-      )
+      nmu_cap = int(config.ACTIVE_CONFIG.get("nmu100_max_words") or NMU100_MAX_WORDS)
       for ln, label_text, word, word_count in nmu100_findings(ui_spans, cap=nmu_cap):
         if 0 < ln <= len(line_ids) and suppressed(code, line_ids[ln - 1]):
           continue
