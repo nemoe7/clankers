@@ -21,7 +21,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import check
+from checks.skills import EXPECTED_SKILL_FIELDS, NAME_RE, parse_frontmatter
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "gpt-plugins"
@@ -162,9 +162,7 @@ def archive_contents(skill: str | None = None) -> dict[str, bytes]:
     raise ValueError(f"Unknown skill: {skill}")
   manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
   _, ship_dir = skill_roots(skill)
-  metadata, _ = check.parse_frontmatter(
-    (ship_dir / "SKILL.md").read_text(encoding="utf-8")
-  )
+  metadata, _ = parse_frontmatter((ship_dir / "SKILL.md").read_text(encoding="utf-8"))
   info = SKILL_INTERFACES[skill]
   manifest.update(name=skill, description=metadata["description"])
   manifest["extensions"]["com.openai"]["interface"].update(
@@ -341,16 +339,16 @@ def check_skill(root: Path, name: str, errors: list[str]) -> None:
     return
 
   text = path.read_text(encoding="utf-8")
-  values, frontmatter_errors = check.parse_frontmatter(text)
+  values, frontmatter_errors = parse_frontmatter(text)
 
   errors.extend(f"{label}: {error}" for error in frontmatter_errors)
 
-  unknown = set(values) - check.EXPECTED_SKILL_FIELDS
+  unknown = set(values) - EXPECTED_SKILL_FIELDS
 
   if unknown:
     errors.append(f"{label}: unknown frontmatter fields: {sorted(unknown)}")
 
-  if values.get("name") != name or not check.NAME_RE.fullmatch(values.get("name", "")):
+  if values.get("name") != name or not NAME_RE.fullmatch(values.get("name", "")):
     errors.append(f"{label}: invalid name {values.get('name')!r}, expected {name!r}")
 
   description = values.get("description", "")

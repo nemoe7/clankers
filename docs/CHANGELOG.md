@@ -19,6 +19,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Exclude amendment proposal templates from Markdown lint (`.markdownlint-cli2.jsonc`).
+- Split `check.py` into the `maintenance/checks/` package (`maintenance/check.py`, `maintenance/gpt_plugins/gate_gpt_plugins.py`, `maintenance/workflows/changed_paths.py`, `tests/maintenance/checks/`). It uses an injected `Repo`, one module per concern, and stdlib logging with the same output text.
+- Re-measure a token budget file after it changes inside one run (`maintenance/checks/measure.py`).
 - Discover clause files by glob instead of a hand-listed budget map (`maintenance/check.py`, `README.md`, `maintenance/README.md`). Measure `o200k_base` tokens by default and count characters only for the two ChatGPT fields.
 - Rename the Nemoize stage in `check.py` and its summary, replacing the "domains" wording, and rename the Nemoize module key (`maintenance/check.py`, `maintenance/workflows/changed_paths.py`).
 

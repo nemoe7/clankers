@@ -106,6 +106,21 @@ The checker reports every problem it finds in:
 - The byte identity of the root `ARENA.md` copy and `rules/ARENA.md`.
 - Tracked Git paths whose names differ only by letter case.
 
+### Layout
+
+`maintenance/check.py` only calls `checks.cli.main`. One module in `maintenance/checks/` owns each concern:
+
+| Module | Concern |
+| --- | --- |
+| `repo.py` | `Repo(root)`, the paths every check reads. Tests pass a temporary root. |
+| `report.py` | Logging, `run_logged`, and `run_check`. |
+| `measure.py` | One measurer per budget type, `o200k_base` tokens and Unicode characters. |
+| `budgets.py` | Budget file discovery, the README table, and the character caps. |
+| `parity/` | Rules, system prompts, skill refs, and root copies. |
+| `skills.py`, `links.py`, `paths.py` | Skill frontmatter, internal links, and case collisions. |
+| `prose.py` | The `nemoize` stage. |
+| `cli.py` | `STAGES`, the run order. Add a check by adding one `(name, function)` pair. |
+
 ## Prose lint
 
 ```bash
@@ -129,7 +144,7 @@ python3 -m pip install -r requirements.txt
 npm ci
 ```
 
-`--update` finds each clause file by the `BUDGET_GLOBS` patterns and rebuilds the budget table before checking, so added and retired files need no hand-edited row. Every file measures `o200k_base` tokens except the two ChatGPT fields, which count Unicode characters (`MEASURE_OVERRIDES`). Test it with `python3 -m pytest tests/maintenance/test_check.py`.
+`--update` finds each clause file by the `BUDGET_GLOBS` patterns and rebuilds the budget table before checking, so added and retired files need no hand-edited row. Every file measures `o200k_base` tokens except the two ChatGPT fields, which count Unicode characters (`MEASURE_OVERRIDES`). Test it with `python3 -m pytest tests/maintenance/checks`.
 
 ## PR checks
 

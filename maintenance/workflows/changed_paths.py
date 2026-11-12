@@ -231,7 +231,14 @@ MODULE_TESTS = {
     "tests/maintenance/workflows/test_gate_workflows.py",
     "tests/github/actions/test_distribute_sync.py",
   ),
-  "Repository Prose and Validation": ("tests/maintenance/test_check.py",),
+  "Repository Prose and Validation": (
+    "tests/maintenance/checks/test_checks_budgets.py",
+    "tests/maintenance/checks/test_checks_cli.py",
+    "tests/maintenance/checks/test_checks_measure.py",
+    "tests/maintenance/checks/test_checks_parity.py",
+    "tests/maintenance/checks/test_checks_report.py",
+    "tests/maintenance/checks/test_checks_structure.py",
+  ),
 }
 # Archived tests remain available for historical reference but are not CI owners.
 ARCHIVED_TEST_PREFIX = "docs/archive/"
@@ -278,13 +285,14 @@ MODULE_PATHS = {
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
+    "maintenance/checks/*",
     "nemoizer.toml",
     "pyproject.toml",
     ".markdownlint*",
     "README.md",
     "rules/*",
     "skills/*/SKILL.md",
-    "tests/maintenance/test_check.py",
+    "tests/maintenance/checks/*",
   ),
 }
 MODULE_NODE_TESTS = {
