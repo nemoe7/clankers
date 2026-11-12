@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Rename the Nemoize stage in `check.py` and its summary, replacing the "domains" wording, and rename the Nemoize module key (`maintenance/check.py`, `maintenance/workflows/changed_paths.py`).
 - Reword maintenance comments, docstrings, and READMEs after a nemoizer advisory review, with no behavior change.
 - Register focused Nemoizer test files in `maintenance/workflows/changed_paths.py`.
+- Check experimental Wenyan copies in refs/live parity (`maintenance/checks/parity/rules.py`, `tests/maintenance/checks/test_checks_parity.py`).
 
 ### Removed
 
