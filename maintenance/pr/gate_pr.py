@@ -354,11 +354,10 @@ def _run_gate(script: Path, *arguments: str) -> tuple[bool, str]:
     [sys.executable, str(script), *arguments],
     cwd=ROOT,
     capture_output=True,
-    text=True,
-    encoding="utf-8",
     check=False,
   )
-  return result.returncode == 0, (result.stdout + result.stderr).strip()
+  output = _decode(result.stdout) + _decode(result.stderr)
+  return result.returncode == 0, output.strip()
 
 
 def bump_range(revision_range: str) -> tuple[str, str] | None:

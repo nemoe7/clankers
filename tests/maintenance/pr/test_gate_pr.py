@@ -532,6 +532,8 @@ def test_git_pipe_rejects_invalid_utf8_and_main_reconfigures_streams(
     patch.setattr(gate_pr.subprocess, "run", run_fake_git)
     with pytest.raises(UnicodeDecodeError):
       gate_pr._git("status")
+  with pytest.raises(UnicodeDecodeError):
+    gate_pr._run_gate(fake_git)
 
   calls: list[tuple[str, str]] = []
 

@@ -41,7 +41,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Reject Git output that is not UTF-8 on Windows as well (`maintenance/pr/gate_pr.py`).
+- Reject Git and gate output that is not UTF-8 on Windows as well (`maintenance/pr/gate_pr.py`).
 - Keep the global Git config and hooks out of test repos (`tests/conftest.py`).
 - Compare test paths with `/`, and skip tests that need POSIX `bash`, `sh`, or `fcntl` on Windows.
 
