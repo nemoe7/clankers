@@ -9,11 +9,13 @@ from ..repo import Repo
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "KILO.md")
-# Kilo mode overrides and both ChatGPT fields compare plain non-empty line counts.
+# Kilo modes, ChatGPT fields, and experimental Wenyan copies compare non-empty line counts.
 PLAIN_PAIRS = (
   *((f"kilo/{name}", f"kilo/{name}") for name in ("plan.md", "code.md", "debug.md")),
   ("CHATGPT-CUSTOM.txt", "CHATGPT.txt"),
   ("CHATGPT-MORE.txt", "CHATGPT.txt"),
+  ("wenyan/CHATGPT-CUSTOM.txt", "CHATGPT.txt"),
+  ("wenyan/CHATGPT-MORE.txt", "CHATGPT.txt"),
   ("COMMIT-SPEC.txt", "COMMIT-SPEC.txt"),
 )
 NEVER_ADD = "compression may merge lines but never add rules"

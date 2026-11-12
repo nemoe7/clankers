@@ -39,8 +39,13 @@ def _isolate_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _run(*args: str) -> tuple[int, str]:
+  argv = list(args)
+  if argv[:1] == ["read"]:
+    argv = ["inbox", "read", *argv[1:]]
+  elif argv[:1] == ["ack"]:
+    argv = ["inbox", "ack", *argv[1:]]
   out = io.StringIO()
-  code = cli_main(list(args), out=out, err=io.StringIO())
+  code = cli_main(argv, out=out, err=io.StringIO())
   return code, out.getvalue()
 
 
@@ -143,7 +148,7 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
   assert _verdict(python) == pre.BLOCK
 
   for line, counted in (
-    ("steer read", False),
+    ("steer inbox read", False),
     ("mkdir -p data", True),
     ("ss -ltnp", False),
   ):
@@ -159,13 +164,8 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
   assert _verdict(following) == pre.BLOCK
 
 
-@pytest.mark.parametrize(
-  ("verb", "blocked"),
-  [(verb, False) for verb in ("msg", "survey", "skills", "ren", "serve")]
-  + [(verb, True) for verb in ("tasks", "task", "reports", "report", "worktree")],
-)
-def test_steering_command_inbox_exemptions(verb: str, blocked: bool) -> None:
-  line = f"steer {verb} --help"
+def test_ack_recovery_accepts_quoted_markdown_backticks() -> None:
+  line = "steer inbox ack abc123 'Read `AGENTS.md` first.'"
   ctx = pre.PreContext(
     line=line,
     command=line,
@@ -173,24 +173,45 @@ def test_steering_command_inbox_exemptions(verb: str, blocked: bool) -> None:
     pending_ids=["abc123"],
     call_count=pre.GATE_THRESHOLD,
   )
-  assert pre.bash_command_policy(ctx) == (False, blocked)
-  assert _verdict(ctx) == (pre.BLOCK if blocked else pre.CONTINUE)
+  assert ctx.is_inbox_recovery()
+  assert _verdict(ctx) == pre.CONTINUE
 
 
 @pytest.mark.parametrize(
-  "line",
+  "verb",
   (
-    "steer msg x; printf after",
-    "steer survey | cat",
-    "steer skills > out",
-    "steer msg $(printf x)",
-    "steer msg `printf x`",
-    "steer msg x && git push",
-    "/tmp/steer msg x",
-    "env steer msg x",
+    "inbox",
+    "survey",
+    "skills",
+    "ren",
+    "serve",
+    "task",
+    "report",
+    "worktree",
   ),
 )
-def test_steering_command_exemptions_reject_shell_composition(line: str) -> None:
+def test_steering_bookkeeping_bypasses_inbox_gate(verb: str) -> None:
+  command = f"steer {verb} --help"
+  line = f"/bin/bash -l -c {command}"
+  ctx = pre.PreContext(
+    line=line,
+    command=command,
+    shell="bash",
+    pending_ids=["abc123"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.bash_command_policy(ctx) == (False, False)
+  assert ctx.is_steering_bookkeeping()
+  assert ctx.is_inbox_recovery() is (verb == "ren")
+  assert _verdict(ctx) == pre.CONTINUE
+
+
+@pytest.mark.parametrize(
+  "verb",
+  ("clear", "run", "pr-update", "job-log", "read", "ack", "msg", "tasks", "reports"),
+)
+def test_non_bookkeeping_steering_commands_remain_gated(verb: str) -> None:
+  line = f"steer {verb} --help"
   ctx = pre.PreContext(
     line=line,
     command=line,
@@ -202,20 +223,45 @@ def test_steering_command_exemptions_reject_shell_composition(line: str) -> None
   assert _verdict(ctx) == pre.BLOCK
 
 
+@pytest.mark.parametrize(
+  "line",
+  (
+    "steer inbox x; printf after",
+    "steer survey | cat",
+    "steer skills > out",
+    "steer inbox $(printf x)",
+    "steer inbox `printf x`",
+    "steer inbox x && git push",
+    "/tmp/steer inbox x",
+    "env steer inbox x",
+  ),
+)
+def test_steering_command_exemptions_reject_shell_composition(line: str) -> None:
+  ctx = pre.PreContext(
+    line=line,
+    command=line,
+    shell="bash",
+    pending_ids=["abc123"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.bash_command_policy(ctx) == (True, True)
+  assert not ctx.is_inbox_recovery()
+  assert not ctx.is_steering_bookkeeping()
+  assert _verdict(ctx) == pre.BLOCK
+
+
 def test_steering_exemptions_preserve_the_pending_counter(_isolate_state: Path) -> None:
   _seed(_isolate_state, "Pending work")
-  for line in ("steer msg --help", "steer task --help"):
+  for line in ("steer inbox --help", "steer task --help"):
     assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == pre.CONTINUE
     _finish_outer(line)
     assert _count(_isolate_state) in (None, "0")
   store, *_ = cli.open_services(_isolate_state)
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
-  for line, verdict in (
-    ("steer msg --help", pre.CONTINUE),
-    ("steer task --help", pre.BLOCK),
-  ):
-    assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == verdict
+  for line in ("steer inbox --help", "steer task --help"):
+    assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == pre.CONTINUE
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
 
 def test_bash_policy_can_block_without_spending_the_pending_budget(
@@ -306,7 +352,9 @@ def test_blocked_bash_probe_records_every_guard_without_redaction(
   line = "sleep 60 && printf 'literal=keep me Ω\nstill here'"
   assert _run("pre", "-l", line, "-c", "sleep 60", "-s", "bash")[0] == pre.BLOCK
   assert (
-    _run("pre", "-l", "steer read | cat", "-c", "steer read", "-s", "bash")[0]
+    _run("pre", "-l", "steer inbox read | cat", "-c", "steer inbox read", "-s", "bash")[
+      0
+    ]
     == pre.BLOCK
   )
   assert (
@@ -323,7 +371,7 @@ def test_blocked_bash_probe_records_every_guard_without_redaction(
   ]
   assert [row["blocked_by"] for row in rows] == ["sleep", "inbox-pipe", "gate"]
   assert rows[0]["line"] == line and rows[0]["command"] == "sleep 60"
-  assert rows[1]["line"] == "steer read | cat"
+  assert rows[1]["line"] == "steer inbox read | cat"
   assert rows[2]["line"] == "git push origin topic"
   assert all(row["at"].endswith("Z") for row in rows)
   assert _run("pre", "-l", "ss -ltn", "-c", "ss -ltn", "-s", "bash")[0] == pre.CONTINUE
@@ -396,7 +444,7 @@ def test_six_call_block_hides_pending_ids_but_keeps_recovery_steps() -> None:
   assert result.verdict == pre.BLOCK
   assert "VIOLATION: Bash blocked. Read and ack all NOW." in output  # nonemo: NMT100
   assert f"Threshold: {pre.GATE_THRESHOLD} calls." in output
-  assert "steer read" in output and "steer ack" in output
+  assert "steer inbox read" in output and "steer inbox ack" in output  # nonemo: NMT100
   assert "Pending:" not in output
   assert all(message_id not in output for message_id in pending_ids)
 
@@ -817,7 +865,7 @@ def test_pre_records_native_tool_cadence_only_for_agent_tools(
   run(process_probe, 'cat "$dir/pid" 2> /dev/null')
   assert activity() == ("bash", fixed_stamp, "2")
 
-  run("steer read", "steer read")
+  run("steer inbox read", "steer inbox read")
   assert activity() == ("bash", fixed_stamp, "2")
 
 
@@ -1181,16 +1229,16 @@ def test_six_call_bash_block_persists_one_violation_for_inbox_gate(
   assert flag.violation_type == "bash-cadence"
   assert flag.body == with_bible_read(
     f"VIOLATION: Bash blocked after {pre.GATE_THRESHOLD} calls. "
-    "`steer read` and `steer ack` now."
+    "`steer inbox read` and `steer inbox ack` now."
   )
   assert set(messages.pending_ids()) == {note.id, flag.id}
   assert _run(*command)[0] == pre.BLOCK
   assert messages.pending_violation().id == flag.id
   messages.ack(flag.id, "Read and correcting the cadence.")
 
-  for line in ("sleep 60", "git push origin branch", "steer read"):
+  for line in ("sleep 60", "git push origin branch", "steer inbox read"):
     code, _ = _run("pre", "-c", line, "-l", line, "-s", "bash")
-    assert code == (pre.CONTINUE if line == "steer read" else pre.BLOCK)
+    assert code == (pre.CONTINUE if line == "steer inbox read" else pre.BLOCK)
     if line == "sleep 60":
       sleep_flag = messages.pending_violation()
       assert sleep_flag is not None and sleep_flag.violation_type == "bash-sleep"
@@ -1206,7 +1254,7 @@ def test_six_call_bash_block_persists_one_violation_for_inbox_gate(
 @pytest.mark.parametrize(
   ("line", "violation_type", "guidance"),
   (
-    ("steer read | cat", "bash-inbox-pipe", "VIOLATION: Inbox piped."),
+    ("steer inbox read | cat", "bash-inbox-pipe", "VIOLATION: Inbox piped."),
     (
       "sleep 60",
       "bash-sleep",
@@ -1235,7 +1283,7 @@ def test_blocked_bash_patterns_persist_distinct_deduplicated_flags(
 @pytest.mark.parametrize(
   ("line", "notice", "is_violation"),
   (
-    ("steer read | cat", "VIOLATION: Inbox piped.", True),
+    ("steer inbox read | cat", "VIOLATION: Inbox piped.", True),
     (
       "git push origin --delete old-ref",
       "VIOLATION: Push blocked. Destructive mod found.",
@@ -1251,11 +1299,11 @@ def test_owner_supplied_pre_notices_have_only_conditional_violation_guidance(
   code, out = _run("pre", "-c", line, "-l", line, "-s", "bash")
   assert code == pre.BLOCK and notice in out
   assert (BIBLE_READ_PREFIX in out) == is_violation
-  if line.startswith("steer read"):
-    assert "Run `steer read` or `steer poll` alone" in out  # nonemo: NMT100
+  if line.startswith("steer inbox read"):
+    assert "Run `steer inbox read` or `steer poll` alone" in out  # nonemo: NMT100
   store, messages, _, _ = cli.open_services(_isolate_state)
   flag = messages.pending_violation()
-  if line.startswith("steer read"):
+  if line.startswith("steer inbox read"):
     assert flag is not None and flag.violation_type == "bash-inbox-pipe"
   else:
     assert flag is None
@@ -1267,7 +1315,7 @@ def test_owner_supplied_pre_notices_have_only_conditional_violation_guidance(
   (
     ("timeout 10 steer poll", "VIOLATION: timeout wrapped poll."),
     ("gh pr close 42", "VIOLATION: PR mod blocked."),
-    ("sleep 60; steer read", "VIOLATION: Sleep BANNED."),
+    ("sleep 60; steer inbox read", "VIOLATION: Sleep BANNED."),
     ("sleep 1; cat runner.log", "VIOLATION: Sleep log read BANNED."),
     ("sleep 60", "VIOLATION: Sleep BANNED over"),
     ("rg -n needle AGENTS.md", "VIOLATION: Partial read blocked:"),
@@ -1344,7 +1392,7 @@ def test_wireframe_stage_warning_has_no_violation_flag(_isolate_state: Path) -> 
 
 
 @pytest.mark.parametrize(
-  "line", ("steer ack a1b2c3 done | cat", "sleep 59", "git add plain.png")
+  "line", ("steer inbox ack a1b2c3 done | cat", "sleep 59", "git add plain.png")
 )
 def test_allowed_bash_patterns_do_not_flag(_isolate_state: Path, line: str) -> None:
   _seed(_isolate_state, "Ready", acked=True)
@@ -1360,7 +1408,9 @@ def test_each_guard_holds_its_own_rule() -> None:
   assert _verdict(pre.PreContext(**{**clear.__dict__, "line": "sleep 5 && x"})) == 0
   assert (
     _verdict(
-      pre.PreContext(**{**clear.__dict__, "line": "sleep 5 && steer read", "shell": ""})
+      pre.PreContext(
+        **{**clear.__dict__, "line": "sleep 5 && steer inbox read", "shell": ""}
+      )
     )
     == pre.BLOCK
   )
@@ -1590,18 +1640,18 @@ tail -c 80000 '{record}'/out.log 2>/dev/null | tail -n 100 || true """
 @pytest.mark.parametrize(
   ("line", "expected"),
   (
-    ("steer read | cat", pre.BLOCK),
+    ("steer inbox read | cat", pre.BLOCK),
     ("steer poll | tee /dev/null", pre.BLOCK),
     ("bash -c steer poll | cat", pre.BLOCK),
-    ("bash -c 'steer read | cat'", pre.BLOCK),
+    ("bash -c 'steer inbox read | cat'", pre.BLOCK),
     ("env LANG=C steer poll | cat", pre.BLOCK),
     ("timeout 10 steer poll", pre.BLOCK),
     ("timeout 1800 steer poll", pre.BLOCK),
     ("timeout 10 bash -c 'steer poll'", pre.BLOCK),
     ('printf "timeout 10 steer poll"', pre.CONTINUE),
-    ("timeout 10 steer read", pre.CONTINUE),
+    ("timeout 10 steer inbox read", pre.CONTINUE),
     ("timeout 10 printf steer poll", pre.CONTINUE),
-    ("steer ack a1b2c3 done | cat", pre.CONTINUE),
+    ("steer inbox ack a1b2c3 done | cat", pre.CONTINUE),
   ),
 )
 def test_inbox_pipes_and_poll_timeout(line: str, expected: int) -> None:
@@ -1611,8 +1661,8 @@ def test_inbox_pipes_and_poll_timeout(line: str, expected: int) -> None:
 
 def test_piped_ack_remains_available_after_the_gate_limit() -> None:
   ctx = pre.PreContext(
-    line="steer ack a1b2c3 done | cat",
-    command="steer ack a1b2c3 done",
+    line="steer inbox ack a1b2c3 done | cat",
+    command="steer inbox ack a1b2c3 done",
     shell="bash",
     pending_ids=["a1b2c3"],
     call_count=pre.GATE_THRESHOLD,
@@ -1628,7 +1678,7 @@ def test_login_path_ack_wrapper_exempts_only_one_literal_ack(
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
 
-  script = "PATH=\"$HOME/.local/bin:$PATH\" steer ack a1b2c3 'Acknowledged.'"
+  script = "PATH=\"$HOME/.local/bin:$PATH\" steer inbox ack a1b2c3 'Acknowledged.'"
   line = f"/bin/bash -l -c {script}"
   code, output = _run("pre", "-l", line, "-c", script, "-s", "bash")
   assert code == pre.CONTINUE, output
@@ -2383,7 +2433,7 @@ def test_installer_places_steer_on_path_idempotently(tmp_path: Path) -> None:
   server_thread.start()
   try:
     read = subprocess.run(
-      ["bash", "-c", 'source "$HOME/.bash_profile"; steer read'],
+      ["bash", "-c", 'source "$HOME/.bash_profile"; steer inbox read'],
       check=False,
       cwd=outside,
       env=env,
@@ -3104,10 +3154,10 @@ def test_http_answer_ack_resets_count_only_after_last_blocker(
 
 def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
   for line in (
-    "steer read",
+    "steer inbox read",
     "steer poll",
-    "steer ack ab1234 Done",
-    "steer ack ab1234 Done | tee log",
+    "steer inbox ack ab1234 Done",
+    "steer inbox ack ab1234 Done | tee log",
   ):
     ctx = pre.PreContext(
       line=line,
@@ -3118,12 +3168,12 @@ def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
     )
     assert _verdict(ctx) == pre.CONTINUE, line
   for line in (
-    "steer read && git status",
-    "steer ack ab1234 Done; git push",
-    "steer ack ab1234 Done | git push",
-    "steer ack ab1234 Done | git -C /workspace push origin topic",
-    "steer read > log",
-    "steer ack ab1234 Done > log",
+    "steer inbox read && git status",
+    "steer inbox ack ab1234 Done; git push",
+    "steer inbox ack ab1234 Done | git push",
+    "steer inbox ack ab1234 Done | git -C /workspace push origin topic",
+    "steer inbox read > log",
+    "steer inbox ack ab1234 Done > log",
   ):
     ctx = pre.PreContext(
       line=line,
@@ -3139,43 +3189,43 @@ def test_gate_allows_inbox_recovery_but_not_mixed_work() -> None:
   ("line", "command", "expected"),
   (
     (
-      "steer ack ab1234 'first\n> second'",
-      "steer ack ab1234 'first\n> second'",
+      "steer inbox ack ab1234 'first\n> second'",
+      "steer inbox ack ab1234 'first\n> second'",
       pre.CONTINUE,
     ),
     (
-      "steer ack ab1234 'first\n> second'; printf later",
-      "steer ack ab1234 'first\n> second'",
+      "steer inbox ack ab1234 'first\n> second'; printf later",
+      "steer inbox ack ab1234 'first\n> second'",
       pre.CONTINUE,
     ),
     (
-      "steer ack ab1234 'a > b'; printf later",
-      "steer ack ab1234 'a > b'",
+      "steer inbox ack ab1234 'a > b'; printf later",
+      "steer inbox ack ab1234 'a > b'",
       pre.CONTINUE,
     ),
     (
-      "printf before; steer ack ab1234 Done; printf later",
-      "steer ack ab1234 Done",
+      "printf before; steer inbox ack ab1234 Done; printf later",
+      "steer inbox ack ab1234 Done",
       pre.BLOCK,
     ),
     (
-      "steer ack ab1234 Done | tee log; printf later",
-      "steer ack ab1234 Done",
+      "steer inbox ack ab1234 Done | tee log; printf later",
+      "steer inbox ack ab1234 Done",
       pre.BLOCK,
     ),
     (
-      "steer ack ab1234 Done > log; printf later",
-      "steer ack ab1234 Done > log",
+      "steer inbox ack ab1234 Done > log; printf later",
+      "steer inbox ack ab1234 Done > log",
       pre.BLOCK,
     ),
-    ("steer read; printf later", "steer read", pre.BLOCK),
+    ("steer inbox read; printf later", "steer inbox read", pre.BLOCK),
     (
-      "steer ack ab1234 Done; git push --dry-run",
-      "steer ack ab1234 Done",
+      "steer inbox ack ab1234 Done; git push --dry-run",
+      "steer inbox ack ab1234 Done",
       pre.CONTINUE,
     ),
     (
-      "steer ack ab1234 Done; git push --dry-run",
+      "steer inbox ack ab1234 Done; git push --dry-run",
       "git push --dry-run",
       pre.BLOCK,
     ),
@@ -3195,7 +3245,7 @@ def test_gate_classifies_current_ack_step(
 
 
 def test_cleared_initial_ack_allows_later_push() -> None:
-  line = "steer ack ab1234 Done; git push --dry-run"
+  line = "steer inbox ack ab1234 Done; git push --dry-run"
   ctx = pre.PreContext(
     line=line,
     command="git push --dry-run",
@@ -3215,7 +3265,7 @@ def test_initial_ack_rechecks_pending_state_and_counts(
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
 
-  ack = "steer ack ab0031 'first\nsecond'"
+  ack = "steer inbox ack ab0031 'first\nsecond'"
   line = f"{ack}; printf later"
   code, _ = _run("pre", "-l", line, "-c", ack, "-s", "bash")
   assert code == pre.CONTINUE
@@ -3602,7 +3652,7 @@ def test_outer_exit_counts_mixed_agent_line_once_per_call(
   )
   assert _run("post-exit", "--line", process_probe, "--rc", "0")[0] == 0
   assert _count(_isolate_state) == "2"
-  assert _run("post-exit", "--line", "steer read", "--rc", "0")[0] == 0
+  assert _run("post-exit", "--line", "steer inbox read", "--rc", "0")[0] == 0
   assert _count(_isolate_state) == "2"
 
 
@@ -3729,10 +3779,10 @@ def test_exit_watches_checks_only_after_successful_push_or_pr_creation(
 @pytest.mark.parametrize(
   ("line", "warn"),
   (
-    ('steer ack abc123 "Read the `section`"', True),
-    ('steer ack abc123 "Read the \\`section\\`"', False),
-    ("steer ack abc123 'Read the `section`'", False),
-    ('printf "steer ack abc123 `section`"', False),
+    ('steer inbox ack abc123 "Read the `section`"', True),
+    ('steer inbox ack abc123 "Read the \\`section\\`"', False),
+    ("steer inbox ack abc123 'Read the `section`'", False),
+    ('printf "steer inbox ack abc123 `section`"', False),
   ),
 )
 def test_ack_backtick_warning_only_on_executable_double_quoted_ack(
@@ -3746,9 +3796,9 @@ def test_ack_backtick_warning_only_on_executable_double_quoted_ack(
 @pytest.mark.parametrize(
   ("line", "warn"),
   (
-    ("/repo/.agents/skills/arena-steering/scripts/steer read", True),
-    ("python /repo/.agents/skills/arena-steering/scripts/steer read", True),
-    ("env LANG=C /repo/skills/arena-steering/scripts/steer read", True),
+    ("/repo/.agents/skills/arena-steering/scripts/steer inbox read", True),
+    ("python /repo/.agents/skills/arena-steering/scripts/steer inbox read", True),
+    ("env LANG=C /repo/skills/arena-steering/scripts/steer inbox read", True),
     ("printf '/repo/skills/arena-steering/scripts/steer'", False),
     ("rg '/repo/skills/arena-steering/scripts/steer' file.txt", False),
   ),
@@ -4439,15 +4489,15 @@ def test_command_activity_names_timeline_labels() -> None:
   cases = {
     "git commit -m x": "commit",
     "git push origin main": "push",
-    "steer read": "inbox",
+    "steer inbox read": "inbox",
     "steer run start -t task gate -- ls": "run",
-    "steer tasks": "task",
-    "steer task mod x deets y -z 1": "task-mod",
+    "steer task list": "task",
+    "steer task edit x deets y -z 1": "task-mod",
     "steer task finish x -c abc": "task-finish",
-    "steer task x": "task",
+    "steer task show x": "task",
     "steer ren x y": "task",
-    "steer report pub source.md -i id -t Title": "pub",
-    "steer ack aa0001 ok": "",
+    "steer report publish -f source.md -i id -t Title": "report",
+    "steer inbox ack aa0001 ok": "inbox",
     "ls": "",
   }
   for line, expected in cases.items():
@@ -4456,7 +4506,9 @@ def test_command_activity_names_timeline_labels() -> None:
 
 def test_timeline_activity_replaces_the_native_tool_label(_isolate_state: Path) -> None:
   _seed(_isolate_state, "Acked.", acked=True)
-  code, output = _run("pre", "-l", "steer tasks", "-c", "steer tasks", "-s", "bash")
+  code, output = _run(
+    "pre", "-l", "steer task list", "-c", "steer task list", "-s", "bash"
+  )
   assert code == pre.CONTINUE, output
   store, messages, _, _ = cli.open_services(_isolate_state)
   assert messages.tool_activity()["tool"] == "task"

@@ -142,8 +142,8 @@ def test_nemoize_stage_passes_on_exit_zero(tmp_path: Path, monkeypatch):
 
 
 def test_nemoize_scope_is_the_root_config(monkeypatch):
-  import nemo_config
-  import nemo_files
+  import config as nemo_config
+  import files as nemo_files
 
   config = tomllib.loads((DEFAULT_ROOT / "nemoizer.toml").read_text(encoding="utf-8"))
   for kept in (

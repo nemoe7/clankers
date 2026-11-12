@@ -58,6 +58,104 @@ from .store import SqliteStore
 
 RUN_STARTED_PREFIX = "Started run"
 
+
+REMOVED_TOP_LEVEL_COMMANDS = {"read", "ack", "msg", "tasks", "reports"}
+
+
+def _normalize_priority(value: str) -> str:
+  """Accept priorities with or without the leading P."""
+  normalized = value.upper()
+  if normalized.isdecimal():
+    normalized = f"P{normalized}"
+  if normalized not in TASK_PRIORITIES:
+    raise argparse.ArgumentTypeError(
+      f"priority must be one of {TASK_PRIORITIES} or 1–5"
+    )
+  return normalized
+
+
+def _normalize_cli_args(args: list[str]) -> list[str]:
+  """Map the approved grouped command tree to the existing domain handlers."""
+  if not args:
+    return args
+  command, *tail = args
+  if command in {"inbox", "task", "report", "run"} and tail in (["-h"], ["--help"]):
+    return args
+  if command in REMOVED_TOP_LEVEL_COMMANDS:
+    replacement = {
+      "read": "inbox read",
+      "ack": "inbox ack",
+      "msg": "inbox list/show/search",
+      "tasks": "task list",
+      "reports": "report list",
+    }[command]
+    raise ValueError(f"Use `steer {replacement}`; top-level `{command}` was removed")
+  if command == "inbox":
+    if not tail:
+      return args
+    subcommand, *rest = tail
+    if subcommand == "read":
+      return ["read", *rest]
+    if subcommand == "ack":
+      return ["ack", *rest]
+    if subcommand == "list":
+      return ["msg", "list", *rest]
+    if subcommand == "show":
+      return ["msg", *rest]
+    if subcommand == "search":
+      return ["inbox-search", *rest]
+    raise ValueError(f"Unknown inbox command: {subcommand!r}")
+  if command == "task":
+    if not tail:
+      return ["task"]
+    subcommand, *rest = tail
+    if subcommand == "list":
+      return ["tasks", *rest]
+    if subcommand == "show":
+      return ["task", *(rest or ["-d"])]
+    if subcommand == "new":
+      return ["task", "new", *rest]
+    if subcommand == "edit":
+      return ["task", "mod", *rest]
+    if subcommand == "finish":
+      return ["task", "finish", *rest]
+    if subcommand == "remove":
+      return ["task", "rm", *rest]
+    if subcommand == "unlink":
+      return ["task", "unlink", *rest]
+    if subcommand == "search":
+      return ["task-search", *rest]
+    if subcommand in {"mod", "rm"}:
+      raise ValueError(f"Use `steer task edit/remove`; task `{subcommand}` was removed")
+    raise ValueError(f"Unknown task command: {subcommand!r}")
+  if command == "report":
+    if not tail:
+      return args
+    subcommand, *rest = tail
+    if subcommand == "list":
+      return ["reports", *rest]
+    if subcommand == "show":
+      return ["report", *rest]
+    if subcommand == "publish":
+      return ["report", "pub", *rest]
+    if subcommand in {"pin", "unpin"}:
+      return ["report", subcommand, *rest]
+    if subcommand == "remove":
+      return ["report", "rm", *rest]
+    if subcommand in {"pub", "rm"}:
+      raise ValueError(
+        f"Use `steer report publish/remove`; report `{subcommand}` was removed"
+      )
+    raise ValueError(f"Unknown report command: {subcommand!r}")
+  if command == "run" and tail:
+    subcommand, *rest = tail
+    if subcommand == "checks":
+      return ["run", "pr-checks", *rest]
+    if subcommand == "pr-checks":
+      raise ValueError("Use `steer run checks`; `pr-checks` was removed")
+  return args
+
+
 Task = task_cli.Task
 _extract_size_flag = task_cli._extract_size_flag
 _parse_task_size_value = task_cli._parse_task_size_value
@@ -194,6 +292,11 @@ def main(
     print(f"steer {__version__}", file=stdout)
     return 0
 
+  try:
+    args_list = _normalize_cli_args(args_list)
+  except ValueError as exc:
+    print(f"Steer error: {exc}", file=stderr)
+    return 2
   command = args_list[0] if args_list else ""
   help_requested = any(arg in {"-h", "--help"} for arg in args_list)
   preflight_state_dir: Path | None = None
@@ -224,72 +327,96 @@ def main(
 
   serve_p = sub.add_parser("serve", help="Start the local steering HTTP server.")
 
-  read_p = sub.add_parser("read", help="Read pending messages and report answers.")
+  inbox_p = sub.add_parser(
+    "inbox",
+    help="Read, acknowledge, list, show, or search messages.",
+    usage="%(prog)s <read|ack|list|show|search> ...",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=(
+      "Commands:\n"
+      "  read                         Read pending messages.\n"
+      "  ack [ID ...] ANSWER          Acknowledge messages or create a task.\n"
+      "  list [-p PAGE] [-s SIZE]     List messages newest-first.\n"
+      "  show ID                      Show one message.\n"
+      "  search QUERY [-p PAGE]       Search message IDs and bodies."
+    ),
+  )
+  read_p = argparse.ArgumentParser(prog="steer inbox read")
   poll_p = sub.add_parser(
     "poll", help="Wait for inbox work, a runnable task, or Skip poll."
   )
 
-  ack_p = sub.add_parser("ack", help="Acknowledge a message or report answer.")
+  ack_p = argparse.ArgumentParser(prog="steer inbox ack")
   ack_p.add_argument("parts", nargs="+", help="[<id> ...] <markdown>")
   ack_p.add_argument("-i", "--id", dest="task_id", default=None)
   ack_p.add_argument("-t", "--title", dest="task_title", default=None)
-  ack_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES)
+  ack_p.add_argument("-p", "--priority", type=_normalize_priority)
   ack_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES)
-  ack_p.add_argument("-T", "--type", dest="task_types", action="append", default=[])
+  ack_p.add_argument(
+    "-T", "--phase", dest="task_types", action="extend", nargs="+", default=[]
+  )
   ack_p.add_argument("-S", "--scope", dest="task_scope", default="")
-  ack_p.add_argument("-d", "--detail", dest="task_details", action="append", default=[])
+  ack_p.add_argument(
+    "-d", "--detail", dest="task_details", action="extend", nargs="+", default=[]
+  )
+  ack_p.add_argument("-m", "--message", action="extend", nargs="+", default=[])
+  ack_p.add_argument("-r", "--report", action="extend", nargs="+", default=[])
+  ack_p.add_argument(
+    "-k", "--task", dest="task_ids", action="extend", nargs="+", default=[]
+  )
+  ack_p.add_argument(
+    "-R", "--run", dest="run_names", action="extend", nargs="+", default=[]
+  )
 
-  msg_p = sub.add_parser("msg", help="List or inspect stored messages.")
-  msg_p.add_argument("id", nargs="?", help="Message ID, or list for history.")
   msg_list_p = argparse.ArgumentParser(
-    prog="steer msg list", description="List messages newest-first."
+    prog="steer inbox list", description="List messages newest-first."
   )
   msg_list_p.add_argument("-p", "--page", type=int, default=1)
   msg_list_p.add_argument("-s", "--page-size", type=int, default=MESSAGE_PAGE_MIN)
   msg_show_p = argparse.ArgumentParser(
-    prog="steer msg", description="Show one message by ID."
+    prog="steer inbox show", description="Show one message by ID."
   )
   msg_show_p.add_argument("id")
 
-  tasks_p = sub.add_parser("tasks", help="List upcoming tasks (or finished with -f).")
-  tasks_p.add_argument(
-    "-f", "--finished", "--full", dest="finished", action="store_true"
-  )
+  tasks_p = argparse.ArgumentParser(prog="steer task list")
+  tasks_p.add_argument("-f", "--finished", action="store_true")
   tasks_p.add_argument("-p", "--page", type=int, default=1)
 
   task_p = sub.add_parser(
     "task",
-    help="Show the current task, or create, remove, or modify a task.",
-    usage="%(prog)s [-d|--deets] | <id|new|rm|mod|unlink> ...",
+    help="List, show, create, edit, finish, remove, or search tasks.",
+    usage="%(prog)s <list|show|new|edit|finish|remove|unlink|search> ...",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=(
       "Commands:\n"
-      "  [-d|--deets]                        Show the current task and optional details.\n"
-      "  ID                                  Show a task with details.\n"
-      "  new ID TITLE -d DETAIL -z SIZE [-p P1..P5] [-T TYPE ...]  Create ordered phases.\n"
-      "  finish ID [-c COMMIT]               Validate and advance one phase.\n"
-      "  rm ID                               Remove a task.\n"
-      "  mod ID FIELD [rm] VALUE             Update a task.\n"
-      "  unlink ID [TYPE] LINK               Remove a task link."
+      "  list [-f] [-p PAGE]                 List tasks.\n"
+      "  show [ID]                           Show a task.\n"
+      "  new ID -t TITLE -z SIZE -S SCOPE    Create a task.\n"
+      "  edit ID FIELD VALUE                 Edit a task.\n"
+      "  finish ID [-c COMMIT]               Advance one phase.\n"
+      "  remove ID                           Remove a task.\n"
+      "  unlink ID [TYPE] LINK               Remove a task link.\n"
+      "  search QUERY [-p PAGE]              Search task fields."
     ),
   )
 
-  reports_p = sub.add_parser("reports", help="List active or stale reports (10/page).")
+  reports_p = argparse.ArgumentParser(prog="steer report list")
   reports_p.add_argument("-s", "--stale", action="store_true")
   reports_p.add_argument("-p", "--page", type=int, default=1)
 
   report_p = sub.add_parser(
     "report",
-    help="Show, publish, or remove a report.",
-    usage="%(prog)s <id|pub|pin|unpin|rm> ...",
+    help="List, show, publish, pin, unpin, or remove reports.",
+    usage="%(prog)s <list|show|publish|pin|unpin|remove> ...",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=(
       "Commands:\n"
-      "  ID                          Show a report.\n"
-      "  pub FILE -i ID -t TITLE     Publish a report.\n"
-      "  pin ID                      Pin a report.\n"
-      "  unpin ID                    Unpin a report.\n"
-      "  rm ID [ID ...] | --stale    Remove reports."
+      "  list [-s] [-p PAGE]              List reports.\n"
+      "  show ID                           Show a report.\n"
+      "  publish -f FILE -i ID -t TITLE   Publish a report.\n"
+      "  pin ID                            Pin a report.\n"
+      "  unpin ID                          Unpin a report.\n"
+      "  remove ID [ID ...] | --stale      Remove reports."
     ),
   )
 
@@ -328,7 +455,7 @@ def main(
   job_log_p.add_argument("-j", "--job", dest="job_id", default=None)
   job_log_p.add_argument("-r", "--run", dest="run_id", default=None)
 
-  pre_p = sub.add_parser("pre", help="Run the pre-command pipeline for a shell line.")
+  pre_p = argparse.ArgumentParser(prog="steer pre")
   pre_p.add_argument("-l", "--line", default="", help="Whole shell line.")
   pre_p.add_argument(
     "-c", "--command", dest="command_text", default="", help="Command the trap reached."
@@ -338,9 +465,7 @@ def main(
     "-d", "--done", default="", help="Steps this shell already finished."
   )
 
-  post_exit_p = sub.add_parser(
-    "post-exit", help="Watch PR checks after a successful shell push or PR creation."
-  )
+  post_exit_p = argparse.ArgumentParser(prog="steer post-exit")
   post_exit_p.add_argument("--line", default="", help="The completed shell line.")
   post_exit_p.add_argument("--rc", type=int, required=True, help="Shell exit status.")
   post_exit_p.add_argument("--elapsed", type=float, default=0, help="Elapsed seconds.")
@@ -366,19 +491,20 @@ def main(
   )
   run_p = sub.add_parser(
     "run",
-    help="Start detached runs and read their logs.",
-    usage="%(prog)s <start|logs|pr-checks> ...",
+    help="Start, inspect, rerun, or check detached runs.",
+    usage="%(prog)s <start|logs|rerun|checks> ...",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=(
       "Commands:\n"
       "  start [-t TASK] [-a RUN] NAME -- COMMAND    Start a detached run.\n"
-      "  logs NAME [-n LINES]                        Read run status and logs.\n"
-      "  pr-checks [-n NUMBER]                       Watch PR checks."
+      "  logs NAME [-n LINES] [-p PAGE] [-s SEARCH]   Read run status and logs.\n"
+      "  rerun NAME                                  Rerun a completed run.\n"
+      "  checks [-n NUMBER]                          Watch PR checks."
     ),
   )
 
   remaining = args_list
-  if not remaining:
+  if not remaining or remaining in (["-h"], ["--help"]):
     parser.print_help(file=stdout)
     return 0
 
@@ -391,12 +517,15 @@ def main(
     except (OSError, sqlite3.Error, ValueError):
       return 0  # The exit hook must never change the completed line's status.
   group_parsers = {
+    "inbox": inbox_p,
     "task": task_p,
     "report": report_p,
     "worktree": worktree_p,
     "run": run_p,
   }
-  if cmd in group_parsers and cmd_args in (["-h"], ["--help"]):
+  if cmd in group_parsers and (
+    cmd_args in (["-h"], ["--help"]) or (not cmd_args and cmd != "task")
+  ):
     group_parsers[cmd].print_help(file=stdout)
     return 0
 
@@ -565,18 +694,22 @@ def main(
       return _run_ack(parsed, messages, tasks, store, stdout)
     if cmd == "msg":
       return _run_msg(cmd_args, msg_list_p, msg_show_p, messages, stdout)
+    if cmd == "inbox-search":
+      return _run_message_search(cmd_args, messages, stdout)
     if cmd == "tasks":
       parsed = tasks_p.parse_args(cmd_args)
       all_items = tasks.list_tasks(include_finished=parsed.finished)
       if parsed.finished:
-        finished_only = [(t, b) for t, b in all_items if t.status == "finished"]
-        page = max(1, int(parsed.page))
-        start = (page - 1) * HISTORICAL_PAGE_SIZE
-        paged = finished_only[start : start + HISTORICAL_PAGE_SIZE]
-        _print_task_list(paged, stdout)
-      else:
-        _print_task_list(all_items, stdout)
+        all_items = [
+          (task, blocked) for task, blocked in all_items if task.status == "finished"
+        ]
+      if parsed.page < 1:
+        raise ValueError("Task page must be at least 1")
+      start = (parsed.page - 1) * HISTORICAL_PAGE_SIZE
+      _print_task_list(all_items[start : start + HISTORICAL_PAGE_SIZE], stdout)
       return 0
+    if cmd == "task-search":
+      return _run_task_search(cmd_args, tasks, stdout)
     if cmd == "task":
       return _run_task(cmd_args, tasks, stdout)
     if cmd == "reports":
@@ -650,7 +783,7 @@ def _run_ack(
   if any(
     target is not None and not MESSAGE_ID_RE.fullmatch(target) for target in target_ids
   ):
-    raise ValueError("Usage: steer ack [<6-char-hex-id> ...] '<markdown>'")
+    raise ValueError("Usage: steer inbox ack [<6-char-hex-id> ...] '<markdown>'")
 
   created = None
   with store.transaction():
@@ -673,8 +806,19 @@ def _run_ack(
         types=parsed.task_types or None,
         scope=parsed.task_scope,
         details=parsed.task_details,
-        msg_ids=[target.id] if target_type == "message" else [],
-        report_ids=[target.report_id] if target_type == "report_answer" else [],
+        msg_ids=list(
+          dict.fromkeys(
+            ([target.id] if target_type == "message" else []) + parsed.message
+          )
+        ),
+        report_ids=list(
+          dict.fromkeys(
+            ([target.report_id] if target_type == "report_answer" else [])
+            + parsed.report
+          )
+        ),
+        task_ids=parsed.task_ids,
+        gate_names=parsed.run_names,
       )
       target_ids = [target.id]
     acked = [messages.ack(target, markdown)[1] for target in target_ids]
@@ -683,7 +827,7 @@ def _run_ack(
     if isinstance(item, Message):
       print("If msg asks for work or details, add to task", file=out)
       print(
-        f"steer task mod <task-id> links msg {item.id} -A '<detail>' -z <size>",
+        f"steer task edit <task-id> links msg {item.id} -A '<detail>' -z <size>",
         file=out,
       )
     if isinstance(item, ReportAnswer):
@@ -693,12 +837,56 @@ def _run_ack(
           print(f"- {detail}", file=out)
         print(
           f"Remove any of these from task {task_id} if they add nothing: "
-          f"steer task mod {task_id} deets rm <index> -z <size>",
+          f"steer task edit {task_id} deets rm <index> -z <size>",
           file=out,
         )
   if created:
     _, blocked = tasks.get_task(created.id)
     _print_single_task(created, blocked, out, tasks=tasks)
+  return 0
+
+
+def _run_message_search(args: list[str], messages: MessageService, out: TextIO) -> int:
+  search_p = argparse.ArgumentParser(prog="steer inbox search")
+  search_p.add_argument("query")
+  search_p.add_argument("-p", "--page", type=int, default=1)
+  parsed = search_p.parse_args(args)
+  if parsed.page < 1:
+    raise ValueError("Search page must be at least 1")
+  query = parsed.query.casefold()
+  matches = [
+    item
+    for item in messages.list_messages(include_hidden=True, newest_first=True)
+    if query in item.id.casefold() or query in item.body.casefold()
+  ]
+  start = (parsed.page - 1) * HISTORICAL_PAGE_SIZE
+  page = matches[start : start + HISTORICAL_PAGE_SIZE]
+  if not page:
+    print("No matching messages.", file=out)
+    return 0
+  for item in page:
+    print(f"{item.id} {_snippet_words(item.body, max_words=6)}".rstrip(), file=out)
+  return 0
+
+
+def _run_task_search(args: list[str], tasks: TaskService, out: TextIO) -> int:
+  search_p = argparse.ArgumentParser(prog="steer task search")
+  search_p.add_argument("query")
+  search_p.add_argument("-p", "--page", type=int, default=1)
+  parsed = search_p.parse_args(args)
+  if parsed.page < 1:
+    raise ValueError("Search page must be at least 1")
+  query = parsed.query.casefold()
+  matches = [
+    (task, blocked)
+    for task, blocked in tasks.list_tasks(include_finished=True)
+    if any(
+      query in value.casefold()
+      for value in (task.id, task.title, task.scope, *task.details)
+    )
+  ]
+  start = (parsed.page - 1) * HISTORICAL_PAGE_SIZE
+  _print_task_list(matches[start : start + HISTORICAL_PAGE_SIZE], out)
   return 0
 
 
@@ -1314,7 +1502,7 @@ def _run_pre(
     flag = messages.flag_violation_once(
       "bash-cadence",
       f"VIOLATION: Bash blocked after {pre_mod.GATE_THRESHOLD} calls. "
-      "`steer read` and `steer ack` now.",
+      "`steer inbox read` and `steer inbox ack` now.",
     )
     print(f"Violation flag: {flag.id}", file=out)
   flag_reasons = {
@@ -1795,7 +1983,7 @@ def _run_run(
   args: list[str], state_dir: Path, out: TextIO, tasks: TaskService, store: SqliteStore
 ) -> int:
   if not args:
-    raise ValueError("Usage: steer run <start|logs|pr-checks> ...")
+    raise ValueError("Usage: steer run <start|logs|rerun|checks> ...")
   subcmd = args[0]
   if subcmd == "start":
     raw_args = args[1:]
@@ -1868,7 +2056,7 @@ def _run_run(
       raise ValueError(f"Run {name} recorded no command to reuse")
     return _start_detached_run(state_dir, name, command, out=out)
   if subcmd == "pr-checks":
-    checks_p = argparse.ArgumentParser(prog="steer run pr-checks")
+    checks_p = argparse.ArgumentParser(prog="steer run checks")
     checks_p.add_argument("-n", "--number", type=int, default=None)
     parsed = checks_p.parse_args(args[1:])
     command = ["gh", "pr", "checks"]
@@ -1889,16 +2077,16 @@ def _run_report(
   args: list[str], reports: ReportService, store: SqliteStore, out: TextIO
 ) -> int:
   if not args:
-    raise ValueError("Usage: steer report <id|pub|pin|unpin|rm> ...")
+    raise ValueError("Usage: steer report <show|publish|pin|unpin|remove> ...")
   subcmd = args[0]
   if subcmd == "pub":
-    pub_p = argparse.ArgumentParser(prog="steer report pub")
-    pub_p.add_argument("source")
+    pub_p = argparse.ArgumentParser(prog="steer report publish")
+    pub_p.add_argument("-f", "--file", required=True)
     pub_p.add_argument("-i", "--id", required=True)
     pub_p.add_argument("-t", "--title", required=True)
     pub_p.add_argument("-u", "--allow-unparsed-markers", action="store_true")
     parsed = pub_p.parse_args(args[1:])
-    source_path = Path(parsed.source)
+    source_path = Path(parsed.file)
     if not source_path.is_file():
       raise ValueError(f"Report source file does not exist: {source_path}")
     body = source_path.read_text(encoding="utf-8")
@@ -1925,7 +2113,7 @@ def _run_report(
   if subcmd == "rm":
     targets = args[1:]
     if not targets or ("--stale" in targets and len(targets) != 1):
-      raise ValueError("Usage: steer report rm <id> [<id> ...] | --stale")
+      raise ValueError("Usage: steer report remove <id> [<id> ...] | --stale")
     removed: list[str] = []
     with store.transaction():
       for target in dict.fromkeys(targets):

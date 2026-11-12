@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.3.10"
+  version: "2.3.12"
 ---
 
 # Arena Steering
@@ -26,35 +26,32 @@ For GitHub Actions logs, follow [the direct job-log recipe](references/recipes/j
 - Read a `references/` file only when a question needs it, except that `references/cli.md` carries commands and `references/recipes/` carries procedures.
 - Installation template copies are supplementary.
 - Install repo tooling through the installed Steering skill.
-- Start repo-tooling installs with `steer run start -t <task> <name> -- <command>` after visibility and before the first `steer poll` or `steer read`.
+- Start repo-tooling installs with `steer run start -t <task> <name> -- <command>` after visibility and before the first `steer poll` or `steer inbox read`.
 - Use `start_process` for the Steering preview.
 - After starting demo servers, use `steer poll` first.
 
 ## Messages (`Inbox`)
 
 ```bash
-steer read
+steer inbox read
 steer poll
-steer ack <id> '<Markdown>' [-i <new-task-id> -t "<title>" -z <size> [-p <priority>] [-T <type>]... [-S <scope>] -d "<detail>"...]
-steer msg list [-p PAGE] [-s SIZE]
-steer msg <id>
+steer inbox ack <id> '<Markdown>' [-i <new-task-id> -t "<title>" -z <size> [-p <priority>] [-T <phase> ...] [-S <scope>] [-d "<detail>" ...] [-m <message> ...] [-r <report> ...] [-k <task> ...] [-R <run> ...]
+steer inbox list [-p PAGE] [-s PAGE_SIZE]
+steer inbox show <id>
+steer inbox search <query> [-p PAGE]
 ```
 
 - Every message ID matches `^[0-9a-f]{6}$`.
 - `blocking=true` messages advance `sent -> seen -> acked`; `blocking=false` messages advance `sent -> seen` on `read` or `poll`.
 - ALWAYS read attached images and text in full with `functions.read_file` before acknowledging their note.
 - Report missing attachment bytes instead of inferring content from a listed path.
-- Use `steer ack -i -t -z -d` to create and link a task while acknowledging one message or report answer.
+- Use `steer inbox ack -i -t -z -d` to create and link a task while acknowledging one message or report answer.
 - MUST create that task before starting any work the message asks for.
 - Link messages only when they change a task's scope or acceptance criteria.
 - Leave unrelated clarifications unlinked.
-- Run `steer read` when stderr reports pending items.
-- Act on other stderr reminders as directed.
-- When stderr directs stale-report removal, run `steer report rm --stale`.
+- Run `steer inbox read` when stderr reports pending items; act on other stderr reminders as directed, and run `steer report remove --stale` when it directs stale-report removal.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read.
-- ALWAYS provide the substantive answer to each delivered message in its own `ack <id> <Markdown>` call before any chat follow-up.
-- One call carries one answer text, so acknowledge messages separately when the answers differ.
-- NEVER blindly acknowledge all pending messages.
+- ALWAYS give each delivered message its substantive answer in its own `ack <id> <Markdown>` before any chat; one answer per call, never a blind ack of all pending messages.
 - Treat a receipt as received, not implemented.
 - Acknowledge a message in the same tool block as the read that surfaced it.
 - Acknowledge a message before starting any implementation that the acknowledgement announces.
@@ -70,24 +67,26 @@ steer msg <id>
 ## Tasks (`Tasks`)
 
 ```bash
-steer tasks [-f, --full]
-steer task <id>
-steer task new <id> "<title>" -z <size> [-T <type>]... [-p <priority>] [-S <scope>] [-d "<detail>"] [-m <msg-id>] [-r <report-id>] [-k <task-id>]
+steer task list [-f, --finished] [-p PAGE]
+steer task show [<id>]
+steer task new <id> -t "<title>" -z <size> [-T <phase> ...] [-p <priority>] -S <scope> [-d "<detail>" ...] [-m <message> ...] [-r <report> ...] [-k <task> ...] [-R <run> ...]
+steer task edit <id> deets <text> -z <size>
+steer task edit <id> deets rm <1-based-index> -z <size>
+steer task edit <id> attach add <path> -z <size>
+steer task edit <id> attach rm <1-based-index> -z <size>
+steer task edit <id> links [msg|report|task] <id> [-A "<detail>"] [--delete <number>] [-z <size>]
+steer task edit <id> links rm msg|report|task <id>
+steer task edit <id> status|title|type|scope|priority|size <value>
 steer task finish <id> [-c <full-commit>]
-steer task mod <id> deets <text> -z <size>
-steer task mod <id> deets rm <1-based-index> -z <size>
-steer task mod <id> attach add <path> -z <size>
-steer task mod <id> attach rm <1-based-index> -z <size>
-steer task mod <id> links [msg|report|task] <id> [-A "<detail>"] [--delete <number>] [-z <size>]
-steer task mod <id> links rm msg|report|task <id>
-steer task mod <id> status|title|type|scope <value>
 steer task unlink <id> [msg|report|task] <link-id>
-steer task rm <id>
+steer task remove <id>
+steer task search <query> [-p PAGE]
 ```
 
 - Estimate each task's Fibonacci size against a known reference task, combining effort, complexity, and uncertainty, not time or cost.
 - Create ordered task phases by repeating `-T` with `report`, `code`, `docs`, `ops`, or `misc`.
 - For approved report work that changes a feature or documentation, MUST order a `report` phase first, followed by each required `code` or `docs` phase.
+- NEVER mark a report phase complete unless its report has been approved.
 - Finish phases on a clean tree using `steer task finish ID [-c FULL_COMMIT]`. Reports need a linked published report or answer, and code/docs need a unique pushed full commit.
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
 - Follow the task order returned by Steering.
@@ -112,21 +111,19 @@ steer task rm <id>
 - NEVER run `steer poll` as a gate wait unless the sole remaining task is blocked for that gate.
 - Continue independent work and poll when no unblocked work remains.
 - Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports.
-- ALWAYS end every turn with `steer poll` on the final Bash call, unless the listing carries a `skip_poll` stamp.
-- Call `functions.bash` with `{"command":"steer poll","timeout":1800}` for the final poll.
-- NEVER wrap the final poll in a shell timeout.
-- MUST NOT substitute sleep for the final poll.
-- NEVER treat a bounded no-result poll as a successful wait.
+- NEVER end a turn with unblocked tasks. Continue them in queue order.
+- Run `steer poll` last only with one task waiting on a gate or no tasks waiting for new work.
+- NEVER poll with multiple tasks queued.
 
 ## Reports (`Reports`)
 
 ```bash
-steer reports [-s, --stale]
-steer report <id>
-steer report pub <source.md> -i <id> -t "<title>"
-steer report pin ID
-steer report unpin ID
-steer report rm <id|--stale>
+steer report list [-s] [-p PAGE]
+steer report show <id>
+steer report publish -f <source.md> -i <id> -t "<title>"
+steer report pin <id>
+steer report unpin <id>
+steer report remove <id|--stale>
 ```
 
 - Publish agent handoffs and cross-session specifications as unfielded Steering reports.
@@ -140,7 +137,7 @@ steer report rm <id|--stale>
 - Write report option text as an imperative action, not a first-person statement or permission request.
 - Field IDs default to kebab-case of `label` with trailing `-` stripped, or come from an optional `<!-- field-id -->` comment above the field.
 - Radio (`choice`) and checkbox (`checkbox`) fields automatically render a built-in `"Something else..."` free-form input in the web UI.
-- After the first answer, a report body change requires `steer report rm <id>` before republishing the same ID. Removal keeps old answers in the inbox, detaches task links, and preserves task details.
+- After the first answer, a report body change requires `steer report remove <id>` before republishing the same ID. Removal keeps old answers in the inbox, detaches task links, and preserves task details.
 - Apply user-approved formatting-only changes to the working source without republishing an answered report or requesting another approval.
 - Publish all reports through the `arena-steering` skill in the shared preview.
 - Carry every proposal and question in a fielded report, NEVER in chat.
@@ -157,4 +154,4 @@ steer report rm <id|--stale>
 - Include a next-action field in every assessment or evaluation report.
 - Give the next-action field a recommended option and a no-change option.
 
-Before publishing reports, check `steer tasks` for related upcoming tasks and name their titles and scopes without IDs.
+Before publishing reports, check `steer task list` for related upcoming tasks and name their titles and scopes without IDs.

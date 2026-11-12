@@ -30,6 +30,26 @@ CALL_COUNT_META = "pre_call_count"
 WIREFRAME_SUFFIX = "-wireframe.png"
 SHELL_NAMES = {"bash", "sh", "dash", "zsh", "ksh"}
 COMMAND_WRAPPERS = {"env", "command", "nice", "nohup", "stdbuf", "sudo", "time"}
+INBOX_RECOVERY_COMMANDS = frozenset(
+  {
+    ("inbox", "read"),
+    ("inbox", "ack"),
+    ("poll",),
+    ("ren",),
+  }
+)
+STEERING_BOOKKEEPING_COMMANDS = frozenset(
+  {
+    "inbox",
+    "survey",
+    "skills",
+    "ren",
+    "serve",
+    "task",
+    "report",
+    "worktree",
+  }
+)
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
 SHELL_WRAPPER = re.compile(
   r"^(?:\S*/)?(?:bash|sh|dash|zsh|ksh)\s+(?:-[\w-]+\s+)*-[\w]*c\s+"
@@ -80,7 +100,7 @@ ARENA_PROBE_COMMANDS = {"source ~/.profile"}
 PROFILE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c mkdir -p '[^'\r\n]+'")
 NATIVE_MKDIR_LAUNCHER = re.compile(r"/bin/bash -l -c (mkdir -p '(/[^'\r\n]+)')")
 LOGIN_ACK_WRAPPER = re.compile(
-  r"""PATH="\$HOME/\.local/bin:\$PATH" steer ack [0-9a-f]{6} '[^'\r\n]+'"""
+  r"""PATH="\$HOME/\.local/bin:\$PATH" steer inbox ack [0-9a-f]{6} '[^'\r\n]+'"""
 )
 ARENA_PORT_PROBE = (
   "(command -v ss >/dev/null 2>&1 && ss -ltnH) || netstat -ltn 2>/dev/null || true"
@@ -540,7 +560,7 @@ def arena_maintenance_step(
   return False
 
 
-TASK_SUBCOMMANDS = frozenset({"task", "tasks", "ren"})
+TASK_SUBCOMMANDS = frozenset({"task", "ren"})
 
 
 def command_activity(line: str, command: str) -> str:
@@ -562,15 +582,19 @@ def command_activity(line: str, command: str) -> str:
   if head != "steer" or not args:
     return ""
   verb = args[0]
-  if verb == "read":
+  if verb in {"read", "inbox"}:
     return "inbox"
   if verb == "run":
     return "run"
   if verb in TASK_SUBCOMMANDS:
     action = args[1] if verb == "task" and len(args) > 1 else ""
-    return {"mod": "task-mod", "finish": "task-finish"}.get(action, "task")
+    return {"edit": "task-mod", "mod": "task-mod", "finish": "task-finish"}.get(
+      action, "task"
+    )
   if verb == "report" and args[1:2] == ["pub"]:
     return "pub"
+  if verb == "report":
+    return "report"
   return ""
 
 
@@ -714,8 +738,27 @@ class PreContext:
       and remote_git_push(command_words(pieces[0][0]))
     )
 
+  def is_steering_bookkeeping(self) -> bool:
+    """Allow a standalone bookkeeping command to bypass the pending-inbox gate."""
+    text = shell_line(self.line or self.command).strip()
+    if not text or "\n" in text or any(mark in text for mark in ("`", "$(", "${")):
+      return False
+    lexer = shlex.shlex(text, posix=True, punctuation_chars="|;&<>()")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+      words = list(lexer)
+    except ValueError:
+      return False
+    return (
+      len(words) >= 2
+      and words[0] == "steer"
+      and words[1] in STEERING_BOOKKEEPING_COMMANDS
+      and not any(word and all(char in "|;&<>()" for char in word) for word in words)
+    )
+
   def is_inbox_recovery(self) -> bool:
-    """Allow inbox-only lines and a current initial ACK step."""
+    """Allow inbox recovery lines and a current initial ACK step."""
     if (
       self.line
       and self.command
@@ -725,9 +768,17 @@ class PreContext:
       return True
 
     def verb(words: list[str]) -> str:
-      if len(words) < 2 or Path(words[0]).name != "steer":
+      if len(words) < 2 or words[0] != "steer":
         return ""
-      return words[1] if words[1] in {"read", "poll", "ack"} else ""
+      args = words[1:]
+      return next(
+        (
+          candidate[-1]
+          for candidate in INBOX_RECOVERY_COMMANDS
+          if tuple(args[: len(candidate)]) == candidate
+        ),
+        "",
+      )
 
     def has_redirection(text: str) -> bool:
       lexer = shlex.shlex(text, posix=False, punctuation_chars="<>")
@@ -739,7 +790,23 @@ class PreContext:
         return True
       return any(word and all(char in "<>" for char in word) for word in words)
 
+    def has_unsafe_expansion(text: str) -> bool:
+      lexer = shlex.shlex(text, posix=False, punctuation_chars="|;&<>()")
+      lexer.whitespace_split = True
+      lexer.commenters = ""
+      try:
+        words = list(lexer)
+      except ValueError:
+        return True
+      return any(
+        any(mark in word for mark in ("`", "$(", "${"))
+        and not (word.startswith("'") and word.endswith("'"))
+        for word in words
+      )
+
     text = shell_line(self.line or self.command)
+    if has_unsafe_expansion(text):
+      return False
     pieces = self.pieces()
     if not pieces:
       return False
@@ -769,7 +836,7 @@ class PreContext:
       ]
       if not punctuation:
         return True
-      if words[1] != "ack" or punctuation != ["|"]:
+      if verb(words) != "ack" or punctuation != ["|"]:
         return False
       return not (self.is_push() or PreContext(line=self.command).is_push())
     if len(pieces) == 1 and pieces[0][1] == ";":
@@ -797,8 +864,7 @@ BASH_COMMAND_POLICY: dict[str, tuple[bool, bool]] = {
   "python": (True, True),
   "standalone mkdir": (True, False),
   "inbox recovery": (False, False),
-  "steering exempt": (False, False),
-  "steering count exempt": (False, True),
+  "steering bookkeeping": (False, False),
   "arena utility": (False, False),
   "routed background": (False, False),
   "*": (True, True),
@@ -829,12 +895,10 @@ def bash_command_policy(ctx: PreContext) -> tuple[bool, bool]:
     if (
       len(words) >= 2
       and words[0] == "steer"
+      and words[1] in STEERING_BOOKKEEPING_COMMANDS
       and not any(word and all(char in "|;&<>()" for char in word) for word in words)
     ):
-      if words[1] in {"msg", "survey", "skills", "ren", "serve"}:
-        return BASH_COMMAND_POLICY["steering exempt"]
-      if words[1] in {"tasks", "task", "reports", "report", "worktree"}:
-        return BASH_COMMAND_POLICY["steering count exempt"]
+      return BASH_COMMAND_POLICY["steering bookkeeping"]
   pieces = ctx.pieces()
   if len(pieces) == 1 and pieces[0][1] == ";":
     words = command_words(pieces[0][0])
@@ -897,7 +961,7 @@ class InboxPipeGuard:
       return (
         len(words) >= 2
         and Path(words[0]).name == "steer"
-        and words[1] in {"read", "poll"}
+        and (words[1] in {"read", "poll"} or words[1:3] == ["inbox", "read"])
       )
 
     for words, separator in ctx.pieces():
@@ -915,7 +979,7 @@ class InboxPipeGuard:
     return PreResult(
       [
         "VIOLATION: Inbox piped.",
-        "Run `steer read` or `steer poll` alone to keep the full output visible.",
+        "Run `steer inbox read` or `steer poll` alone to keep the full output visible.",
       ],
       BLOCK,
     )
@@ -1423,7 +1487,7 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
-    if ctx.is_inbox_recovery():
+    if ctx.is_inbox_recovery() or ctx.is_steering_bookkeeping():
       return False
     if ctx.pending_ids and ctx.is_push():
       return True
@@ -1438,7 +1502,7 @@ class InboxGate:
       return PreResult(
         [
           "VIOLATION: Push blocked. Inbox has pending. Read and ack all. Retry.",
-          "Nothing left the sandbox. Use `steer read`, then `steer ack` for each item.",
+          "Nothing left the sandbox. Use `steer inbox read`, then `steer inbox ack` for each item.",
           "Pending: " + ", ".join(ctx.pending_ids),
           f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
         ],
@@ -1449,7 +1513,7 @@ class InboxGate:
     return PreResult(
       [
         "VIOLATION: Bash blocked. Read and ack all NOW.",
-        f"Threshold: {GATE_THRESHOLD} calls. Use `steer read`, then `steer ack` for each item.",
+        f"Threshold: {GATE_THRESHOLD} calls. Use `steer inbox read`, then `steer inbox ack` for each item.",
         f"Blocked by the part `{ctx.blocked_part()}`. Run the inbox calls alone.",
       ],
       BLOCK,
@@ -1474,7 +1538,7 @@ class WireframeGuard:
     )
 
 
-ACK_QUOTE = re.compile(r'(?:^|[;&|]\s*)\s*(?:\S*/)?steer\s+ack\b[^;|]*?"')
+ACK_QUOTE = re.compile(r'(?:^|[;&|]\s*)\s*(?:\S*/)?steer\s+inbox\s+ack\b[^;|]*?"')
 
 
 class AckQuoteReminder:

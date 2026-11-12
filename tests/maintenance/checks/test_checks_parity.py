@@ -76,6 +76,8 @@ def rule_tree(root: Path, live: str) -> Repo:
     ("kilo/debug.md", "kilo/debug.md"),
     ("CHATGPT-CUSTOM.txt", "CHATGPT.txt"),
     ("CHATGPT-MORE.txt", "CHATGPT.txt"),
+    ("wenyan/CHATGPT-CUSTOM.txt", "CHATGPT.txt"),
+    ("wenyan/CHATGPT-MORE.txt", "CHATGPT.txt"),
     ("COMMIT-SPEC.txt", "COMMIT-SPEC.txt"),
   ):
     write(root, f"rules/refs/{ref_name}", "one\ntwo\n")
@@ -97,6 +99,19 @@ def test_rule_parity_rejects_an_added_rule_and_a_moved_heading(tmp_path: Path):
   errors.clear()
   check_rule_parity(rule_tree(tmp_path, "## B\n- one\n"), errors)
   assert len(errors) == 1 and "section headings diverge" in errors[0]
+
+
+def test_rule_parity_checks_experimental_wenyan_copies(tmp_path: Path):
+  repo = rule_tree(tmp_path, "## A\n- one\n")
+  for name in ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt"):
+    live_name = f"rules/wenyan/{name}"
+    write(tmp_path, live_name, "one\ntwo\nthree\n")
+    errors: list[str] = []
+    check_rule_parity(repo, errors)
+    assert len(errors) == 1
+    assert live_name in errors[0]
+    assert "3 rule lines vs 2" in errors[0]
+    write(tmp_path, live_name, "one\n")
 
 
 def test_rule_parity_reports_an_incomplete_pair(tmp_path: Path):

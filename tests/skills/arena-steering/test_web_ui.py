@@ -2154,7 +2154,7 @@ def test_cli_agent_call_clears_turn_end(
     store.set_meta("agent_seen_at", old_seen)
     store.set_meta("turn_ended_at", _stamp(200))
     store.set_meta("poll_completed", "1")
-    assert cli.main(["read"], out=io.StringIO(), err=io.StringIO()) == 0
+    assert cli.main(["inbox", "read"], out=io.StringIO(), err=io.StringIO()) == 0
     assert not store.get_meta("turn_ended_at")
     assert not store.get_meta("poll_completed")
     assert store.get_meta("agent_seen_at") != old_seen
@@ -2404,7 +2404,6 @@ def test_title_tooltip_matches_arena_and_preserves_survey_click(tmp_path: Path) 
         page.get_by_role("heading", name="Survey Verification").wait_for()
         page.get_by_role("button", name="Close dialog").click()
         page.keyboard.press("Tab")
-        button.evaluate("el => el.blur()")
         button.focus()
         tip.wait_for(state="visible")
         page.keyboard.press("Escape")

@@ -4,7 +4,7 @@ description: Steer an Arena.ai agent mid-turn through a local preview inbox, dep
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.11+, persisted workspace and long-lived process tools.
 metadata:
-  version: "2.3.10"
+  version: "2.3.11"
 ---
 
 # Arena Steering
@@ -73,6 +73,7 @@ steer task rm <id>
 - Estimate each task's Fibonacci size against a known reference task, combining effort, complexity, and uncertainty, not time or cost.
 - Create ordered task phases by repeating `-T` with `report`, `code`, `docs`, `ops`, or `misc`.
 - For approved report work that changes a feature or documentation, MUST order a `report` phase first, followed by each required `code` or `docs` phase.
+- NEVER complete a report phase before its report is approved.
 - Finish phases on a clean tree using `steer task finish ID [-c FULL_COMMIT]`. Reports need a linked published report or answer, and code/docs need a unique pushed full commit.
 - Tasks sit in a mutable queue where dependents automatically follow their task links (`links.task_ids[]`).
 - Follow the task order returned by Steering.
@@ -93,7 +94,7 @@ steer task rm <id>
 - After one diagnosis, resume unblocked work and use a worktree if the gate freezes its files. Recheck logs only after meaningful progress, never just to wait.
 - Continue independent work and poll when no unblocked work remains.
 - Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports.
-- ALWAYS end every turn with `steer poll` on the final Bash call unless the listing carries a `skip_poll` stamp, calling Bash with `{"command":"steer poll","timeout":1800}`; NEVER wrap it in a shell timeout, substitute sleep, or treat a bounded no-result poll as a successful wait.
+- NEVER end a turn with unblocked tasks; continue in queue order. Run `steer poll` last only when one task waits on a gate or none wait for new work. NEVER poll with multiple tasks queued.
 
 ## Reports (`Reports`)
 

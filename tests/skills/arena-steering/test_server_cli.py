@@ -83,9 +83,94 @@ def _isolate_cli_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _run_cli(state_dir: Path, *args: str) -> tuple[int, str, str]:
   assert state_dir == cli.resolve_state_dir()
+  argv = list(args)
+  if argv[:1] == ["read"]:
+    argv = ["inbox", "read", *argv[1:]]
+  elif argv[:1] == ["ack"]:
+    argv = ["inbox", "ack", *argv[1:]]
+  elif argv[:1] == ["msg"]:
+    if len(argv) == 1:
+      argv = ["inbox", "list"]
+    elif argv[1] in {"list", "show", "search"}:
+      argv = ["inbox", *argv[1:]]
+    else:
+      argv = ["inbox", "show", *argv[1:]]
+  elif argv[:1] == ["tasks"]:
+    argv = ["task", "list", *argv[1:]]
+  elif argv[:1] == ["reports"]:
+    argv = ["report", "list", *argv[1:]]
+  elif (
+    argv[:1] == ["task"]
+    and len(argv) == 2
+    and argv[1]
+    not in {"list", "show", "new", "edit", "finish", "remove", "unlink", "search"}
+  ):
+    argv = ["task", "show", argv[1]]
+  elif (
+    argv[:1] == ["report"]
+    and len(argv) == 2
+    and argv[1] not in {"list", "show", "publish", "pin", "unpin", "remove"}
+  ):
+    argv = ["report", "show", argv[1]]
+  if argv[:2] == ["task", "new"] and not any(
+    option in {"-t", "--title"} for option in argv
+  ):
+    single_value_options = {
+      "-p",
+      "--priority",
+      "-z",
+      "--size",
+      "-S",
+      "--scope",
+      "-i",
+      "--id",
+    }
+    multi_value_options = {
+      "-T",
+      "--phase",
+      "-d",
+      "--detail",
+      "-m",
+      "--message",
+      "-r",
+      "--report",
+      "-k",
+      "--task",
+      "-R",
+      "--run",
+    }
+    positional_indices: list[int] = []
+    index = 2
+    while index < len(argv):
+      token = argv[index]
+      if token in single_value_options:
+        index += 2
+      elif token in multi_value_options:
+        index += 1
+        while index < len(argv) and not argv[index].startswith("-"):
+          index += 1
+      elif token.startswith("-"):
+        index += 1
+      else:
+        positional_indices.append(index)
+        index += 1
+    if len(positional_indices) > 1:
+      argv[positional_indices[1] : positional_indices[1]] = ["-t"]
+  if argv[:2] == ["task", "mod"]:
+    argv[1] = "edit"
+  elif argv[:2] == ["task", "rm"]:
+    argv[1] = "remove"
+  elif argv[:2] == ["report", "pub"]:
+    argv[1] = "publish"
+    if len(argv) > 2 and not argv[2].startswith("-"):
+      argv.insert(2, "-f")
+  elif argv[:2] == ["report", "rm"]:
+    argv[1] = "remove"
+  elif argv[:2] == ["run", "pr-checks"]:
+    argv[1] = "checks"
   out = io.StringIO()
   err = io.StringIO()
-  code = cli_main(list(args), out=out, err=err)
+  code = cli_main(argv, out=out, err=err)
   return code, out.getvalue(), err.getvalue()
 
 
@@ -139,18 +224,18 @@ def test_cli_task_reminders_for_ack_and_nonempty_read(tmp_path: Path) -> None:
   try:
     app = SteeringApp(store)
     app.messages.send_message("Please fix this", msg_id=MSG_ID_CLI)
-    code, out, err = _run_cli(state_dir, "read")
+    code, out, err = _run_cli(state_dir, "inbox", "read")
     assert (code, err) == (0, "")
     read_hint = "If a message asks for work or details, add it to a task."
     assert read_hint in out
     assert "steer task mod <task-id> links msg <message-id>" not in out
-    code, out, err = _run_cli(state_dir, "ack", MSG_ID_CLI, "Working on it")
+    code, out, err = _run_cli(state_dir, "inbox", "ack", MSG_ID_CLI, "Working on it")
     assert (code, err) == (0, "")
     assert (
-      f"steer task mod <task-id> links msg {MSG_ID_CLI} -A '<detail>' -z <size>" in out
+      f"steer task edit <task-id> links msg {MSG_ID_CLI} -A '<detail>' -z <size>" in out
     )
     assert "If msg asks for work or details, add to task" in out  # nonemo: NMT100
-    assert "add it to a task" not in _run_cli(state_dir, "read")[1]
+    assert "add it to a task" not in _run_cli(state_dir, "inbox", "read")[1]
   finally:
     store.close()
 
@@ -945,9 +1030,9 @@ def test_task_lists_only_titles_and_ids_but_single_task_keeps_details() -> None:
 @pytest.mark.parametrize(
   ("group", "commands"),
   [
-    ("task", ("new ID TITLE", "rm ID", "mod ID", "unlink ID")),
-    ("report", ("pub FILE", "pin ID", "unpin ID", "rm ID")),
-    ("run", ("start", "logs NAME", "pr-checks")),
+    ("task", ("new ID -t TITLE", "remove ID", "edit ID", "unlink ID")),
+    ("report", ("publish -f FILE", "pin ID", "unpin ID", "remove ID")),
+    ("run", ("start", "logs NAME", "checks")),
     ("worktree", ("add NAME", "list", "remove NAME", "prune", "collect NAME")),
   ],
 )
@@ -1077,23 +1162,7 @@ def test_task_status_api_and_cli_reject_noncanonical_values(
   assert app.dispatch("GET", "/tasks/work")[1]["task"]["status"] == "upcoming"
   store.close()
 
-  code, _, error = _run_cli(state_dir, "task", "mod", "work", "status", invalid_status)
-  assert code != 0 and "Invalid Task.status" in error
-  code, _, error = _run_cli(
-    state_dir,
-    "task",
-    "new",
-    "-z",
-    "3",
-    "another",
-    "Another",
-    "-S",
-    "Another scope",
-    "-d",
-    "Do work",
-    "-s",
-    invalid_status,
-  )
+  code, _, error = _run_cli(state_dir, "task", "edit", "work", "status", invalid_status)
   assert code != 0 and "Invalid Task.status" in error
 
 
@@ -2454,15 +2523,15 @@ def test_cli_end_to_end_messages_tasks_and_reports(tmp_path: Path) -> None:
   code, out, _ = _run_cli(state_dir, "msg", MSG_ID_CLI)
   assert code == 0
   assert ACK_MARKDOWN in out
-  with pytest.raises(SystemExit) as invalid_args:
-    _run_cli(state_dir, "msg", "show", MSG_ID_CLI)
-  assert invalid_args.value.code == 2
+  code, out, error = _run_cli(state_dir, "inbox", "show", MSG_ID_CLI)
+  assert code == 0 and not error
+  assert ACK_MARKDOWN in out
 
   code, _, err = _run_cli(
     state_dir, "task", "new", "-z", "3", "-S", "Empty scope", "empty-task", "Empty"
   )
   expected_error = "at least one detail"
-  assert code != 0 and expected_error in err
+  assert code != 0 and expected_error in err  # nonemo: NMT100
   code, out, _ = _run_cli(
     state_dir,
     "task",
@@ -3654,7 +3723,7 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
   cli._write_server_file(state_dir, f"http://127.0.0.1:{health_server.server_port}")
   try:
     result = subprocess.run(
-      [sys.executable, str(entrypoint), "tasks"],
+      [sys.executable, str(entrypoint), "task", "list"],
       cwd=outside,
       env=env,
       capture_output=True,
@@ -3668,7 +3737,7 @@ def test_fixed_state_location_uses_state_sqlite3(tmp_path: Path) -> None:
     assert not (outside / "arena-state").exists()
     assert not override.exists()
     rejected = subprocess.run(
-      [sys.executable, str(entrypoint), "--state-dir", str(override), "tasks"],
+      [sys.executable, str(entrypoint), "--state-dir", str(override), "task", "list"],
       cwd=outside,
       env=env,
       capture_output=True,
@@ -4042,9 +4111,9 @@ def test_cli_ack_batches_messages_and_report_answers(tmp_path: Path) -> None:
   assert out == (
     "ok ab1001 ab1002 ab1003\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1001 -A '<detail>' -z <size>\n"
+    "steer task edit <task-id> links msg ab1001 -A '<detail>' -z <size>\n"
     "If msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1002 -A '<detail>' -z <size>\n"
+    "steer task edit <task-id> links msg ab1002 -A '<detail>' -z <size>\n"
   )
   store, _, _, reports = cli.open_services(state_dir)
   assert store.get_message("ab1001").acks == ["One shared reply"]
@@ -4079,7 +4148,7 @@ def test_cli_ack_without_id_still_requires_one_pending_item(tmp_path: Path) -> N
   assert code == 0, err
   assert out == (
     "ok ab1011\nIf msg asks for work or details, add to task\n"
-    "steer task mod <task-id> links msg ab1011 -A '<detail>' -z <size>\n"
+    "steer task edit <task-id> links msg ab1011 -A '<detail>' -z <size>\n"
   )
   store, messages, _, _ = cli.open_services(state_dir)
   assert store.get_message("ab1011").acks == ["Received"]
@@ -4109,7 +4178,7 @@ def test_cli_ack_rejects_id_only_reply_and_keeps_message_pending() -> None:
     assert code == 0, err
     assert out == (
       "ok ab1014\nIf msg asks for work or details, add to task\n"
-      "steer task mod <task-id> links msg ab1014 -A '<detail>' -z <size>\n"
+      "steer task edit <task-id> links msg ab1014 -A '<detail>' -z <size>\n"
     )
     assert store.get_message("ab1014").acks == ["Reviewed the change"]
   finally:
@@ -5284,11 +5353,7 @@ def test_cli_bare_task_shows_first_unblocked_without_details(tmp_path: Path) -> 
   assert code == 0, err
   assert "ready-task" in out and "Ready scope" in out
   assert "blocked-task" not in out and "Detailed step" not in out
-  for flag in ("-d", "--deets"):
-    code, out, err = _run_cli(state_dir, "task", flag)
-    assert code == 0, err
-    assert "ready-task" in out and "Detailed step" in out
-  code, out, err = _run_cli(state_dir, "task", "ready-task")
+  code, out, err = _run_cli(state_dir, "task", "show", "ready-task")
   assert code == 0, err
   assert "Detailed step" in out
 
@@ -5346,7 +5411,7 @@ def test_cli_bare_task_handles_no_unblocked_work(tmp_path: Path) -> None:
   tasks.create_task("done-task", "Done", size=3, type="ops", details=["Done"])
   tasks.finish_phase("done-task")
   store.close()
-  code, out, err = _run_cli(state_dir, "task", "--deets")
+  code, out, err = _run_cli(state_dir, "task", "show")
   assert code == 0, err
   assert NO_CURRENT_TASK in out
 
@@ -5367,7 +5432,7 @@ def test_cli_bare_task_excludes_non_upcoming_items(
   assert "ready-task" in out
   assert "done-task" not in out and "legacy-task" not in out
   items.pop()
-  code, out, err = _run_cli(cli.resolve_state_dir(), "task", "--deets")
+  code, out, err = _run_cli(cli.resolve_state_dir(), "task", "show")
   assert code == 0, err
   assert NO_CURRENT_TASK in out
 
@@ -6164,10 +6229,10 @@ def test_browser_recipe_is_standard_tooling_without_installer_changes() -> None:
   ("line", "warn"),
   (
     (f"{INSTALLED} read", True),
-    ("~/.local/bin/steer read", True),
+    ("~/.local/bin/steer inbox read", True),
     (f"env LANG=C {INSTALLED} read", True),
     (f"printf '{INSTALLED}'", False),
-    ("steer read", False),
+    ("steer inbox read", False),
   ),
 )
 def test_installed_launcher_suggests_bare_steer_without_blocking(

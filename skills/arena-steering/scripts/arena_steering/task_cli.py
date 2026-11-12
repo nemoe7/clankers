@@ -11,6 +11,17 @@ from .models import TASK_PRIORITIES, TASK_SIZES, Task
 from .services import TaskService
 
 
+def _normalize_priority(value: str) -> str:
+  normalized = value.upper()
+  if normalized.isdecimal():
+    normalized = f"P{normalized}"
+  if normalized not in TASK_PRIORITIES:
+    raise argparse.ArgumentTypeError(
+      f"priority must be one of {TASK_PRIORITIES} or 1–5"
+    )
+  return normalized
+
+
 def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
   if not args or args in (["-d"], ["--deets"]):
     current = next(
@@ -31,18 +42,21 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
   if subcmd == "new":
     new_p = argparse.ArgumentParser(prog="steer task new")
     new_p.add_argument("id")
-    new_p.add_argument("title")
-    new_p.add_argument("-p", "--priority", choices=TASK_PRIORITIES)
+    new_p.add_argument("-t", "--title", required=True)
+    new_p.add_argument("-p", "--priority", type=_normalize_priority)
     new_p.add_argument("-z", "--size", type=int, choices=TASK_SIZES, required=True)
-    new_p.add_argument("-T", "--type", dest="types", action="append", default=[])
-    new_p.add_argument("-s", "--status", default="upcoming")
-    new_p.add_argument("-S", "--scope", required=True)
-    new_p.add_argument("-d", "--detail", action="append", default=[])
-    new_p.add_argument("-m", "--msg", action="append", default=[])
-    new_p.add_argument("-r", "--report", action="append", default=[])
-    new_p.add_argument("-g", "--gate", action="append", default=[])
     new_p.add_argument(
-      "-k", "--task", "--dep", dest="task_ids", action="append", default=[]
+      "-T", "--phase", dest="types", action="extend", nargs="+", default=[]
+    )
+    new_p.add_argument("-S", "--scope", required=True)
+    new_p.add_argument("-d", "--detail", action="extend", nargs="+", default=[])
+    new_p.add_argument("-m", "--message", action="extend", nargs="+", default=[])
+    new_p.add_argument("-r", "--report", action="extend", nargs="+", default=[])
+    new_p.add_argument(
+      "-k", "--task", dest="task_ids", action="extend", nargs="+", default=[]
+    )
+    new_p.add_argument(
+      "-R", "--run", dest="run_names", action="extend", nargs="+", default=[]
     )
     parsed = new_p.parse_args(args[1:])
     task = tasks.create_task(
@@ -52,14 +66,13 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
       size=parsed.size,
       type=parsed.types[0] if parsed.types else "code",
       types=parsed.types or None,
-      status=parsed.status,
       scope=parsed.scope,
       details=parsed.detail,
       links={
-        "msg_ids": parsed.msg,
+        "msg_ids": parsed.message,
         "report_ids": parsed.report,
         "task_ids": parsed.task_ids,
-        "gate_names": parsed.gate,
+        "gate_names": parsed.run_names,
       },
     )
     _, blocked = tasks.get_task(task.id)
@@ -86,7 +99,7 @@ def _run_task(args: list[str], tasks: TaskService, out: TextIO) -> int:
 
   if subcmd == "rm":
     if len(args) != 2:
-      raise ValueError("Usage: steer task rm <id>")
+      raise ValueError("Usage: steer task remove <id>")
     removed = tasks.remove_task(args[1])
     if not removed:
       raise KeyError(f"Unknown task ID: {args[1]}")
@@ -157,17 +170,17 @@ def _extract_size_flag(tokens: list[str]) -> tuple[int | None, list[str]]:
 
 def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
   if len(args) < 3:
-    raise ValueError("Usage: steer task mod <id> <field> [rm] <value>")
+    raise ValueError("Usage: steer task edit <id> <field> [rm] <value>")
   task_id, field = args[0], args[1].lower()
   rest = args[2:]
 
   if field == "deets":
     size, detail_args = _extract_size_flag(rest)
     if not detail_args:
-      raise ValueError("Usage: steer task mod <id> deets <text> -z <size>")
+      raise ValueError("Usage: steer task edit <id> deets <text> -z <size>")
     if detail_args[0] == "rm":
       if len(detail_args) != 2:
-        raise ValueError("Usage: steer task mod <id> deets rm <number> -z <size>")
+        raise ValueError("Usage: steer task edit <id> deets rm <number> -z <size>")
       updated = tasks.mod_deets_rm(task_id, int(detail_args[1]), size=size)
     else:
       updated = tasks.mod_deets(task_id, " ".join(detail_args), size=size)
@@ -175,29 +188,29 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
     size, attach_args = _extract_size_flag(rest)
     if not attach_args:
       raise ValueError(
-        "Usage: steer task mod <id> attach add <path> -z <size> | attach rm <number> -z <size>"
+        "Usage: steer task edit <id> attach add <path> -z <size> | attach rm <number> -z <size>"
       )
     if attach_args[0] == "rm":
       if len(attach_args) != 2:
-        raise ValueError("Usage: steer task mod <id> attach rm <number> -z <size>")
+        raise ValueError("Usage: steer task edit <id> attach rm <number> -z <size>")
       updated = tasks.mod_attachments_rm(task_id, size=size, number=int(attach_args[1]))
     elif attach_args[0] == "add":
       if len(attach_args) != 2:
-        raise ValueError("Usage: steer task mod <id> attach add <path> -z <size>")
+        raise ValueError("Usage: steer task edit <id> attach add <path> -z <size>")
       updated = tasks.mod_attachments_add(task_id, attach_args[1], size=size)
     else:
       raise ValueError(
-        "Usage: steer task mod <id> attach add <path> -z <size> | attach rm <number> -z <size>"
+        "Usage: steer task edit <id> attach add <path> -z <size> | attach rm <number> -z <size>"
       )
   elif field == "links":
     if rest[0] == "rm":
       if len(rest) != 3:
         raise ValueError(
-          "Usage: steer task mod <id> links rm <msg|report|task|gate> <id>"
+          "Usage: steer task edit <id> links rm <msg|report|task|gate> <id>"
         )
       updated = tasks.mod_links_rm(task_id, rest[1], rest[2])
     else:
-      link_parser = argparse.ArgumentParser(prog="steer task mod links")
+      link_parser = argparse.ArgumentParser(prog="steer task edit links")
       link_parser.add_argument("link", nargs="+")
       link_parser.add_argument("-A", "--append", dest="append_detail")
       link_parser.add_argument("--delete", dest="remove_detail", type=int)
@@ -215,7 +228,7 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
         link_type, link_id = None, parsed.link[0]
       else:
         raise ValueError(
-          "Usage: steer task mod <id> links [msg|report|task|gate] <link-id> "
+          "Usage: steer task edit <id> links [msg|report|task|gate] <link-id> "
           "[-A detail] [--delete number] [-z size]"
         )
       before = set(tasks.get_task(task_id)[0].details)
@@ -235,32 +248,31 @@ def _run_task_mod(args: list[str], tasks: TaskService, out: TextIO) -> int:
             print(f"- {detail}", file=out)
           print(
             f"Remove any of these from task {updated.id} if they add nothing: "
-            f"steer task mod {updated.id} deets rm <index> -z <size>",
+            f"steer task edit {updated.id} deets rm <index> -z <size>",
             file=out,
           )
   elif field == "deps":
     if rest[0] == "rm":
       if len(rest) != 2:
-        raise ValueError("Usage: steer task mod <id> deps rm <task-id>")
+        raise ValueError("Usage: steer task edit <id> deps rm <task-id>")
       updated = tasks.mod_deps_rm(task_id, rest[1])
     else:
       if len(rest) != 1:
-        raise ValueError("Usage: steer task mod <id> deps <task-id>")
+        raise ValueError("Usage: steer task edit <id> deps <task-id>")
       updated = tasks.mod_deps_add(task_id, rest[0])
   elif field == "types":
     updated = tasks.mod_types(task_id, rest)
   elif field == "status" and rest[0] == "finished":
     if len(rest) > 2:
-      raise ValueError("Usage: steer task mod <id> status finished [commit-hash]")
+      raise ValueError("Usage: steer task edit <id> status finished [commit-hash]")
     updated = tasks.finish_phase(
       task_id, commit_hash=rest[1] if len(rest) == 2 else None
     )
   elif field in {"priority", "size"}:
     if len(rest) != 1:
-      raise ValueError(f"Usage: steer task mod <id> {field} <value>")
-    updated = tasks.patch_task(
-      task_id, {field: int(rest[0]) if field == "size" else rest[0]}
-    )
+      raise ValueError(f"Usage: steer task edit <id> {field} <value>")
+    value = int(rest[0]) if field == "size" else _normalize_priority(rest[0])
+    updated = tasks.patch_task(task_id, {field: value})
   elif field in {"status", "title", "type", "scope"}:
     updated = tasks.mod_scalar(task_id, field, " ".join(rest))
   else:
