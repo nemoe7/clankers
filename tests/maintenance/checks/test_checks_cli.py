@@ -142,7 +142,8 @@ def test_nemoize_stage_passes_on_exit_zero(tmp_path: Path, monkeypatch):
 
 
 def test_nemoize_scope_is_the_root_config(monkeypatch):
-  import nemoize
+  import nemo_config
+  import nemo_files
 
   config = tomllib.loads((DEFAULT_ROOT / "nemoizer.toml").read_text(encoding="utf-8"))
   for kept in (
@@ -152,7 +153,7 @@ def test_nemoize_scope_is_the_root_config(monkeypatch):
   ):
     assert kept in config["extend-exclude"]
   monkeypatch.setattr(
-    nemoize, "ACTIVE_CONFIG", nemoize.load_config([str(DEFAULT_ROOT)])
+    nemo_config, "ACTIVE_CONFIG", nemo_config.load_config([str(DEFAULT_ROOT)])
   )
   for path in (
     ".agents/skills/README.md",
@@ -162,10 +163,12 @@ def test_nemoize_scope_is_the_root_config(monkeypatch):
     "docs/nuu/README.md",
     "docs/nuu/CHANGELOG.md",
   ):
-    assert not nemoize.skipped(DEFAULT_ROOT / path, DEFAULT_ROOT, ())
-  assert nemoize.skipped(DEFAULT_ROOT / "docs/archive/CHANGELOG.md", DEFAULT_ROOT, ())
-  assert nemoize.skipped(DEFAULT_ROOT / ".agents/skills/other.md", DEFAULT_ROOT, ())
-  assert nemoize.skipped(DEFAULT_ROOT / "rules/other.md", DEFAULT_ROOT, ())
+    assert not nemo_files.skipped(DEFAULT_ROOT / path, DEFAULT_ROOT, ())
+  assert nemo_files.skipped(
+    DEFAULT_ROOT / "docs/archive/CHANGELOG.md", DEFAULT_ROOT, ()
+  )
+  assert nemo_files.skipped(DEFAULT_ROOT / ".agents/skills/other.md", DEFAULT_ROOT, ())
+  assert nemo_files.skipped(DEFAULT_ROOT / "rules/other.md", DEFAULT_ROOT, ())
 
 
 def test_nemoize_stays_a_standalone_tool(tmp_path: Path):

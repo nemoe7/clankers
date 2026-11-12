@@ -5,7 +5,6 @@
 import argparse
 import ast
 import configparser
-import contextlib
 import fnmatch
 import json
 import os
@@ -22,12 +21,26 @@ from concurrent.futures import FIRST_COMPLETED, Future, wait
 from itertools import pairwise
 from pathlib import Path
 
+import nemo_config
 from markers import (
   MARKER,
   MARKER_SPAN,
   audit_lines,
   collect_markers,
 )
+from nemo_config import (
+  HEADING_SENTENCE_CAP,
+  LIST_SENTENCE_CAP,
+  MIN_THE_COUNT,
+  PARAGRAPH_CAP,
+  SENTENCE_CAPS,
+  THE_DENSITY_CAP,
+  config_file_exclusions,
+  file_config,
+  file_scope,
+  load_config,
+)
+from nemo_files import text_file, walk
 from nemo_markdown import (
   blank_inline_comments,
   fence_states,
@@ -76,473 +89,6 @@ from prose import (
   ui_label_spans,
   workflow_name_spans,
 )
-
-SENTENCE_CAPS = {"instruction": 20, "description": 25}
-PARAGRAPH_CAP = 4
-LIST_SENTENCE_CAP = 2
-HEADING_SENTENCE_CAP = 1
-THE_DENSITY_CAP = 20
-MIN_THE_COUNT = 3
-
-
-# The rotation table names the avoided words, so its own rows never flag.
-SKIP_DIRS = {
-  ".pytest_cache",
-  ".git",
-  ".venv",
-  "__pycache__",
-  "build",
-  "dist",
-  "node_modules",
-  "out",
-}
-SKIP_PATHS = (
-  ".agents",
-  "arena-state",
-  "AGENTS.md",
-  "**/AGENTS.md",
-  "ARENA.md",
-  "**/ARENA.md",
-)
-SKIP_SUFFIXES = {
-  ".json",
-  ".webmanifest",
-}
-DEFAULT_CONFIG = {
-  "root": None,
-  "exclude": None,
-  "extend_exclude": (),
-  "respect_gitignore": True,
-  "context": None,
-  "instruction_sentence_cap": SENTENCE_CAPS["instruction"],
-  "description_sentence_cap": SENTENCE_CAPS["description"],
-  "paragraph_cap": PARAGRAPH_CAP,
-  "list_sentence_cap": LIST_SENTENCE_CAP,
-  "heading_sentence_cap": HEADING_SENTENCE_CAP,
-  "comment_block_cap": COMMENT_BLOCK_CAP,
-  "the_density_cap": THE_DENSITY_CAP,
-  "min_the_count": MIN_THE_COUNT,
-  "nmu100_max_words": NMU100_MAX_WORDS,
-  "test_helpers": (),
-  "select": ("ALL",),
-  "ignore": (),
-  "per_file_ignores": {},
-  "files": (),
-}
-CAP_KEYS = (
-  ("instruction-sentence-cap", "instruction_sentence_cap"),
-  ("description-sentence-cap", "description_sentence_cap"),
-  ("list-sentence-cap", "list_sentence_cap"),
-  ("heading-sentence-cap", "heading_sentence_cap"),
-  ("comment-block-cap", "comment_block_cap"),
-  ("min-the-count", "min_the_count"),
-  ("nmu100-max-words", "nmu100_max_words"),
-  ("nmu100_max_words", "nmu100_max_words"),
-)
-FILE_ENTRY_KEYS = {
-  "path",
-  "paths",
-  "context",
-  "paragraph-cap",
-  "the-density-cap",
-  "select",
-  "ignore",
-  "lint",
-  *(toml_key for toml_key, _ in CAP_KEYS),
-}
-NUMERIC_HEADER_KEYS = {
-  *(toml_key for toml_key, _ in CAP_KEYS),
-  "paragraph-cap",
-  "the-density-cap",
-}
-HEADER_KEYS = {"context", *NUMERIC_HEADER_KEYS}
-HEADER_MARKER = re.compile(r"\bnemoizer:[ \t]*(.*)")
-HEADER_STOP = re.compile(r"--!?>|\*/")
-BASE_CONFIG = dict(DEFAULT_CONFIG)
-ACTIVE_CONFIG = dict(DEFAULT_CONFIG)
-LICENSE_FILE_RE = re.compile(
-  r"^(?:(?:un)?licen[cs]e(?:[-._].*)?|.*\.licen[cs]e|copying(?:[-._].*)?|"
-  r"notice(?:[-._].*)?|(?:thirdparty|copyright)notices?(?:\..*)?|"
-  r"patents?(?:[-._].*)?)$",
-  re.IGNORECASE,
-)
-
-
-def _match_selectors(code, selectors):
-  """True when a rule ID matches any configured rule ID, prefix, or ALL."""
-  for item in selectors:
-    token = str(item).strip().upper()
-    if token == "ALL" or code == token or code.startswith(token):
-      return True
-  return False
-
-
-def _match_glob(rel_posix, name, pattern):
-  """Match a path against a Ruff-style file or directory glob pattern."""
-  pat = pattern.strip().replace("\\", "/")
-  if pat.endswith("/**"):
-    prefix = pat[:-3].rstrip("/")
-    return rel_posix == prefix or rel_posix.startswith(prefix + "/")
-  if "/**/" in pat:
-    collapsed = pat
-    while "/**/" in collapsed:
-      collapsed = collapsed.replace("/**/", "/")
-    if _match_glob(rel_posix, name, collapsed):
-      return True
-  if pat.startswith("**/"):
-    suffix = pat[3:]
-    return (
-      fnmatch.fnmatchcase(name, suffix)
-      or fnmatch.fnmatchcase(rel_posix, suffix)
-      or fnmatch.fnmatchcase(rel_posix, pat)
-    )
-  if "/" not in pat:
-    return (
-      pat in Path(rel_posix).parts
-      or fnmatch.fnmatchcase(name, pat)
-      or fnmatch.fnmatchcase(rel_posix, pat)
-    )
-  return fnmatch.fnmatchcase(rel_posix, pat)
-
-
-def _config_overrides(table):
-  """Return the validated context, cap, and rule keys of one config table."""
-  overrides = {}
-  if "context" in table:
-    context = str(table["context"])
-    if context not in {*SENTENCE_CAPS, "unknown"}:
-      raise ValueError(f"invalid context in config: {context}")
-    overrides["context"] = context
-  for toml_key, cfg_key in CAP_KEYS:
-    if toml_key in table:
-      val = int(table[toml_key])
-      if val < 1:
-        raise ValueError(f"{toml_key} must be at least 1")
-      overrides[cfg_key] = val
-  if "the-density-cap" in table:
-    density_cap = int(table["the-density-cap"])
-    if not 1 <= density_cap <= 100:
-      raise ValueError("the-density-cap must be between 1 and 100")
-    overrides["the_density_cap"] = density_cap
-  if "paragraph-cap" in table:
-    paragraph_cap = int(table["paragraph-cap"])
-    if not 0 < paragraph_cap <= PARAGRAPH_CAP:
-      raise ValueError(f"paragraph-cap must be between 1 and {PARAGRAPH_CAP}")
-    overrides["paragraph_cap"] = paragraph_cap
-  lint = table.get("lint", {})
-  if isinstance(lint, dict):
-    if "select" in lint:
-      overrides["select"] = tuple(str(item) for item in lint["select"])
-    if "ignore" in lint:
-      overrides["ignore"] = tuple(str(item) for item in lint["ignore"])
-    for lint_key in ("nmu100_max_words", "nmu100-max-words"):
-      if lint_key in lint:
-        val = int(lint[lint_key])
-        if val < 1:
-          raise ValueError(f"{lint_key} must be at least 1")
-        overrides["nmu100_max_words"] = val
-  return overrides
-
-
-def _file_entry(entry, index):
-  """Return the paths and rule overrides of one `[[files]]` entry."""
-  table = entry if isinstance(entry, dict) else {}
-  unknown = sorted(set(table) - FILE_ENTRY_KEYS)
-  if unknown:
-    raise ValueError(f"files entry {index} has unknown keys: {unknown}")
-  raw_paths = table.get("paths", table.get("path"))
-  if isinstance(raw_paths, str):
-    paths = (raw_paths,)
-  elif isinstance(raw_paths, (list, tuple)) and raw_paths:
-    paths = tuple(str(item) for item in raw_paths)
-  else:
-    raise ValueError(f"files entry {index} needs a path or paths list")
-  overrides = {
-    key: value for key, value in table.items() if key not in {"path", "paths", "lint"}
-  }
-  lint = dict(table.get("lint") or {})
-  for key in ("select", "ignore"):
-    if key in table:
-      lint[key] = overrides.pop(key, None)
-  if lint:
-    overrides["lint"] = lint
-  return {"paths": paths, "overrides": _config_overrides(overrides)}
-
-
-def load_config(targets=(), config_path=None, no_config=False):
-  """Discover and parse nemoizer.toml or [tool.nemoizer] in pyproject.toml."""
-  config = dict(DEFAULT_CONFIG)
-  if no_config:
-    return config
-  root = None
-  table = None
-  if config_path is not None:
-    candidate = Path(config_path)
-    if not candidate.is_file():
-      raise ValueError(f"config file does not exist: {candidate}")
-    raw = tomllib.loads(candidate.read_text(encoding="utf-8"))
-    table = (
-      raw.get("tool", {}).get("nemoizer", {})
-      if candidate.name == "pyproject.toml"
-      else raw
-    )
-    root = candidate.resolve().parent
-  else:
-    first = Path(targets[0]).resolve() if targets else Path.cwd().resolve()
-    start = first if first.is_dir() else first.parent
-    for directory in (start, *start.parents):
-      for name in ("nemoizer.toml", ".nemoizer.toml"):
-        candidate = directory / name
-        if candidate.is_file():
-          table = tomllib.loads(candidate.read_text(encoding="utf-8"))
-          root = directory
-          break
-      if table is not None:
-        break
-      pyproject = directory / "pyproject.toml"
-      if pyproject.is_file():
-        raw = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        section = raw.get("tool", {}).get("nemoizer")
-        if isinstance(section, dict):
-          table = section
-          root = directory
-          break
-      if (directory / ".git").exists():
-        break
-  if not isinstance(table, dict):
-    return config
-  config["root"] = root
-  if "exclude" in table:
-    config["exclude"] = tuple(str(item) for item in table["exclude"])
-  if "extend-exclude" in table:
-    config["extend_exclude"] = tuple(str(item) for item in table["extend-exclude"])
-  if "respect-gitignore" in table:
-    if not isinstance(table["respect-gitignore"], bool):
-      raise ValueError("respect-gitignore must be a boolean")
-    config["respect_gitignore"] = table["respect-gitignore"]
-  config.update(_config_overrides(table))
-  if "files" in table:
-    files = table["files"]
-    if not isinstance(files, list):
-      raise ValueError("files must be an array of tables")
-    config["files"] = tuple(
-      _file_entry(entry, index) for index, entry in enumerate(files, 1)
-    )
-  if "test-helpers" in table:
-    config["test_helpers"] = tuple(
-      (root / str(item)).resolve() if root else Path(str(item)).resolve()
-      for item in table["test-helpers"]
-    )
-  lint = table.get("lint", {})
-  if isinstance(lint, dict):
-    per_file = lint.get("per-file-ignores", {})
-    if isinstance(per_file, dict):
-      for pattern, rules in per_file.items():
-        pat_lower = str(pattern).lower()
-        rule_tuple = tuple(str(rule) for rule in rules)
-        if "test" in pat_lower and _match_selectors("NMT100", rule_tuple):
-          raise ValueError(
-            f"per-file-ignores cannot suppress NMT100 on test pattern: {pattern}"
-          )
-      config["per_file_ignores"] = {
-        str(pattern): tuple(str(rule) for rule in rules)
-        for pattern, rules in per_file.items()
-      }
-  return config
-
-
-def config_relative(path, root=None):
-  """Return a path relative to the config root in POSIX form when possible."""
-  candidate = Path(path)
-  if root is None:
-    return candidate.as_posix()
-  try:
-    return candidate.resolve().relative_to(Path(root).resolve()).as_posix()
-  except ValueError:
-    return candidate.as_posix()
-
-
-def header_config(text, path=None):
-  """Return cap and context overrides from a `nemoizer:` header on lines 1-3."""
-  overrides = {}
-  for number, line in enumerate(text.splitlines()[:3], 1):
-    visible = mask_protected_spans(line)
-    marker = HEADER_MARKER.search(visible)
-    if marker is None:
-      continue
-    before = visible[: marker.start()]
-    if any(
-      re.search(pattern, before, flags=re.IGNORECASE) for _, pattern, _ in ROTATIONS
-    ):
-      continue
-    for pair in re.split(r"[,;]", HEADER_STOP.split(marker[1], maxsplit=1)[0]):
-      key, separator, value = pair.partition("=")
-      key, value = key.strip().lower(), value.strip()
-      if not separator or key not in HEADER_KEYS:
-        raise ValueError(
-          f"{path or 'header'}:{number}: invalid nemoizer header key: {key or pair.strip()}"
-        )
-      if key in NUMERIC_HEADER_KEYS and not re.fullmatch(r"\d+", value):
-        raise ValueError(
-          f"{path or 'header'}:{number}: {key} needs a whole number, got: {value}"
-        )
-      overrides.update(_config_overrides({key: value}))
-  return overrides
-
-
-def file_config(path, text=None):
-  """Return the base config merged with matched `[[files]]` entries and a header."""
-  config = dict(BASE_CONFIG)
-  relative = config_relative(path, BASE_CONFIG.get("root"))
-  name = Path(path).name
-  for entry in BASE_CONFIG.get("files", ()):
-    if any(_match_glob(relative, name, pattern) for pattern in entry["paths"]):
-      config.update(entry["overrides"])
-  if text is not None:
-    config.update(header_config(text, path))
-  return config
-
-
-@contextlib.contextmanager
-def file_scope(path, text=None):
-  """Apply the `[[files]]` and header config of one file, then restore it."""
-  global ACTIVE_CONFIG
-  previous = ACTIVE_CONFIG
-  ACTIVE_CONFIG = file_config(path, text)
-  try:
-    yield ACTIVE_CONFIG
-  finally:
-    ACTIVE_CONFIG = previous
-
-
-def config_file_exclusions(path, config=None):
-  """Return rule IDs suppressed for path by select, ignore, and per-file-ignores."""
-  cfg = ACTIVE_CONFIG if config is None else config
-  select = cfg.get("select", ("ALL",))
-  ignore = cfg.get("ignore", ())
-  per_file = cfg.get("per_file_ignores", {})
-  disabled = {
-    code
-    for code in KNOWN_RULE_IDS
-    if not _match_selectors(code, select) or _match_selectors(code, ignore)
-  }
-  if per_file:
-    candidate = Path(path)
-    rel = config_relative(candidate, cfg.get("root"))
-    for pattern, rules in per_file.items():
-      if _match_glob(rel, candidate.name, pattern):
-        disabled.update(
-          code for code in KNOWN_RULE_IDS if _match_selectors(code, rules)
-        )
-  return disabled
-
-
-def is_license_file(path):
-  """True when a path has a common license, copying, or notice filename."""
-  return bool(LICENSE_FILE_RE.match(Path(path).name))
-
-
-def text_file(path):
-  """Return the decoded text, or None when the file is not UTF-8 text."""
-  try:
-    raw = path.read_bytes()
-  except OSError:
-    return None
-  if b"\0" in raw[:1024]:
-    return None
-  try:
-    return raw.decode("utf-8")
-  except UnicodeDecodeError:
-    return None
-
-
-def _matches_ignore_item(text, name, item):
-  """True when relative POSIX path `text` or filename `name` matches `item`."""
-  return text == item or text.startswith(item + "/") or _match_glob(text, name, item)
-
-
-def skipped(path, root, ignores):
-  """True when a path sits under a skipped directory or an ignored prefix."""
-  if is_license_file(path):
-    return True
-  custom_exclude = ACTIVE_CONFIG.get("exclude")
-  if custom_exclude is None and path.suffix.lower() in SKIP_SUFFIXES:
-    return True
-  try:
-    relative = path.resolve().relative_to(root.resolve())
-  except ValueError:
-    relative = path
-  text = relative.as_posix()
-  if custom_exclude is None and any(part in SKIP_DIRS for part in Path(text).parts):
-    return True
-  base_skips = custom_exclude if custom_exclude is not None else SKIP_PATHS
-  all_ignores = (*base_skips, *ACTIVE_CONFIG.get("extend_exclude", ()), *ignores)
-  excluded = False
-  for raw in all_ignores:
-    item = str(raw).strip()
-    if not item:
-      continue
-    if item.startswith("!"):
-      target = item[1:].strip()
-      if target and _matches_ignore_item(text, path.name, target):
-        excluded = False
-    elif _matches_ignore_item(text, path.name, item):
-      excluded = True
-  return excluded
-
-
-def git_ignored(root, candidates):
-  """Return the subset of candidate Paths that git check-ignore marks as ignored."""
-  if not candidates or not ACTIVE_CONFIG.get("respect_gitignore", True):
-    return set()
-  base = root.resolve()
-  rel_map = {}
-  for candidate in candidates:
-    try:
-      rel = candidate.resolve().relative_to(base).as_posix()
-    except ValueError:
-      rel = candidate.as_posix()
-    rel_map[rel] = candidate
-  try:
-    proc = subprocess.run(
-      ["git", "-C", str(base), "check-ignore", "-z", "--stdin"],
-      input="\0".join(rel_map),
-      capture_output=True,
-      text=True,
-      encoding="utf-8",
-      errors="replace",
-      check=False,
-    )
-  except (OSError, UnicodeError):
-    return set()
-  if proc.returncode not in (0, 1):
-    return set()
-  return {rel_map[item] for item in proc.stdout.split("\0") if item in rel_map}
-
-
-def walk(targets, ignores):
-  """Yield every text file under the targets that survives the skip rules."""
-  for target in targets:
-    path = Path(target)
-    if not path.exists():
-      raise ValueError(f"target does not exist: {target}")
-    if path.is_file():
-      if path.suffix.lower() not in SKIP_SUFFIXES and not is_license_file(path):
-        yield path
-      continue
-    root = path
-    # Exclusion patterns are rooted at the config's project root, never at the walk target.
-    # A subdirectory target keeps the same relative paths.
-    skip_root = ACTIVE_CONFIG.get("root") or root
-    candidates = [
-      candidate
-      for candidate in sorted(root.rglob("*"))
-      if candidate.is_file() and not skipped(candidate, skip_root, ignores)
-    ]
-    ignored_set = git_ignored(root, candidates)
-    for candidate in candidates:
-      if candidate not in ignored_set:
-        yield candidate
 
 
 def exclusions(path, lines, audit=False):
@@ -676,8 +222,8 @@ def format_paths(targets, ignores, out=None):
     lines = text.split("\n")
     with file_scope(path, text):
       file_ids, line_ids, _ = exclusions(path, lines)
-      the_cap = ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
-      min_the = ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
+      the_cap = nemo_config.ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
+      min_the = nemo_config.ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
     is_code = is_code_file(path)
     prose_map = _prose_line_map(path, text) if is_code else None
     block_lines = {}
@@ -1317,10 +863,10 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
           }
         )
   sentence_caps = {
-    "instruction": ACTIVE_CONFIG.get(
+    "instruction": nemo_config.ACTIVE_CONFIG.get(
       "instruction_sentence_cap", SENTENCE_CAPS["instruction"]
     ),
-    "description": ACTIVE_CONFIG.get(
+    "description": nemo_config.ACTIVE_CONFIG.get(
       "description_sentence_cap", SENTENCE_CAPS["description"]
     ),
   }
@@ -1393,10 +939,12 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
     for item in paragraphs:
       number, count, kind = item if len(item) == 3 else (*item, "paragraph")
       if kind == "heading":
-        cap = ACTIVE_CONFIG.get("heading_sentence_cap", HEADING_SENTENCE_CAP)
+        cap = nemo_config.ACTIVE_CONFIG.get(
+          "heading_sentence_cap", HEADING_SENTENCE_CAP
+        )
         status = "review"
       elif kind == "list":
-        cap = ACTIVE_CONFIG.get("list_sentence_cap", LIST_SENTENCE_CAP)
+        cap = nemo_config.ACTIVE_CONFIG.get("list_sentence_cap", LIST_SENTENCE_CAP)
         status = "review"
       elif kind == "blockquote":
         cap = paragraph_cap
@@ -1418,11 +966,11 @@ def prose_review(path, text, context, paragraph_cap, min_the_override=None):
           }
         )
   code = PROSE_RULE_IDS["the_density"]
-  the_cap = ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
+  the_cap = nemo_config.ACTIVE_CONFIG.get("the_density_cap", THE_DENSITY_CAP)
   min_the = (
     min_the_override
     if min_the_override is not None
-    else ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
+    else nemo_config.ACTIVE_CONFIG.get("min_the_count", MIN_THE_COUNT)
   )
   if not suppressed(code, file_ids):
     for number, column, density in prose_the_density(
@@ -1518,7 +1066,7 @@ def _source_prose(path, text, context, paragraph_cap):
   findings = []
   if code_file:
     code = PROSE_RULE_IDS["comment_block"]
-    comment_cap = ACTIVE_CONFIG.get("comment_block_cap", COMMENT_BLOCK_CAP)
+    comment_cap = nemo_config.ACTIVE_CONFIG.get("comment_block_cap", COMMENT_BLOCK_CAP)
     if not suppressed(code, file_ids):
       for start, count in comment_blocks(path, text):
         if count > comment_cap and not suppressed(
@@ -1598,7 +1146,9 @@ def _source_prose(path, text, context, paragraph_cap):
         if (label_text, first) not in seen_ui:
           seen_ui.add((label_text, first))
           ui_spans.append((label_text, first, last))
-      nmu_cap = int(ACTIVE_CONFIG.get("nmu100_max_words") or NMU100_MAX_WORDS)
+      nmu_cap = int(
+        nemo_config.ACTIVE_CONFIG.get("nmu100_max_words") or NMU100_MAX_WORDS
+      )
       for ln, label_text, word, word_count in nmu100_findings(ui_spans, cap=nmu_cap):
         if 0 < ln <= len(line_ids) and suppressed(code, line_ids[ln - 1]):
           continue
@@ -2828,7 +2378,6 @@ def is_test_file(path, text, helpers):
 
 
 def main(argv=None):
-  global ACTIVE_CONFIG, BASE_CONFIG
   # Windows consoles default to cp1252. Force UTF-8 output so findings with any
   # decoded character print instead of crashing the report.
   for stream in (sys.stdout, sys.stderr):
@@ -2887,24 +2436,26 @@ def main(argv=None):
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
   try:
-    BASE_CONFIG = load_config(targets, arguments.config, arguments.no_config)
+    nemo_config.BASE_CONFIG = load_config(
+      targets, arguments.config, arguments.no_config
+    )
   except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
     parser.error(str(error))
-  ACTIVE_CONFIG = BASE_CONFIG
+  nemo_config.ACTIVE_CONFIG = nemo_config.BASE_CONFIG
   context = (
     arguments.context
     if arguments.context is not None
-    else (ACTIVE_CONFIG.get("context") or "unknown")
+    else (nemo_config.ACTIVE_CONFIG.get("context") or "unknown")
   )
   paragraph_cap = (
     arguments.paragraph_cap
     if arguments.paragraph_cap is not None
-    else (ACTIVE_CONFIG.get("paragraph_cap") or PARAGRAPH_CAP)
+    else (nemo_config.ACTIVE_CONFIG.get("paragraph_cap") or PARAGRAPH_CAP)
   )
   if not 0 < paragraph_cap <= PARAGRAPH_CAP:
     parser.error(f"--paragraph-cap must be between 1 and {PARAGRAPH_CAP}")
   test_helpers = [
-    *ACTIVE_CONFIG.get("test_helpers", ()),
+    *nemo_config.ACTIVE_CONFIG.get("test_helpers", ()),
     *arguments.test_helper,
   ]
   for helper in test_helpers:
@@ -3083,7 +2634,9 @@ def main(argv=None):
       for row in result["rows"]
     )
     if arguments.audit:
-      findings.extend(docs_drift_findings(path, text, ACTIVE_CONFIG.get("root")))
+      findings.extend(
+        docs_drift_findings(path, text, nemo_config.ACTIVE_CONFIG.get("root"))
+      )
   try:
     result = review_tests(tests)
   except ValueError as error:

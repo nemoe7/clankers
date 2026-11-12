@@ -7,10 +7,13 @@ import subprocess
 import sys
 from pathlib import Path, PureWindowsPath
 
+import nemo_config
+import nemo_files
 import nemo_report
 import nemo_rotate
 import nemo_rules
 import nemoize
+import prose
 import pytest
 
 SCRIPT = Path(nemoize.__file__).resolve()
@@ -387,8 +390,6 @@ def test_format_keeps_each_file_line_ending_bytes(tmp_path):
 
 
 def test_javascript_parsers_count_crlf_as_one_line_break():
-  import prose
-
   source = "// one\r\n// two\r\nassert.equal(panel.width, 320);\r\n"
   assert [first for _, first, _ in prose.javascript_comments(source)] == [1, 2]
   assert [span[0][0] for span in prose.javascript_comment_spans(source)] == [1, 2]
@@ -888,10 +889,10 @@ def test_ignore_prefixes_accept_windows_paths():
       return self
 
   root = WindowsPath("C:/repo")
-  assert nemoize.skipped(root / "vendor" / "file.txt", root, ["vendor"])
-  assert nemoize.skipped(root / ".agents" / "skills" / "tool" / "SKILL.md", root, [])
-  assert nemoize.skipped(root / "node_modules" / "lib" / "file.js", root, [])
-  assert not nemoize.skipped(root / "app" / "code.py", root, ["vendor"])
+  assert nemo_files.skipped(root / "vendor" / "file.txt", root, ["vendor"])
+  assert nemo_files.skipped(root / ".agents" / "skills" / "tool" / "SKILL.md", root, [])
+  assert nemo_files.skipped(root / "node_modules" / "lib" / "file.js", root, [])
+  assert not nemo_files.skipped(root / "app" / "code.py", root, ["vendor"])
 
 
 def test_generated_pytest_cache_is_not_scanned(tmp_path):
@@ -991,12 +992,12 @@ def test_prose_and_test_ids_have_separate_domains():
 
 
 def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "note.md"
   source.write_text(
     sentence
     + "\n\n"
-    + "Short. " * (nemoize.PARAGRAPH_CAP + 1)
+    + "Short. " * (nemo_config.PARAGRAPH_CAP + 1)
     + "\n\nFirst; second.\n",
     encoding="utf-8",
   )
@@ -1050,7 +1051,7 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
 
 
 def test_default_prose_checks_extract_python_comments_not_literals(tmp_path):
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   source.write_text(f'value = "{sentence}"\n', encoding="utf-8")
   assert run(cwd=tmp_path).returncode == 0
@@ -1139,7 +1140,7 @@ def test_default_javascript_test_scope_uses_declarations_not_string_examples(tmp
 def test_explicit_prose_mode_uses_shared_source_extraction(tmp_path):
   import json
 
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   source.write_text(f'value = "{sentence}"\n', encoding="utf-8")
   result = run("prose", str(source), cwd=tmp_path)
@@ -1162,7 +1163,7 @@ def test_unreadable_detected_test_is_not_silently_checked(tmp_path):
 
 
 def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.js"
   prefix = "\n" * 4
   source.write_text(prefix + "/*\n * " + sentence + "\n */\n", encoding="utf-8")
@@ -1181,7 +1182,7 @@ def test_block_comment_prose_keeps_its_source_line_and_exclusion(tmp_path):
 
 
 def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "example.py"
   for prefix in ("Short.\\n", "\\n", "\\nShort.\\n"):
     source.write_text('"""' + prefix + sentence + '"""\n', encoding="utf-8")
@@ -1191,7 +1192,7 @@ def test_escaped_docstring_newline_uses_a_physical_source_line(tmp_path):
 
 
 def test_source_extractors_skip_module_and_yaml_data_literals(tmp_path):
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   for filename, code in (
     ("example.mjs", 'const value = "' + sentence + '";\n'),
     ("example.yaml", 'value: "' + sentence + '"\n'),
@@ -1224,7 +1225,7 @@ def test_explicit_prose_reports_parser_runtime_failures(tmp_path, monkeypatch, c
 
 
 def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_path):
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   source = tmp_path / "note.md"
   lines = [
     "# Note",
@@ -1245,7 +1246,7 @@ def test_markdown_trailing_newline_keeps_source_lines_and_local_exclusions(tmp_p
 
 
 def test_wrapped_prose_counts_the_complete_sentence(tmp_path):
-  cap = nemoize.SENTENCE_CAPS["instruction"]
+  cap = nemo_config.SENTENCE_CAPS["instruction"]
   for filename, prefix in (("note.md", ""), ("note.py", "# ")):
     source = tmp_path / filename
     first = 5
@@ -1517,7 +1518,7 @@ def test_nemoizer_toml_and_pyproject_config_discovery(tmp_path):
   vendor.mkdir()
   (vendor / "skipped.md").write_text("Transmit this kind.\n", encoding="utf-8")
   note = tmp_path / "note.md"
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + "."
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + "."
   note.write_text(f"{sentence}\nStart; stop.\n", encoding="utf-8")
   code = tmp_path / "app.py"
   code.write_text("# One.\n# Two.\n# Three.\nx = 1\n", encoding="utf-8")
@@ -1604,16 +1605,16 @@ def test_nmp100_counts_lists_tables_headings_and_blockquotes(tmp_path):
 def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   default_toml = SCRIPT.parent.parent / "references" / "nemoizer.toml"
   assert default_toml.is_file()
-  cfg = nemoize.load_config(config_path=default_toml)
+  cfg = nemo_config.load_config(config_path=default_toml)
   assert cfg["respect_gitignore"] is True
-  assert cfg["instruction_sentence_cap"] == nemoize.SENTENCE_CAPS["instruction"]
-  assert cfg["description_sentence_cap"] == nemoize.SENTENCE_CAPS["description"]
-  assert cfg["paragraph_cap"] == nemoize.PARAGRAPH_CAP
-  assert cfg["list_sentence_cap"] == nemoize.LIST_SENTENCE_CAP
-  assert cfg["heading_sentence_cap"] == nemoize.HEADING_SENTENCE_CAP
-  assert cfg["comment_block_cap"] == nemoize.COMMENT_BLOCK_CAP
-  assert cfg["the_density_cap"] == nemoize.THE_DENSITY_CAP
-  assert cfg["min_the_count"] == nemoize.MIN_THE_COUNT
+  assert cfg["instruction_sentence_cap"] == nemo_config.SENTENCE_CAPS["instruction"]
+  assert cfg["description_sentence_cap"] == nemo_config.SENTENCE_CAPS["description"]
+  assert cfg["paragraph_cap"] == nemo_config.PARAGRAPH_CAP
+  assert cfg["list_sentence_cap"] == nemo_config.LIST_SENTENCE_CAP
+  assert cfg["heading_sentence_cap"] == nemo_config.HEADING_SENTENCE_CAP
+  assert cfg["comment_block_cap"] == prose.COMMENT_BLOCK_CAP
+  assert cfg["the_density_cap"] == nemo_config.THE_DENSITY_CAP
+  assert cfg["min_the_count"] == nemo_config.MIN_THE_COUNT
   for expected_item in ("AGENTS.md", "**/AGENTS.md", "ARENA.md", "**/ARENA.md"):
     assert expected_item in cfg["exclude"]
 
@@ -2223,7 +2224,7 @@ def test_files_globs_scope_caps_rules_and_context(tmp_path):
   (tmp_path / "tight.md").write_text(list_item, encoding="utf-8")
   (tmp_path / "quiet.md").write_text("Alpha; beta.\n", encoding="utf-8")
   (tmp_path / "semi.md").write_text("Alpha; beta.\n", encoding="utf-8")
-  sentence = " ".join(["term"] * (nemoize.SENTENCE_CAPS["instruction"] + 1)) + ".\n"
+  sentence = " ".join(["term"] * (nemo_config.SENTENCE_CAPS["instruction"] + 1)) + ".\n"
   (tmp_path / "long.md").write_text(sentence, encoding="utf-8")
   (tmp_path / "brief.md").write_text(sentence, encoding="utf-8")
   result = run(cwd=tmp_path)
@@ -2323,59 +2324,63 @@ def test_file_config_merges_a_glob_entry_then_a_file_header(tmp_path, monkeypatc
     'context = "description"\n',
     encoding="utf-8",
   )
-  loaded = nemoize.load_config(config_path=config)
+  loaded = nemo_config.load_config(config_path=config)
   assert loaded["files"] == (
     {
       "paths": ("docs/*.md",),
       "overrides": {"list_sentence_cap": 3, "context": "description"},
     },
   )
-  monkeypatch.setattr(nemoize, "BASE_CONFIG", loaded)
+  monkeypatch.setattr(nemo_config, "BASE_CONFIG", loaded)
   page = tmp_path / "docs" / "page.md"
-  merged = nemoize.file_config(page)
+  merged = nemo_config.file_config(page)
   assert merged["list_sentence_cap"] == 3
   assert merged["context"] == "description"
-  headed = nemoize.file_config(page, "# nemoizer: list-sentence-cap=5\n\nText.\n")
+  headed = nemo_config.file_config(page, "# nemoizer: list-sentence-cap=5\n\nText.\n")
   assert headed["list_sentence_cap"] == 5
   assert headed["context"] == "description"
-  elsewhere = nemoize.file_config(tmp_path / "elsewhere.md")
-  assert elsewhere["list_sentence_cap"] == nemoize.LIST_SENTENCE_CAP
+  elsewhere = nemo_config.file_config(tmp_path / "elsewhere.md")
+  assert elsewhere["list_sentence_cap"] == nemo_config.LIST_SENTENCE_CAP
   assert elsewhere["context"] is None
 
 
 def test_a_file_header_reads_lines_one_to_three_only(tmp_path):
-  assert nemoize.header_config("# nemoizer: list-sentence-cap=4\n") == {
+  assert nemo_config.header_config("# nemoizer: list-sentence-cap=4\n") == {
     "list_sentence_cap": 4
   }
-  assert nemoize.header_config("<!-- nemoizer: list-sentence-cap=4 --!>\n") == {
+  assert nemo_config.header_config("<!-- nemoizer: list-sentence-cap=4 --!>\n") == {
     "list_sentence_cap": 4
   }
   assert (
-    nemoize.header_config("Return overrides from a `nemoizer:` header on lines 1-3.\n")
+    nemo_config.header_config(
+      "Return overrides from a `nemoizer:` header on lines 1-3.\n"
+    )
     == {}
   )
-  assert nemoize.header_config(
+  assert nemo_config.header_config(
     "One.\nTwo.\nThree.\n# nemoizer: list-sentence-cap=4\n"
   ) == ({})
   with pytest.raises(ValueError):
-    nemoize.header_config("# nemoizer: paragraph-cap=9\n")
+    nemo_config.header_config("# nemoizer: paragraph-cap=9\n")
   with pytest.raises(ValueError):
-    nemoize.header_config("# nemoizer: select=STE100\n")
+    nemo_config.header_config("# nemoizer: select=STE100\n")
 
 
 def test_extend_exclude_supports_globstar_and_negation(tmp_path, monkeypatch):
   monkeypatch.setitem(
-    nemoize.ACTIVE_CONFIG,
+    nemo_config.ACTIVE_CONFIG,
     "extend_exclude",
     ("skills/**/*.md", "!skills/**/README.md", "rules/**"),
   )
-  assert nemoize.skipped(tmp_path / "skills" / "demo" / "SKILL.md", tmp_path, ())
-  assert not nemoize.skipped(tmp_path / "skills" / "README.md", tmp_path, ())
-  assert not nemoize.skipped(tmp_path / "skills" / "demo" / "README.md", tmp_path, ())
-  assert not nemoize.skipped(
+  assert nemo_files.skipped(tmp_path / "skills" / "demo" / "SKILL.md", tmp_path, ())
+  assert not nemo_files.skipped(tmp_path / "skills" / "README.md", tmp_path, ())
+  assert not nemo_files.skipped(
+    tmp_path / "skills" / "demo" / "README.md", tmp_path, ()
+  )
+  assert not nemo_files.skipped(
     tmp_path / "skills" / "demo" / "scripts" / "tool.py", tmp_path, ()
   )
-  assert nemoize.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
+  assert nemo_files.skipped(tmp_path / "rules" / "CORE.md", tmp_path, ())
 
 
 def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
@@ -2384,7 +2389,7 @@ def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
   root = SCRIPT.parents[3]
   config = tomllib.loads((root / "nemoizer.toml").read_text(encoding="utf-8"))
   monkeypatch.setitem(
-    nemoize.ACTIVE_CONFIG, "extend_exclude", tuple(config["extend-exclude"])
+    nemo_config.ACTIVE_CONFIG, "extend_exclude", tuple(config["extend-exclude"])
   )
   for name in (
     "app.min.js",
@@ -2400,14 +2405,14 @@ def test_root_config_excludes_bundled_material(tmp_path, monkeypatch):
     "vendored/module.py",
     "files/source.tar.gz",
   ):
-    assert nemoize.skipped(tmp_path / name, tmp_path, ()), name
+    assert nemo_files.skipped(tmp_path / name, tmp_path, ()), name
   for name in (
     "src/app.js",
     "docs/README.md",
     "src/archive_helper.py",
     "src/vendor_helper.py",
   ):
-    assert not nemoize.skipped(tmp_path / name, tmp_path, ()), name
+    assert not nemo_files.skipped(tmp_path / name, tmp_path, ()), name
 
 
 def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
@@ -2418,7 +2423,7 @@ def test_js_html_template_extracts_ui_prose_and_flags_em_dash(tmp_path):
     "}\n"
   )
   view.write_text(source, encoding="utf-8")
-  rows = nemoize.source_prose(view, source, "description", nemoize.PARAGRAPH_CAP)
+  rows = nemoize.source_prose(view, source, "description", nemo_config.PARAGRAPH_CAP)
   assert any(row["rule"] == "HMN905" and row["line"] == 2 for row in rows)
 
 
@@ -2436,7 +2441,7 @@ def test_missing_targets_fail_before_scanning_or_formatting(tmp_path):
     assert f"target does not exist: {missing}" in result.stderr
     assert note.read_text(encoding="utf-8") == original
   with pytest.raises(ValueError, match="target does not exist"):
-    list(nemoize.walk([missing], ()))
+    list(nemo_files.walk([missing], ()))
 
 
 def test_timed_out_worker_does_not_block_process_exit(tmp_path):

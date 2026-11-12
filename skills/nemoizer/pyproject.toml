@@ -22,4 +22,6 @@ py-modules = [
   "nemo_report",
   "nemo_rotate",
   "nemo_ui",
+  "nemo_config",
+  "nemo_files",
 ]
