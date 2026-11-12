@@ -39,7 +39,7 @@ flowchart TB
   Z --> R[release under a gpt-plugins-v tag]
 ```
 
-`.github/workflows/artifacts.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch.
+`.github/workflows/artifacts.yml` checks the collection on PRs. A PR that changes shipped plugin files must raise the `plugin.json` version above the base branch.
 
 Pushes to `main` write the eight ZIPs below as direct Actions artifacts. On-demand runs package only from `main`.
 

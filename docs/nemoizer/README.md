@@ -10,7 +10,7 @@ Local CLI tools need Python 3.11 or later with no extra Python packages, and Jav
 
 ## Quick start
 
-From the repository root in Windows cmd:
+From the repo root in Windows cmd:
 
 ```cmd
 python skills\nemoizer\scripts\nemoizer path\to\project

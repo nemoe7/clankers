@@ -1,6 +1,6 @@
 # Arena quirks
 
-Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified.
+Observed Arena.ai platform behaviours, not repo defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified.
 
 Restores deleted the original steering notes, so [CHANGELOG.md](CHANGELOG.md) is the durable record.
 
@@ -8,7 +8,7 @@ Restores deleted the original steering notes, so [CHANGELOG.md](CHANGELOG.md) is
 
 ### GitHub token expiry mid-turn
 
-[rules/ARENA.md](../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repository change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold.
+[rules/ARENA.md](../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repo change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold.
 
 ### `gh pr edit --body-file` fails
 
@@ -20,9 +20,9 @@ Restores deleted the original steering notes, so [CHANGELOG.md](CHANGELOG.md) is
 
 ### GitHub API reach, GitHub session
 
-2026-10-03: The sandbox token reads much of a repository, and it cannot read security data.
+2026-10-03: The sandbox token reads much of a repo, and it cannot read security data.
 
-Readable sources hold workflow run, job, and step metadata, check runs with annotations, artifact names and identifiers, pull request review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
+Readable sources hold workflow run, job, and step metadata, check runs with annotations, artifact names and identifiers, PR review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
 
 Refused with 403: `code-scanning/alerts`, `code-scanning/analyses`, `code-scanning/default-setup`, `secret-scanning/alerts` and `dependabot/alerts`. A fetch of `code-scanning/sarifs` answers 404.
 
@@ -30,7 +30,7 @@ Run logs and artifact bytes need `results-receiver.actions.githubusercontent.com
 
 The token is a GitHub App installation token. A deliberately invalid Authorization header still answered as the owner, so the egress proxy replaces that header. A personal access token pasted into the sandbox has no effect.
 
-Consequence: an alert or log claim must rest on a readable source. The security bot's pull request review comments carry alert details. An owner export or a workflow comment can carry the rest.
+Consequence: an alert or log claim must rest on a readable source. The security bot's PR review comments carry alert details. An owner export or a workflow comment can carry the rest.
 
 Rule: read alerts from the bot's review comments or from an owner export. Never claim a log read that the session cannot perform.
 
@@ -48,21 +48,21 @@ A reset can return HEAD to the branch base and delete ignored directories. In tw
 
 Pushed commits survived remotely, and tree-only work appeared as uncommitted differences against the base. Notes, receipts, and tasks in lost state do not survive.
 
-Recovery runs the steering installer first, then `git fetch -q origin <branch>` and `git reset --mixed FETCH_HEAD`, then the repository toolchain and a restarted preview. Rebuild tasks from commit history only if the state is missing. The installer rewrites the home-directory files a restore deletes, including the global ignore rule that keeps the state directory out of `git status`. A task backup protects against bad imports, not every restore.
+Recovery runs the steering installer first, then `git fetch -q origin <branch>` and `git reset --mixed FETCH_HEAD`, then the repo toolchain and a restarted preview. Rebuild tasks from commit history only if the state is missing. The installer rewrites the home-directory files a restore deletes, including the global ignore rule that keeps the state directory out of `git status`. A task backup protects against bad imports, not every restore.
 
 Missing tooling reads as a lint failure, so distinguish a broken gate from a real one. The Python harness writes `__pycache__` inside the live skill copy, so a `diff -r` parity check reports untracked differences.
 
 An earlier reset:
 
-- kept tracked worktree changes, unignored repository files and pushed commits
+- kept tracked worktree changes, unignored repo files and pushed commits
 - deleted the paths that `.gitignore` or `.git/info/exclude` ignored, and reset `.git/info/exclude`
-- lost the files outside the workspace and the home-directory tools
+- lost files outside the workspace and home-directory tools
 
 In another reset, Git ignored one file only through `core.excludesFile`, but the file survived. That reset lost the Git setting. The cause is unknown.
 
-2026-09-24: About one hour passed between the last check before the reset and the first check after it. Ten of 20 probe files survived: root and nested files in the untracked, hidden, globally ignored `arena-state/`, intent-to-add and staged groups. Both symlinks, both manifests, the preview SQLite inbox and its report also survived. The reset lost both files in each of five groups: repository-ignored `.tiktoken-cache/`, locally excluded, `.cache/`, `.git/info/` and outside the workspace.
+2026-09-24: About one hour passed between the last check before the reset and the first check after it. Ten of 20 probe files survived: root and nested files in the untracked, hidden, globally ignored `arena-state/`, intent-to-add and staged groups. Both symlinks, both manifests, the preview SQLite inbox and its report also survived. The reset lost both files in each of five groups: repo-ignored `.tiktoken-cache/`, locally excluded, `.cache/`, `.git/info/` and outside the workspace.
 
-All surviving bytes matched the original hash. The Git index lost the staged and intent-to-add flags. The reset also lost the global ignore setting. The installer restored it.
+All surviving bytes matched their original hash. The Git index lost its staged and intent-to-add flags. The reset also lost the global ignore setting. The installer restored it.
 
 An earlier reset on the same day lost `arena-state/state.sqlite3`. The reason for this difference is unknown. Do not treat this one-hour result as a guarantee that ignored data survives.
 
@@ -78,9 +78,9 @@ Keep the retraction beside the claim, and recover from durable sources. Commit a
 
 `gh pr view` can return `mergeable=UNKNOWN mergeStateStatus=UNKNOWN` with the correct head after a MERGEABLE result. UNKNOWN means computation is pending. Query again rather than report a fault.
 
-### Session memory can roll back
+### Session memory can revert
 
-2026-10-04 to 2026-10-10: several instances. The conversation resets to an earlier point. Three things roll back together: the session memory, `arena-state/`, and the working tree.
+2026-10-04 to 2026-10-10: several instances. The conversation resets to an earlier point. Three things revert together: the session memory, `arena-state/`, and the working tree.
 
 The agent resumes from the earlier point with no signal that anything was lost. Work done after that point is gone from all three at once. A note answered there reads as unanswered, and a commit made there is absent.
 
@@ -112,7 +112,7 @@ Context exhaustion is worse: `This conversation is too long for this model. Plea
 
 One note reported replacement, with no mechanism established: a duplicate can replace a new message. Replacement loses the original for comparison and leaves no recovery path. Mismatched instructions, or answers that refer to absent text, are indirect signs. Ask the user.
 
-A replacement cannot be identified from plausible, unmarked instructions, so small commits and early pushes remain the safeguard.
+Plausible, unmarked instructions do not reveal a replacement, so small commits and early pushes remain the safeguard.
 
 ## Network reach
 
@@ -124,13 +124,13 @@ The blocked set holds every `*.githubusercontent.com` host, `docs.github.com`, `
 
 A blocked host resolves and accepts TCP. The TLS handshake then fails with `SSL_ERROR_SYSCALL`. Plain HTTP on `github.com` and `api.github.com` returns 301, and plain HTTP fails elsewhere. The filter reads the host name.
 
-Consequence: package installs, Git operations and the GitHub API work. Every other fetch fails with a TLS error that looks like a transient fault, and a retry never helps. `codeload.github.com` serves repository archives, so a tarball download works without Git.
+Consequence: package installs, Git operations and the GitHub API work. Every other fetch fails with a TLS error that looks like a transient fault, and a retry never helps. `codeload.github.com` serves repo archives, so a tarball download works without Git.
 
 Rule: treat the host list above as this session type's reach. Test a host before a plan depends on it, and report a blocked host as a limit, not as a failure.
 
 ### `fetch_page` reaches beyond the sandbox egress filter
 
-2026-10-03: The `fetch_page` tool runs outside the sandbox. It fetched `httpbin.org`, `raw.githubusercontent.com`, `arena.site` and `api.github.com`. The sandbox egress filter blocks the first three.
+2026-10-03: The `fetch_page` tool runs outside the sandbox. It fetched `httpbin.org`, `raw.githubusercontent.com`, `arena.site` and `api.github.com`. Sandbox egress blocks the first three.
 
 It runs headless Chrome. The user agent and `sec-ch-ua` headers name Chrome 153, the accept language is `en-US`, and the referer is `https://www.google.com/`. Query strings pass through unchanged, so a search query works.
 
@@ -158,9 +158,9 @@ Each fetch times out after 600 seconds. Each URL needs its own approval while th
 
 Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work.
 
-The fetch omits cookies, and the sandbox token cannot read the security endpoints.
+The fetch omits cookies, and the sandbox token cannot read security endpoints.
 
-Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a pull request comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.
+Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a PR comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.
 
 ## The preview page in the owner's browser
 
@@ -170,7 +170,7 @@ Rule: request public URLs only, name the signature when the URL holds one, and e
 
 ### A preview page cannot hand the owner's PC a file
 
-2026-10-04: A preview page was tested for handing a file to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file.
+2026-10-04: A test tried to hand a file from a preview page to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file.
 
 `navigator.clipboard.writeText` threw in the frame, while the preview's shared copy path, the API followed by a selection copy, put a text file on the clipboard.
 

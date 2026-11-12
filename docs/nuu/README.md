@@ -20,7 +20,7 @@ The project supplies its page, running server, and browser binary. Tools never d
 
 ## Nine CLI commands
 
-From the repository root in Windows cmd:
+From the repo root in Windows cmd:
 
 ```cmd
 set UI=skills\nuu\scripts\nuu.py
@@ -55,7 +55,7 @@ This README is human documentation and stays outside the installed skill payload
 
 ## Sources
 
-### Repositories
+### Repos
 
 | Source | Commit | License |
 | --- | --- | --- |

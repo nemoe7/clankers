@@ -40,7 +40,7 @@ The bundle uses `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 Arena uses `[NemoUtils][module][level] event` with allowlisted fields. Default `info` includes warnings and errors. `Userscript - log level` cycles `info`, `debug`, `warn`, and `error`, saves the setting, and applies it immediately.
 
-Only debug mode includes repository names and filenames. Keys, message text, page labels, URLs, and raw error text stay out. The logger does not suppress repeated events, save records, or send records.
+Only debug mode includes repo names and filenames. Keys, message text, page labels, URLs, and raw error text stay out. The logger does not suppress repeated events, save records, or send records.
 
 Title logs require a title or emoji change. Debug adds decision conditions for that change.
 
@@ -48,11 +48,11 @@ Title logs require a title or emoji change. Debug adds decision conditions for t
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
-The bar serves a session. On a new chat the composer's own repository chip names the repository. If neither component renders, the tab title provides the repository name.
+The bar serves a session. On a new chat the composer's own repo chip names the repo. If neither component renders, the tab title provides the repo name.
 
-A selected diff branch wears the same owner/repo shape as the repository chip. The read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository beside it.
+A selected diff branch wears the same owner/repo shape as the repo chip. The read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repo beside it.
 
-The fill fetches `userscripts/arena-prompt-fill.txt` and `skills/arena-steering/references/survey-questions.txt` once from this repository. It waits for both files before writing, and leaves the composer unchanged if either fetch fails. The fill optionally fetches `rules/ARENA.md` and appends it when that fetch succeeds.
+The fill fetches `userscripts/arena-prompt-fill.txt` and `skills/arena-steering/references/survey-questions.txt` once from this repo. It waits for both files before writing, and leaves the composer unchanged if either fetch fails. The fill optionally fetches `rules/ARENA.md` and appends it when that fetch succeeds.
 
 The template requests strong reasoning and context retention for a potentially long, complex task, not model selection. It says work can continue indefinitely, and each final poll waits up to 1,800 seconds or until skipped.
 
@@ -73,7 +73,7 @@ The message then carries a six-step checklist:
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
 4. Write the failing check before new or changed executable behavior, and reproduce a bug before the fix.
 5. Keep the behavior, interfaces, validation, and security that stand.
-6. Run the project's own gate, and read the result before the report.
+6. Run the project's own gate, and read its result before the report.
 
 Six rules follow the checklist:
 
@@ -82,7 +82,7 @@ Six rules follow the checklist:
 - Stated assumptions.
 - No claim of an unrun check.
 - Screenshots and corrections through the steering channel, with each image read directly.
-- A closing report of the change, the checks and the open items.
+- A closing report of changes, checks, and open items.
 
 ## Arena auto-send wake up
 
@@ -117,7 +117,7 @@ The command takes one row limit:
 
 ## Arena security check hold
 
-While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait. The held work is the prompt fill, the Open Steering click, the auto-wake click, and the proxy key posts. Each tab reads its own page. The held work resumes when the check clears.
+While the Arena security check shows, the tab title carries a shield emoji and automatic posts wait. The held work is the prompt fill, the Open Steering click, the auto-wake click, and the proxy key posts. Each tab reads its own page. The held work resumes when the check clears.
 
 ## Arena userscript pause
 
@@ -135,7 +135,7 @@ A stamp-pair mismatch stops automatic replacement, fetches full backup NDJSON fr
 
 Saves never use browser downloads or local `.ndjson` file handles. Failed `/v1/state` requests show `#clankers-state-panel` with `Retry save`, and missing proxy settings on manual saves offer `Settings`.
 
-The preview retains two saved core states with completion receipts per repository and branch. Reconstructed NDJSON backups include flat, versioned history, while manual Copy state stays core-only.
+The preview retains two saved core states with completion receipts per repo and branch. Reconstructed NDJSON backups include flat, versioned history, while manual Copy state stays core-only.
 
 Replacement imports check and restore supplied history. Legacy imports preserve it. Merge imports preserve existing history or adopt supplied history only when none exists.
 
@@ -149,7 +149,7 @@ A preview URL change skips the overwrite prompt within 150 seconds of 02:00, 08:
 
 ## Arena tab title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. If the link is absent, it reads a valid repository name before ` read ` in the session title button. State-file naming uses the same fallback before a stale tab title.
+On `/agent/*`, ON reads the repo name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. If the link is absent, it reads a valid repo name before ` read ` in the session title button. State-file naming uses the same fallback before a stale tab title.
 
 Allowlisted board sessions add their Greek symbol (`α`..`ω`, or custom ID) as `Arena | <repository> <symbol> <emoji>`. Non-worker sessions prepend an asterisk and a space when published reports await owner submission, ignoring worker sessions and unseen reply acknowledgements.
 
@@ -177,7 +177,7 @@ A process card carries a play icon and the process name, so it takes 🖥️ as 
 
 ## Check
 
-From the repository root:
+From the repo root:
 
 ```bash
 node userscripts/arena.user.js

@@ -1,6 +1,6 @@
 # Vendored skills
 
-These third-party tools audit and lint the repository. They are not owner skills: `skills/` has no mirrors, `skills/refs/` has no baselines, and `maintenance/check.py` skips this directory.
+These third-party tools audit and lint the repo. They are not owner skills: `skills/` has no mirrors, `skills/refs/` has no baselines, and `maintenance/check.py` skips this directory.
 
 Copies retain skill entry points, required references and scripts, and licenses. Retained upstream files stay unchanged. Local fixes belong upstream.
 

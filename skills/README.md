@@ -25,7 +25,7 @@ Skills in this repo follow the [Agent Skills specification](https://agentskills.
 
 ## Upstream sources
 
-Adapted skills record `metadata.upstream` and reapply a local `Precedence` section so user instructions and project conventions outrank skill defaults. Visual-reference structure and image-board examples in `nuu` are adapted from [UI Prep, The Best Way to Document UX/UI Design](https://www.uiprep.com/blog/the-best-way-to-document-ux-ui-design).
+Adapted skills record `metadata.upstream` and reapply a local `Precedence` section so user instructions and project conventions outrank skill defaults. `nuu` adapts its visual-reference structure and image-board examples from [UI Prep, The Best Way to Document UX/UI Design](https://www.uiprep.com/blog/the-best-way-to-document-ux-ui-design).
 
 ## Install
 

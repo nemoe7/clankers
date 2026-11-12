@@ -53,4 +53,4 @@ Platform constraints shape three distinct rule surfaces, and each row summarizes
 
 ## Markdown lint scope
 
-Run `npx --yes markdownlint-cli2` from the repository root. `.markdownlint-cli2.jsonc` defines the scope.
+Run `npx --yes markdownlint-cli2` from the repo root. `.markdownlint-cli2.jsonc` defines the scope.

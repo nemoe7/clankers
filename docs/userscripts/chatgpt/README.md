@@ -37,7 +37,7 @@ On any `chatgpt.com` path, the feature adds `hidden` to twelve managed targets:
 - The Chat and Work header toggle.
 - The Codex sidebar entry.
 - The Images sidebar entry.
-- The Library sidebar entries, in the collapsed rail and in the open nav list.
+- The Library sidebar entries, in the collapsed rail and the open nav list.
 - The Free badge.
 - The prompt textarea header banner.
 - The header Upgrade and Share controls.
@@ -52,7 +52,7 @@ On any `chatgpt.com` path, the feature clicks the Think pill every second while 
 
 ## Check
 
-From the repository root:
+From the repo root:
 
 ```bash
 node userscripts/chatgpt.user.js
