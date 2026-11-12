@@ -24,6 +24,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Discover clause files by glob instead of a hand-listed budget map (`maintenance/check.py`, `README.md`, `maintenance/README.md`). Measure `o200k_base` tokens by default and count characters only for the two ChatGPT fields.
 - Rename the Nemoize stage in `check.py` and its summary, replacing the "domains" wording, and rename the Nemoize module key (`maintenance/check.py`, `maintenance/workflows/changed_paths.py`).
 
+### Removed
+
+#### maintenance
+
+- Remove the Markdown lint scope test (`tests/maintenance/checks/test_checks_structure.py`).
+
 ### Added
 
 #### maintenance

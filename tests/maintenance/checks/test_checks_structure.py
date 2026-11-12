@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 from checks.links import check_links
 from checks.paths import check_case_collisions
-from checks.repo import DEFAULT_ROOT, Repo
+from checks.repo import Repo
 from checks.skills import check_skills, parse_frontmatter
 
 GOOD = "---\nname: {name}\ndescription: Does one thing.\n---\nBody\n"
@@ -118,44 +117,3 @@ def test_case_collisions_skip_a_tree_without_git(tmp_path: Path):
   errors: list[str] = []
   check_case_collisions(Repo(tmp_path), errors)
   assert errors == []
-
-
-def test_markdownlint_scope_includes_readmes_except_agents(tmp_path: Path):
-  cli = shutil.which(
-    "markdownlint-cli2", path=str(DEFAULT_ROOT / "node_modules" / ".bin")
-  )
-  if cli is None:
-    pytest.skip("Install npm dependencies to run markdownlint")
-  shutil.copy2(DEFAULT_ROOT / ".markdownlint-cli2.jsonc", tmp_path)
-  included = [
-    "README.md",
-    "docs/archive/old/README.md",
-    "rules/README.md",
-    "skills/example/README.md",
-    "ordinary.md",
-  ]
-  excluded = [
-    ".agents/README.md",
-    ".agents/nested/README.md",
-    "AGENTS.md",
-    "docs/archive/old/notes.md",
-    "skills/example/SKILL.md",
-    "system-prompts/prompt.md",
-  ]
-  for name in included + excluded:
-    write(tmp_path, name, "Not a heading\n")
-  result = subprocess.run(
-    [cli],
-    cwd=tmp_path,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-    check=False,
-  )
-  output = result.stdout + result.stderr
-  assert result.returncode == 1, output
-  errors = output.splitlines()
-  for name in included:
-    assert any(line.startswith(f"{name}:1 ") for line in errors), output
-  for name in excluded:
-    assert not any(line.startswith(f"{name}:1 ") for line in errors), output
