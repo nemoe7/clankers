@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.19]
+
+### Changed
+
+- Rename CLI severity labels: `(advisory-free)` → `(violation)` for findings that fail the check, `(advisory)` + `(manual review)` → `(review)` for findings needing human judgment; remove redundant `(manual review)` suffix.
+- Update summary footer to count "violations" and "review findings" instead of "hard violations" and "advisory findings".
+
 ## [0.1.18]
 
 ### Changed

@@ -28,7 +28,7 @@ from nemo_report import (
   describe_finding,
   format_finding,
   format_summary,
-  is_advisory,
+  is_review,
 )
 from nemo_review import (
   docs_drift_findings,
@@ -342,7 +342,7 @@ def main(argv=None):
   if errors:
     print("\n".join(errors), file=sys.stderr)
     return 2
-  return int(any(not is_advisory(finding) for finding in findings))
+  return int(any(not is_review(finding) for finding in findings))
 
 
 if __name__ == "__main__":

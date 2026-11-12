@@ -38,7 +38,7 @@ python3 skills/nemoizer/scripts/nemoize.py --ignore vendor --ignore third_party 
 ```
 
 - Every text file is read, including comments and Markdown prose.
-- Print each finding as `path:line: [ID] (advisory-free|advisory) description` with its indented source line and a `Summary` footer, exit 1 only for mandatory findings, and mark advisory findings for manual review by the agent or user.
+- Print each finding as `path:line: [ID] (violation|review) description` with its indented source line and a `Summary` footer; exit 1 only for violations, and have the agent or user inspect review findings.
 - Skip vendored and generated trees. Configure repo or `[[files]]` glob rules, exclusions, and caps in `nemoizer.toml` or `pyproject.toml`.
 
 - Run word rotations and serial-comma checks (`NMO`), semicolon, sentence-length, nominalization, and manual-review style checks (`STE`), human-prose checks (`HMN`), paragraph-length checks (`NMP`), UI and byte-unit divisor checks (`NMU`), and test-assertion reviews (`NMT`) by default.

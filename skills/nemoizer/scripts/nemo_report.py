@@ -34,10 +34,9 @@ def describe_finding(row):
 
 def format_finding(path, line, code, message, source_line=None, status=None):
   """Format one finding in STE-linter style with an indented source snippet."""
-  advisory = code in ADVISORY_RULE_IDS or status == "manual_review"
-  level = "advisory" if advisory else "advisory-free"
-  suffix = " (manual review)" if advisory and "(manual review)" not in message else ""
-  header = f"{path}:{line}: [{code}] ({level}) {message}{suffix}"
+  review = code in ADVISORY_RULE_IDS or status == "manual_review"
+  level = "review" if review else "violation"
+  header = f"{path}:{line}: [{code}] ({level}) {message}"
   if source_line is None:
     return header
   snippet = source_line.strip()
@@ -46,7 +45,7 @@ def format_finding(path, line, code, message, source_line=None, status=None):
   return f"{header}\n    {snippet}" if snippet else header
 
 
-def is_advisory(finding):
+def is_review(finding):
   return is_advisory_finding(finding, ADVISORY_RULE_IDS)
 
 
@@ -54,10 +53,10 @@ def format_summary(findings):
   """Format the STE-linter summary footer for a non-empty finding list."""
   if not findings:
     return ""
-  hard = sum(1 for item in findings if not is_advisory(item))
-  advisory = len(findings) - hard
+  violations = sum(1 for item in findings if not is_review(item))
+  reviews = len(findings) - violations
   files = len({item.splitlines()[0].rsplit(":", 2)[0] for item in findings})
   return (
-    f"\nSummary: {hard} hard violation(s), "
-    f"{advisory} advisory finding(s) across {files} file(s)."
+    f"\nSummary: {violations} violation(s), "
+    f"{reviews} review finding(s) across {files} file(s)."
   )

@@ -1,6 +1,6 @@
 # nonemo: NMO100
 # nonemo: NMO901
-"""Collect nonemo exclusion markers and manual-review findings for audits."""
+"""Collect nonemo exclusion markers and review findings for audits."""
 
 import re
 import sys
@@ -9,7 +9,7 @@ from pathlib import Path
 
 MARKER = re.compile(r"\bnonemo:[ \t]*(.*?)(?=-->|\*/|;|\s|$|\bnonemo:)")
 MARKER_SPAN = re.compile(r"\bnonemo:[ \t]*.*?(?=-->|\*/|;|\s|$|\bnonemo:)[ \t]*;?")
-INLINE_CODE = re.compile(r"(?P<fence>`+)(?!`).*?(?P=fence)(?!`)")
+INLINE_CODE = re.compile(r"(?P<fence>`+)(?!`).*?(?P=fence)(?!`)") 
 
 
 def head_marker(line, position=None, rotations=()):
@@ -95,21 +95,21 @@ def collect_markers(path, lines, known_rule_ids, rotations=(), audit=False):
 
 
 def is_advisory_finding(finding, advisory_rule_ids):
-  """Return whether a formatted finding line belongs to a manual-review rule."""
+  """Return whether a formatted finding line belongs to a review rule."""
   first = finding.splitlines()[0]
   parts = first.rsplit(": ", 1)[-1].split()
   token = parts[0].strip("[]") if parts else ""
   return (
-    token in advisory_rule_ids or "(advisory)" in first or "(manual review)" in first
+    token in advisory_rule_ids or "(review)" in first
   )
 
 
 def audit_lines(marks, findings, advisory_rule_ids):
-  """Return all nonemo markers followed by all manual-review findings."""
-  advisory = [
+  """Return all nonemo markers followed by all review findings."""
+  review = [
     finding for finding in findings if is_advisory_finding(finding, advisory_rule_ids)
   ]
-  return [*marks, *advisory]
+  return [*marks, *review]
 
 
 def main(argv=None):
