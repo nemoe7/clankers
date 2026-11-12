@@ -160,11 +160,21 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
 
 
 @pytest.mark.parametrize(
-  ("verb", "blocked"),
-  [(verb, False) for verb in ("msg", "survey", "skills", "ren", "serve")]
-  + [(verb, True) for verb in ("tasks", "task", "reports", "report", "worktree")],
+  "verb",
+  (
+    "msg",
+    "survey",
+    "skills",
+    "ren",
+    "serve",
+    "tasks",
+    "task",
+    "reports",
+    "report",
+    "worktree",
+  ),
 )
-def test_steering_command_inbox_exemptions(verb: str, blocked: bool) -> None:
+def test_steering_bookkeeping_bypasses_inbox_gate(verb: str) -> None:
   line = f"steer {verb} --help"
   ctx = pre.PreContext(
     line=line,
@@ -173,8 +183,22 @@ def test_steering_command_inbox_exemptions(verb: str, blocked: bool) -> None:
     pending_ids=["abc123"],
     call_count=pre.GATE_THRESHOLD,
   )
-  assert pre.bash_command_policy(ctx) == (False, blocked)
-  assert _verdict(ctx) == (pre.BLOCK if blocked else pre.CONTINUE)
+  assert pre.bash_command_policy(ctx) == (False, False)
+  assert _verdict(ctx) == pre.CONTINUE
+
+
+@pytest.mark.parametrize("verb", ("clear", "run", "pr-update", "job-log"))
+def test_non_bookkeeping_steering_commands_remain_gated(verb: str) -> None:
+  line = f"steer {verb} --help"
+  ctx = pre.PreContext(
+    line=line,
+    command=line,
+    shell="bash",
+    pending_ids=["abc123"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert pre.bash_command_policy(ctx) == (True, True)
+  assert _verdict(ctx) == pre.BLOCK
 
 
 @pytest.mark.parametrize(
@@ -211,11 +235,9 @@ def test_steering_exemptions_preserve_the_pending_counter(_isolate_state: Path) 
   store, *_ = cli.open_services(_isolate_state)
   store.set_meta(pre.CALL_COUNT_META, str(pre.GATE_THRESHOLD))
   store.close()
-  for line, verdict in (
-    ("steer msg --help", pre.CONTINUE),
-    ("steer task --help", pre.BLOCK),
-  ):
-    assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == verdict
+  for line in ("steer msg --help", "steer task --help"):
+    assert _run("pre", "-l", line, "-c", line, "-s", "bash")[0] == pre.CONTINUE
+    assert _count(_isolate_state) == str(pre.GATE_THRESHOLD)
 
 
 def test_bash_policy_can_block_without_spending_the_pending_budget(

@@ -797,8 +797,7 @@ BASH_COMMAND_POLICY: dict[str, tuple[bool, bool]] = {
   "python": (True, True),
   "standalone mkdir": (True, False),
   "inbox recovery": (False, False),
-  "steering exempt": (False, False),
-  "steering count exempt": (False, True),
+  "steering bookkeeping": (False, False),
   "arena utility": (False, False),
   "routed background": (False, False),
   "*": (True, True),
@@ -831,10 +830,19 @@ def bash_command_policy(ctx: PreContext) -> tuple[bool, bool]:
       and words[0] == "steer"
       and not any(word and all(char in "|;&<>()" for char in word) for word in words)
     ):
-      if words[1] in {"msg", "survey", "skills", "ren", "serve"}:
-        return BASH_COMMAND_POLICY["steering exempt"]
-      if words[1] in {"tasks", "task", "reports", "report", "worktree"}:
-        return BASH_COMMAND_POLICY["steering count exempt"]
+      if words[1] in {
+        "msg",
+        "survey",
+        "skills",
+        "ren",
+        "serve",
+        "tasks",
+        "task",
+        "reports",
+        "report",
+        "worktree",
+      }:
+        return BASH_COMMAND_POLICY["steering bookkeeping"]
   pieces = ctx.pieces()
   if len(pieces) == 1 and pieces[0][1] == ";":
     words = command_words(pieces[0][0])
