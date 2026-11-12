@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [2.3.11]
+
+### Added
+
+- Require report approval before completing a report phase.
+
 ## [2.3.10]
 
 ### Changed
