@@ -9,7 +9,8 @@
     "!gpt-plugins/refs/**/!(README).md",
     "!system-prompts/**/!(README).md",
     "!docs/archive/**/!(README).md",
-    "!.agents/**"
+    "!.agents/**",
+    "!.kilo/**"
   ],
   "gitignore": true,
   "config": {

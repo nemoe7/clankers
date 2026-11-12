@@ -10,7 +10,6 @@ Rules, skills, and workflows for AI agents.
 - [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines.
 - [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines.
 
-
 ## Rules flow
 
 ```mermaid
