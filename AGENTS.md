@@ -24,7 +24,7 @@
 ## Setup
 
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
-- Mirror task-related source changes into installed copies in this repository without separate user authorization.
+- Amend refs first and squash changes into live files without verbatim copying, including rules/wenyan/ for ChatGPT.
 - Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
 
 ## Glossary
