@@ -1737,9 +1737,7 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
   assert pyproject_data["project"]["name"] == "nemoizer"
   assert pyproject_data["project"]["scripts"]["nemoizer"] == "nemoize:main"
   assert set(pyproject_data["tool"]["setuptools"]["py-modules"]) == {
-    "nemoize",
-    "prose",
-    "markers",
+    path.stem for path in SCRIPT.parent.glob("*.py")
   }
 
 
