@@ -13,4 +13,13 @@ nemoizer = "nemoize:main"
 
 [tool.setuptools]
 package-dir = {"" = "scripts"}
-py-modules = ["nemoize", "prose", "markers", "nemo_markdown", "nemo_rules", "nemo_report"]
+py-modules = [
+  "nemoize",
+  "prose",
+  "markers",
+  "nemo_markdown",
+  "nemo_rules",
+  "nemo_report",
+  "nemo_rotate",
+  "nemo_ui",
+]

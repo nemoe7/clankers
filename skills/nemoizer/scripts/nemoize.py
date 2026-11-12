@@ -28,9 +28,6 @@ from markers import (
   audit_lines,
   collect_markers,
 )
-from markers import (
-  head_marker as marker_head,
-)
 from nemo_markdown import (
   blank_inline_comments,
   fence_states,
@@ -47,6 +44,14 @@ from nemo_report import (
   format_summary,
   is_advisory,
 )
+from nemo_rotate import (
+  KEEP_LOWER,
+  ROTATIONS,
+  collapse_list_articles,
+  mask_protected_spans,
+  rotate,
+  rotation_legend,
+)
 from nemo_rules import (
   ADVISORY_RULE_IDS,
   KNOWN_RULE_IDS,
@@ -56,6 +61,7 @@ from nemo_rules import (
   RULE_IDS,
   TEST_RULE_IDS,
 )
+from nemo_ui import NMU100_MAX_WORDS, NMU200_SUFFIXES, nmu100_findings, nmu200_findings
 from prose import (
   COMMENT_BLOCK_CAP,
   comment_blocks,
@@ -71,193 +77,14 @@ from prose import (
   workflow_name_spans,
 )
 
-# Exact inflections and their replacements.
-ROTATION_FORMS = {
-  "transmit": "send",
-  "transmits": "sends",
-  "transmitted": "sent",
-  "transmitting": "sending",
-  "transmitter": "sender",
-  "transmitters": "senders",
-  "kind": "type",
-  "kinds": "types",
-  "repository": "repo",
-  "repositories": "repos",
-  "pull request": "PR",
-  "pull requests": "PRs",
-  "name": "specify",
-  "names": "specifies",
-  "named": "specified",
-  "naming": "specifying",
-}
-
-NEMOIZER_MODIFIED_NOUNS = (
-  r"rules?|lists?|linters?|prose|skills?|configs?|checks?|scripts?|"
-  r"parsers?|suites?|tests?|plugins?|domains?|targets?|markers?"
-)
-KEEP_LOWER = {"nemoizer"}
-NAME_VERB_PATTERN = (
-  r"(?:"
-  r"(?:(?<=^)|(?<=\n)|(?<=^- )|(?<=\* )|(?<=\. )|(?<=, and )"
-  r"|(?<=, or )|(?<=\bto )|(?<=\bmust )|(?<=\bcan )|(?<=\bmay )|(?<=\bwill )"
-  r"|(?<=\bshould )|(?<=\bnever )|(?<=\balways )|(?<=\bnot )|(?<=\bplease )|(?<=\balso ))"
-  r"name(?=\s+(?:(?:the|a|an|each|every|all|any|this|that|its|their)\s+(?!few\b)[A-Za-z]+|[A-Za-z]+s\b))"
-  r"|"
-  r"(?:(?<=\bit )|(?<=\bthat )|(?<=\bwhich )|(?<=\bwho )|(?<=\bsheet )"
-  r"|(?<=\bcontrol )|(?<=\btable )|(?<=\brule )|(?<=\bclause )|(?<=\breport )"
-  r"|(?<=\bconfig )|(?<=\bscript )|(?<=\bcheck )|(?<=\btool )|(?<=\bpage )|(?<=, and ))"
-  r"names(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their|[A-Z])[A-Za-z]*)"
-  r"|(?<![A-Za-z0-9_$.\/-])names(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+[A-Za-z]+)"
-  r"|(?<![A-Za-z0-9_$.\/-])naming(?=\s+(?:the|a|an|each|every|all|any|this|that|its|their)\s+[A-Za-z]+)"
-  r"|(?<![A-Za-z0-9_$.\/-])named(?=\s+(?:in|under|by)\s+the\s+[A-Za-z]+)"
-  r")"
-)
-
-
-def rotation_pattern(prefix):
-  """Match only the listed inflections, outside identifiers and paths."""
-  forms = (form for form in ROTATION_FORMS if form.startswith(prefix))
-  choices = "|".join(re.escape(form) for form in sorted(forms, key=len, reverse=True))
-  return rf"(?<![A-Za-z0-9_$.\/-])(?:{choices})(?![A-Za-z0-9_\/-]|\.[A-Za-z0-9_])"
-
-
-ROTATIONS = (
-  ("transmit", rotation_pattern("transmit"), "send"),
-  ("kind", r"(?<!\bbe )(?<!\bin )" + rotation_pattern("kind"), "type"),
-  ("repository", rotation_pattern("repositor"), "repo"),
-  (
-    "pull request",
-    r"(?<![A-Za-z0-9])(?:"
-    + "|".join(
-      re.escape(form).replace(r"\ ", r"[ \t]+")
-      for form in sorted(ROTATION_FORMS, key=len, reverse=True)
-      if form.startswith("pull request")
-    )
-    + r")(?![A-Za-z0-9])",
-    "PR",
-  ),
-  ("name", NAME_VERB_PATTERN, "specify"),
-  (
-    "nemoizer",
-    (
-      rf"(?<![A-Za-z0-9_./:-])(?:the[ \t]+(?!nemoizer[ \t]+(?:{NEMOIZER_MODIFIED_NOUNS})\b))?"
-      r"nemoizer(?![A-Za-z0-9_/-]|\.[A-Za-z0-9_])"
-    ),
-    "nemoizer",
-  ),
-)
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 4
 LIST_SENTENCE_CAP = 2
 HEADING_SENTENCE_CAP = 1
 THE_DENSITY_CAP = 20
 MIN_THE_COUNT = 3
-NMU200_SUFFIXES = {".py", ".js", ".cjs", ".mjs", ".ts", ".tsx", ".jsx", ".html", ".htm"}
-NMU200_LABEL_RE = re.compile(r"\b(KB|MB|GB|TB|KiB|MiB|GiB|TiB)\b")
-NMU200_BINARY_RE = re.compile(
-  r"/\s*\(*\s*(?:1024|1_024|1048576|1_048_576|1073741824|1_073_741_824)(?![\w.])"
-  r"|/\s*\(*\s*1\s*<<\s*(?:10|20|30)(?!\w)"
-  r"|/\s*\(*\s*1024\s*(?:\*\*|\^)\s*(?:2|3)(?!\w)"
-)
-NMU200_DECIMAL_RE = re.compile(
-  r"/\s*\(*\s*(?:1000|1_000|1000000|1_000_000|1000000000|1_000_000_000)(?![\w.])"
-  r"|/\s*\(*\s*1[eE][+]?0*(?:3|6|9)(?!\w)"
-  r"|/\s*\(*\s*10\s*(?:\*\*|\^)\s*(?:3|6|9)(?!\w)"
-  r"|/\s*\(*\s*1000\s*(?:\*\*|\^)\s*(?:2|3)(?!\w)"
-)
-NMU200_INTERPOLATION_RE = re.compile(r"\{([^{}]*)\}")
-NMU100_MAX_WORDS = 6
-PADDING = re.compile(r"\b(the|this|these|those|a|an|please|here|just)\b", re.IGNORECASE)
-SENTENCE_END = re.compile(r"[.!?]$")
 
 
-def nmu100_findings(spans, cap=NMU100_MAX_WORDS):
-  """A label of cap words or fewer must not carry an article or a filler."""
-  for text, line, _ in spans:
-    words = text.split()
-    if len(words) > cap or SENTENCE_END.search(text):
-      continue
-    hit = PADDING.search(text)
-    if hit:
-      yield line, text, hit.group(1), len(words)
-
-
-def nmu200_string_contents(line, suffix, in_block_comment=False):
-  contents = []
-  index = 0
-  javascript = suffix in {".js", ".cjs", ".mjs", ".ts", ".tsx", ".jsx"}
-  while index < len(line):
-    if in_block_comment:
-      end_marker = "-->" if suffix in {".html", ".htm"} else "*/"
-      end = line.find(end_marker, index)
-      if end < 0:
-        return contents, True
-      index = end + len(end_marker)
-      in_block_comment = False
-      continue
-    if suffix == ".py" and line[index] == "#":
-      break
-    if javascript and line.startswith("//", index):
-      break
-    if javascript and line.startswith("/*", index):
-      in_block_comment = True
-      index += 2
-      continue
-    if suffix in {".html", ".htm"} and line.startswith("<!--", index):
-      in_block_comment = True
-      index += 4
-      continue
-    quote = line[index]
-    if quote not in {"'", '"', "`"}:
-      index += 1
-      continue
-    delimiter = (
-      quote * 3 if suffix == ".py" and line.startswith(quote * 3, index) else quote
-    )
-    start = index + len(delimiter)
-    index = start
-    while index < len(line):
-      if line[index] == "\\":
-        index += 2
-      elif line.startswith(delimiter, index):
-        contents.append(line[start:index])
-        index += len(delimiter)
-        break
-      else:
-        index += 1
-    else:
-      contents.append(line[start:])
-  return contents, in_block_comment
-
-
-def nmu200_findings(path, text):
-  suffix = path.suffix.lower()
-  if suffix not in NMU200_SUFFIXES:
-    return
-  decimal_labels = {"KB", "MB", "GB", "TB"}
-  binary_labels = {"KiB", "MiB", "GiB", "TiB"}
-  in_block_comment = False
-  for line_number, line in enumerate(text.splitlines(), 1):
-    literals, in_block_comment = nmu200_string_contents(line, suffix, in_block_comment)
-    for literal in literals:
-      for expression in NMU200_INTERPOLATION_RE.finditer(literal):
-        tail = literal[expression.end() :]
-        next_expression = tail.find("{")
-        if next_expression >= 0:
-          tail = tail[:next_expression]
-        binary = bool(NMU200_BINARY_RE.search(expression.group(1)))
-        decimal = bool(NMU200_DECIMAL_RE.search(expression.group(1)))
-        for label_match in NMU200_LABEL_RE.finditer(tail):
-          label = label_match.group(1)
-          if binary and label in decimal_labels:
-            yield line_number, label, "binary"
-          elif decimal and label in binary_labels:
-            yield line_number, label, "decimal"
-
-
-CURLY_QUOTES = str.maketrans(
-  {"\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"}
-)
 # The rotation table names the avoided words, so its own rows never flag.
 SKIP_DIRS = {
   ".pytest_cache",
@@ -718,11 +545,6 @@ def walk(targets, ignores):
         yield candidate
 
 
-def head_marker(line, position=None):
-  """Identify a header marker with no avoided word before it on the line."""
-  return marker_head(line, position, ROTATIONS)
-
-
 def exclusions(path, lines, audit=False):
   """Collect every marker and the known rule IDs it suppresses."""
   file_ids, line_ids, marks = collect_markers(
@@ -734,54 +556,6 @@ def exclusions(path, lines, audit=False):
 def suppressed(code, ids, name=None):
   """Return whether the active marker set suppresses a rule ID."""
   return code in ids
-
-
-def plain(word, name, use):
-  """Give the matched word its plain word, and keep the old word's case."""
-  if name in KEEP_LOWER:
-    return use
-  normalized = " ".join(word.lower().split())
-  form = ROTATION_FORMS[normalized]
-  if word.isupper():
-    return form.upper()
-  if word[:1].isupper():
-    return form[:1].upper() + form[1:]
-  return form
-
-
-LIST_THE_SPAN = re.compile(
-  r"\b(the[ \t]+[^,.;:!?()\n]+)"
-  r"((?:,[ \t]+(?:(?:and|or)[ \t]+)?the[ \t]+[^,.;:!?()\n]+)+"
-  r"(?:\s+(?:and|or)[ \t]+the[ \t]+[^,.;:!?()\n]+)?)",
-  re.IGNORECASE,
-)
-SUBSEQUENT_LIST_THE = re.compile(
-  r"(,[ \t]+(?:(?:and|or)[ \t]+)?|[ \t]+(?:and|or)[ \t]+)the[ \t]+",
-  re.IGNORECASE,
-)
-
-
-def collapse_list_articles(line):
-  """Collapse repeated leading 'the' articles across comma-separated list items."""
-  return LIST_THE_SPAN.sub(
-    lambda match: match.group(1) + SUBSEQUENT_LIST_THE.sub(r"\1", match.group(2)),
-    line,
-  )
-
-
-PROTECTED_ROTATE_SPAN = re.compile(
-  r"(`+)(?:(?!\1).)+?\1"
-  r"|(?<=\()https?://[^\s)]+(?=\))"
-  r"|https?://[^\s<>]+"
-  r"|\$\{\{.*?\}\}"
-  r"|:(?:param|type|ivar|vartype|keyword)\s+[A-Za-z0-9_]+\s*:"
-  r"|^\s*(?:-\s+)?[A-Za-z0-9_.-]+\s*:(?=\s|$)"
-)
-
-
-def mask_protected_spans(line):
-  """Replace inline code spans, workflow expressions, YAML keys, and :param <ident>: with spaces."""
-  return PROTECTED_ROTATE_SPAN.sub(lambda match: " " * len(match.group(0)), line)
 
 
 def _prose_line_map(path, text):
@@ -807,41 +581,6 @@ def _prose_line_map(path, text):
       for ln in range(first, last + 1):
         mapping.setdefault(ln, []).append(span_text)
   return {ln: "\n".join(parts) for ln, parts in mapping.items()}
-
-
-def _rotate_segment(segment, suppressed):
-  for name, pattern, use in ROTATIONS:
-    if RULE_IDS[name] in suppressed:
-      continue
-    segment = re.sub(
-      pattern,
-      lambda match, name=name, use=use: plain(match.group(0), name, use),
-      segment,
-      flags=re.IGNORECASE,
-    )
-  if PROSE_RULE_IDS["curly_quote"] not in suppressed:
-    segment = segment.translate(CURLY_QUOTES)
-  return segment
-
-
-def rotate(line, suppressed=frozenset()):
-  """Swap each matched word for its plain word, and take the exception words first."""
-  out = []
-  cursor = 0
-  for match in PROTECTED_ROTATE_SPAN.finditer(line):
-    if match.start() > cursor:
-      out.append(_rotate_segment(line[cursor : match.start()], suppressed))
-    out.append(match.group(0))
-    cursor = match.end()
-  if cursor < len(line):
-    out.append(_rotate_segment(line[cursor:], suppressed))
-  return "".join(out)
-
-
-def rotation_legend(line):
-  return bool(
-    re.match(r"^\|\s*`?avoid`?\s*\|\s*`?use`?\s*\|", line.strip(), re.IGNORECASE)
-  )
 
 
 def scan(targets, ignores, audit=False, verbose=False):

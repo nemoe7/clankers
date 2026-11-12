@@ -1,4 +1,4 @@
-"""One record per rule ID. The lookup tables are built from these records."""
+"""One record per rule ID. The lookup tables come from these records."""
 
 from dataclasses import dataclass
 

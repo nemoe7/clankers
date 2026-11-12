@@ -8,6 +8,7 @@ import sys
 from pathlib import Path, PureWindowsPath
 
 import nemo_report
+import nemo_rotate
 import nemo_rules
 import nemoize
 import pytest
@@ -1485,7 +1486,7 @@ def test_adopted_ste_rules_pull_request_and_license_exemption(tmp_path):
   for code in ("STE400", "STE401", "STE909", "STE910", "NMO901"):
     assert code in result.stdout
   assert (
-    nemoize.rotate("Open a pull request and merge Pull Requests.")
+    nemo_rotate.rotate("Open a pull request and merge Pull Requests.")
     == "Open a PR and merge PRs."
   )
   for license_name in (
@@ -1663,15 +1664,15 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
 
 def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path):
   assert (
-    nemoize.rotate("Use the nemoizer, The Nemoizer, THE NEMOIZER, and Nemoizer.")
+    nemo_rotate.rotate("Use the nemoizer, The Nemoizer, THE NEMOIZER, and Nemoizer.")
     == "Use nemoizer, nemoizer, nemoizer, and nemoizer."
   )
   assert (
-    nemoize.rotate("The prose linter runs the nemoizer rules.")
+    nemo_rotate.rotate("The prose linter runs the nemoizer rules.")
     == "The prose linter runs the nemoizer rules."
   )
   assert (
-    nemoize.collapse_list_articles(
+    nemo_rotate.collapse_list_articles(
       "Supply the source text, the target, and the unit for the worker."
     )
     == "Supply the source text, target, and unit for the worker."
@@ -1905,7 +1906,7 @@ def test_sql_dbml_env_and_jinja_comment_extractors_and_ste903_guard(tmp_path):
   assert "STE903" not in res.stdout
   assert "NMO100" not in res.stdout
   assert (
-    nemoize.rotate(
+    nemo_rotate.rotate(
       "- Name a relationship and the sheet names the single size, keeping role names."
     )
     == "- Specify a relationship and the sheet specifies the single size, keeping role names."
