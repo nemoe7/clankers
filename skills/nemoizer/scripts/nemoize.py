@@ -47,7 +47,12 @@ from nemo_rules import (
 from nemo_runner import run_with_timeouts
 
 
-def activate_config(parser, targets, config_path=None, no_config=False):
+def add_config_arguments(parser):
+  parser.add_argument("--config", type=Path, default=None)
+  parser.add_argument("--no-config", action="store_true")
+
+
+def activate_config(parser, targets, config_path, no_config):
   """Load the discovered or named config as the active config, or exit with usage."""
   try:
     nemo_config.BASE_CONFIG = load_config(targets, config_path, no_config)
@@ -63,13 +68,14 @@ def prose_main(argv=None):
     "--context", choices=[*SENTENCE_CAPS, "unknown"], default="unknown"
   )
   parser.add_argument("--paragraph-cap", type=int, default=PARAGRAPH_CAP)
+  add_config_arguments(parser)
   arguments = parser.parse_args(argv)
   if not 0 < arguments.paragraph_cap <= PARAGRAPH_CAP:
     parser.error(f"--paragraph-cap must be between 1 and {PARAGRAPH_CAP}")
   for target in arguments.targets:
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
-  activate_config(parser, arguments.targets)
+  activate_config(parser, arguments.targets, arguments.config, arguments.no_config)
   findings, coverage, errors = [], [], []
   for path in walk(arguments.targets, []):
     text = text_file(path)
@@ -112,11 +118,12 @@ def review_tests_main(argv=None):
     description="Review explicitly scoped test assertions and waits."
   )
   parser.add_argument("targets", nargs="+")
+  add_config_arguments(parser)
   args = parser.parse_args(argv)
   for target in args.targets:
     if not Path(target).exists():
       parser.error(f"target does not exist: {target}")
-  activate_config(parser, args.targets)
+  activate_config(parser, args.targets, args.config, args.no_config)
   try:
     result = review_tests(args.targets)
   except ValueError as error:
@@ -173,8 +180,7 @@ def main(argv=None):
   parser.add_argument("--context", choices=[*SENTENCE_CAPS, "unknown"], default=None)
   parser.add_argument("--paragraph-cap", type=int, default=None)
   parser.add_argument("--test-helper", action="append", type=Path, default=[])
-  parser.add_argument("--config", type=Path, default=None)
-  parser.add_argument("--no-config", action="store_true")
+  add_config_arguments(parser)
   arguments = parser.parse_args(argv)
   if arguments.selftest:
     assert rotate("Transmit the kind.") == "Send the type."

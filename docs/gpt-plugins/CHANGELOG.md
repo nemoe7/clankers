@@ -15,7 +15,7 @@ This log has no Unreleased section.
 ### Fixed
 
 - `skills/nemoizer/scripts/`: Keep CRLF line endings in `--format` output and in JavaScript parsing on Windows.
-- `skills/nemoizer/scripts/nemoize.py`: Load the discovered config in `prose` and `review-tests`.
+- `skills/nemoizer/scripts/nemoize.py`: Load the discovered config in `prose` and `review-tests`, and accept `--config` and `--no-config` there.
 
 ## [1.10.33]
 

@@ -1691,6 +1691,24 @@ def test_subcommands_apply_discovered_config_exclusions(tmp_path, subcommand, na
   }
   assert scanned == {f"docs/{name}"}
 
+  unconfigured = run(subcommand, "--no-config", "docs", cwd=tmp_path)
+  assert unconfigured.returncode in (0, 1), unconfigured.stderr
+  assert {
+    Path(row["path"]).as_posix() for row in json.loads(unconfigured.stdout)["coverage"]
+  } == {f"docs/{name}", f"docs/archive/{name}"}
+
+  named = tmp_path / "named.toml"
+  named.write_text(f'extend-exclude = ["docs/{name}"]\n', encoding="utf-8")
+  configured = run(subcommand, "--config", str(named), "docs", cwd=tmp_path)
+  assert configured.returncode in (0, 1), configured.stderr
+  assert {
+    Path(row["path"]).as_posix() for row in json.loads(configured.stdout)["coverage"]
+  } == {f"docs/archive/{name}"}
+
+  missing = run(subcommand, "--config", "missing.toml", "docs", cwd=tmp_path)
+  assert missing.returncode == 2
+  assert "config file does not exist" in missing.stderr
+
 
 def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path):
   assert (
