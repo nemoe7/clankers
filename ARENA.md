@@ -60,6 +60,7 @@
 
 - Continue after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
+- Prefer one Bash call for related shell steps and chain dependent steps with `&&`.
 - Work while tasks remain; end when verified and stopped.
 - MUST run `steer poll` only to wait for gates when one task remains, or for new work when no tasks remain.
 - NEVER sleep during a background gate.

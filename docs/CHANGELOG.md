@@ -35,6 +35,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### rules
+
+- Prefer one Bash call for related shell steps and chain dependent steps with `&&` (`ARENA.md`, `rules/ARENA.md`, `rules/refs/ARENA.md`).
+
 #### maintenance
 
 - Introduce Kilo/Plannotator amendment proposal template (`maintenance/amendment-template.md`).
