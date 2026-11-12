@@ -27,7 +27,6 @@ from markers import (
   MARKER_SPAN,
   audit_lines,
   collect_markers,
-  is_advisory_finding,
 )
 from markers import (
   head_marker as marker_head,
@@ -41,6 +40,21 @@ from nemo_markdown import (
   prose_counts,
   prose_line_matches,
   prose_lines,
+)
+from nemo_report import (
+  describe_finding,
+  format_finding,
+  format_summary,
+  is_advisory,
+)
+from nemo_rules import (
+  ADVISORY_RULE_IDS,
+  KNOWN_RULE_IDS,
+  LINE_PROSE_RULE_IDS,
+  NMU_RULE_IDS,
+  PROSE_RULE_IDS,
+  RULE_IDS,
+  TEST_RULE_IDS,
 )
 from prose import (
   COMMENT_BLOCK_CAP,
@@ -132,84 +146,12 @@ ROTATIONS = (
     "nemoizer",
   ),
 )
-RULE_IDS = {
-  "transmit": "NMO100",
-  "kind": "NMO100",
-  "repository": "NMO901",
-  "pull request": "NMO901",
-  "name": "NMO901",
-  "nemoizer": "NMO100",
-}
-ADVISORY_RULE_IDS = {
-  "NMO901",
-  "NMO902",
-  "STE901",
-  "STE902",
-  "STE903",
-  "STE904",
-  "STE905",
-  "STE906",
-  "STE908",
-  "STE909",
-  "STE910",
-  "HMN901",
-  "HMN902",
-  "HMN903",
-  "HMN904",
-  "HMN905",
-  "HMN906",
-  "HMN907",
-  "HMN908",
-  "HMN909",
-  "HMN910",
-  "NMT300",
-  "NMT400",
-}
 SENTENCE_CAPS = {"instruction": 20, "description": 25}
 PARAGRAPH_CAP = 4
 LIST_SENTENCE_CAP = 2
 HEADING_SENTENCE_CAP = 1
 THE_DENSITY_CAP = 20
 MIN_THE_COUNT = 3
-PROSE_RULE_IDS = {
-  "dangling_conjunction": "STE001",
-  "semicolon": "STE100",
-  "sentence": "STE200",
-  "nominalization": "STE300",
-  "wordy_phrase": "STE400",
-  "archaic_connector": "STE401",
-  "passive": "STE901",
-  "phrasal": "STE902",
-  "ellipsis": "STE903",
-  "compound_instruction": "STE904",
-  "noun_cluster": "STE905",
-  "synonym_cluster": "STE906",
-  "compound_tense": "STE908",
-  "inline_list": "STE909",
-  "double_negative": "STE910",
-  "staged_frame": "HMN100",
-  "stacked_qualifier": "HMN200",
-  "ai_vocabulary": "HMN300",
-  "arrow": "HMN400",
-  "chatbot_courtesy": "HMN500",
-  "curly_quote": "HMN600",
-  "negative_contrast": "HMN901",
-  "aphorism": "HMN902",
-  "rhetorical_setup": "HMN903",
-  "repeated_opener": "HMN904",
-  "prose_dash": "HMN905",
-  "vague_attribution": "HMN906",
-  "copula_avoidance": "HMN907",
-  "bold_label_bullet": "HMN908",
-  "consecutive_emoji": "HMN909",
-  "self_narration": "HMN910",
-  "paragraph": "NMP100",
-  "comment_block": "NMP101",
-  "padded_ui_label": "NMU100",
-  "serial_comma": "NMO003",
-  "the_density": "NMO902",
-}
-NMU_RULE_IDS = {"byte_unit": "NMU200"}
 NMU200_SUFFIXES = {".py", ".js", ".cjs", ".mjs", ".ts", ".tsx", ".jsx", ".html", ".htm"}
 NMU200_LABEL_RE = re.compile(r"\b(KB|MB|GB|TB|KiB|MiB|GiB|TiB)\b")
 NMU200_BINARY_RE = re.compile(
@@ -313,94 +255,6 @@ def nmu200_findings(path, text):
             yield line_number, label, "decimal"
 
 
-RULE_DESCRIPTIONS = {
-  "STE001": "dangling conjunction",
-  "STE100": "semicolon in prose",
-  "STE200": "sentence has {count} words (cap {cap})",
-  "STE300": "nominalized verb",
-  "STE400": "wordy phrase",
-  "STE401": "archaic or legalistic connector",
-  "STE901": "passive voice",
-  "STE902": "phrasal verb",
-  "STE903": "omitted passive auxiliary",
-  "STE904": "compound instruction",
-  "STE905": "noun cluster",
-  "STE906": "synonym cluster",
-  "STE908": "compound tense",
-  "STE909": "inline list in prose",
-  "STE910": "double negative",
-  "HMN100": "staged frame",
-  "HMN200": "stacked qualifier",
-  "HMN300": "AI vocabulary",
-  "HMN400": "arrow in prose",
-  "HMN500": "chatbot courtesy",
-  "HMN600": "curly quotation mark",
-  "HMN901": "negative contrast",
-  "HMN902": "aphorism or importance claim",
-  "HMN903": "rhetorical setup",
-  "HMN904": "repeated sentence opener",
-  "HMN905": "em or en dash in prose",
-  "HMN906": "vague attribution",
-  "HMN907": "copula avoidance",
-  "HMN908": "bold-label bullet",
-  "HMN909": "consecutive emojis",
-  "HMN910": "self-narration",
-  "NMP100": "paragraph has {count} sentences (cap {cap})",
-  "NMP101": "comment block has {count} lines (cap {cap})",
-  "NMU100": 'label "{text}" carries "{word}" ({count} words, cap {cap})',
-  "NMU200": "byte-unit divisor and label mismatch",
-  "NMT300": "unconditional real-time test wait",
-  "NMO003": "missing Oxford comma",
-  "NMO902": (
-    '"the" density is {count}% (cap {cap}%); '
-    'collapse list "the" articles (--format) or drop "the" before proper names'
-  ),
-}
-
-
-NMP100_LABELS = {
-  "paragraph": "paragraph",
-  "table": "table cell",
-  "list": "list item",
-  "heading": "heading",
-  "blockquote": "blockquote",
-}
-
-
-def describe_finding(row):
-  """Format a human-readable violation description for one prose or comment finding."""
-  if row["rule"] == "NMP100" and row.get("kind") in NMP100_LABELS:
-    label = NMP100_LABELS[row["kind"]]
-    return f"{label} has {row['count']} sentences (cap {row['cap']})"
-  if row["rule"] == "NMU100":
-    return (
-      f'label "{row["text"]}" carries "{row["word"]}"'
-      f" ({row['count']} words, cap {row['cap']})"
-    )
-  if row["rule"] == "NMU200":
-    return f'{row["scale"]} divisor paired with mismatched byte label "{row["text"]}"'
-  template = RULE_DESCRIPTIONS.get(row["rule"], "{count} (cap {cap})")
-  if "{count}" in template:
-    return template.format(count=row["count"], cap=row["cap"])
-  if row["count"] > 1:
-    return f"{template} ({row['count']} matches)"
-  return template
-
-
-TEST_RULE_IDS = {
-  "output_text": "NMT100",
-  "measurement": "NMT200",
-  "timing_wait": "NMT300",
-  "numeric_setting": "NMT400",
-}
-RESERVED_RULE_IDS = {"HMN000"}
-KNOWN_RULE_IDS = {
-  *RULE_IDS.values(),
-  *PROSE_RULE_IDS.values(),
-  *NMU_RULE_IDS.values(),
-  *TEST_RULE_IDS.values(),
-  *RESERVED_RULE_IDS,
-}
 CURLY_QUOTES = str.maketrans(
   {"\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"}
 )
@@ -984,33 +838,6 @@ def rotate(line, suppressed=frozenset()):
   return "".join(out)
 
 
-def format_finding(path, line, code, message, source_line=None, status=None):
-  """Format one finding in STE-linter style with an indented source snippet."""
-  advisory = code in ADVISORY_RULE_IDS or status == "manual_review"
-  level = "advisory" if advisory else "advisory-free"
-  suffix = " (manual review)" if advisory and "(manual review)" not in message else ""
-  header = f"{path}:{line}: [{code}] ({level}) {message}{suffix}"
-  if source_line is None:
-    return header
-  snippet = source_line.strip()
-  if len(snippet) > 100:
-    snippet = snippet[:97] + "..."
-  return f"{header}\n    {snippet}" if snippet else header
-
-
-def format_summary(findings):
-  """Format the STE-linter summary footer for a non-empty finding list."""
-  if not findings:
-    return ""
-  hard = sum(1 for item in findings if not is_advisory(item))
-  advisory = len(findings) - hard
-  files = len({item.splitlines()[0].rsplit(":", 2)[0] for item in findings})
-  return (
-    f"\nSummary: {hard} hard violation(s), "
-    f"{advisory} advisory finding(s) across {files} file(s)."
-  )
-
-
 def rotation_legend(line):
   return bool(
     re.match(r"^\|\s*`?avoid`?\s*\|\s*`?use`?\s*\|", line.strip(), re.IGNORECASE)
@@ -1097,10 +924,6 @@ def scan(targets, ignores, audit=False, verbose=False):
               )
             )
   return findings, marks
-
-
-def is_advisory(finding):
-  return is_advisory_finding(finding, ADVISORY_RULE_IDS)
 
 
 def format_paths(targets, ignores, out=None):
@@ -1718,18 +1541,6 @@ def prose_the_density(text, cap=THE_DENSITY_CAP, min_the=MIN_THE_COUNT):
       if density >= cap:
         rows.append((start_line, hits[0].start() + 1, density))
   return rows
-
-
-LINE_PROSE_RULE_IDS = {
-  "STE001",
-  "STE100",
-  "STE200",
-  "HMN400",
-  "HMN600",
-  "HMN905",
-  "HMN908",
-  "HMN909",
-}
 
 
 def prose_review(path, text, context, paragraph_cap, min_the_override=None):

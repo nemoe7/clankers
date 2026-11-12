@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path, PureWindowsPath
 
+import nemo_report
+import nemo_rules
 import nemoize
 import pytest
 
@@ -64,7 +66,7 @@ def test_a_rotation_matches_the_stem_and_prose():
     assert "code.py:1:" not in result.stdout
     assert "\n    He names the tool. Do not transmit this." in result.stdout
     assert (
-      nemoize.format_summary(
+      nemo_report.format_summary(
         [
           "note.md:1: [NMO100] (advisory-free) transmit -> send",
           "note.md:1: [NMO901] (advisory) names -> specify",
@@ -902,9 +904,19 @@ def test_generated_pytest_cache_is_not_scanned(tmp_path):
   assert ".pytest_cache" not in result.stdout
 
 
+def test_rule_registry_has_unique_codes_and_family_keys():
+  codes = [rule.code for rule in nemo_rules.RULES]
+  assert len(codes) == len(set(codes))
+  family_keys = [(rule.family, key) for rule in nemo_rules.RULES for key in rule.keys]
+  assert len(family_keys) == len(set(family_keys))
+  for rule in nemo_rules.RULES:
+    assert bool(rule.keys) == (rule.family != "reserved"), rule.code
+    assert not rule.line_scoped or rule.family == "prose", rule.code
+
+
 def test_prose_and_test_ids_have_separate_domains():
-  assert set(nemoize.RULE_IDS.values()) == {"NMO100", "NMO901"}
-  assert nemoize.PROSE_RULE_IDS == {
+  assert set(nemo_rules.RULE_IDS.values()) == {"NMO100", "NMO901"}
+  assert nemo_rules.PROSE_RULE_IDS == {
     "dangling_conjunction": "STE001",
     "semicolon": "STE100",
     "sentence": "STE200",
@@ -942,16 +954,16 @@ def test_prose_and_test_ids_have_separate_domains():
     "serial_comma": "NMO003",
     "the_density": "NMO902",
   }
-  assert nemoize.TEST_RULE_IDS == {
+  assert nemo_rules.TEST_RULE_IDS == {
     "output_text": "NMT100",
     "measurement": "NMT200",
     "timing_wait": "NMT300",
     "numeric_setting": "NMT400",
   }
-  assert "NMT300" in nemoize.KNOWN_RULE_IDS
-  assert "NMT300" in nemoize.ADVISORY_RULE_IDS
-  assert nemoize.RESERVED_RULE_IDS == {"HMN000"}
-  assert "HMN000" in nemoize.KNOWN_RULE_IDS
+  assert "NMT300" in nemo_rules.KNOWN_RULE_IDS
+  assert "NMT300" in nemo_rules.ADVISORY_RULE_IDS
+  assert nemo_rules.RESERVED_RULE_IDS == {"HMN000"}
+  assert "HMN000" in nemo_rules.KNOWN_RULE_IDS
   assert not (
     {
       "P001",
@@ -973,7 +985,7 @@ def test_prose_and_test_ids_have_separate_domains():
       "NMT001",
       "NMT002",
     }
-    & nemoize.KNOWN_RULE_IDS
+    & nemo_rules.KNOWN_RULE_IDS
   )
 
 
@@ -990,15 +1002,15 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   result = run(cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert (
-    f"note.md:1: [STE200] (advisory-free) {nemoize.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
+    f"note.md:1: [STE200] (advisory-free) {nemo_report.describe_finding({'rule': 'STE200', 'count': 21, 'cap': 20})}"
     in result.stdout
   )
   assert (
-    f"note.md:3: [NMP100] (advisory-free) {nemoize.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
+    f"note.md:3: [NMP100] (advisory-free) {nemo_report.describe_finding({'rule': 'NMP100', 'count': 5, 'cap': 4})}"
     in result.stdout
   )
   assert (
-    f"note.md:5: [STE100] (advisory-free) {nemoize.RULE_DESCRIPTIONS['STE100']}"
+    f"note.md:5: [STE100] (advisory-free) {nemo_rules.RULE_DESCRIPTIONS['STE100']}"
     in result.stdout
   )
   description = run("--context", "description", cwd=tmp_path)
@@ -1012,7 +1024,7 @@ def test_default_scan_checks_semicolon_sentence_and_paragraph_caps(tmp_path):
   comment_res = run(str(code_file), cwd=tmp_path)
   assert comment_res.returncode == 1, comment_res.stderr
   assert (
-    f"{code_file}:1: [NMP101] (advisory-free) {nemoize.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
+    f"{code_file}:1: [NMP101] (advisory-free) {nemo_report.describe_finding({'rule': 'NMP101', 'count': 3, 'cap': 2})}"
     in comment_res.stdout
   )
 
@@ -1029,7 +1041,7 @@ def test_cmd_and_bat_files_extract_only_batch_comments_and_enforce_ste001(tmp_pa
   result = run(str(cmd), cwd=tmp_path)
   assert result.returncode == 1, result.stderr
   assert (
-    f"{cmd}:3: [STE100] (advisory-free) {nemoize.RULE_DESCRIPTIONS['STE100']}"
+    f"{cmd}:3: [STE100] (advisory-free) {nemo_rules.RULE_DESCRIPTIONS['STE100']}"
     in result.stdout
   )
   assert f"{cmd}:2:" not in result.stdout
@@ -1282,7 +1294,7 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   assert "[NMO901] (advisory) Repository -> repo (manual review)" in result.stdout
   assert "[NMO901] (advisory) repositories -> repo (manual review)" in result.stdout
   assert (
-    f"[STE901] (advisory) {nemoize.RULE_DESCRIPTIONS['STE901']} (manual review)"
+    f"[STE901] (advisory) {nemo_rules.RULE_DESCRIPTIONS['STE901']} (manual review)"
     in result.stdout
   )
   formatted = run("--format", str(source), cwd=tmp_path)
@@ -1301,18 +1313,19 @@ def test_repository_rotation_and_ste901_passive_voice_are_manual_review(tmp_path
   advisory = run(str(source), cwd=tmp_path)
   assert advisory.returncode == 0, advisory.stderr
   assert (
-    f"[STE902] (advisory) {nemoize.RULE_DESCRIPTIONS['STE902']} (manual review)"
+    f"[STE902] (advisory) {nemo_rules.RULE_DESCRIPTIONS['STE902']} (manual review)"
     in advisory.stdout
   )
   assert (
-    f"[STE903] (advisory) {nemoize.RULE_DESCRIPTIONS['STE903']} (manual review)"
+    f"[STE903] (advisory) {nemo_rules.RULE_DESCRIPTIONS['STE903']} (manual review)"
     in advisory.stdout
   )
   source.write_text("Check red, green and blue.\n", encoding="utf-8")
   serial = run(str(source), cwd=tmp_path)
   assert serial.returncode == 1, serial.stderr
   assert (
-    f"[NMO003] (advisory-free) {nemoize.RULE_DESCRIPTIONS['NMO003']}" in serial.stdout
+    f"[NMO003] (advisory-free) {nemo_rules.RULE_DESCRIPTIONS['NMO003']}"
+    in serial.stdout
   )
   assert "manual review" not in serial.stdout
   test_sample = tmp_path / "test_sample.py"
@@ -1446,7 +1459,7 @@ def test_references_follow_markdownlint_doc_layout():
   refs_dir = SCRIPT.parent.parent / "references"
   rules_md = (refs_dir / "rules.md").read_text(encoding="utf-8")
   assert "\n# Rules\n" in rules_md
-  for code in sorted(nemoize.KNOWN_RULE_IDS - nemoize.RESERVED_RULE_IDS):
+  for code in sorted(nemo_rules.KNOWN_RULE_IDS - nemo_rules.RESERVED_RULE_IDS):
     assert f"\n## `{code}` - " in rules_md
     rule_file = refs_dir / f"{code.lower()}.md"
     assert rule_file.is_file(), f"missing {rule_file.name}"
@@ -1555,16 +1568,16 @@ def test_nmp100_counts_lists_tables_headings_and_blockquotes(tmp_path):
   )
   res = run(str(doc), cwd=tmp_path)
   assert res.returncode == 1, res.stderr
-  heading_msg = nemoize.describe_finding(
+  heading_msg = nemo_report.describe_finding(
     {"rule": "NMP100", "count": 2, "cap": 1, "kind": "heading"}
   )
-  list_msg = nemoize.describe_finding(
+  list_msg = nemo_report.describe_finding(
     {"rule": "NMP100", "count": 3, "cap": 2, "kind": "list"}
   )
-  table_msg = nemoize.describe_finding(
+  table_msg = nemo_report.describe_finding(
     {"rule": "NMP100", "count": 5, "cap": 4, "kind": "table"}
   )
-  quote_msg = nemoize.describe_finding(
+  quote_msg = nemo_report.describe_finding(
     {"rule": "NMP100", "count": 5, "cap": 4, "kind": "blockquote"}
   )
   assert f"[NMP100] (advisory-free) {heading_msg}" in res.stdout
@@ -1678,7 +1691,7 @@ def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path
     doc.read_text(encoding="utf-8")
     == "Use nemoizer on the source text, target, and unit.\n"
   )
-  assert "--format" in nemoize.RULE_DESCRIPTIONS["NMO902"]
+  assert "--format" in nemo_rules.RULE_DESCRIPTIONS["NMO902"]
 
 
 def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
@@ -2027,7 +2040,7 @@ def test_nmu100_padded_ui_labels_and_cap_config(tmp_path):
   r1 = run(str(page), cwd=tmp_path)
   assert r1.returncode == 1, r1.stderr
   assert r1.stdout.count("[NMU100]") == 5
-  expected = nemoize.describe_finding(
+  expected = nemo_report.describe_finding(
     {
       "rule": "NMU100",
       "text": "Open the repo",
@@ -2083,7 +2096,7 @@ def test_nmu100_padded_ui_labels_and_cap_config(tmp_path):
   r4 = run(str(cap_js), cwd=tmp_path)
   assert r4.returncode == 1, r4.stderr
   assert r4.stdout.count("[NMU100]") == 1
-  expected_cap = nemoize.describe_finding(
+  expected_cap = nemo_report.describe_finding(
     {
       "rule": "NMU100",
       "text": "Open the repo",
