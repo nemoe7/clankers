@@ -59,7 +59,7 @@ Verbatim baselines would exceed live budgets. Refs preserve originals, identical
 
 ### Formatting
 
-Markdown linting covers repository Markdown and `README.md` files selected by [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc). It excludes `AGENTS.md`, `ARENA.md`, non-README rule and skill files, system prompts, archived notes, and `.agents/`. The required blank first line and `###` heading of a Kilo mode override fail MD001 and MD041.
+Markdown linting covers repo Markdown and `README.md` files selected by [`.markdownlint-cli2.jsonc`](../.markdownlint-cli2.jsonc). It excludes `AGENTS.md`, `ARENA.md`, non-README rule and skill files, system prompts, archived notes, and `.agents/`. The required blank first line and `###` heading of a Kilo mode override fail MD001 and MD041.
 
 Soft-wrap prose: one line per paragraph, list item and table row. Keep third-party license wrapping.
 
@@ -79,7 +79,7 @@ Kilo wraps the mode overrides as a mode reminder rather than loading them as a f
 
 [.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps the file selection, the exclusions, and the rule settings together. It keeps the markdownlint defaults, enables **MD060** for table-column consistency, and disables **MD013** so there is no line-length constraint. MD060 uses its default `any` style, and MD007 uses its default two-space list indent, so neither needs a pin.
 
-Run `markdownlint-cli2` from the repository root with no extra globs so local runs match CI.
+Run `markdownlint-cli2` from the repo root with no extra globs so local runs match CI.
 
 Core defines Python style (Ruff E4, E7, E9, F), with no managed Ruff dependency. `maintenance/check.py` checks both ChatGPT fields against 1,500 Unicode characters each, including newlines.
 
@@ -169,7 +169,7 @@ python3 maintenance/gpt_plugins/gate_gpt_plugins.py            # report drift, w
 
 The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, shipped skill names, the Agent Skills frontmatter limits, and the collection tree. `docs/gpt-plugins/README.md` documents the collection and never ships.
 
-`--archive <zip>` compares a packaged archive with the collection. The archive must carry `plugin.json` and `skills/` only, with byte-identical content, so `refs/` never ships. On pull requests, `.github/workflows/artifacts.yml` runs the collection check and requires a higher `plugin.json` version when shipped files change. On `main`, it packages and publishes `gpt-plugins.zip`.
+`--archive <zip>` compares a packaged archive with the collection. The archive must carry `plugin.json` and `skills/` only, with byte-identical content, so `refs/` never ships. On PRs, `.github/workflows/artifacts.yml` runs the collection check and requires a higher `plugin.json` version when shipped files change. On `main`, it packages and publishes `gpt-plugins.zip`.
 
 The shipped `SKILL.md` files join the budget table in the root `README.md`. `plugin.json` does not, because it is metadata and not instruction text.
 

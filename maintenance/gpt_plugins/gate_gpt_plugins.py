@@ -329,7 +329,7 @@ def check_manifest(schema: dict | None, errors: list[str]) -> None:
 
 
 def check_skill(root: Path, name: str, errors: list[str]) -> None:
-  """Check one SKILL.md against the Agent Skills limits this repository enforces."""
+  """Check one SKILL.md against the Agent Skills limits this repo enforces."""
   directory = root / name
   path = directory / "SKILL.md"
   label = path.relative_to(ROOT)

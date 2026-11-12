@@ -19,7 +19,7 @@ EMPTY_BASE = "0" * 40
 ARTIFACTS = ".github/workflows/artifacts.yml"
 
 # One rule per artifact path family: the package archive and the rules gist.
-# The rules family skips `rules/refs/`, which no target repository sees.
+# The rules family skips `rules/refs/`, which no target repo sees.
 ARTIFACT_RULES = (
   (
     "package",
@@ -331,7 +331,7 @@ def ci_surfaces() -> dict[str, tuple[str, ...]]:
   surfaces = {
     "ruff": ("*.py", "*.pyi", "*.ipynb", "pyproject.toml", "ruff.toml", ".ruff.toml"),
     "markdownlint": ("*.md", ".markdownlint*", "package.json", "package-lock.json"),
-    # The repository gate scans all text, validates paths, and checks parity.
+    # The repo gate scans all text, validates paths, and checks parity.
     "repo_check": (".",),
   }
   for name, tests in MODULE_TESTS.items():

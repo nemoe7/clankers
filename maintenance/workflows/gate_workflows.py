@@ -1,7 +1,7 @@
 """Gate for the workflow set: required files, least-privilege permissions and job-scoped secrets.
 
 actionlint checks the syntax and zizmor audits the security. This gate holds the
-repository contract that both tools leave implicit. The contract is the exact file
+repo contract that both tools leave implicit. The contract is the exact file
 set and a read-only top level. No privileged trigger for untrusted code, and
 credentials stay inside their job.
 """
@@ -26,17 +26,17 @@ REQUIRED_FILES = (
   "workflow-security.yml",
 )
 
-# A pull request can run untrusted code, so these scopes stay out of its workflows.
+# A PR can run untrusted code, so these scopes stay out of its workflows.
 FORBIDDEN_PR_PERMISSIONS = ("contents", "actions", "packages", "id-token")
 READ_ONLY_VALUES = ("read", "none")
 
-# A job whose `if` names an event that is not a pull request never runs pull request
-# code. So that job alone may carry a forbidden scope inside a pull request workflow.
+# A job whose `if` names an event that is not a PR never runs PR code.
+# So that job alone may carry a forbidden scope inside a PR workflow.
 NON_PULL_REQUEST_EVENT_RE = re.compile(
   r"github\.event_name\s*(?:!=\s*'pull_request'"
   r"|==\s*'(?:push|workflow_dispatch|schedule|release|repository_dispatch)')"
 )
-# A condition that admits the pull request event guards nothing, an `||` branch included.
+# A condition that admits the PR event guards nothing, an `||` branch included.
 PULL_REQUEST_EVENT_RE = re.compile(r"github\.event_name\s*==\s*'pull_request'")
 
 SECRET_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
@@ -80,7 +80,7 @@ def jobs_of(document: dict) -> dict:
 
 
 def guarded_from_pull_request(job: dict) -> bool:
-  """Return True when the job's `if` names an event that is not a pull request."""
+  """Return True when the job's `if` names an event that is not a PR."""
   condition = job.get("if")
   if not isinstance(condition, str):
     return False

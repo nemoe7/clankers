@@ -1,4 +1,4 @@
-"""Tests for the stage runner, the `nemoize` stage, and the command line."""
+"""Tests for the stage runner, `nemoize` stage, and command line."""
 
 from __future__ import annotations
 

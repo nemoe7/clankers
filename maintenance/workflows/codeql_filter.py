@@ -12,7 +12,7 @@ JS_EXTENSIONS = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".html", ".vue"}
 
 
 def languages_for(paths: list[str]) -> set[str]:
-  """Unknown inputs trigger all analyses. Shared configuration is never skipped."""
+  """Unknown inputs trigger all analyses. Shared configuration always selects every analysis."""
   selected: set[str] = set()
   for path in paths:
     name = PurePosixPath(path)

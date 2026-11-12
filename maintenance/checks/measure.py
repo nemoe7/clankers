@@ -15,7 +15,7 @@ const { encode } = require("gpt-tokenizer/encoding/o200k_base");
 const fs = require("fs");
 process.stdout.write(String(encode(fs.readFileSync(process.argv[1], "utf8")).length));
 """
-# A file whose size or time changed between two measurements is measured again.
+# Measure again any file whose size or time changed between two measurements.
 _token_cache: dict[tuple[str, int, int], int] = {}
 
 

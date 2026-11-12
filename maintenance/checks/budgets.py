@@ -16,7 +16,7 @@ UPDATED_RE = re.compile(r"Latest measurements as of \d{4}-\d{2}-\d{2}\.")
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
 # and `More about you`, each capped at 1,500 characters.
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
-# The cap covers the production fields and the Wenyan experimentals.
+# The cap covers production fields and Wenyan experimentals.
 CHATGPT_CHAR_CAP = 1500
 
 # Every clause file measures in tokens. Only the ChatGPT fields count characters,

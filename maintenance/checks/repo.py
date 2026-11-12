@@ -1,4 +1,4 @@
-"""The repository tree every check reads. Tests pass a temporary root instead of patching globals."""
+"""The repo tree every check reads. Tests pass a temporary root instead of patching globals."""
 
 from __future__ import annotations
 

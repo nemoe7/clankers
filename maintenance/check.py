@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check repository structure and maintain README measurements. See the `checks` package."""
+"""Check repo structure and maintain README measurements. See the `checks` package."""
 
 import sys
 
