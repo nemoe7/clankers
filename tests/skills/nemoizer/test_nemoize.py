@@ -1670,6 +1670,28 @@ def test_config_caps_respect_gitignore_and_bundled_default_config(tmp_path):
   assert "NMO902" not in custom_run.stdout
 
 
+@pytest.mark.parametrize(
+  ("subcommand", "name"), [("prose", "note.md"), ("review-tests", "test_note.py")]
+)
+def test_subcommands_apply_discovered_config_exclusions(tmp_path, subcommand, name):
+  import json
+
+  (tmp_path / ".git").mkdir()
+  (tmp_path / "nemoizer.toml").write_text(
+    'extend-exclude = ["archive"]\n', encoding="utf-8"
+  )
+  text = 'def test_note():\n  assert result.stdout == "Saved the report."\n'
+  for folder in ("docs", "docs/archive"):
+    (tmp_path / folder).mkdir(exist_ok=True)
+    (tmp_path / folder / name).write_text(text, encoding="utf-8")
+  result = run(subcommand, "docs", cwd=tmp_path)
+  assert result.returncode in (0, 1), result.stderr
+  scanned = {
+    Path(row["path"]).as_posix() for row in json.loads(result.stdout)["coverage"]
+  }
+  assert scanned == {f"docs/{name}"}
+
+
 def test_nemoizer_proper_name_rotation_and_nmo902_list_article_collapse(tmp_path):
   assert (
     nemo_rotate.rotate("Use the nemoizer, The Nemoizer, THE NEMOIZER, and Nemoizer.")

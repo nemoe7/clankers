@@ -17,6 +17,7 @@ This log has no Unreleased section.
 
 - Keep the line endings of each file that `--format` rewrites.
 - Count CRLF as one line break in JavaScript comment and test parsing on Windows.
+- Load the discovered config in `prose` and `review-tests`, so their exclusions apply.
 
 ### Removed
 
