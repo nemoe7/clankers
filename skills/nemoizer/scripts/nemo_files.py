@@ -141,7 +141,7 @@ def walk(targets, ignores):
         yield path
       continue
     root = path
-    # Exclusion patterns are rooted at the config's project root, never at the walk target.
+    # Exclusion patterns start at the config's project root, never at the walk target.
     # A subdirectory target keeps the same relative paths.
     skip_root = nemo_config.ACTIVE_CONFIG.get("root") or root
     candidates = [

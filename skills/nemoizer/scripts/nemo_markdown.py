@@ -3,7 +3,7 @@
 import re
 
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
-# The rotation table names the avoided words, so its own rows never flag.
+# The rotation table lists the avoided words, so its own rows never flag.
 TABLE_ROW = re.compile(r"^\|\s*`[^`]+`\s*\|")
 CODE_SPAN = re.compile(r"(`+)(.*?)\1")
 

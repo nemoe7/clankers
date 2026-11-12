@@ -485,8 +485,8 @@ def test_distribute_keeps_the_owner_run_packages_home(tmp_path):
     gate_workflows.ROOT / ".github" / "actions" / "distribute-sync" / "action.yml"
   )
   script = action.with_name("sync.sh").read_text(encoding="utf-8")
-  # The owner pages and the docker packages stay in this repository. Only files
-  # a session loads at runtime ride to the target repositories.
+  # The owner pages and the docker packages stay in this repo. Only files
+  # a session loads at runtime ride to the target repos.
   start = script.index("skill_files() {")
   helper = script[start : script.index("\nfor skill ", start)]
   runtime = {"SKILL.md", "scripts/runtime.py", "references/rules.md"}
@@ -651,7 +651,7 @@ def test_guarded_from_pull_request_reads_the_condition():
   assert gate_workflows.guarded_from_pull_request({"if": "github.event_name == 'push'"})
   assert not gate_workflows.guarded_from_pull_request({})
   assert not gate_workflows.guarded_from_pull_request({"if": True})
-  # An `||` branch that admits the pull request event guards nothing.
+  # A `||` branch that admits the PR event guards nothing.
   assert not gate_workflows.guarded_from_pull_request(
     {"if": "github.event_name == 'push' || github.event_name == 'pull_request'"}
   )

@@ -1,4 +1,4 @@
-"""Run the distribution action against local Git repositories and controlled push failures."""
+"""Run the distribution action against local Git repos and controlled push failures."""
 
 import json
 import os

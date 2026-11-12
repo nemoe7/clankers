@@ -1,4 +1,4 @@
-"""Tests for the shared change-detection step, against real Git repositories."""
+"""Tests for the shared change-detection step, against real Git repos."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def write(repo: Path, files: dict[str, str]) -> None:
 
 
 def init_repo(tmp_path: Path) -> Path:
-  """One repository at its first commit."""
+  """One repo at its first commit."""
   repo = tmp_path / "repo"
   repo.mkdir()
   git(repo, "init", "-q")

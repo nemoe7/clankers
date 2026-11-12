@@ -1,4 +1,4 @@
-"""Gate for the pull request contract: commits, PR title, PR body and Simplified Technical English.
+"""Gate for the PR contract: commits, PR title, PR body and Simplified Technical English.
 
 The commit rules are the inline constants `ALLOWED_TYPES` and `SUBJECT_LIMIT`, which state
 `rules/COMMIT-SPEC.txt` and are never read from it. The PR body rules come from the locked
