@@ -5,6 +5,9 @@ import os
 from http.server import ThreadingHTTPServer
 
 import pytest
+
+pytest.importorskip("fcntl", reason="arena-steering needs POSIX fcntl")
+
 from arena_steering import cli
 
 

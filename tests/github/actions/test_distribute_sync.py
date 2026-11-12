@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 import yaml
 
+pytestmark = pytest.mark.skipif(
+  sys.platform == "win32", reason="the action runs POSIX bash"
+)
 ACTION = (
   Path(__file__).resolve().parents[3] / ".github/actions/distribute-sync/action.yml"
 )

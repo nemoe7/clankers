@@ -261,11 +261,13 @@ def test_module_test_ownership_is_complete_and_unique():
   root = Path(changed_paths.__file__).resolve().parents[2]
   owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
   discovered = {
-    str(path.relative_to(root))
+    path.relative_to(root).as_posix()
     for directory in ("tests", "maintenance", "skills", "github/workflows")
     if (root / directory).exists()
     for path in (root / directory).rglob("test_*.py")
-    if not str(path.relative_to(root)).startswith(changed_paths.ARCHIVED_TEST_PREFIX)
+    if not path.relative_to(root)
+    .as_posix()
+    .startswith(changed_paths.ARCHIVED_TEST_PREFIX)
   }
   assert set(owned) == discovered
   assert len(owned) == len(set(owned))
@@ -318,7 +320,7 @@ def test_node_test_ownership_is_complete_and_unique():
   root = Path(changed_paths.__file__).resolve().parents[2]
   owned = [path for paths in changed_paths.MODULE_NODE_TESTS.values() for path in paths]
   discovered = {
-    str(path.relative_to(root))
+    path.relative_to(root).as_posix()
     for directory in ("tests", "maintenance", "skills/refs")
     if (root / directory).exists()
     for suffix in ("*.test.cjs", "*.checks.cjs")

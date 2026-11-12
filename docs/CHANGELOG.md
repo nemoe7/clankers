@@ -37,6 +37,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Introduce Kilo/Plannotator amendment proposal template (`maintenance/amendment-template.md`).
 - Introduce Arena Steering amendment proposal template with the final clause verbatim as the approval option label (`maintenance/amendment-template-arena.md`).
 
+### Fixed
+
+#### maintenance
+
+- Reject Git output that is not UTF-8 on Windows as well (`maintenance/pr/gate_pr.py`).
+- Keep the global Git config and hooks out of test repos (`tests/conftest.py`).
+- Compare test paths with `/`, and skip tests that need POSIX `bash`, `sh`, or `fcntl` on Windows.
+
 ## 2026-11-11
 
 ### Changed

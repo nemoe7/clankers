@@ -5,8 +5,10 @@ from __future__ import annotations
 import copy
 import os
 import subprocess
+import sys
 
 import gate_workflows
+import pytest
 import yaml
 
 BASE = {
@@ -477,6 +479,7 @@ def test_distribute_jobs_share_one_action_and_keep_their_own_lists(monkeypatch):
   )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="sync.sh needs POSIX bash")
 def test_distribute_keeps_the_owner_run_packages_home(tmp_path):
   action = (
     gate_workflows.ROOT / ".github" / "actions" / "distribute-sync" / "action.yml"
