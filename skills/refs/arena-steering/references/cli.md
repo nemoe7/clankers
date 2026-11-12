@@ -26,6 +26,8 @@ A full wait prints `Poll waited fully. End turn.` A skip prints `User skipped po
 
 `steer ack` accepts multiple IDs before one shared answer. `-i TASK -t TITLE -z SIZE [-T TYPE]... [-S SCOPE] [-d DETAIL]...` creates and links a task in that call.
 
+When Inbox items are pending, `read`, `poll`, and `ack` bypass the Bash gate. Bookkeeping commands `msg`, `tasks`, `task`, `reports`, `report`, `survey`, `skills`, `ren`, and `worktree` also bypass it. `serve` remains exempt. Shell combinations, redirections, `clear`, `run`, `pr-update`, and `job-log` stay gated.
+
 An attached message adds each file path as a home-relative task detail without another flag. Its linked task uses P3 unless an explicit priority overrides it.
 
 ## Tasks and ordered phases
@@ -47,7 +49,7 @@ An attached message adds each file path as a home-relative task detail without a
 | `steer task rm ID` | `Removed task ID` | 0 on removal, 1 on error |
 | `steer ren OLD_ID NEW_ID` | Renamed task or report | 0 on rename, 1 on conflict or error |
 
-Task sizes are 1, 2, 3, 5, 8, 13, 21, or 34. Priority accepts P1–P5. Without `-p`, report-only tasks default to P3; all others default to P4.
+Task sizes are 1, 2, 3, 5, 8, 13, 21, or 34. Priority accepts P1–P5. Without `-p`, report-only tasks default to P3. Other tasks default to P4.
 
 Runnable tasks sort by priority, size, and insertion order. Links to unfinished dependencies or unanswered reports block applicable phases.
 
@@ -70,7 +72,8 @@ Docs and code phases need a clean tree and a unique full Git commit hash. Operat
 | `steer report rm --stale` | `Dismissed reports: ...` | 0 on removal, 1 on error |
 
 The source is an ignored workspace file, not a commit artifact. Fielded questions use `<!-- question {"id":"...","label":"..."} -->` and labelled options. Mark at least one option in each radio or checkbox field with `(x)` or `[x]`.
-Use the final decision on every question and option label, and NEVER use question strings or generic words like Decision or Answer. See [report-labels.md](report-labels.md) for worked examples.
+
+Use final decisions in labels. Avoid question strings or generic labels like Decision or Answer. See [report-labels.md](report-labels.md) for examples.
 
 For example:
 
@@ -102,7 +105,7 @@ Survey submissions require a running server and fail without one. Results stay i
 
 ## Detached runs and GitHub helpers
 
-Use `steer run start` for supported long-running jobs and task gates; keep persistent services on the platform `start_process` path.
+Use `steer run start` for supported long-running jobs and task gates. Keep persistent services on the platform `start_process` path.
 
 | Command | Output on success | Exit |
 | --- | --- | --- |
@@ -118,7 +121,7 @@ Use `steer run start` for supported long-running jobs and task gates; keep persi
 
 A launched run has not passed. Its `run logs` exit line gives the verdict. An absent PR check list reports `no checks reported`, not a pass.
 
-`-s` filters lines before `-n` and `-p` apply; `-p 1` is the newest page. `rerun` refuses while the run is live.
+`-s` filters lines before `-n` and `-p` apply. `-p 1` is the newest page. `rerun` refuses while the run is live.
 
 Job-log URLs are signed and temporary. `worktree add NAME [-b BRANCH]` uses `.worktrees/NAME`. The remaining worktree actions list, remove, prune, or collect work under this checkout.
 
