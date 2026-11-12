@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [1.10.34]
+
+### Changed
+
+- `skills/nemoizer/scripts/`: Split `nemoize.py` into single-purpose modules with the same command line.
+
+### Fixed
+
+- `skills/nemoizer/scripts/`: Keep CRLF line endings in `--format` output and in JavaScript parsing on Windows.
+
+## [1.10.33]
+
+### Removed
+
+- `skills/nemoizer/scripts/nemoize.py`: Retire the pick-to-select rotation.
+
 ## [1.10.32]
 
 ### Changed

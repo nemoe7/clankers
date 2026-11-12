@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and this mod
 
 This log has no Unreleased section.
 
+## [0.1.18]
+
+### Changed
+
+- Split `scripts/nemoize.py` into single-purpose modules, and keep the command line in `nemoize.py`.
+- Build the rule ID tables, rule descriptions, advisory status, and line scope from one rule registry.
+
+### Fixed
+
+- Keep the line endings of each file that `--format` rewrites.
+- Count CRLF as one line break in JavaScript comment and test parsing on Windows.
+
+### Removed
+
+- Remove the inlined `markers.py` copy from `nemoize.py`.
+
 ## [0.1.17]
 
 ### Changed
