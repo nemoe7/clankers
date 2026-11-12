@@ -30,6 +30,21 @@ CALL_COUNT_META = "pre_call_count"
 WIREFRAME_SUFFIX = "-wireframe.png"
 SHELL_NAMES = {"bash", "sh", "dash", "zsh", "ksh"}
 COMMAND_WRAPPERS = {"env", "command", "nice", "nohup", "stdbuf", "sudo", "time"}
+INBOX_RECOVERY_COMMANDS = frozenset({"read", "poll", "ack", "ren"})
+STEERING_BOOKKEEPING_COMMANDS = frozenset(
+  {
+    "msg",
+    "survey",
+    "skills",
+    "ren",
+    "serve",
+    "tasks",
+    "task",
+    "reports",
+    "report",
+    "worktree",
+  }
+)
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*=")
 SHELL_WRAPPER = re.compile(
   r"^(?:\S*/)?(?:bash|sh|dash|zsh|ksh)\s+(?:-[\w-]+\s+)*-[\w]*c\s+"
@@ -714,8 +729,27 @@ class PreContext:
       and remote_git_push(command_words(pieces[0][0]))
     )
 
+  def is_steering_bookkeeping(self) -> bool:
+    """Allow a standalone bookkeeping command to bypass the pending-inbox gate."""
+    text = shell_line(self.line or self.command).strip()
+    if not text or "\n" in text or any(mark in text for mark in ("`", "$(", "${")):
+      return False
+    lexer = shlex.shlex(text, posix=True, punctuation_chars="|;&<>()")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+      words = list(lexer)
+    except ValueError:
+      return False
+    return (
+      len(words) >= 2
+      and words[0] == "steer"
+      and words[1] in STEERING_BOOKKEEPING_COMMANDS
+      and not any(word and all(char in "|;&<>()" for char in word) for word in words)
+    )
+
   def is_inbox_recovery(self) -> bool:
-    """Allow inbox-only lines and a current initial ACK step."""
+    """Allow inbox recovery lines and a current initial ACK step."""
     if (
       self.line
       and self.command
@@ -725,9 +759,9 @@ class PreContext:
       return True
 
     def verb(words: list[str]) -> str:
-      if len(words) < 2 or Path(words[0]).name != "steer":
+      if len(words) < 2 or words[0] != "steer":
         return ""
-      return words[1] if words[1] in {"read", "poll", "ack"} else ""
+      return words[1] if words[1] in INBOX_RECOVERY_COMMANDS else ""
 
     def has_redirection(text: str) -> bool:
       lexer = shlex.shlex(text, posix=False, punctuation_chars="<>")
@@ -739,7 +773,23 @@ class PreContext:
         return True
       return any(word and all(char in "<>" for char in word) for word in words)
 
+    def has_unsafe_expansion(text: str) -> bool:
+      lexer = shlex.shlex(text, posix=False, punctuation_chars="|;&<>()")
+      lexer.whitespace_split = True
+      lexer.commenters = ""
+      try:
+        words = list(lexer)
+      except ValueError:
+        return True
+      return any(
+        any(mark in word for mark in ("`", "$(", "${"))
+        and not (word.startswith("'") and word.endswith("'"))
+        for word in words
+      )
+
     text = shell_line(self.line or self.command)
+    if has_unsafe_expansion(text):
+      return False
     pieces = self.pieces()
     if not pieces:
       return False
@@ -828,21 +878,10 @@ def bash_command_policy(ctx: PreContext) -> tuple[bool, bool]:
     if (
       len(words) >= 2
       and words[0] == "steer"
+      and words[1] in STEERING_BOOKKEEPING_COMMANDS
       and not any(word and all(char in "|;&<>()" for char in word) for word in words)
     ):
-      if words[1] in {
-        "msg",
-        "survey",
-        "skills",
-        "ren",
-        "serve",
-        "tasks",
-        "task",
-        "reports",
-        "report",
-        "worktree",
-      }:
-        return BASH_COMMAND_POLICY["steering bookkeeping"]
+      return BASH_COMMAND_POLICY["steering bookkeeping"]
   pieces = ctx.pieces()
   if len(pieces) == 1 and pieces[0][1] == ";":
     words = command_words(pieces[0][0])
@@ -1431,7 +1470,7 @@ class InboxGate:
   name = "gate"
 
   def applies(self, ctx: PreContext) -> bool:
-    if ctx.is_inbox_recovery():
+    if ctx.is_inbox_recovery() or ctx.is_steering_bookkeeping():
       return False
     if ctx.pending_ids and ctx.is_push():
       return True

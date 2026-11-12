@@ -159,6 +159,19 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
   assert _verdict(following) == pre.BLOCK
 
 
+def test_ack_recovery_accepts_quoted_markdown_backticks() -> None:
+  line = "steer ack abc123 'Read `AGENTS.md` first.'"
+  ctx = pre.PreContext(
+    line=line,
+    command=line,
+    shell="bash",
+    pending_ids=["abc123"],
+    call_count=pre.GATE_THRESHOLD,
+  )
+  assert ctx.is_inbox_recovery()
+  assert _verdict(ctx) == pre.CONTINUE
+
+
 @pytest.mark.parametrize(
   "verb",
   (
@@ -175,15 +188,18 @@ def test_bash_command_policy_keeps_counting_and_threshold_separate() -> None:
   ),
 )
 def test_steering_bookkeeping_bypasses_inbox_gate(verb: str) -> None:
-  line = f"steer {verb} --help"
+  command = f"steer {verb} --help"
+  line = f"/bin/bash -l -c {command}"
   ctx = pre.PreContext(
     line=line,
-    command=line,
+    command=command,
     shell="bash",
     pending_ids=["abc123"],
     call_count=pre.GATE_THRESHOLD,
   )
   assert pre.bash_command_policy(ctx) == (False, False)
+  assert ctx.is_steering_bookkeeping()
+  assert ctx.is_inbox_recovery() is (verb == "ren")
   assert _verdict(ctx) == pre.CONTINUE
 
 
@@ -223,6 +239,8 @@ def test_steering_command_exemptions_reject_shell_composition(line: str) -> None
     call_count=pre.GATE_THRESHOLD,
   )
   assert pre.bash_command_policy(ctx) == (True, True)
+  assert not ctx.is_inbox_recovery()
+  assert not ctx.is_steering_bookkeeping()
   assert _verdict(ctx) == pre.BLOCK
 
 
