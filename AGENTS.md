@@ -91,7 +91,7 @@ Read these first:
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 - MUST include ARENA and CHATGPT amendment proposals in the same report as each CORE amendment proposal.
 - MUST name the failure each proposed amendment prevents.
-- Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/CORE.md`; other AGENTS.md files are exempt.
+- Apply this section's AGENTS.md proposal and approval requirements to all agent-facing files.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
 - Before editing a clause, follow maintenance/amendment-template.md and show one <filename.ext> - <clause-name> section per clause with a fenced `diff` block per changed clause.
   - Put `Final clause:` with the exact final clause verbatim below its `diff` block, without diff markup, backticks, or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
