@@ -15,6 +15,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Route amendments to platform-specific templates (`AGENTS.md`).
 - Split amendment templates by review surface (`maintenance/amendment-template.md`, `maintenance/amendment-template-arena.md`).
 - Use Kilo/Plannotator annotations and approval, and use Arena Steering fielded reports.
+- Place runnable checks in focused test files under directories that mirror source directories, and split mixed test files when touched (`rules/refs/CORE.md`, `rules/refs/ARENA.md`, `rules/refs/CHATGPT.txt`).
 
 #### maintenance
 

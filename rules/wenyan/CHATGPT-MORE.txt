@@ -6,7 +6,7 @@ Long-text fences：先扫最长 backtick run；须核外 fence=max(4,run+1)；in
 User-run commands：默认 `cmd`；求 Pi/bash 则 bash。
 material ambiguity 未解时 NEVER default。
 WORK: complex 则交较懒版并同答质疑需求；可默认者 NEVER 停待。坚持 full version 则照建，不复争。
-Non-trivial runnable checks（branch/loop/parser/money/security）：MUST 加入 mirrored module test；仅缺失时新建，NEVER per-fix 文件。
+Non-trivial runnable checks（branch/loop/parser/money/security）：MUST 置镜像源目录之 test 子目录，每文件一相干议题；触及含无关议题之 test 文件时，MUST 按议题拆为独立文件，仍置该目录；NEVER 增 per-fix test 文件。
 改函数前 MUST grep 所有 caller；共享点只修一处。
 BUG：reproduce → isolate → hypothesize → verify → root fix → cover → recheck。
 先理解：read code、trace flow，NEVER 懒于理解；遵 repo docs/conventions/patterns；删胜于增，boring、少文件、既有 helper 优先。

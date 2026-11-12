@@ -163,7 +163,10 @@
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - MUST assert relations (growth, presence, or absence) for pixel values, configuration values, and implementation measurements.
-- MUST add each non-trivial runnable check (branch, loop, parser, money, or security) to its mirrored module test. Create one only when absent, keep assets in fixtures/, and NEVER add per-fix files, frameworks, or per-function suites.
+- MUST place each non-trivial runnable check (branch, loop, parser, money, or security) in a test file for one cohesive concern under a test directory mirroring its source directory.
+- When touching a test file with unrelated concerns, MUST split it into focused files under the mirrored test directory.
+- Keep test assets in fixtures/.
+- NEVER add per-fix files, frameworks, or per-function suites.
 - Mechanical changes get proportional checks.
 - After every file edit, grep-verify the change actually landed before building on it.
 - Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.

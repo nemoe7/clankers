@@ -10,7 +10,7 @@ This log has no Unreleased section.
 
 ### Changed
 
-- Rename CLI severity labels: `(advisory-free)` → `(violation)` for findings that fail the check, `(advisory)` + `(manual review)` → `(review)` for findings needing human judgment; remove redundant `(manual review)` suffix.
+- Rename CLI severity labels: `(advisory-free)` to `(violation)` for findings failing the check and `(advisory)` plus `(manual review)` to `(review)` for findings needing human judgment. Drop redundant `(manual review)` suffix.
 - Update summary footer to count "violations" and "review findings" instead of "hard violations" and "advisory findings".
 
 ## [0.1.18]

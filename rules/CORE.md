@@ -76,7 +76,9 @@
 - Keep exact-text tests for executable interface/protocol contracts.
 - Test public interfaces and integration boundaries.
 - Reuse the project's frameworks/fixtures/helpers/conventions.
-- MUST add each non-trivial runnable check (branch, loop, parser, money/security) to its mirrored module test; create one only when absent, NEVER per-fix files.
+- MUST place non-trivial runnable checks (branch/loop/parser/money/security) in single-concern test files under directories mirroring their source directories.
+- When touching a mixed-concern test file, MUST split it into focused files under the mirrored test directory.
+- NEVER add per-fix test files.
 - Mechanical edits get proportional checks.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
