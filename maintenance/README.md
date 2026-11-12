@@ -3,7 +3,7 @@
 ## Rule maintenance
 
 1. Rule changes land in `rules/refs/` first, and maintainers compress only the new or changed line into the live counterpart.
-2. `rules/ARENA.md` optimizes UTF-8 file size and matches `rules/CORE.md` in meaning except for push, PR, and merge rules (see Arena file).
+2. `rules/ARENA.md` optimizes `o200k_base` tokens and matches `rules/CORE.md` in meaning except for push, PR, and merge rules (see Arena file).
 3. `rules/KILO.md`, and `rules/kilo/` hold platform-specific rules, and Kilo mode overrides stay outside markdownlint (`MD001`, `MD041`).
 4. Rule files keep filename headings, while `rules/CHATGPT-CUSTOM.txt` and `rules/CHATGPT-MORE.txt` extract plain-text lines from `rules/refs/CHATGPT.txt` within 1,500 Unicode characters each.
 5. Deployed rule files reserve `MUST` and `NEVER` for hard rules and bold at most two clauses per file (see Emphasis).
@@ -129,7 +129,7 @@ python3 -m pip install -r requirements.txt
 npm ci
 ```
 
-`--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 -m pytest tests/maintenance/test_check.py`.
+`--update` finds each clause file by the `BUDGET_GLOBS` patterns and rebuilds the budget table before checking, so added and retired files need no hand-edited row. Every file measures `o200k_base` tokens except the two ChatGPT fields, which count Unicode characters (`MEASURE_OVERRIDES`). Test it with `python3 -m pytest tests/maintenance/test_check.py`.
 
 ## PR checks
 

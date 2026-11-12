@@ -230,51 +230,94 @@ def test_nemoizer_scope_is_root_config_and_one_stage(monkeypatch, capsys):
   assert capsys.readouterr().out.count("== nemoize ...") == 1
 
 
-def test_budget_updates_handle_additions_removals_and_measurements(
+BUDGET_TREE = (
+  "rules/CORE.md",
+  "rules/README.md",
+  "rules/CHATGPT-CUSTOM.txt",
+  "rules/CHATGPT-MORE.txt",
+  "rules/kilo/plan.md",
+  "rules/refs/CORE.md",
+  "rules/wenyan/CHATGPT-MORE.txt",
+  "skills/alpha/SKILL.md",
+  "skills/refs/alpha/SKILL.md",
+  "system-prompts/NEMOGPT.md",
+  "system-prompts/README.md",
+  "system-prompts/refs/NEMOGPT.md",
+  "system-prompts/wenyan/NEMOGPT.md",
+  "userscripts/fill.txt",
+  "gpt-plugins/skills/gpt-x/SKILL.md",
+)
+
+
+def write_budget_tree(root: Path) -> None:
+  for relative in BUDGET_TREE:
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("hello world", encoding="utf-8")
+
+
+def test_budget_files_are_discovered_with_one_default_measure(
   tmp_path: Path, monkeypatch
 ):
-  root = tmp_path
-  monkeypatch.setattr(check, "ROOT", root)
-  monkeypatch.setattr(check, "README", root / "README.md")
-  monkeypatch.setattr(
-    check,
-    "EXPECTED_BUDGETS",
-    {"Zed.md": "UTF-8 file size", "alpha.md": "UTF-8 file size"},
-  )
-  (root / "Zed.md").write_text("one", encoding="utf-8")
-  (root / "alpha.md").write_text("two!", encoding="utf-8")
+  monkeypatch.setattr(check, "ROOT", tmp_path)
+  write_budget_tree(tmp_path)
+  assert dict(check.expected_budget_items()) == {
+    "gpt-plugins/skills/gpt-x/SKILL.md": "o200k_base",
+    "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
+    "rules/CHATGPT-MORE.txt": "Unicode chars",
+    "rules/CORE.md": "o200k_base",
+    "rules/kilo/plan.md": "o200k_base",
+    "skills/alpha/SKILL.md": "o200k_base",
+    "system-prompts/NEMOGPT.md": "o200k_base",
+    "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
+    "userscripts/fill.txt": "o200k_base",
+  }
+  paths = [relative for relative, _ in check.expected_budget_items()]
+  assert paths == sorted(paths, key=str.casefold)
+
+
+def test_budget_measure_defaults_to_tokens_and_chats_count_chars():
+  assert check.MEASURE_DEFAULT == "o200k_base"
+  assert check.measure_type("rules/CORE.md") == "o200k_base"
+  assert check.measure_type("skills/nuu/SKILL.md") == "o200k_base"
+  for field in check.CHATGPT_FIELDS:
+    assert check.measure_type(f"rules/{field}") == "Unicode chars"
+  assert check.format_unit("o200k_base") == "tok"
+  assert check.format_unit("Unicode chars") == "chars"
+  try:
+    check.measurement("UTF-8 file size")
+    raise AssertionError("An unsupported measure was accepted")
+  except ValueError:
+    pass
+
+
+def test_budget_updates_handle_additions_and_removals(tmp_path: Path, monkeypatch):
+  monkeypatch.setattr(check, "ROOT", tmp_path)
+  monkeypatch.setattr(check, "README", tmp_path / "README.md")
+  write_budget_tree(tmp_path)
   check.README.write_text(
     "# Example\n\nLatest measurements as of 2000-01-01.\n\n"
     "| File | Measure | Current |\n| --- | --- | --- |\n"
-    "| `retired.md` | `UTF-8 file size` | 10 `B` |\n\nKeep this paragraph.\n",
+    "| `retired.md` | `o200k_base` | 10 `tok` |\n\nKeep this paragraph.\n",
     encoding="utf-8",
   )
   assert check.update_readme_measurements()
   text = check.README.read_text(encoding="utf-8")
   assert "retired.md" not in text
-  expected = sorted(check.EXPECTED_BUDGETS, key=str.casefold)
-  assert list(check.read_budget_table()) == expected
-  for relative in expected:
-    type = check.EXPECTED_BUDGETS[relative]
-    size = len((root / relative).read_bytes())
-    assert f"| [`{relative}`]({relative}) | `{type}` | {size} `B` |" in text
-    assert check.read_budget_table()[relative] == (type, f"{size} B")
+  items = check.expected_budget_items()
+  assert list(check.read_budget_table()) == [relative for relative, _ in items]
+  tokens = check.measure(tmp_path / "rules/CORE.md", "o200k_base")
+  assert tokens > 0
+  assert f"| [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | {tokens} `tok` |" in text
+  assert (
+    "| [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 11 `chars` |"
+    in text
+  )
   assert text.endswith("Keep this paragraph.\n")
   assert not check.update_readme_measurements()
-  del check.EXPECTED_BUDGETS["Zed.md"]
+  (tmp_path / "userscripts/fill.txt").unlink()
   assert check.update_readme_measurements()
-  assert "Zed.md" not in check.README.read_text(encoding="utf-8")
-  before = check.README.read_bytes()
-  check.EXPECTED_BUDGETS["missing.md"] = "UTF-8 file size"
-  try:
-    check.update_readme_measurements()
-    raise AssertionError("A missing source was accepted")
-  except RuntimeError:
-    assert check.README.read_bytes() == before
-  check.EXPECTED_BUDGETS = {"tok.md": "o200k_base"}
-  (root / "tok.md").write_text("hello world", encoding="utf-8")
-  assert check.measure(root / "tok.md", "o200k_base") > 0
-  assert check.format_unit("o200k_base") == "tok"
+  assert "userscripts/fill.txt" not in check.README.read_text(encoding="utf-8")
 
 
 def test_check_case_collisions_rejects_case_only_tracked_duplicates(

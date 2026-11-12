@@ -41,30 +41,6 @@ EXPECTED_SKILL_FIELDS = {
 
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-EXPECTED_BUDGETS = {
-  "userscripts/arena-prompt-fill.txt": "o200k_base",
-  "rules/CORE.md": "o200k_base",
-  "rules/ARENA.md": "o200k_base",
-  "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
-  "rules/CHATGPT-MORE.txt": "Unicode chars",
-  "rules/KILO.md": "o200k_base",
-  "rules/kilo/code.md": "o200k_base",
-  "rules/kilo/debug.md": "o200k_base",
-  "rules/kilo/plan.md": "o200k_base",
-  "rules/COMMIT-SPEC.txt": "o200k_base",
-  "system-prompts/NEMOGPT.md": "o200k_base",
-  "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
-  "skills/nuu/SKILL.md": "o200k_base",
-  "skills/nemoizer/SKILL.md": "o200k_base",
-  "skills/squash/SKILL.md": "o200k_base",
-  "gpt-plugins/skills/gpt-quirks/SKILL.md": "o200k_base",
-  "gpt-plugins/skills/gpt-handoff/SKILL.md": "o200k_base",
-  "gpt-plugins/skills/gpt-planning/SKILL.md": "o200k_base",
-  "gpt-plugins/skills/gpt-github/SKILL.md": "o200k_base",
-  "gpt-plugins/skills/gpt-display/SKILL.md": "o200k_base",
-  "gpt-plugins/skills/gpt-question/SKILL.md": "o200k_base",
-}
-
 # Root `ARENA.md` copies the source that distribution pushes to target repos.
 # The byte check guards against drift.
 ROOT_COPIES = ("ARENA.md",)
@@ -97,6 +73,22 @@ PLAIN_PAIRS = (
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
 # The cap covers the production fields and the Wenyan experimentals.
 CHATGPT_CHAR_CAP = 1500
+
+# Every clause file measures in tokens. Only the ChatGPT fields count characters,
+# because ChatGPT caps its fields in characters.
+MEASURE_DEFAULT = "o200k_base"
+MEASURE_OVERRIDES = {f"rules/{field}": "Unicode chars" for field in CHATGPT_FIELDS}
+# Clause files live under these globs. READMEs are documentation, not clauses.
+BUDGET_GLOBS = (
+  "rules/*.md",
+  "rules/*.txt",
+  "rules/kilo/*.md",
+  "system-prompts/*.md",
+  "system-prompts/wenyan/*.md",
+  "userscripts/*.txt",
+  "skills/*/SKILL.md",
+  "gpt-plugins/skills/*/SKILL.md",
+)
 
 # gpt-tokenizer ships its ranks and measures offline, and needs no cache seeding.
 # Node resolves it from the real root, fixed when a test points ROOT at a temporary tree.
@@ -247,7 +239,6 @@ def load_token_counts(paths: list[Path]) -> dict[str, int]:
 # Each README budget type maps to its measurer and the unit the table prints.
 MEASUREMENTS = {
   "Unicode chars": (lambda path, text: len(text), "chars"),
-  "UTF-8 file size": (lambda path, text: len(text.encode("utf-8")), "B"),
   "o200k_base": (lambda path, text: load_token_counts([path])[str(path)], "tok"),
 }
 
@@ -275,9 +266,21 @@ def format_unit(type: str) -> str:
   return measurement(type)[1]
 
 
+def measure_type(relative: str) -> str:
+  return MEASURE_OVERRIDES.get(relative, MEASURE_DEFAULT)
+
+
 def expected_budget_items() -> list[tuple[str, str]]:
   """Return canonical sorted `(relative_path, measure_type)` budget entries."""
-  return sorted(EXPECTED_BUDGETS.items(), key=lambda item: item[0].casefold())
+  found = {
+    path.relative_to(ROOT).as_posix()
+    for pattern in BUDGET_GLOBS
+    for path in ROOT.glob(pattern)
+    if path.is_file() and path.name != "README.md"
+  }
+  return [
+    (relative, measure_type(relative)) for relative in sorted(found, key=str.casefold)
+  ]
 
 
 def format_budget_row(relative: str, type: str) -> str:
