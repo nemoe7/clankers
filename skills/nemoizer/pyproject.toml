@@ -24,4 +24,5 @@ py-modules = [
   "nemo_ui",
   "nemo_config",
   "nemo_files",
+  "nemo_detectors",
 ]

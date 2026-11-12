@@ -8,6 +8,7 @@ import sys
 from pathlib import Path, PureWindowsPath
 
 import nemo_config
+import nemo_detectors
 import nemo_files
 import nemo_report
 import nemo_rotate
@@ -914,6 +915,9 @@ def test_rule_registry_has_unique_codes_and_family_keys():
   for rule in nemo_rules.RULES:
     assert bool(rule.keys) == (rule.family != "reserved"), rule.code
     assert not rule.line_scoped or rule.family == "prose", rule.code
+  detector_keys = [key for key, _ in nemo_detectors.DETECTORS]
+  assert len(detector_keys) == len(set(detector_keys))
+  assert set(detector_keys) <= set(nemo_rules.PROSE_RULE_IDS)
 
 
 def test_prose_and_test_ids_have_separate_domains():
@@ -1709,11 +1713,11 @@ def test_prose_block_rules_evaluate_across_wrapped_lines(tmp_path):
     "This section\n"
     "covers the API.\n"
   )
-  assert nemoize.prose_the_density(wrapped) == [(1, 1, 33), (4, 1, 33)]
-  assert nemoize.prose_repeated_openers(wrapped) == [(4, 1, 1)]
-  assert [row[0] for row in nemoize.prose_wordy_phrases(wrapped)] == [8]
-  assert [row[0] for row in nemoize.prose_serial_commas(wrapped)] == [8]
-  assert [row[0] for row in nemoize.prose_self_narration(wrapped)] == [12]
+  assert nemo_detectors.prose_the_density(wrapped) == [(1, 1, 33), (4, 1, 33)]
+  assert nemo_detectors.prose_repeated_openers(wrapped) == [(4, 1, 1)]
+  assert [row[0] for row in nemo_detectors.prose_wordy_phrases(wrapped)] == [8]
+  assert [row[0] for row in nemo_detectors.prose_serial_commas(wrapped)] == [8]
+  assert [row[0] for row in nemo_detectors.prose_self_narration(wrapped)] == [12]
 
   doc = tmp_path / "wrapped.md"
   doc.write_text(
