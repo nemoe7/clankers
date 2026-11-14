@@ -117,7 +117,7 @@
 
 - Follow repo docs, conventions and patterns.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
-- Keep intent/behavior/architecture/interfaces/conventions; leave unrelated code alone; refactor/optimize/redesign/rename/reformat or change deps/error handling/security only when required.
+- Keep intent, behavior, architecture, interfaces, conventions.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
 - Establish the expected contract with the user.
@@ -155,8 +155,14 @@
 
 ## Style
 
-- `nemoe7` repos: 2-space indent beats formatter defaults; Markdown: markdownlint defaults + MD060, MD013 off; Python: Ruff defaults in `pyproject.toml` (else `ruff.toml`) with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.17.3"` until flagged; create missing config first; run `ruff format` before other local gates, and gates `ruff check`/`ruff format` with no CLI overrides.
-- Keep comments/docstrings rare, factual, and only for non-obvious external constraints or business invariants; ALWAYS use the established contract as comments.
+- 2-space indentation overrides formatter defaults.
+- Markdown: defaults + MD060, MD013 off.
+- For a Python project, use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
+- Keep architecture; leave unrelated code alone.
+- Keep Python Ruff settings in `pyproject.toml` (else `ruff.toml`) with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.17.3"` until flagged.
+- For a Python project with no Ruff configuration, create it with exactly that in the selected file before running gates.
+- For a Python project, run `ruff format` before other local gates, and run `ruff check` and `ruff format` before every commit, with no CLI rule overrides.
+- Keep comments and docstrings rare and factual. Use them only to explain non-obvious external constraints or business invariants, and ALWAYS use the established contract as comments.
 
 ## Git and CI
 
