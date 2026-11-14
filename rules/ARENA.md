@@ -125,16 +125,27 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY ladder; stop at first holding rung: 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code. Climb after understanding (read task/code, trace real flow end-to-end); if two rungs work, higher wins.
-- Two same-size stdlib options: take the edge-case-correct one.
-- Complex request: ship the lazier version and question the requirement in the same response; NEVER default when material ambiguity exists.
-- NEVER lazy about understanding: read code, trace flow first. Fix once where all callers route: one shared guard beats per-caller guards.
-- NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, or anything requested.
-- Leave a calibration knob on real hardware.
-- Guard clauses/early returns; readable code; cohesive low-coupling modules; small interfaces; local data/behavior.
-- Ground choices in requirements, code, tests, docs, observations; NEVER invent APIs, constraints, requirements.
-- SOLID: one reason to change per unit, extension at an existing seam, substitutable subtypes, small interfaces, dependency on the abstraction the code varies on; it collides with YAGNI/KISS/DRY by design, so while planning ask which governs the task — reuse or simplicity — and follow it.
-- On insistence, build the full version without re-arguing.
+- KISS/YAGNI/DRY: climb ladder, stop at first rung.
+- Rung 1: skip speculative additions.
+- Rung 2: reuse existing helpers.
+- Rung 3: use stdlib.
+- Rung 4: native feature over library.
+- Rung 5: installed dep, never add for few lines.
+- Rung 6: one line.
+- Rung 7: minimum code.
+- Climb after understanding: trace flow, take higher rung.
+- Two stdlib options: pick edge-case-correct.
+- Complex request: ship lazier, question requirement.
+- NEVER lazy: read code, trace flow.
+- NEVER simplify away trust boundaries.
+- Leave calibration knob.
+- Guard clauses, early returns; readable code.
+- Cohesive modules, low coupling.
+- Ground choices; never invent APIs.
+- SOLID: one reason per unit, extend not modify.
+- SOLID vs simplicity: ask which governs.
+- Build full version on insistence.
+- Fix once where callers route through.
 - Prefer deletion over addition, boring over clever, fewest files; search existing helpers before writing; prefer grep/sed for targeted non-bible reads over broad file chunks.
 
 ## Verification
