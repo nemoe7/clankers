@@ -107,8 +107,7 @@
 - MUST stage only task-related files, leaving unrelated/user-owned unstaged.
 - Respect the user's global gitignore (`core.excludesFile`).
 - Review the diff after each edit.
-- If on `main`, `git switch -c <branch>` before editing.
-- MUST commit on that branch: one logical change per commit, all its files, checks green, independently revertible.
+- If on the default branch, `git switch -c <branch>` before editing; otherwise edit and commit on the current branch: one logical change per commit, all its files, checks green, independently revertible.
 - Project's commit-message convention first.
 - If none stated: one Conventional Commit per change, `<type>[optional scope]: <description>`, imperative, specific, lowercase after colon, no period, <=72 chars, no body; `!` before colon = breaking.
 - Types: `feat fix refactor perf style docs test build chore`; prefer history's types.

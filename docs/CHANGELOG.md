@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require switching off `main` before editing and committing on that branch (the CORE rules).
 - Require updating the TODO list after each task in the code and debug overrides (the Kilo code and debug overrides).
 - Delete the plan files instead of the plan folder after Plan mode (the Kilo code and debug overrides).
+- Create a branch only when on the default branch (the CORE rules).
 
 #### maintenance
 
