@@ -7,7 +7,7 @@ from pathlib import Path
 from checks.parity import check_parity
 from checks.parity.prompts import check_system_prompt_parity, prompt_sections
 from checks.parity.root_copies import check_root_copies
-from checks.parity.rules import check_rule_parity, section_rule_counts
+from checks.parity.rules import check_rule_parity, section_rule_lines
 from checks.parity.skill_refs import check_skill_refs_parity
 from checks.repo import DEFAULT_ROOT, Repo
 
@@ -61,9 +61,10 @@ def test_skill_refs_parity_rejects_a_baseline_without_a_live_file(tmp_path: Path
   ]
 
 
-def test_section_rule_counts_split_on_second_level_headings():
+def test_section_rule_lines_split_on_second_level_headings():
   text = "# T\n\n## A\n\n- one\n- two\n\n## B\n- three\n"
-  assert section_rule_counts(text) == [("A", 2), ("B", 1)]
+  result = section_rule_lines(text)
+  assert [(h, len(r)) for h, r in result] == [("A", 2), ("B", 1)]
 
 
 def rule_tree(root: Path, live: str) -> Repo:
@@ -74,49 +75,49 @@ def rule_tree(root: Path, live: str) -> Repo:
     ("kilo/plan.md", "kilo/plan.md"),
     ("kilo/code.md", "kilo/code.md"),
     ("kilo/debug.md", "kilo/debug.md"),
-    ("CHATGPT-CUSTOM.txt", "CHATGPT.txt"),
-    ("CHATGPT-MORE.txt", "CHATGPT.txt"),
     ("COMMIT-SPEC.txt", "COMMIT-SPEC.txt"),
   ):
     write(root, f"rules/refs/{ref_name}", "one\ntwo\n")
-    write(root, f"rules/{live_name}", "one\n")
+    write(root, f"rules/{live_name}", "one\ntwo\n")
   write(root, "rules/CORE.md", live)
   return Repo(root)
 
 
 def test_rule_parity_accepts_merged_lines(tmp_path: Path):
   errors: list[str] = []
-  check_rule_parity(rule_tree(tmp_path, "## A\n- one and two\n"), errors)
+  check_rule_parity(rule_tree(tmp_path, "## A\n- one\n- two\n"), errors)
   assert errors == []
 
 
 def test_rule_parity_rejects_an_added_rule_and_a_moved_heading(tmp_path: Path):
   errors: list[str] = []
   check_rule_parity(rule_tree(tmp_path, "## A\n- one\n- two\n- three\n"), errors)
-  assert len(errors) == 1 and "3 rule lines vs 2" in errors[0]
+  assert len(errors) == 1 and "live has 3 rule lines, refs has 2" in errors[0]
   errors.clear()
   check_rule_parity(rule_tree(tmp_path, "## B\n- one\n"), errors)
   assert len(errors) == 1 and "section headings diverge" in errors[0]
 
 
 def test_rule_parity_reports_an_incomplete_pair(tmp_path: Path):
-  repo = rule_tree(tmp_path, "## A\n- one\n")
+  repo = rule_tree(tmp_path, "## A\n- one\n- two\n")
   (tmp_path / "rules/kilo/plan.md").unlink()
   errors: list[str] = []
   check_rule_parity(repo, errors)
   assert errors == ["rules/kilo/plan.md: refs/live pair incomplete"]
 
 
-PROMPT = "Intro\n\nRules\n\nDo one.\nDo two.\n"
+PROMPT = "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one.\nDo two.\n"
 
 
-def test_system_prompt_sections_are_bare_lines_between_blanks():
-  assert [head for head, _, _ in prompt_sections(PROMPT)] == ["Intro", "Rules"]
+def test_system_prompt_sections_are_hash_lines_between_blanks():
+  text = "## A\n\n- one\n- two\n\n## B\n- three\n"
+  assert [head for head, _, _ in prompt_sections(text)] == ["A", "B"]
 
 
 def test_system_prompt_parity_accepts_compression(tmp_path: Path):
   write(tmp_path, "system-prompts/refs/NEMOGPT.md", PROMPT)
-  write(tmp_path, "system-prompts/NEMOGPT.md", "Intro\n\nRules\n\nDo one and two.\n")
+  write(tmp_path, "system-prompts/NEMOGPT.md", "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n")
+  write(tmp_path, "system-prompts/wenyan/NEMOGPT.md", "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n")
   errors: list[str] = []
   check_system_prompt_parity(Repo(tmp_path), errors)
   assert errors == []
@@ -125,6 +126,7 @@ def test_system_prompt_parity_accepts_compression(tmp_path: Path):
 def prompt_errors(root: Path, ref: str, live: str) -> list[str]:
   write(root, "system-prompts/refs/NEMOGPT.md", ref)
   write(root, "system-prompts/NEMOGPT.md", live)
+  write(root, "system-prompts/wenyan/NEMOGPT.md", live)
   errors: list[str] = []
   check_system_prompt_parity(Repo(root), errors)
   return errors
@@ -136,15 +138,16 @@ def test_system_prompt_parity_rejects_growth(tmp_path: Path):
 
 
 def test_system_prompt_parity_rejects_a_section_absent_from_refs(tmp_path: Path):
-  errors = prompt_errors(tmp_path, PROMPT, "Intro\n\nExtra\n\nDo.\n")
-  assert errors == ["system-prompts/NEMOGPT.md: sections absent from refs: ['Extra']"]
+  errors = prompt_errors(tmp_path, PROMPT, "## Intro\n\nYou are NemoGPT.\n\n## Extra\n\nDo.\n")
+  assert "system-prompts/NEMOGPT.md: sections absent from refs: ['Extra']" in errors
+  assert "system-prompts/wenyan/NEMOGPT.md: sections absent from refs: ['Extra']" in errors
 
 
 def test_system_prompt_parity_rejects_a_section_with_more_lines_than_refs(
   tmp_path: Path,
 ):
   errors = prompt_errors(
-    tmp_path, "Intro\n\nRules\n\nA.\n", "Intro\n\nRules\n\nA.\nB.\n"
+    tmp_path, "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\n", "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\nB.\n"
   )
   assert any("'Rules': 2 lines vs 1 in refs" in error for error in errors)
 
@@ -153,7 +156,8 @@ def test_system_prompt_parity_reports_an_incomplete_pair(tmp_path: Path):
   write(tmp_path, "system-prompts/refs/NEMOGPT.md", PROMPT)
   errors: list[str] = []
   check_system_prompt_parity(Repo(tmp_path), errors)
-  assert errors == ["system-prompts/NEMOGPT.md: refs/live pair incomplete"]
+  assert "system-prompts/NEMOGPT.md: refs/live pair incomplete" in errors
+  assert "system-prompts/wenyan/NEMOGPT.md: refs/live pair incomplete" in errors
 
 
 def test_root_copy_must_match_its_rule_source(tmp_path: Path):
