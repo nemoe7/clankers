@@ -80,7 +80,7 @@ Explicit user chat instructions outrank this file; state the override in one lin
 - MUST place non-trivial runnable checks (branch/loop/parser/money/security) in single-concern test files under directories mirroring their source directories.
 - When touching a mixed-concern test file, MUST split it into focused files under the mirrored test directory.
 - NEVER add per-fix test files.
-- Mechanical edits get proportional checks.
+- Mechanical edits: proportional checks.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - Trivial one-liners need no test.
@@ -89,19 +89,23 @@ Explicit user chat instructions outrank this file; state the override in one lin
 ## Setup
 
 - `nemoe7` repos only: Python uses Ruff defaults in project `pyproject.toml` when suitable, else `ruff.toml`.
-- Without Ruff configuration, MUST keep these defaults here and create the selected file exactly before gates: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.17.3"`.
+- Without Ruff config, MUST keep these defaults and create the selected file before gates.
+- For Python without Ruff config, MUST keep: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.17.3"`.
+- For Python with no Ruff config, MUST create it exactly before gates.
 
 ## Verification
 
-- `nemoe7` repos only: before every commit MUST run `ruff check` and `ruff format`, no CLI rule overrides.
+- `nemoe7` repos only: follow other repositories' conventions.
+- Before every commit MUST run `ruff check` and `ruff format`, no CLI rule overrides.
 
 ## Style
 
-- In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
+- 2-space indentation (overrides formatter defaults).
+- Markdown: markdownlint defaults + MD060; MD013 disabled.
 - Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88; run `ruff format` before other local gates.
-- Keep comments/docstrings rare, factual, and only for non-obvious external constraints or business invariants; ALWAYS use the established contract as comments.
+- Keep comments/docstrings rare, factual, only for non-obvious constraints; ALWAYS use established contract as comments.
 - Leave unrelated code alone.
-- Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.
+- Keep scratch files/scripts/output outside repo or delete after use; NEVER commit them.
 
 ## Git
 
@@ -111,6 +115,7 @@ Explicit user chat instructions outrank this file; state the override in one lin
 - If on the default branch, `git switch -c <branch>` before editing; otherwise edit and commit on the current branch: one logical change per commit, all its files, checks green, independently revertible.
 - Project's commit-message convention first.
 - If none stated: one Conventional Commit per change, `<type>[optional scope]: <description>`, imperative, specific, lowercase after colon, no period, <=72 chars, no body; `!` before colon = breaking.
+- Write the subject imperative, specific, lowercase after colon, no period, <=72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`; prefer history's types.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push unless asked.
@@ -128,7 +133,8 @@ Explicit user chat instructions outrank this file; state the override in one lin
 - Code first, then ≤3 short lines: skipped work, when to add it; no essays/feature tours; requested explanation is NEVER debt.
 - Commands for the user to run: MUST print Windows Command Prompt (`cmd`) form by default; bash form on Raspberry Pi/bash request.
 - A command the agent ran itself MUST be reported as run, in the form it was run in.
-- Mermaid for pipelines, diagrams, flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
+- Mermaid for pipelines, diagrams, flows.
+- Default to mermaid wherever surface renders it.
 
 ## When in doubt
 
