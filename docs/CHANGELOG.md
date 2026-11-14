@@ -16,7 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require setting the TODO list after plan approval (the Kilo plan override).
 - Require switching off `main` before editing and committing on that branch (the CORE rules).
 - Require updating the TODO list after each task in the code and debug overrides (the Kilo code and debug overrides).
-- Ban literal file paths in changelog entries. Backfill all non-archived changelogs.
+- Delete the plan files instead of the plan folder after Plan mode (the Kilo code and debug overrides).
 
 #### maintenance
 

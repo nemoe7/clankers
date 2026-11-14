@@ -11,7 +11,7 @@
 - Follow the approved plan step-by-step.
 - MUST run the gates named in the project's AGENTS.md before every commit.
 - MUST update the TODO list after each task.
-- If Plan mode was used, MUST delete .kilo/plans.
+- If Plan mode was used, MUST delete the plan files.
 - Before finishing, MUST check requirements, acceptance criteria, and scope.
 - Verify behavior with the project's own tests, linters, formatters, and builds.
 - Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.

@@ -36,8 +36,8 @@ flowchart TB
 | [`rules/COMMIT-SPEC.txt`](rules/COMMIT-SPEC.txt) | `o200k_base` | 84 `tok` |
 | [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,853 `tok` |
 | [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 76 `tok` |
-| [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 244 `tok` |
-| [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 293 `tok` |
+| [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 242 `tok` |
+| [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 291 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 279 `tok` |
 | [`skills/arena-steering/SKILL.md`](skills/arena-steering/SKILL.md) | `o200k_base` | 2,333 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,479 `tok` |
