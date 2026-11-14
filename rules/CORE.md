@@ -2,8 +2,8 @@
 
 ## Use
 
-These rules outrank skills/plugins.
-Explicit user chat instructions outrank this file; state the override in one line, then follow it.
+- These rules outrank skills/plugins: skills specialize defaults and NEVER weaken an explicit requirement or replace project conventions.
+- Explicit user chat instructions outrank this file; state the override in one line, then follow it.
 
 ## Constitution
 
@@ -47,28 +47,28 @@ Explicit user chat instructions outrank this file; state the override in one lin
 
 ## Engineering
 
-- KISS/YAGNI/DRY ladder: stop at first rung.
-- Rung 1: skip speculative additions.
-- Rung 2: reuse existing helpers.
-- Rung 3: use stdlib.
-- Rung 4: native feature over library.
-- Rung 5: installed dep, never add for few lines.
+- KISS/YAGNI/DRY: climb the ladder and stop at the first rung that holds.
+- Rung 1: skip speculative additions, not explicit requirements (YAGNI).
+- Rung 2: reuse helpers/utils/patterns here; look before writing.
+- Rung 3: stdlib does it? Use it.
+- Rung 4: native feature covers it? Date input, CSS, DB constraint.
+- Rung 5: installed dep solves it? Use it; NEVER add for few lines.
 - Rung 6: one line.
-- Rung 7: minimum code.
-- Climb after understanding: trace flow, take higher rung.
+- Rung 7: minimum code that works.
+- Climb after understanding: read task/code, trace flow end to end; take higher rung.
 - Two stdlib options: pick edge-case-correct.
-- Complex request: ship lazier, question requirement.
+- Complex request: ship lazier, question requirement; NEVER default on material ambiguity.
 - Guard clauses, early returns.
-- Cohesive modules, low coupling.
-- Ground choices; never invent APIs.
-- SOLID: one reason per unit, extend not modify.
-- SOLID vs simplicity: ask which governs.
-- Prefer deletion, boring, fewest files.
-- Never lazy: read code, trace flow.
-- Fix bugs where callers route through.
-- Never simplify away trust boundaries.
-- Leave calibration knob.
-- Build full version on insistence.
+- Cohesive modules, low coupling, small interfaces, local data.
+- Ground choices in requirements, code, tests, docs; NEVER invent APIs.
+- SOLID: one reason per unit, extend at existing seam, substitutable subtypes, small interfaces, depend on abstraction.
+- SOLID vs simplicity: ask during planning which governs — SOLID reuse or simplicity; follow answer.
+- Prefer deletion over addition, boring over clever, fewest files, search for helper first.
+- NEVER lazy about understanding: read code, trace flow first.
+- Fix bugs where all callers route through: one shared guard beats per-caller guards.
+- NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, anything requested.
+- Leave calibration knob on real hardware.
+- If user insists on full version, build without re-arguing.
 
 ## Testing
 
@@ -103,7 +103,7 @@ Explicit user chat instructions outrank this file; state the override in one lin
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
 - Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88; run `ruff format` before other local gates.
-- Keep comments/docstrings rare, factual, only for non-obvious constraints; ALWAYS use established contract as comments.
+- Keep comments/docstrings rare, factual, only for non-obvious external constraints or business invariants; ALWAYS use established contract as comments.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside repo or delete after use; NEVER commit them.
 
@@ -126,15 +126,15 @@ Explicit user chat instructions outrank this file; state the override in one lin
 
 ## Responses
 
-- Report changes, findings, checks, results, files, decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
-- ALWAYS use the Oxford comma.
+- Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, limitations; no unnecessary prose; detail when asked.
+- ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Code first, then ≤3 short lines: skipped work, when to add it; no essays/feature tours; requested explanation is NEVER debt.
 - Commands for the user to run: MUST print Windows Command Prompt (`cmd`) form by default; bash form on Raspberry Pi/bash request.
 - A command the agent ran itself MUST be reported as run, in the form it was run in.
-- Mermaid for pipelines, diagrams, flows.
-- Default to mermaid wherever surface renders it.
+- Mermaid for pipelines, diagrams, flows where surface renders it.
+- Fit narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no wide rows.
 
 ## When in doubt
 
