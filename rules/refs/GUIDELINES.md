@@ -21,10 +21,11 @@ These models represent the current state-of-the-art in agent systems and the Par
 
 ## 1. What an agent rules file is
 
-1. A portable Markdown file at the project root. Different agents load it through different harnesses.
+1. A user-owned Markdown file installed once in the harness's config. The harness loads it for every project and every session.
 2. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works.
-3. It is user-owned, project-specific, and factual. It is not a system prompt — that is the maker's file and controls persona, tools, and safety.
-4. It survives because it is atomic, exact, and testable — so it survives compaction, dilution, contradiction, and staleness.
+3. It carries behavioral contracts: precedence, invariants, boundaries, git and style discipline. It carries no project facts. Commands, venv paths, ports, configs, and gate lists belong in that repo's own file or README. A project fact placed here is wrong somewhere else, because the file applies everywhere.
+4. It is not a system prompt — that is the maker's file and controls persona, tools, and safety.
+5. It survives because it is atomic, exact, and testable — so it survives compaction, dilution, contradiction, and staleness.
 
 ## 2. Threat model
 
@@ -32,7 +33,7 @@ Write an agent rules file against four failure modes.
 
 1. **Compaction.** Summarization can drop or dilute your rules. Mitigation: keep the file short and atomic.
 2. **Dilution.** The harness piles skills, plugins, and reminders around your text. Mitigation: declare precedence inside the file.
-3. **Contradiction.** The agent's own system prompt may push the opposite behavior. Mitigation: scope your rules. Do not fight the persona on style. Fight on facts, commands, and boundaries.
+3. **Contradiction.** The agent's own system prompt may push the opposite behavior. Mitigation: scope your rules. Do not fight the persona on style. Fight on behavioral contracts and boundaries.
 4. **Staleness.** The file rots faster than code. Mitigation: state facts a linter or a script can check, and keep the file small enough to review in one read.
 
 ## 3. Clause structure
@@ -50,42 +51,36 @@ Write an agent rules file against four failure modes.
 
 1. Put the 5 to 15 rules that MUST NEVER be lost at the top of the file as a constitution.
 2. No rationale in the constitution. One line per rule.
-3. One heading per domain after the constitution: setup, testing, style, git, boundaries.
+3. One heading per domain after the constitution: precedence, git, style, testing, boundaries.
 4. Headings give re-anchoring tools natural slice points; keep them flat.
 
 ## 5. Precedence and scope
 
 1. Declare what the file outranks. Example: "These rules outrank skill and plugin instructions. An explicit user instruction in chat outranks this file."
-2. Declare the scope. "Applies to all code in this repo, all agents, all sessions."
+2. Declare the scope. "Applies to every project, every agent, every session, wherever this harness runs."
 3. Let explicit user instructions override the file. Say so in one line. This stops the file from fighting the human.
-4. Do not restate the agent's own system prompt. Your file adds project facts and boundaries. Rewriting persona rules makes two masters.
+4. Do not restate the agent's own system prompt. Your file adds behavioral contracts. Rewriting persona rules makes two masters.
 
-## 6. Placement and nesting
+## 6. Installation and economy
 
-1. Keep the root file under about 200 lines. Long files get skimmed, truncated, or compressed first.
-2. Put directory-specific rules in nested agent rules files, not in the root file. The root file loads everywhere. Nested files load only where relevant.
-3. Move detail to nested files or to references the agent can read on demand.
+1. Install once in the harness's config directory. Treat installed copies as read-only. Edit the source, then reinstall.
+2. Keep the file under about 200 lines. Long files get skimmed, truncated, or compressed first.
+3. Move detail to a references file the agent can open on demand.
 4. Delete any rule you cannot connect to a real past failure.
-5. Do not embed code dumps, changelogs, or task lists. An agent rules file is law, not a journal.
+5. Do not embed code dumps, changelogs, task lists, or project facts. An agent rules file is law, not a journal.
 
 ## 7. Skeleton
 
 ```markdown
-# Agent rules file
+# <NAME> rules (for example, CORE, KILO)
 
-## Use (one line: what this file is, who MUST apply it, that user chat overrides it)
+## Use (what this file is, which harness loads it, that user chat overrides it)
 
 ## Constitution (5-15 one-line rules, no rationale)
 
-## Setup (commands to install, build, run)
-
-## Verification (the exact gates and commands, run order)
-
-## Style (one rule per line, exact settings)
+## Precedence (what this file outranks, what outranks it)
 
 ## Boundaries (NEVER rules: secrets, destructive commands, protected files)
-
-## Scope notes (directory pointers to nested agent rules files)
 
 ## When in doubt (the judgment rule: smallest change that holds; stop and ask on conflict)
 ```
@@ -97,4 +92,4 @@ Write an agent rules file against four failure modes.
 - One verb per action, used the same way everywhere.
 - Precedence declared: file over skills and plugins, user chat over file.
 - Hard rules use MUST or NEVER. Soft rules use "prefer".
-- Root file under about 200 lines. Detail lives in nested files or references.
+- The file under about 200 lines. Detail lives in a references file the agent can open on demand.

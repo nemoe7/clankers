@@ -3,7 +3,7 @@
 `rules/refs/` keeps full rule baselines from `main` history, oldest commit `7841d84` through `dcea8d3`. The baselines follow `GUIDELINES.md`:
 
 - a one-line-rule constitution, one rule per line under domain headings, and a `When in doubt` closer.
-- `MUST` and `NEVER` on the irreversible, the dangerous and the honesty rules, with every other rule positive (`GUIDELINES.md` 4.7).
+- `MUST` and `NEVER` on the irreversible, the dangerous and the honesty rules, with every other rule positive (`GUIDELINES.md` 3.6).
 - a `Use` opener in the core and `ARENA.md`, which the overlays omit.
 - no closer in `KILO.md`, because the core settles its doubts.
 

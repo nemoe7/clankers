@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Rewrite the agent-rules writing standard as rules an agent can follow. Keep dated research in section 0.
 - Rewrite the system-prompt writing standard with the same rule structure. Add the parts only system prompts need: identity, environment, tools, subagents, memory, skills, safety, examples.
 - Restore the constitution requirements in the agent-rules standard and restate section 0 as a dated model reference.
+- Retarget the agent-rules standard to harness-installed rules. Drop project-fact sections from the skeleton and keep behavioral contracts.
 
 #### maintenance
 
