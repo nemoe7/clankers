@@ -30,15 +30,17 @@ flowchart TB
 | [`gpt-plugins/skills/gpt-planning/SKILL.md`](gpt-plugins/skills/gpt-planning/SKILL.md) | `o200k_base` | 359 `tok` |
 | [`gpt-plugins/skills/gpt-question/SKILL.md`](gpt-plugins/skills/gpt-question/SKILL.md) | `o200k_base` | 157 `tok` |
 | [`gpt-plugins/skills/gpt-quirks/SKILL.md`](gpt-plugins/skills/gpt-quirks/SKILL.md) | `o200k_base` | 134 `tok` |
-| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,580 `tok` |
+| [`rules/ARENA.md`](rules/ARENA.md) | `o200k_base` | 4,548 `tok` |
 | [`rules/CHATGPT-CUSTOM.txt`](rules/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,498 `chars` |
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,498 `chars` |
 | [`rules/COMMIT-SPEC.txt`](rules/COMMIT-SPEC.txt) | `o200k_base` | 84 `tok` |
-| [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,875 `tok` |
-| [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 76 `tok` |
+| [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,866 `tok` |
+| [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 70 `tok` |
 | [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 267 `tok` |
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 342 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 273 `tok` |
+| [`rules/wenyan/CHATGPT-CUSTOM.txt`](rules/wenyan/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,479 `chars` |
+| [`rules/wenyan/CHATGPT-MORE.txt`](rules/wenyan/CHATGPT-MORE.txt) | `Unicode chars` | 1,110 `chars` |
 | [`skills/arena-steering/SKILL.md`](skills/arena-steering/SKILL.md) | `o200k_base` | 2,333 `tok` |
 | [`skills/nemoizer/SKILL.md`](skills/nemoizer/SKILL.md) | `o200k_base` | 1,479 `tok` |
 | [`skills/nuu/SKILL.md`](skills/nuu/SKILL.md) | `o200k_base` | 2,962 `tok` |

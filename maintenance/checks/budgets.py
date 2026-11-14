@@ -21,11 +21,18 @@ CHATGPT_CHAR_CAP = 1500
 
 # Every clause file measures in tokens. Only the ChatGPT fields count characters,
 # because ChatGPT caps its fields in characters.
-MEASURE_OVERRIDES = {f"rules/{field}": "Unicode chars" for field in CHATGPT_FIELDS}
+MEASURE_OVERRIDES = {
+    f"rules/{field}": "Unicode chars" for field in CHATGPT_FIELDS
+}
+# Also measure Wenyan copies in chars (same ChatGPT field cap)
+for lang in ("", "wenyan/"):
+    for field in CHATGPT_FIELDS:
+        MEASURE_OVERRIDES[f"rules/{lang}{field}"] = "Unicode chars"
 # Clause files live under these globs. READMEs are documentation, not clauses.
 BUDGET_GLOBS = (
   "rules/*.md",
   "rules/*.txt",
+  "rules/wenyan/*.txt",
   "rules/kilo/*.md",
   "system-prompts/*.md",
   "system-prompts/wenyan/*.md",

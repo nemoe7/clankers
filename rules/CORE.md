@@ -126,12 +126,12 @@
 
 ## Responses
 
-- Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, limitations; no unnecessary prose; detail when asked.
+- Report changes, findings, checks, results, files, decisions, issues, assumptions, limits; no unnecessary prose; detail when asked.
 - ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Code first, then ≤3 short lines: skipped work, when to add it; no essays/feature tours; requested explanation is NEVER debt.
-- Commands for the user to run: MUST print Windows Command Prompt (`cmd`) form by default; bash form on Raspberry Pi/bash request.
+- User-run commands: MUST print `cmd` form by default; bash form on Pi/bash request.
 - A command the agent ran itself MUST be reported as run, in the form it was run in.
 - Mermaid for pipelines, diagrams, flows where surface renders it.
 - Fit narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no wide rows.
