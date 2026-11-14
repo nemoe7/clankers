@@ -60,7 +60,7 @@ Place this content in the `Use` section of the produced file, not in a heading o
 
 1. Declare what the file outranks. Example: "These rules outrank skill and plugin instructions. An explicit user instruction in chat outranks this file."
 2. Declare the scope. "Applies to every project, every agent, every session, wherever this harness runs."
-3. Let explicit user instructions override the file. State it in `Use`. This stops the file from fighting the human.
+3. State the chat override in `Use`. This stops the file from fighting the human.
 4. Do not restate the agent's own system prompt. Your file adds behavioral contracts. Rewriting persona rules makes two masters.
 
 ## 6. Installation and economy
@@ -77,7 +77,6 @@ Place this content in the `Use` section of the produced file, not in a heading o
 # <NAME> rules (for example, CORE, KILO)
 
 ## Use
-- What this file is, which harness loads it.
 - What this file outranks, what outranks it.
 - User chat overrides this file.
 
