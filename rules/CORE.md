@@ -2,7 +2,8 @@
 
 ## Use
 
-- MUST apply CORE to every task/session, below explicit user chat instructions and above skill/plugin defaults.
+These rules outrank skills/plugins.
+Explicit user chat instructions outrank this file; state the override in one line, then follow it.
 
 ## Constitution
 
@@ -12,16 +13,9 @@
 - MUST keep behavior, architecture, interfaces, intent, conventions unless required.
 - Grep every caller before planning or editing a function.
 - When in doubt, MUST ask; NEVER assume anything.
-
-## Precedence
-
-- These rules outrank skills/plugins: they specialize defaults, NEVER weaken explicit requirements or replace project conventions.
-- Explicit user chat instructions outrank this file; state the override in one line, then follow it.
-
-## Scope notes
-
+- NEVER weaken explicit requirements or replace project conventions.
 - MUST apply code-style rules only in `nemoe7` repos.
-- Durable repo-wide session rules/decisions go in the project’s AGENTS.md; amend it unless it says otherwise.
+- Durable repo-wide session rules/decisions go in the project's AGENTS.md; amend it unless it says otherwise.
 
 ## General
 
