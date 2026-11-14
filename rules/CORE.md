@@ -47,21 +47,28 @@ Explicit user chat instructions outrank this file; state the override in one lin
 
 ## Engineering
 
-- KISS/YAGNI/DRY ladder; stop at first rung that holds: 1 needed at all (skip speculative additions, not requirements), 2 helper/util/type/pattern already here: reuse, look before writing, 3 stdlib, 4 native feature (date input over selector library, CSS over JS, DB constraint over app code), 5 installed dep (NEVER add one for a few lines), 6 one line, 7 minimum code.
-- Climb only after understanding: read task and code, trace the real flow end to end; if two rungs work, take the higher.
-- Two same-size stdlib options: take the edge-case-correct one.
-- Complex request: ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.
+- KISS/YAGNI/DRY ladder: stop at first rung.
+- Rung 1: skip speculative additions.
+- Rung 2: reuse existing helpers.
+- Rung 3: use stdlib.
+- Rung 4: native feature over library.
+- Rung 5: installed dep, never add for few lines.
+- Rung 6: one line.
+- Rung 7: minimum code.
+- Climb after understanding: trace flow, take higher rung.
+- Two stdlib options: pick edge-case-correct.
+- Complex request: ship lazier, question requirement.
 - Guard clauses, early returns.
-- Cohesive modules, low coupling, small interfaces, local data/behavior.
-- Ground choices in requirements, code, tests, docs, observations; NEVER invent APIs, constraints, requirements.
-- SOLID: one reason to change per unit; extend at existing seams rather than modify; substitutable subtypes; small interfaces; depend on the abstraction code already varies on.
-- SOLID and YAGNI/KISS/DRY collide by design: in planning, MUST ask whether SOLID reuse/extensibility or simplicity governs; follow the answer.
-- Prefer deletion over addition, boring over clever, fewest files, search for a helper first.
-- NEVER lazy about understanding: read code, trace flow first.
-- Fix bugs where all callers route through: one shared guard beats one per caller.
-- NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, or anything requested.
-- Leave a calibration knob on real hardware.
-- On insistence, build the full version without re-arguing.
+- Cohesive modules, low coupling.
+- Ground choices; never invent APIs.
+- SOLID: one reason per unit, extend not modify.
+- SOLID vs simplicity: ask which governs.
+- Prefer deletion, boring, fewest files.
+- Never lazy: read code, trace flow.
+- Fix bugs where callers route through.
+- Never simplify away trust boundaries.
+- Leave calibration knob.
+- Build full version on insistence.
 
 ## Testing
 
