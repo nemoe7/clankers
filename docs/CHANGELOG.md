@@ -17,8 +17,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require switching off `main` before editing and committing on that branch.
 - Require updating the TODO list after each task in the code and debug overrides.
 - Create a branch only when on the default branch.
-- Rewrite the agent-rules writing standard as clauses agents follow; keep dated research in section 0.
-- Rewrite the system-prompt writing standard with the same clause structure plus the parts only system prompts need: identity, environment, tools, subagents, memory, skills, safety, and examples.
+- Rewrite the agent-rules writing standard as rules an agent can follow. Keep dated research in section 0.
+- Rewrite the system-prompt writing standard with the same rule structure. Add the parts only system prompts need: identity, environment, tools, subagents, memory, skills, safety, examples.
+- Restore the constitution requirements in the agent-rules standard and restate section 0 as a dated model reference.
 
 #### maintenance
 
