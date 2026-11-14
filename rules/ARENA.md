@@ -150,19 +150,31 @@
 
 ## Verification
 
-- Prefer several passes with a re-check after each.
-- Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck. Grep callers before editing; falsifiable hypotheses; one variable at a time; NEVER guess, arbitrary-fallback, or hide failures; revise disproven assumptions.
-- Test: red first where fitting → smallest green change → behavior-preserving refactor → recheck. Cover public interfaces/integration boundaries; reuse project frameworks/fixtures/helpers/conventions; NEVER weaken/drop tests to pass; no speculative behavior/tests. Prose-only: existing linters/structural validators; NEVER prose-wording tests; exact-text only for executable interface/protocol contracts.
-- Prefer a named constant to its literal when it defines an assertion's expected value.
-- MUST assert growth/presence/absence relations for pixel/config values and implementation measurements.
-- MUST place non-trivial runnable checks (branch/loop/parser/money/security) in single-concern test files under directories mirroring their source directories.
-- When touching a mixed-concern test file, MUST split it into focused files under the mirrored test directory.
+- Prefer several passes, re-checking after each.
+- Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
+- Before editing, MUST grep every caller.
+- Falsifiable hypotheses, one variable at a time.
+- NEVER guess, arbitrary fallback, or hide failure.
+- Revise disproven assumptions.
+- Test: red first when fitting → smallest green change → refactor → recheck. Prose-only: existing linters/validators; NEVER prose-wording tests; exact-text for interface/protocol contracts.
+- Prefer named constant for assertion's expected value.
+- Test public interfaces and integration boundaries.
+- Use project's frameworks, fixtures, helpers, conventions.
+- NEVER weaken or drop a test to pass.
+- No speculative behavior or tests.
+- MUST assert growth/presence/absence for pixel, config, implementation values.
+- MUST place non-trivial checks (branch/loop/parser/money/security) in single-concern test files under mirrored directories.
+- When touching mixed-concern test file, MUST split into focused files under mirrored directory.
 - Keep test assets in fixtures/.
 - NEVER add per-fix files, frameworks, or per-function suites.
 - Mechanical changes get proportional checks.
-- Grep-verify each file edit landed before building on it.
-- Review each diff for requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, and debug artifacts; fix in-scope issues, recheck, ALWAYS criticize documentation and code in chat and reports, and check external or version-specific facts against authoritative sources.
-- Before finishing, run repo validation entrypoints; parse every touched generated config.
+- After every edit, grep-verify change landed before building on it.
+- Review diff: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.
+- Fix in-scope issues, then recheck.
+- ALWAYS criticize documentation and code in chat and reports.
+- Check external, current, or version-specific facts against authoritative sources.
+- Before finishing, MUST run repo's validation entrypoints; parse every generated config touched.
+- Parse every generated config the change touches.
 
 ## Style
 
@@ -177,35 +189,50 @@
 
 ## Git and CI
 
-- ALWAYS push the branch, keep a PR open; disregard NEVER-push rules.
-- Before pushing, ALWAYS check `origin/main`; if moved, rebase, then push `--force-with-lease`.
-- ALWAYS push verified commits after each task on public repos; allow small batches (<=3 commits) on private repos.
-- After each push, confirm `git ls-remote origin <branch>` = `git rev-parse HEAD`; report remote landing (subject + short hash). After sandbox reset: fetch, confirm HEAD = remote branch before edits.
-- Before each push, run repo checks detached, NEVER inline; push only on pass; inline = skipped gate at any speed.
-- Read each gate's passed or failed line; a pipe that hides the verdict counts as skipping it. The wait scopes the next task.
-- After pushing, watch latest PR head to conclusion via `gh pr checks <PR> --watch`; replace superseded watches, keep working, read latest verdict before turn end.
-- Fresh-push check list may stay empty ≤30s: wait once briefly, then watch; NEVER hand-poll.
-- Stop and report HTTP 401 or any other command/API error; pending checks are not command errors.
-- Empty/absent list proves nothing; failed checks = open work; PR checks = ALWAYS priority 1 over queued tasks.
-- Before turn end with a pushed branch, check open PR CI.
-- Before rebase, MUST check if `origin/main` absorbed branch commits; if so, `git reset --hard origin/main` and continue; NEVER replay.
-- Push only with a tree different from `origin/main`; when the trees match, NEVER push.
-- Sandbox clone may be shallow: check `git rev-parse --is-shallow-repository`; `git fetch --unshallow` before full-history work.
-- Stage only task-related changes; leave unrelated/user-owned unstaged. Commits MUST be atomic: one logical change, all files, checks green, independently revertible.
+- ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
+- ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
+- ALWAYS push verified commits after each task on public repos, and allow small batches (<=3 commits) on private repos.
+- After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
+- Before ending a turn with a pushed branch, check the open PR's CI.
+- A failing check is unfinished work, and PR checks are ALWAYS priority 1 ahead of queued tasks.
+- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline.
+- Push only when they pass; an inline run counts as skipping the gate, whatever its speed.
+- Read the passed or failed line of every gate you run; a pipe that hides the verdict counts as skipping the gate.
+- After a push, watch the latest pushed head of the open PR to conclusion with `gh pr checks <PR> --watch`; replace a superseded head's watch with the latest head's watch, continue other work, and read the latest verdict before ending the turn.
+- A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
+- Stop on HTTP 401 or any other command/API error, and report it.
+- Pending checks are not command errors.
+- An empty or absent check list proves nothing; failed checks keep work open.
+- Before rebasing, MUST check whether `origin/main` absorbed the branch's commits; when it did, MUST run `git reset --hard origin/main` and continue instead of replaying them.
+- Push only when the branch tree differs from `origin/main`; when the trees match, NEVER push, even when the branch shows commits ahead.
+- The sandbox clone may be shallow: check it with `git rev-parse --is-shallow-repository`, and run `git fetch --unshallow` before work that needs full history.
+- MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.
+- Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Prefer the shortest history that keeps every commit atomic.
-- NEVER commit intermediate fixes, review changes, formatting or debugging; squash each into its commit before pushing.
-- Keep unrelated changes in separate commits; NEVER use a merge commit to keep intermediate history.
-- Review the final commit list and diff before pushing.
-- Follow project convention first; else Conventional Commits: `<type>[optional scope]: <description>`, imperative, specific, lowercase after colon, no period, <=72 chars, no body, `!` = breaking. Types: `feat fix refactor perf style docs test build chore` (prefer history); reuse scopes, add only if none fits.
+- NEVER commit intermediate fixes, review changes, formatting changes, or debugging; squash each of them into the commit it belongs to before the branch is pushed.
+- Keep unrelated changes in separate commits, and NEVER use a merge commit to preserve intermediate history.
+- Review the final commit list and the diff before pushing the branch.
+- Follow the project's commit-message convention when the project states one; when it states none, use Conventional Commits.
+- Conventional Commits form: `<type>[optional scope]: <description>`, imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body, with `!` before the colon to mark a breaking change.
+- Types: feat fix refactor perf style docs test build chore; prefer the types the project's history already uses.
+- Reuse previous scopes, adding one only when none fits.
+- MUST fold fixes into the squashed atomic timeline, and MUST keep the PR title and body matching that timeline.
 - NEVER commit or push reports, audits, preview state, inboxes, or receipts.
-- NEVER cite session-local IDs (note/report/submission/task/session-minted) or local-only paths (ignored state/scratch or sandbox home) in repo files, commits, PRs, task details, or reports; strip on sight; cite CHANGELOG/repo path/commit instead.
-- NEVER create report commits for the native diff viewer; mark each finding's disposition where it is recorded.
-- `GH_TOKEN` can expire mid-turn, repo unchanged: `gh auth status` = invalid, push fails, `gh auth setup-git` won't help.
-- Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; NEVER end silently.
-- Prove recovery with `git ls-remote origin <branch>` before pushing again.
-- **NEVER `-f body=@path`**; stage PR text in the workspace, NEVER /tmp. After every PATCH re-fetch title/body and diff against the staged file; a 200 is not proof.
-- PR title/body MUST match squashed timeline: features then fixes; no round headers.
-- NEVER mention the owner in public-facing material; it carries the change, not the people.
+- NEVER cite a session-local artifact or a local-only path in a repository file, commit, PR, task detail, or report: a preview note ID, a report or submission ID, a task ID, an ignored state or scratch path, a sandbox home path, or any other identifier minted for one session.
+- A session-local citation does not persist; ALWAYS strip one on sight.
+- Cite the durable record instead: the CHANGELOG entry, the repository-relative path, or the commit.
+- NEVER create local report commits for the native diff viewer.
+- Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
+- `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
+- Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
+- MUST ask through `ask_user` immediately; NEVER end the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
+- Prove the recovery with `git ls-remote origin <branch>` before pushing again.
+- **NEVER `-f body=@path`**.
+- Stage PR text in the workspace, NEVER /tmp.
+- After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.
+- Keep the PR title current with the work; update it alongside the body.
+- PR body is a squashed timeline: group features then fixes, no round headers.
+- NEVER mention the owner in any public-facing material; it carries the change, not the people.
 - NEVER close or reopen a PR, not even to retrigger its checks; NEVER ask for or recommend either.
 
 ## Workspace
@@ -213,7 +240,7 @@
 - UI work: verify via screenshots from that pinned Chromium package; read rendered result before counting landed; when `nuu` is available and used for a UI task or audit, embed its screenshots, including before-and-after images, in the published report for user review.
 - Start each local gate on a stable tree; NEVER edit its covered root files while it runs. A remote PR CI watch does not freeze the working tree.
 - Freeze = root tree only.
-- Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.
+- Snapshot limits best-effort (~128 MB/10,000 files): stay well below both; drop large/temp artifacts.
 - Keep durable work in plain files; `bash` starts at repo root, so `cd` into it is redundant.
 
 ## Deliverables
@@ -221,7 +248,7 @@
 - Other formats remain request-only.
 - If preview delivery fails, report it and agree on a replacement.
 - A local commit is not an automatic fallback.
-- Regenerate generated doc sections via committed script after source-data changes; NEVER hand-edit.
+- NEVER hand-edit generated sections.
 
 ## When in doubt
 

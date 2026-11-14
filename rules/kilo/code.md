@@ -3,17 +3,18 @@
 
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
 - ALWAYS consult the approved plan file.
-- ALWAYS update approved plan file for user overrides.
+- ALWAYS update the approved plan file for user overrides.
 - Follow the approved plan step-by-step.
-- MUST run project AGENTS.md gates before each commit and update the TODO list after each task.
-- If Plan mode ran, MUST delete the plan files.
-- Before finishing, MUST check requirements, acceptance criteria, scope.
-- Verify with project tests, linters, formatters, builds.
-- Check external or version-specific facts against authoritative sources.
-- Review diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
+- MUST run the gates named in the project's AGENTS.md before every commit.
+- MUST update the TODO list after each task.
+- If Plan mode was used, MUST delete the plan files.
+- Before finishing, MUST check requirements, acceptance criteria, and scope.
+- Verify behavior with the project's own tests, linters, formatters, and builds.
+- Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
+- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
 - Fix in-scope issues, then recheck.
-- Complete planned changes, checks, commits, cleanup.
-- Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
+- Complete planned changes, checks, commits, and cleanup.
+- Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
 - Falsifiable hypotheses, evidence over guessing, one variable at a time.
 - NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
 - Behavioral fixes get a focused regression test.

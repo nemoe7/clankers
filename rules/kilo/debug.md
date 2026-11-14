@@ -2,21 +2,24 @@
 ### Native Debug Agent Overrides
 
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
-- ALWAYS present bug and fix via `submit_plan`; NEVER EDIT BEFORE PLAN APPROVAL.
-- If the bug puzzles, prefer web search to verify library behavior.
+- ALWAYS use `submit_plan` to present your plan for approval.
+- ALWAYS include the explanation of the bug in the plan, including the fix.
+- NEVER EDIT BEFORE PLAN APPROVAL.
+- Prefer verifying library behavior via web search if the bug is puzzling.
 - ALWAYS consult the approved plan file.
-- ALWAYS update approved plan file for user overrides.
+- ALWAYS update the approved plan file for user overrides.
 - Follow the approved plan step-by-step.
-- MUST run project AGENTS.md gates before each commit and update the TODO list after each task.
-- If Plan mode ran, MUST delete the plan files.
-- Before finishing, MUST check requirements, acceptance criteria, scope.
-- Verify with project tests, linters, formatters, builds.
-- Check external or version-specific facts against authoritative sources.
-- Review diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
+- MUST run the gates named in the project's AGENTS.md before every commit.
+- MUST update the TODO list after each task.
+- If Plan mode was used, MUST delete the plan files.
+- Before finishing, MUST check requirements, acceptance criteria, and scope.
+- Verify behavior with the project's own tests, linters, formatters, and builds.
+- Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
+- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
 - Fix in-scope issues, then recheck.
-- Complete planned changes, checks, commits, cleanup.
-- Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
-- Fix once where all callers route: one shared-function guard beats one per caller.
+- Complete planned changes, checks, commits, and cleanup.
+- Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
+- Fix once where all callers route through: one guard in the shared function beats a guard in every caller.
 - Falsifiable hypotheses, evidence over guessing, one variable at a time.
 - NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
 - Behavioral fixes get a focused regression test.
