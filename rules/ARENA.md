@@ -106,11 +106,12 @@
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
 - ALWAYS use the Oxford comma.
+- Prefer numbered lists for multiple points.
 - Chat/reports MUST be concise, vertical-display readable (phone/vertical monitor), human-digestible; limit prose; essays only if strictly necessary; requested explanation is NEVER debt.
 - Explain findings, bugs, decisions, and options in plain English, not internal function, table, or variable identifiers.
 - Mermaid: NEVER in chat, ALWAYS everywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
-- Report changes, findings, checks, results, useful files, decisions, open issues, assumptions, limitations. Open with result; skip task restatement; prefer numbered lists; skipped work + add-when in ≤3 short lines.
+- Report changes, findings, checks, results, useful files, decisions, open issues, assumptions, limitations.
 
 ## Scope
 
