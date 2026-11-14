@@ -47,11 +47,12 @@
 
 ## Preview
 
-- Before non-setup tools, install repo tooling with `pip install -e` on `nuu` when present, and await visibility.
+- Install repo tooling with `pip install -e` on `nuu` when present.
 - Start demo servers and presentations via `start_process`.
-- Claim visibility only after user confirmation.
-- Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs/remote fonts/stylesheets.
-- Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
+- NEVER claim the live preview is visible before the user confirms it.
+- Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
+- Servers bind 0.0.0.0.
+- Browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 
 ## Inbox
 
@@ -59,6 +60,7 @@
 - Give one short receipt for a corrected routine no-impact slip.
 - Corrected routine command-input/process slips (e.g. late read) alone are not rule violations.
 - Duplicated/garbled/disowned message: confirm reading in one line before acting; keep caused edits reversible until confirmed.
+- When arena-steering is unavailable, acknowledge delivered messages in chat with literal `ACK:` and your interpretation.
 
 ## Tasks and gates
 
