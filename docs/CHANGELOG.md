@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-14
+
+### Changed
+
+#### rules
+
+- Delete .kilo/plans instead of the generated plan files after Plan mode (rules/refs/kilo/code.md, rules/refs/kilo/debug.md, rules/kilo/code.md, rules/kilo/debug.md).
+
+#### maintenance
+
+- Bump ruff to 0.17.5 and reformat config lists (pyproject.toml, requirements.txt).
+
 ## 2026-11-12
 
 ### Changed

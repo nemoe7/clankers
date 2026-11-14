@@ -2,9 +2,7 @@
 # One root `pytest` runs every Python test. Product `gate_*.py` files stay gates, not tests.
 # Every run splits across the workers, local, and CI both, so the config is the single source.
 addopts = "-n auto"
-testpaths = [
-  "tests",
-]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = [
   "github/workflows",
@@ -19,14 +17,11 @@ pythonpath = [
 ]
 
 [tool.ruff]
-required-version = "0.17.3"
+required-version = "0.17.5"
 indent-width = 2
 # The project does not own vendored third-party code. Do not reformat or lint it.
 # Archived v1 code stays readable and outside active lint checks.
-extend-exclude = [
-  ".agents/skills",
-  "docs/archive/arena-skill",
-]
+extend-exclude = [".agents/skills", "docs/archive/arena-skill"]
 
 [tool.ruff.lint]
 ignore = ["BLE001", "S110"]
