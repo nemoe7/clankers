@@ -16,7 +16,7 @@ A live copy without a budget row stays equal to its refs source. `GUIDELINES.md`
 
 ## Prompt checks
 
-[refs/GUIDELINES.md](refs/GUIDELINES.md) section 8 defines four live-prompt checks, with results logged below from newest to oldest.
+[refs/GUIDELINES.md](refs/GUIDELINES.md) section 9 defines six prompt checks, with results logged below from newest to oldest.
 
 | Check | Method | Status |
 | --- | --- | --- |
@@ -24,3 +24,6 @@ A live copy without a budget row stays equal to its refs source. `GUIDELINES.md`
 | Drift | Session of 50 or more turns to probe for rule decay. | Not run |
 | Compaction | Mid-task context summary to verify rule retention. | Not run |
 | Conflict | Conflicting project and skill rules to verify precedence resolution. | Not run |
+| Value | Task cost per success against the Pareto frontier. | Not run |
+
+The 2026-11-14 refresh distilled the top 10 Agent Arena models and the Pareto frontier from the leaked prompts at `asgeirtj/system_prompts_leaks`. MiMo V2.6 Pro, MiMo V2.6 Flash, and Solar Pro 4 are not in the repository.
