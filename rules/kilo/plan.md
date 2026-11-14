@@ -7,7 +7,8 @@
 - ALWAYS use `submit_plan` to present the plan.
 - NEVER call `plan_exit` or end the turn before approval.
 - ALWAYS call `plan_exit` after approval.
-- While planning, ask whether the design optimizes for SOLID reuse or YAGNI/KISS/DRY simplicity; plan for the answer.
+- MUST set TODO list after approval.
+- While planning, ask SOLID reuse or YAGNI/KISS/DRY simplicity; plan accordingly.
 - MUST read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, executable without clarification.
 - Plans MUST carry TDD: red, green, refactor, verify. Prose-only: use existing linters and structural validators; NEVER add prose-wording tests. Keep exact-text tests for executable interface/protocol contracts.

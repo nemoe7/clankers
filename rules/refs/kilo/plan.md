@@ -7,6 +7,7 @@
 - ALWAYS use `submit_plan` to present the plan.
 - NEVER call `plan_exit` or end the turn before approval.
 - ALWAYS call `plan_exit` after approval.
+- MUST set the TODO list after approval.
 - While planning, ask whether the design optimizes for SOLID reuse or YAGNI/KISS/DRY simplicity, and plan for the answer.
 - MUST read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, and executable without clarification.

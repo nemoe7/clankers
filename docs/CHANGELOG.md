@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Delete .kilo/plans instead of the generated plan files after Plan mode (rules/refs/kilo/code.md, rules/refs/kilo/debug.md, rules/kilo/code.md, rules/kilo/debug.md).
+- Require setting the TODO list after plan approval (rules/refs/kilo/plan.md, rules/kilo/plan.md).
 
 #### maintenance
 
