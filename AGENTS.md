@@ -50,6 +50,7 @@
 ## Rules
 
 - Agent-facing rule files live in `rules/`: the generic core `CORE.md` and the platform overlays `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
+  - Overlays inherit skeleton from base; see `rules/refs/GUIDELINES.md`.
 - Baseline skill trees live in `skills/refs/`: keep prose files only unless nested `AGENTS.md` exempts minification. Amend refs first, then squash only live `SKILL.md`, and never install or distribute refs.
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`.
   - Keep compressed live copies in `rules/kilo/`, each with a blank first line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
