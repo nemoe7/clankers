@@ -65,11 +65,10 @@ Place this content in the `Use` section of the produced file, not in a heading o
 
 ## 6. Installation and economy
 
-1. Install once in the harness's config directory. Treat installed copies as read-only. Edit the source, then reinstall.
-2. Keep the file under about 200 lines. Long files get skimmed, truncated, or compressed first.
-3. Move detail to a references file the agent can open on demand.
-4. Delete any rule you cannot connect to a real past failure.
-5. Do not embed code dumps, changelogs, task lists, or project facts. An agent rules file is law, not a journal.
+1. Keep the file under about 200 lines. Long files get skimmed, truncated, or compressed first.
+2. Move detail to a references file the agent can open on demand.
+3. Delete any rule you cannot connect to a real past failure.
+4. Do not embed code dumps, changelogs, task lists, or project facts. An agent rules file is law, not a journal.
 
 ## 7. Skeleton
 
