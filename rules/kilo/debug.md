@@ -7,7 +7,7 @@
 - ALWAYS consult the approved plan file.
 - ALWAYS update approved plan file for user overrides.
 - Follow the approved plan step-by-step.
-- MUST run project AGENTS.md gates before each commit.
+- MUST run project AGENTS.md gates before each commit and update the TODO list after each task.
 - If Plan mode ran, MUST delete .kilo/plans.
 - Before finishing, MUST check requirements, acceptance criteria, scope.
 - Verify with project tests, linters, formatters, builds.
