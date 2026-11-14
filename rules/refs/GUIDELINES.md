@@ -51,14 +51,16 @@ Write an agent rules file against four failure modes.
 
 1. Put the 5 to 15 rules that MUST NEVER be lost at the top of the file as a constitution.
 2. No rationale in the constitution. One line per rule.
-3. One heading per domain after the constitution: precedence, git, style, testing, boundaries.
+3. One heading per domain after the constitution: git, style, testing, boundaries. Use carries precedence before the constitution.
 4. Headings give re-anchoring tools natural slice points; keep them flat.
 
 ## 5. Precedence and scope
 
+Place this content in the `Use` section of the produced file, not in a heading of its own.
+
 1. Declare what the file outranks. Example: "These rules outrank skill and plugin instructions. An explicit user instruction in chat outranks this file."
 2. Declare the scope. "Applies to every project, every agent, every session, wherever this harness runs."
-3. Let explicit user instructions override the file. Say so in one line. This stops the file from fighting the human.
+3. Let explicit user instructions override the file. State it in `Use`. This stops the file from fighting the human.
 4. Do not restate the agent's own system prompt. Your file adds behavioral contracts. Rewriting persona rules makes two masters.
 
 ## 6. Installation and economy
@@ -74,11 +76,12 @@ Write an agent rules file against four failure modes.
 ```markdown
 # <NAME> rules (for example, CORE, KILO)
 
-## Use (what this file is, which harness loads it, that user chat overrides it)
+## Use
+- What this file is, which harness loads it.
+- What this file outranks, what outranks it.
+- User chat overrides this file.
 
 ## Constitution (5-15 one-line rules, no rationale)
-
-## Precedence (what this file outranks, what outranks it)
 
 ## Boundaries (NEVER rules: secrets, destructive commands, protected files)
 
@@ -90,6 +93,6 @@ Write an agent rules file against four failure modes.
 - Constitution of 5-15 atomic rules sits at the top.
 - Every rule is one line, imperative, and testable.
 - One verb per action, used the same way everywhere.
-- Precedence declared: file over skills and plugins, user chat over file.
+- Precedence declared in Use: file over skills and plugins, user chat over file.
 - Hard rules use MUST or NEVER. Soft rules use "prefer".
 - The file under about 200 lines. Detail lives in a references file the agent can open on demand.
