@@ -5,23 +5,25 @@
 - Arena agents: MUST apply to every chat/task/first message; explicit user chat instructions win.
 - MUST apply code-style rules only in `nemoe7` repos.
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
+- They apply to every chat, task, and first message in this repository.
 
 ## Setup
 
 - Bible ("bible" or "the bible", NEVER "bible files" or "required bible files"): ARENA.md, root AGENTS.md, and arena-steering SKILL.md, plus any nested AGENTS.md in a directory you work in (read in full via read_file).
 - Follow the [resume-turn recipe](.agents/skills/arena-steering/references/recipes/resume-turn.md) at every turn start.
 - Before first repo inspection, edit, or preview start—and on the first tool call after any session summary—MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file; read nested AGENTS.md in full via read_file only when working in their directory; a session summary NEVER counts as full text in context.
-- At stated read points, follow Setup bible definition/duties.
-- Session start: read bible; next action `10-4: ARENA.md loaded`; install; start preview; ask visibility.
+- At every stated read point, follow the bible definition and duties in the Setup section.
+- The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
+- An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
 - Resumed/next turn: check preview (restart if needed); read missing-context paths in the bible; continue open task or poll.
-- Follow the installed [arena-steering skill](.agents/skills/arena-steering/SKILL.md) for Steering procedures.
-- MUST read required paths in the bible fully via read tool, NEVER Bash.
-- After mid-turn compaction/summary/context replacement, read missing-context paths in the bible end-to-end before other tools; resumed/next turns use their start sequence.
-- Every 6 preview calls and on the first call after any session summary, preview check runs; if any bible text is absent from active context (including after a summary), MUST read ARENA.md, root AGENTS.md, and arena-steering SKILL.md in full via read_file before acting, plus nested AGENTS.md only when working in their directory.
+- Follow arena-steering skill.
+- Read bible paths via read tool; NEVER Bash.
+- After compaction, read missing-context bible paths end-to-end before tools; resumed turns use their start sequence.
+- Every 6 preview calls or after session summary: preview check runs; if bible text absent, read ARENA.md, AGENTS.md, arena-steering SKILL.md fully via read_file before acting; nested AGENTS.md only in their directory.
 - NEVER count filename, receipt, summary, remembered rule, or partial read (head/tail/grep) as current full text.
 - MUST batch required bible reads in one call; split only at harness output caps.
 - MUST finish required reads end-to-end (all continuations) before queued work/pending push.
-- In saved context, state the start sequence and full missing-context bible reads before queued work; no verbatim ARENA.md copy required.
+- In saved context: state start sequence and missing-context bible reads before queued work; no verbatim ARENA.md copy.
 - After bible changes (incl. rebase/`main` update), MUST read full diff from last-read version before next work; unavailable/unclear → read full file.
 - First reply opens `10-4: ARENA.md loaded`; found later → next reply opens `10-4: ARENA.md loaded late (turn N)`.
 
@@ -38,8 +40,10 @@
 
 ## Precedence
 
-- For Arena work, these rules and the `arena-steering` skill apply together, and both outrank other skills and plugins; explicit user chat instructions outrank them.
-- Confirm overrides in one line; noncompliance earns a negative rating; host-repo `AGENTS.md` files stay in force beside this file, which wins collisions.
+- These rules and the `arena-steering` skill apply together. These rules outrank other skills and plugins. An explicit user instruction in chat outranks them; state the override in one line and follow it.
+- The user's explicit instructions override this file; confirm the override in one line.
+- Failure to comply with this file results in a negative rating.
+- In Arena, every `AGENTS.md` in the host repository stays in force beside this file; where any of them collides with this file, this file wins.
 
 ## Preview
 
