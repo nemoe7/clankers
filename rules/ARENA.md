@@ -111,12 +111,12 @@
 - Explain findings, bugs, decisions, and options in plain English, not internal function, table, or variable identifiers.
 - Mermaid: NEVER in chat, ALWAYS everywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
-- Report changes, findings, checks, results, useful files, decisions, open issues, assumptions, limitations.
+- Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
 
 ## Scope
 
-- Follow repo docs, conventions and patterns.
-- Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
+- Follow repo docs/conventions and existing patterns.
+- Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 - Keep intent, behavior, architecture, interfaces, conventions.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
@@ -125,28 +125,28 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY: climb ladder, stop at first rung.
-- Rung 1: skip speculative additions.
-- Rung 2: reuse existing helpers.
-- Rung 3: use stdlib.
-- Rung 4: native feature over library.
-- Rung 5: installed dep, never add for few lines.
+- KISS/YAGNI/DRY: climb the ladder and stop at the first rung that holds.
+- Rung 1: skip speculative additions, not explicit requirements (YAGNI).
+- Rung 2: reuse helpers/utils/patterns here; look before writing.
+- Rung 3: stdlib does it? Use it.
+- Rung 4: native feature covers it? Date input, CSS, DB constraint.
+- Rung 5: installed dep solves it? Use it; NEVER add for few lines.
 - Rung 6: one line.
-- Rung 7: minimum code.
-- Climb after understanding: trace flow, take higher rung.
+- Rung 7: minimum code that works.
+- Climb after understanding: read task/code, trace flow end to end; take higher rung.
 - Two stdlib options: pick edge-case-correct.
-- Complex request: ship lazier, question requirement.
-- NEVER lazy: read code, trace flow.
-- NEVER simplify away trust boundaries.
-- Leave calibration knob.
+- Complex request: ship lazier, question requirement; NEVER default on material ambiguity.
 - Guard clauses, early returns; readable code.
-- Cohesive modules, low coupling.
+- Cohesive, low-coupling modules, small interfaces, local data/behavior.
 - Ground choices; never invent APIs.
-- SOLID: one reason per unit, extend not modify.
-- SOLID vs simplicity: ask which governs.
-- Build full version on insistence.
-- Fix once where callers route through.
-- Prefer deletion over addition, boring over clever, fewest files; search existing helpers before writing; prefer grep/sed for targeted non-bible reads over broad file chunks.
+- SOLID: one reason, extend, small interfaces.
+- SOLID vs simplicity: ask; follow.
+- Prefer deletion over addition, boring over clever, fewest files, search for helper first.
+- NEVER lazy about understanding: read code, trace flow first.
+- Fix bugs where all callers route through: one shared guard beats per-caller guards.
+- NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, anything requested.
+- Leave calibration knob on real hardware.
+- If user insists on full version, build without re-arguing.
 
 ## Verification
 
