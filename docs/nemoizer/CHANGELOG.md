@@ -18,7 +18,7 @@ This log has no Unreleased section.
 
 ### Changed
 
-- Split `scripts/nemoize.py` into single-purpose modules, and keep the command line in `nemoize.py`.
+- Split the nemoizer script into single-purpose modules, and keep the command line in the nemoizer script.
 - Build the rule ID tables, rule descriptions, advisory status, and line scope from one rule registry.
 
 ### Fixed
@@ -73,7 +73,7 @@ This log has no Unreleased section.
 
 ### Added
 
-- Add `-v` and `--verbose` logging for file scans and worker start or completion (`scripts/nemoize.py`).
+- Add `-v` and `--verbose` logging for file scans and worker start or completion (the nemoizer script).
 
 ### Fixed
 
@@ -87,22 +87,22 @@ This log has no Unreleased section.
 
 ### Fixed
 
-- Scan files in parallel with a 10 second per-file cap, report skipped files, and print pytest-style progress dots (`scripts/nemoize.py`).
-- Feed Node subprocesses UTF-8 and cap each call at 10 seconds (`scripts/prose.py`).
-- Match exclusion patterns against the config root so a subdirectory target keeps them (`scripts/nemoize.py`).
+- Scan files in parallel with a 10 second per-file cap, report skipped files, and print pytest-style progress dots (the nemoizer script).
+- Feed Node subprocesses UTF-8 and cap each call at 10 seconds (the prose module).
+- Match exclusion patterns against the config root so a subdirectory target keeps them (the nemoizer script).
 
 ## [0.1.13]
 
 ### Added
 
-- `scripts/prose.py` (`_iter_js_masked_templates`, `js_ui_prose_spans`) and `scripts/nemoize.py` (`_source_prose`): Extract visible HTML template-literal prose from `.js` and `.mjs` files and flag prose dashes (`HMN905`) in JavaScript UI strings.
+- The prose module and the nemoizer script: Extract visible HTML prose from `.js` and `.mjs` files and flag prose dashes in JavaScript UI strings.
 
 ### Changed
 
-- `SKILL.md`: Require comments and docstrings to use the established contract when complexity requires them.
+- The skill: Require comments and docstrings to use the established contract when complexity requires them.
 
 ## [0.1.12]
 
 ### Added
 
-- `scripts/nemoize.py` (`_match_glob`, `skipped`): Support `/**/` zero-or-more directory globs and `!pattern` negation rules in `exclude`, `extend-exclude`, and `--ignore`.
+- The nemoizer script: Support `/**/` zero-or-more directory globs and `!pattern` negation rules in `exclude`, `extend-exclude`, and `--ignore`.

@@ -20,4 +20,4 @@ This log has no Unreleased section.
 
 ### Added
 
-- Add `metadata.version` (`0.1.0`) in `SKILL.md` (`skills/squash/SKILL.md`, `skills/refs/squash/SKILL.md`).
+- Add `metadata.version` (`0.1.0`) to the squash skill and its ref.

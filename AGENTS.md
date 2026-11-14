@@ -114,6 +114,10 @@
 
 - Squash every `README.md` and every file in `docs/` against the [compression procedure](README.md#compression); prose is not exempt.
 
+## Changelog
+
+- NEVER cite literal file paths in changelog entries; group by domain and use the domain heading as the reference.
+
 ## Git
 
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.

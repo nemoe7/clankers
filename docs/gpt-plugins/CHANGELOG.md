@@ -10,25 +10,25 @@ This log has no Unreleased section.
 
 ### Changed
 
-- `skills/nemoizer/scripts/`: Split `nemoize.py` into single-purpose modules with the same command line.
+- The nemoizer scripts: Split `nemoize.py` into single-purpose modules with the same command line.
 
 ### Fixed
 
-- `skills/nemoizer/scripts/`: Keep CRLF line endings in `--format` output and in JavaScript parsing on Windows.
-- `skills/nemoizer/scripts/nemoize.py`: Load the discovered config in `prose` and `review-tests`, and accept `--config` and `--no-config` there.
+- The nemoizer scripts: Keep CRLF line endings in `--format` output and in JavaScript parsing on Windows.
+- The nemoizer script: Load the discovered config in `prose` and `review-tests`, and accept `--config` and `--no-config` there.
 
 ## [1.10.33]
 
 ### Removed
 
-- `skills/nemoizer/scripts/nemoize.py`: Retire the pick-to-select rotation.
+- The nemoizer script: Retire the pick-to-select rotation.
 
 ## [1.10.32]
 
 ### Changed
 
 - Split the repository-discovery bullet and the cost-comparison bullet into one action each.
-- Rewrite `docs/gpt-plugins/README.md` in human-facing prose and drop the stale turn receipt.
+- Rewrite the gpt-plugins README in human-facing prose and drop the stale turn receipt.
 
 ### Removed
 
@@ -43,26 +43,26 @@ This log has no Unreleased section.
 
 ### Added
 
-- `skills/nemoizer/scripts/nemoize.py`: Add `-v` and `--verbose` logging for file scans and worker start or completion.
+- The nemoizer script: Add `-v` and `--verbose` logging for file scans and worker start or completion.
 
 ## [1.10.30]
 
 ### Fixed
 
-- `skills/nemoizer/scripts/`: Bound source scans and subprocesses, force UTF-8 output, and honor repository-root exclusions.
+- The nemoizer scripts: Bound source scans and subprocesses, force UTF-8 output, and honor repository-root exclusions.
 
 ## [1.10.29]
 
 ### Added
 
-- `skills/nemoizer/scripts/prose.py` (`_iter_js_masked_templates`, `js_ui_prose_spans`) and `skills/nemoizer/scripts/nemoize.py` (`_source_prose`): Extract visible HTML template-literal prose from `.js` and `.mjs` files and flag prose dashes (`HMN905`) in JavaScript UI strings.
+- The prose module and the nemoizer script: Extract visible HTML prose from `.js` and `.mjs` files and flag prose dashes in JavaScript UI strings.
 
 ### Changed
 
-- `skills/nemoizer/SKILL.md`: Require comments and docstrings to use the established contract when complexity requires them.
+- The nemoizer skill: Require comments and docstrings to use the established contract when complexity requires them.
 
 ## [1.10.28]
 
 ### Added
 
-- `skills/nemoizer/scripts/nemoize.py` (`_match_glob`, `skipped`): Support `/**/` zero-or-more directory globs and `!pattern` negation rules in `exclude`, `extend-exclude`, and `--ignore`.
+- The nemoizer script: Support `/**/` zero-or-more directory globs and `!pattern` negation rules in `exclude`, `extend-exclude`, and `--ignore`.

@@ -16,10 +16,10 @@ This log has no Unreleased section.
 
 ### Fixed
 
-- Reconfigure `stdout` and `stderr` to UTF-8 in `gemini_release.py` (`github/workflows/gemini_release.py`).
+- Reconfigure `stdout` and `stderr` to UTF-8 in `gemini_release.py`.
 
 ## [0.1.0]
 
 ### Added
 
-- Add `VERSION = "0.1.0"` to `gemini_release.py` (`github/workflows/gemini_release.py`).
+- Add `VERSION = "0.1.0"` to `gemini_release.py`.

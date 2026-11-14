@@ -233,7 +233,7 @@ This log has no Unreleased section.
 - Separate HTTP/WebSocket transport and task CLI commands into modules. Group browser tests by view and transport, preserving public entry points.
 
 - `SKILL.md`: Link messages only when they change a task's scope or acceptance criteria, and leave unrelated clarifications unlinked.
-- `SKILL.md`, `references/cli.md`, `docs/arena-steering/README.md`: Use `steer run start` for supported long-running jobs and task gates, and keep persistent services on the platform's `start_process` path.
+- The skill, the CLI reference: Use `steer run start` for supported long-running jobs and task gates, and keep persistent services on the platform's `start_process` path.
 - Remove field ID chips from report input cards.
 - Check the violation form's optional reason control and label focus without a prose assertion suppression.
 - Preserve report source paths and message parent links when a rename changes task or report IDs.
@@ -261,7 +261,7 @@ This log has no Unreleased section.
 
 ### Added
 
-- Seed baseline prose under `skills/refs/arena-steering/` and add worked report-label examples in `references/report-labels.md`.
+- Seed baseline prose under the arena-steering refs and add worked report-label examples in the report-labels reference.
 
 ### Changed
 
@@ -293,9 +293,9 @@ This log has no Unreleased section.
 
 - Remove default boxes on contained Steering buttons, gating interactive hover fills to fine pointers while keeping press fills.
 
-- Load survey question text from `skills/arena-steering/references/survey-questions.txt` for shared consumption with Arena prompt fill.
+- Load survey question text from the arena-steering survey questions for shared consumption with Arena prompt fill.
 
-- Move `README.md` to `docs/arena-steering/README.md` and rewrite it for human readers.
+- Move the README to the arena-steering README and rewrite it for human readers.
 
 - Update the Messages unseen-reply indicator optimistically while receipts are pending, restore it on failure, and preserve newer acknowledgement revisions.
 
@@ -425,7 +425,7 @@ This log has no Unreleased section.
 
 - Remove the misleading checkpoint label from non-blocking message receipts.
 
-- Rename the CLI reference to `cli.md`.
+- Rename the CLI reference.
 
 - Show report answers immediately, preserve edits after failures, and reconcile retries by request ID.
 
@@ -485,13 +485,13 @@ This log has no Unreleased section.
 
 - `SKILL.md`: Document ordered task phases, completion evidence, and phase blocking.
 
-- `references/recipes/resume-turn.md`, `SKILL.md`: Rename the turn-start recipe and update its link.
+- Rename the turn-start recipe and update its link.
 
 - `SKILL.md`: Require specific labels for report fields and answer options.
 
 - `SKILL.md`: Estimate task sizes relative to a reference using effort, complexity, and uncertainty.
 
-- `references/recipes/turn-start.md`: Name every Steering preview after its checkout directory.
+- Name every Steering preview after its checkout directory.
 
 - `SKILL.md`: Require full reads of image and text attachments before acknowledging their notes.
 
@@ -501,7 +501,7 @@ This log has no Unreleased section.
 
 ### Removed
 
-- `references/notices.md`: Remove the notice inventory and its README link.
+- Remove the notice inventory and its README link.
 
 ### Fixed
 
@@ -523,9 +523,9 @@ This log has no Unreleased section.
 
 ### Added
 
-- `references/nuu/reports-*.json`, `test_reports_nuu_flows.py`: Audit empty Reports and a fielded report at the top and after scrolling, across the required viewports and both motion preferences. Capture screenshots without editing or submitting answers.
+- Audit empty Reports and a fielded report at the top and after scrolling, across the required viewports and both motion preferences. Capture screenshots without editing or submitting answers.
 
-- `references/cli.md`: Document direct agent CLI commands, outputs, exits, and task phases in one guide.
+- The CLI reference: Document direct agent CLI commands, outputs, exits, and task phases in one guide.
 
 - `server.py`, `assets/messages-view.js`, `assets/app.js`, `assets/style.css`: Expose served image URLs, render message thumbnails, and open them in the existing viewer. Leave missing and nonimage files as labels.
 
@@ -597,7 +597,7 @@ This log has no Unreleased section.
 
 - `assets/` and `test_web_ui.py`: Select typed parents from message IDs, task titles, and report IDs. Focus the composer after task and report selection, show IDs only in UI chips, navigate from sent-message chips, and leave ID-like Markdown as plain text.
 
-- `cli.py`, `server.py`, `.agents/skills/arena-steering/SKILL.md`: Point v2 bible reminders and read sets to its future installed skill path. The repo-only stub directs readers to the checked-in v2 skill without releasing it.
+- The CLI, the server, the arena-steering skill: Point v2 bible reminders and read sets to its future installed skill path. The repo-only stub directs readers to the checked-in v2 skill without releasing it.
 
 - `server.py`, `assets/tasks-view.js`, `assets/style.css`: Show a blue task-title shimmer only for an active linked gate. Keep report blockers and finished gates static.
 
@@ -890,15 +890,15 @@ This log has no Unreleased section.
 
 - `scripts/arena_steering/store.py`: Retry transient SQLite lock errors during concurrent WAL initialization.
 
-- `skills/arena-steering/README.md`: Document the message retry duplication risk found during the parity audit.
+- The arena-steering README: Document the message retry duplication risk found during the parity audit.
 
 - `assets/messages-view.js` and `scripts/arena_steering/server.py`: Match v1 paste thresholds and support Ctrl+Shift+V plain-text bypass.
 
 - `scripts/arena_steering/cli.py`: Fix state under `arena-state` and use a separate v2 database filename while v1 remains active. Keep demo state in `arena-state/demo/`.
 
-- `skills/arena-steering/README.md`: Document v2 features, commands, routes, and current limits. Expand interface and lifecycle contracts, and align the v1/v2 parity matrix with the feature inventory.
+- The arena-steering README: Document v2 features, commands, routes, and current limits. Expand interface and lifecycle contracts, and align the v1/v2 parity matrix with the feature inventory.
 - `scripts/arena_steering/` and `scripts/steer`: Add the `arena-steering` skill and `steer` CLI with domain models, SQLite storage, server-cached Markdown forms, SHA-256 survey grading, and HTTP/WebSocket routes.
-- `assets/`, `references/survey.json`, and `scripts/demo.py`: Add ES module web UI for Inbox, Tasks, Reports, and Survey with PrismJS, Mermaid, Arena tokens, `Basel_Grotesk` fonts, and `demo.py`.
+- The assets, the survey reference, and the demo script: Add an ES module web UI for Inbox, Tasks, Reports, and Survey.
 - `scripts/arena_steering/server.py` and `assets/`: Push `report.acked` over `/api/ws` to update an open report in place, and mark `ack_seen` when the owner views it.
 - `assets/reports-view.js` and `assets/style.css`: Pair fielded reports' bottom submit spacer with a fixed `#report-submit-float` that stays reachable while scrolling.
 - `scripts/arena_steering/` and `assets/`: Store `parent_ids[]` on messages, toggle composer reply parents from receipt IDs, copy IDs on Shift+Click, and render clickable `↪ <id>` parent chips.

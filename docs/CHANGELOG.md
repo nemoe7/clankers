@@ -12,10 +12,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Delete .kilo/plans instead of the generated plan files after Plan mode (rules/refs/kilo/code.md, rules/refs/kilo/debug.md, rules/kilo/code.md, rules/kilo/debug.md).
-- Require setting the TODO list after plan approval (rules/refs/kilo/plan.md, rules/kilo/plan.md).
-- Require switching off `main` before editing and committing on that branch (rules/CORE.md, rules/refs/CORE.md).
-- Require updating the TODO list after each task in the code and debug overrides (rules/refs/kilo/code.md, rules/refs/kilo/debug.md, rules/kilo/code.md, rules/kilo/debug.md).
+- Delete .kilo/plans instead of the generated plan files after Plan mode (the Kilo code and debug overrides).
+- Require setting the TODO list after plan approval (the Kilo plan override).
+- Require switching off `main` before editing and committing on that branch (the CORE rules).
+- Require updating the TODO list after each task in the code and debug overrides (the Kilo code and debug overrides).
+- Ban literal file paths in changelog entries. Backfill all non-archived changelogs.
 
 #### maintenance
 
@@ -27,40 +28,40 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Route amendments to platform-specific templates (`AGENTS.md`).
-- Split amendment templates by review surface (`maintenance/amendment-template.md`, `maintenance/amendment-template-arena.md`).
+- Route amendments to platform-specific templates (the house rules).
+- Split amendment templates by review surface (the amendment templates).
 - Use Kilo/Plannotator annotations and approval, and use Arena Steering fielded reports.
-- Place runnable checks in focused test files under directories that mirror source directories, and split mixed test files when touched (`rules/refs/CORE.md`, `rules/refs/ARENA.md`, `rules/refs/CHATGPT.txt`).
+- Place runnable checks in focused test files under directories that mirror source directories, and split mixed test files when touched.
 
 #### maintenance
 
-- Exclude amendment proposal templates from Markdown lint (`.markdownlint-cli2.jsonc`).
-- Split `check.py` into the `maintenance/checks/` package (`maintenance/check.py`, `maintenance/gpt_plugins/gate_gpt_plugins.py`, `maintenance/workflows/changed_paths.py`, `tests/maintenance/checks/`). It uses an injected `Repo`, one module per concern, and stdlib logging with the same output text.
-- Re-measure a token budget file after it changes inside one run (`maintenance/checks/measure.py`).
-- Discover clause files by glob instead of a hand-listed budget map (`maintenance/check.py`, `README.md`, `maintenance/README.md`). Measure `o200k_base` tokens by default and count characters only for the two ChatGPT fields.
-- Rename the Nemoize stage in `check.py` and its summary, replacing the "domains" wording, and rename the Nemoize module key (`maintenance/check.py`, `maintenance/workflows/changed_paths.py`).
+- Exclude amendment proposal templates from Markdown lint (the Markdownlint config).
+- Split the checker into the checks package (the validation tooling). It uses an injected `Repo`, one module per concern, and stdlib logging with the same output text.
+- Re-measure a token budget file after it changes inside one run (the measurement tooling).
+- Discover clause files by glob instead of a hand-listed budget map (the validation tooling and READMEs). Measure `o200k_base` tokens by default and count characters only for the two ChatGPT fields.
+- Rename the Nemoize stage in the checker and its summary, replacing the "domains" wording, and rename the Nemoize module key.
 - Reword maintenance comments, docstrings, and READMEs after a nemoizer advisory review, with no behavior change.
-- Register focused Nemoizer test files in `maintenance/workflows/changed_paths.py`.
+- Register focused Nemoizer test files in the changed-paths workflow.
 
 ### Removed
 
 #### maintenance
 
-- Remove the Markdown lint scope test (`tests/maintenance/checks/test_checks_structure.py`).
+- Remove the Markdown lint scope test (the structural checks tests).
 
 ### Added
 
 #### maintenance
 
-- Introduce Kilo/Plannotator amendment proposal template (`maintenance/amendment-template.md`).
-- Introduce Arena Steering amendment proposal template with the final clause verbatim as the approval option label (`maintenance/amendment-template-arena.md`).
+- Introduce Kilo/Plannotator amendment proposal template (the amendment templates).
+- Introduce Arena Steering amendment proposal template with the final clause verbatim as the approval option label (the amendment templates).
 
 ### Fixed
 
 #### maintenance
 
-- Reject Git and gate output that is not UTF-8 on Windows as well (`maintenance/pr/gate_pr.py`).
-- Keep the global Git config and hooks out of test repos (`tests/conftest.py`).
+- Reject Git and gate output that is not UTF-8 on Windows as well (the PR gate tooling).
+- Keep the global Git config and hooks out of test repos (the test fixtures).
 - Compare test paths with `/`, and skip tests that need POSIX `bash`, `sh`, or `fcntl` on Windows.
 
 ## 2026-11-11
@@ -69,12 +70,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Read and acknowledge blocking inbox messages before starting or resuming queued work (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
-- Restrict `steer poll` gate waits to a sole task and empty-queue work waits to no remaining tasks (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Read and acknowledge blocking inbox messages before starting or resuming queued work (the Arena rules).
+- Restrict `steer poll` gate waits to a sole task and empty-queue work waits to no remaining tasks (the Arena rules).
 
 #### arena-steering
 
-- Require a report phase first for approved report work affecting features or documentation (`skills/arena-steering/SKILL.md`, `.agents/skills/arena-steering/SKILL.md`).
+- Require a report phase first for approved report work affecting features or documentation (the arena-steering skill).
 
 ## 2026-11-09
 
@@ -130,19 +131,19 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Rewrite `rules/README.md` and `rules/wenyan/README.md` for human readers.
-- Specify the stale-report reminder command (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
-- Remove the code-scanning requirement (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Rewrite the rules READMEs for human readers.
+- Specify the stale-report reminder command (the Arena rules).
+- Remove the code-scanning requirement (the Arena rules).
 
 #### system-prompts
 
-- Rewrite `system-prompts/README.md` and `system-prompts/wenyan/README.md` in human-facing prose.
+- Rewrite the system-prompts READMEs in human-facing prose.
 
 #### maintenance
 
-- Parse README budgets without `markdown-it-py`, drop retired group budgets and `maintenance/javascript-comments.cjs`, and refresh `maintenance/README.md`.
-- Rewrite `maintenance/README.md` for human maintainers and replace retired `arena-preview` hook tables with `steer pre`.
-- Archive the retired minification workflow check and its tests under `docs/archive/arena-skill/`.
+- Parse README budgets without `markdown-it-py`, drop retired group budgets and the retired JavaScript comments utility, and refresh the maintenance README.
+- Rewrite the maintenance README for human maintainers and replace retired `arena-preview` hook tables with `steer pre`.
+- Archive the retired minification workflow check and its tests under the archive.
 - Exclude minified, archived, and vendored material from the root Nemoizer scan.
 - Filter CodeQL language scans conservatively and restrict dependency reviews to dependency and workflow changes.
 - Group plugin release and rules publication into separate credential-isolated jobs.
@@ -150,18 +151,18 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Group read-only CI checks into one job, including PR plugin validation, and reuse successful input digests.
 - Guard the archived Arena proxy tests against returning to the active test matrix.
 - Refresh Ponytail and its audit skill from upstream `96608e0`, keeping only those two skills.
-- Add pass-ledger collection and recording primitives for CI surfaces (`maintenance/workflows/changed_paths.py`).
-- Run workflow lint, security audit, and contract checks in one job (`.github/workflows/workflow-security.yml`).
-- Ignore seven reviewed historical test-fixture findings in Gitleaks (`.gitleaksignore`).
-- Replace the root Arena symlink with a byte-identical regular copy (`ARENA.md`, `maintenance/check.py`).
-- Expand Markdownlint coverage and remove the fixed scope guard (`.markdownlint-cli2.jsonc`, `maintenance/check.py`).
+- Add pass-ledger collection and recording primitives for CI surfaces (the changed-paths workflow).
+- Run workflow lint, security audit, and contract checks in one job (the workflow security checks).
+- Ignore seven reviewed historical test-fixture findings in Gitleaks (the Gitleaks ignore list).
+- Replace the root Arena symlink with a byte-identical regular copy (the root Arena file and the validation tooling).
+- Expand Markdownlint coverage and remove the fixed scope guard (the Markdownlint config and the validation tooling).
 
 ### Fixed
 
 #### maintenance
 
 - Decode child-process text pipes as strict UTF-8, reconfigure CLI streams for Windows consoles, and pass explicit `encoding="utf-8"` across test suites.
-- Update the seeded `S2E5P` survey payload in `maintenance/demo-arena-steer.py` to use `first_name` and `last_name`.
+- Update the seeded `S2E5P` survey payload in the demo script to use `first_name` and `last_name`.
 
 ## 2026-11-06
 
@@ -169,25 +170,25 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Route Preview checks to consolidated Steering test modules (`maintenance/workflows/changed_paths.py`).
-- Route test checks to mirrored modules and split userscript suites (`maintenance/workflows/changed_paths.py`).
-- Time skills, links, budgets, parity, and paths validation as separate stages (`maintenance/check.py`).
-- Run one Nemoizer stage using the root configuration instead of a separate Markdown allowlist (`maintenance/check.py`, `nemoizer.toml`).
+- Route Preview checks to consolidated Steering test modules (the changed-paths workflow).
+- Route test checks to mirrored modules and split userscript suites (the changed-paths workflow).
+- Time skills, links, budgets, parity, and paths validation as separate stages (the validation tooling).
+- Run one Nemoizer stage using the root configuration instead of a separate Markdown allowlist (the validation tooling and root config).
 
 #### rules
 
-- Place non-trivial checks in mirrored module tests (`rules/refs/CORE.md`, `rules/refs/ARENA.md`, `rules/refs/CHATGPT.txt`, `rules/CORE.md`, `rules/ARENA.md`, `rules/CHATGPT-MORE.txt`, `rules/wenyan/CHATGPT-MORE.txt`).
-- Distinguish stderr read reminders from other action reminders (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Limit inbox reads to stderr-reported unacknowledged messages (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
-- Forbid Mermaid in chat and require it everywhere else (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Protect running Steering previews and require recommended report options (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Require self-contained handoffs (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Remove the deliverable-open requirement and publish handoffs as unfielded Steering reports (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Set the final poll Bash timeout to 1800 seconds and prohibit shell timeouts (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Remove the violation-notice trigger for full bible reads (`rules/refs/ARENA.md`, `rules/ARENA.md`).
-- Route turn start, task ordering, Steering procedures, and job-log lookup through the installed skill. Use v2 `steer` commands (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
-- Split the contract rules and keep the no-commit rule free of storage-location details (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
-- After one diagnosis, resume unblocked work, use a worktree for frozen files, and recheck logs only after meaningful progress (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
+- Place non-trivial checks in mirrored module tests (the CORE, Arena, and ChatGPT rules).
+- Distinguish stderr read reminders from other action reminders (the Arena rules).
+- Limit inbox reads to stderr-reported unacknowledged messages (the Arena rules).
+- Forbid Mermaid in chat and require it everywhere else (the Arena rules).
+- Protect running Steering previews and require recommended report options (the Arena rules).
+- Require self-contained handoffs (the Arena rules).
+- Remove the deliverable-open requirement and publish handoffs as unfielded Steering reports (the Arena rules).
+- Set the final poll Bash timeout to 1800 seconds and prohibit shell timeouts (the Arena rules).
+- Remove the violation-notice trigger for full bible reads (the Arena rules).
+- Route turn start, task ordering, Steering procedures, and job-log lookup through the installed skill. Use v2 `steer` commands (the Arena rules).
+- Split the contract rules and keep the no-commit rule free of storage-location details (the Arena rules).
+- After one diagnosis, resume unblocked work, use a worktree for frozen files, and recheck logs only after meaningful progress (the Arena rules).
 
 ## 2026-11-05
 
@@ -195,12 +196,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Replace v1 steering references with v2, require six-call bible rechecks, and use v2 for all reports (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`, `AGENTS.md`).
+- Replace v1 steering references with v2, require six-call bible rechecks, and use v2 for all reports (the Arena rules and the house rules).
 
 #### maintenance
 
-- Log Nemoize child commands and exit codes during repo validation (`maintenance/check.py`).
-- Add optional per-file scan and worker progress logging to Nemoizer (`skills/nemoizer/scripts/nemoize.py`).
+- Log Nemoize child commands and exit codes during repo validation (the validation tooling).
+- Add optional per-file scan and worker progress logging to Nemoizer (the Nemoizer).
 
 ## 2026-11-04
 
@@ -208,14 +209,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Require substantive answers to delivered messages in their own acknowledgement before chat (`rules/refs/ARENA.md`, `rules/ARENA.md`, `ARENA.md`).
-- Remove the short-report-to-chat exception (`AGENTS.md`).
+- Require substantive answers to delivered messages in their own acknowledgement before chat (the Arena rules).
+- Remove the short-report-to-chat exception (the house rules).
 
 ### Fixed
 
 #### maintenance
 
-- Assign blocked-Bash dismissal and task-priority regressions to the Preview test group (`workflows/changed_paths.py`).
+- Assign blocked-Bash dismissal and task-priority regressions to the Preview test group (the changed-paths workflow).
 
 ## 2026-11-03
 
@@ -223,31 +224,31 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Print each failed check's findings under its FAIL line. Rename the STE lint check to Nemoize and its constants (`maintenance/check.py`).
-- Decode every `check.py` subprocess as UTF-8. Compare the markdownlint scope on POSIX separators so the check holds on Windows (`maintenance/check.py`).
-- Nemoizer scans files in parallel with a 10 second per-file cap, reports skipped files, and prints progress dots (`skills/nemoizer/scripts/nemoize.py`, `skills/nemoizer/scripts/prose.py`).
-- Feed Node subprocesses UTF-8 and cap each call at 10 seconds (`skills/nemoizer/scripts/prose.py`).
-- Match nemoizer exclusion patterns against the config root so a subdirectory target keeps them (`skills/nemoizer/scripts/nemoize.py`).
-- Exclude the retired arena-skill trees, its tests, prompt-fill text, archive changelog, and markdown outside READMEs under automations, system-prompts, and gpt-plugins (`pyproject.toml`).
-- Remove the `--ste` flag from `check.py`. Nemoize runs as part of normal validation (`maintenance/check.py`, `maintenance/extract_prose.py`).
-- Drop `.agents/skills/asd-ste100` from vendored prose extraction targets (`maintenance/extract_prose.py`).
-- Remove the obsolete `--ste` CI step because repo validation checks covered docs (`.github/workflows/ci.yml`).
-- Use fenced clause diff blocks instead of proposal tables (`maintenance/amendment-template.md`, `AGENTS.md`).
+- Print each failed check's findings under its FAIL line. Rename the STE lint check to Nemoize and its constants (the validation tooling).
+- Decode every checker subprocess as UTF-8. Compare the markdownlint scope on POSIX separators so the check holds on Windows (the validation tooling).
+- Nemoizer scans files in parallel with a 10 second per-file cap, reports skipped files, and prints progress dots (the Nemoizer).
+- Feed Node subprocesses UTF-8 and cap each call at 10 seconds (the Nemoizer).
+- Match nemoizer exclusion patterns against the config root so a subdirectory target keeps them (the Nemoizer).
+- Exclude the retired arena-skill trees, its tests, prompt-fill text, archive changelog, and markdown outside READMEs under automations, system-prompts, and gpt-plugins (the project config).
+- Remove the `--ste` flag from the checker. Nemoize runs as part of normal validation (the validation and extraction tooling).
+- Drop the vendored asd-ste100 skill from vendored prose extraction targets (the extraction tooling).
+- Remove the obsolete `--ste` CI step because repo validation checks covered docs (the CI workflow).
+- Use fenced clause diff blocks instead of proposal tables (the amendment templates and the house rules).
 
 #### skills
 
-- Remove vendored `asd-ste100` skill (`.agents/skills/asd-ste100/`).
-- Remove vendored `humanizer` skill (`.agents/skills/humanizer/`).
-- Remove `asd-ste100` row from vendored skills table (`.agents/skills/README.md`).
-- Remove ASD-STE100 and Humanizer rule references from nemoizer description (`docs/gpt-plugins/README.md`).
+- Remove vendored `asd-ste100` skill (the vendored asd-ste100 skill).
+- Remove vendored `humanizer` skill (the vendored humanizer skill).
+- Remove `asd-ste100` row from vendored skills table (the vendored skills README).
+- Remove ASD-STE100 and Humanizer rule references from nemoizer description (the gpt-plugins README).
 
 #### system-prompts
 
-- Reword nemoizer-only writing style line. Drop ASD-STE100-style controlled English (`system-prompts/NEMOGPT.md`, `system-prompts/refs/NEMOGPT.md`, `system-prompts/wenyan/NEMOGPT.md`).
+- Reword nemoizer-only writing style line. Drop ASD-STE100-style controlled English (the NEMOGPT system prompt).
 
 #### automations
 
-- Drop the ASD-STE100 report language line (`automations/DAILIES.md`).
+- Drop the ASD-STE100 report language line (the Dailies automation).
 
 ## 2026-11-01
 
@@ -255,8 +256,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Seed finished steering demo tasks as historical rows while live task creation requires phase completion checks (`demo-arena-steer.py`).
-- Route steering source changes and the task-chain regression through Preview CI tests (`workflows/changed_paths.py`).
+- Seed finished steering demo tasks as historical rows while live task creation requires phase completion checks (the demo script).
+- Route steering source changes and the task-chain regression through Preview CI tests (the changed-paths workflow).
 
 ## 2026-10-31
 
@@ -264,13 +265,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Reset the running demo to sample data without restarting its server. Preserve survey results and the reset action across reloads (`demo-arena-steer.py`).
-- Route demo changes, reset tests, and connection tests to the Preview test group (`workflows/changed_paths.py`).
-- Assign the composer parity browser test to the Preview test group (`workflows/changed_paths.py`).
-- Assign the message retry browser test to the Preview test group (`workflows/changed_paths.py`).
-- Assign the browser violation regression to the Preview test group (`workflows/changed_paths.py`).
-- Ignore `.agents/` during Gitleaks scans while retaining the default rules (`.gitleaks.toml`).
-- Move the configurable steering demo out of the shipped skill (`demo-arena-steer.py`).
+- Reset the running demo to sample data without restarting its server. Preserve survey results and the reset action across reloads (the demo script).
+- Route demo changes, reset tests, and connection tests to the Preview test group (the changed-paths workflow).
+- Assign the composer parity browser test to the Preview test group (the changed-paths workflow).
+- Assign the message retry browser test to the Preview test group (the changed-paths workflow).
+- Assign the browser violation regression to the Preview test group (the changed-paths workflow).
+- Ignore `.agents/` during Gitleaks scans while retaining the default rules (the Gitleaks ignore list).
+- Move the configurable steering demo out of the shipped skill (the demo script).
 
 ## 2026-10-30
 
@@ -278,13 +279,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Assign the message scroll-fade tests to the Preview test group (`workflows/changed_paths.py`).
-- Exclude vendored `skills/arena-steering/assets/` bundles and licenses from repo prose extraction (`check.py`, `extract_prose.py`).
+- Assign the message scroll-fade tests to the Preview test group (the changed-paths workflow).
+- Exclude vendored arena-steering assets bundles and licenses from repo prose extraction (the validation and extraction tooling).
 
 #### rules
 
-- Require code and configuration comments to use the established contract (`CORE.md`, `ARENA.md`, `CHATGPT-MORE.txt`).
-- Require reporting uncontracted shipped changes (`ARENA.md`).
+- Require code and configuration comments to use the established contract (the Arena rules).
+- Require reporting uncontracted shipped changes (the Arena rules).
 
 ## 2026-10-29
 
@@ -292,4 +293,4 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Route the `Preview` test group to `tests/skills/arena-steering/` and remove legacy `tests/skills/arena-skill/` test references (`workflows/changed_paths.py`, `README.md`).
+- Route the `Preview` test group to the arena-steering tests and remove legacy arena-skill test references (the changed-paths workflow and the README).
