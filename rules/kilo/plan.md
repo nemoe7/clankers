@@ -12,9 +12,9 @@
 - MUST read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, executable without clarification.
 - Plans MUST carry TDD: red, green, refactor, verify. Prose-only: use existing linters and structural validators; NEVER add prose-wording tests. Keep exact-text tests for executable interface/protocol contracts.
-- TDD step inapplicable: say why.
+- Say why if TDD step inapplicable.
 - Plans MUST define exact atomic commits with messages.
-- A plan is incomplete without defined TDD and commits.
+- Plans incomplete without TDD and commits.
 - MUST stop and ask when reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
 - MUST stop investigation when a pattern meets stated task requirements.
 - Skip unrelated requirements and edge cases.
