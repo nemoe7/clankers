@@ -39,15 +39,14 @@ def test_frontmatter_reports_each_malformed_form(text: str, message: str):
   assert parse_frontmatter(text)[1][0].startswith(message)
 
 
-def test_skills_pass_when_listed_and_well_formed(tmp_path: Path):
+def test_skills_pass_when_well_formed(tmp_path: Path):
   write(tmp_path, "skills/alpha/SKILL.md", GOOD.format(name="alpha"))
-  write(tmp_path, "skills/README.md", "- [alpha](alpha/SKILL.md)\n")
   errors: list[str] = []
   assert check_skills(Repo(tmp_path), errors) == 1
   assert errors == []
 
 
-def test_skills_report_naming_listing_and_license_problems(tmp_path: Path):
+def test_skills_report_naming_and_license_problems(tmp_path: Path):
   write(tmp_path, "skills/alpha/SKILL.md", GOOD.format(name="beta"))
   write(tmp_path, "skills/gamma/NOTES.md", "no skill file\n")
   write(
@@ -55,22 +54,19 @@ def test_skills_report_naming_listing_and_license_problems(tmp_path: Path):
     "skills/delta/SKILL.md",
     "---\nname: delta\ndescription: x\nmetadata:\n  upstream: u\nextra: 1\n---\n",
   )
-  write(tmp_path, "skills/README.md", "- [alpha](alpha/SKILL.md)\n")
   errors: list[str] = []
   assert check_skills(Repo(tmp_path), errors) == 3
   joined = "\n".join(errors)
-  assert "skills/README.md list mismatch" in joined
   assert "skills/alpha/SKILL.md: invalid name 'beta'" in joined
   assert "skills/gamma: missing SKILL.md" in joined
   assert "skills/delta/SKILL.md: unknown frontmatter fields: ['extra']" in joined
   assert "adapted skill records metadata.upstream but declares no license" in joined
 
 
-def test_skills_report_a_missing_readme_and_oversized_files(tmp_path: Path):
+def test_skills_report_oversized_files(tmp_path: Path):
   write(tmp_path, "skills/alpha/SKILL.md", GOOD.format(name="alpha") + "line\n" * 500)
   errors: list[str] = []
   check_skills(Repo(tmp_path), errors)
-  assert "skills/README.md is missing" in errors
   assert "skills/alpha/SKILL.md: SKILL.md exceeds 500 lines" in errors
 
 

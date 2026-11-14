@@ -12,12 +12,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Delete .kilo/plans instead of the generated plan files after Plan mode (the Kilo code and debug overrides).
-- Require setting the TODO list after plan approval (the Kilo plan override).
-- Require switching off `main` before editing and committing on that branch (the CORE rules).
-- Require updating the TODO list after each task in the code and debug overrides (the Kilo code and debug overrides).
-- Delete the plan files instead of the plan folder after Plan mode (the Kilo code and debug overrides).
-- Create a branch only when on the default branch (the CORE rules).
+- Delete the plan files instead of the plan folder after Plan mode.
+- Require setting the TODO list after plan approval.
+- Require switching off `main` before editing and committing on that branch.
+- Require updating the TODO list after each task in the code and debug overrides.
+- Create a branch only when on the default branch.
+- Generalize the agent-rules writing standard from an AGENTS.md-specific guideline to agent rules.
+- Refresh the system-prompt writing standard against the top 10 Agent Arena models and the Pareto frontier.
 
 #### maintenance
 
@@ -29,8 +30,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
-- Route amendments to platform-specific templates (the house rules).
-- Split amendment templates by review surface (the amendment templates).
+- Route amendments to platform-specific templates.
+- Split amendment templates by review surface.
 - Use Kilo/Plannotator annotations and approval, and use Arena Steering fielded reports.
 - Place runnable checks in focused test files under directories that mirror source directories, and split mixed test files when touched.
 
@@ -54,8 +55,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Introduce Kilo/Plannotator amendment proposal template (the amendment templates).
-- Introduce Arena Steering amendment proposal template with the final clause verbatim as the approval option label (the amendment templates).
+- Introduce Kilo/Plannotator amendment proposal template.
+- Introduce Arena Steering amendment proposal template with the final clause verbatim as the approval option label.
 
 ### Fixed
 
@@ -234,7 +235,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Remove the `--ste` flag from the checker. Nemoize runs as part of normal validation (the validation and extraction tooling).
 - Drop the vendored asd-ste100 skill from vendored prose extraction targets (the extraction tooling).
 - Remove the obsolete `--ste` CI step because repo validation checks covered docs (the CI workflow).
-- Use fenced clause diff blocks instead of proposal tables (the amendment templates and the house rules).
+- Use fenced clause diff blocks instead of proposal tables.
 
 #### skills
 

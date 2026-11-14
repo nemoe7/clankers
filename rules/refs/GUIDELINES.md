@@ -1,15 +1,15 @@
-# Guidelines: writing an AGENTS.md
+# Guidelines: writing agent rules
 
-AGENTS.md is not a system prompt. It is a user-owned rules file that many different agents load into their own system prompts. This changes how you write it.
+An agent rules file is not a system prompt. It is a user-owned rules file that many different agents load into their own system prompts. This changes how you write it.
 
-## 1. What AGENTS.md is
+## 1. What an agent rules file is
 
 1. A portable Markdown file at the project root. Different agents load it through different harnesses.
 2. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works.
 
 ## 2. Threat model
 
-Write AGENTS.md against four failure modes.
+Write an agent rules file against four failure modes.
 
 1. **Compaction.** Summarization can drop or dilute your rules. Mitigation: keep the file short and atomic.
 2. **Dilution.** The harness piles skills, plugins, and reminders around your text. Mitigation: declare precedence inside the file.
@@ -20,7 +20,7 @@ Write AGENTS.md against four failure modes.
 
 1. Put a constitution first: the 5 to 15 rules that MUST NEVER be lost. No rationale. One line each.
 2. Group the rest by domain: setup, testing, style, git, boundaries. One heading per domain. Headings give re-anchoring tools natural slice points.
-3. Put directory-specific rules in nested AGENTS.md files, not in the root file. The root file loads everywhere. Nested files load only where relevant.
+3. Put directory-specific rules in nested agent rules files, not in the root file. The root file loads everywhere. Nested files load only where relevant.
 4. End the file with a short "When in doubt" section. Give the judgment rule that covers what the rules missed. This is the stance section, and it absorbs edge cases.
 
 ## 4. Rules that survive
@@ -46,12 +46,12 @@ Write AGENTS.md against four failure modes.
 1. Keep the root file under about 200 lines. Long files get skimmed, truncated, or compressed first.
 2. Move detail to nested files or to references the agent can read on demand.
 3. Delete any rule you cannot connect to a real past failure.
-4. Do not embed code dumps, changelogs, or task lists. AGENTS.md is law, not a journal.
+4. Do not embed code dumps, changelogs, or task lists. An agent rules file is law, not a journal.
 
 ## 7. Skeleton
 
 ```markdown
-# AGENTS.md
+# Agent rules file
 
 ## Use (one line: what this file is, who MUST apply it, that user chat overrides it)
 
@@ -65,7 +65,7 @@ Write AGENTS.md against four failure modes.
 
 ## Boundaries (NEVER rules: secrets, destructive commands, protected files)
 
-## Scope notes (directory pointers to nested AGENTS.md files)
+## Scope notes (directory pointers to nested agent rules files)
 
 ## When in doubt (the judgment rule: smallest change that holds; stop and ask on conflict)
 ```

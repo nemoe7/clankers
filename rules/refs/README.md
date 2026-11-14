@@ -17,4 +17,4 @@ See [maintenance/README.md](../../maintenance/README.md) for the refs-first main
 - `KILO.md`: uncompressed Kilo Code overlay: two tool rules, no core repetition.
 - `kilo/plan.md`, `kilo/code.md`, `kilo/debug.md`: Kilo mode overrides, paired with the live `rules/kilo/`. Each one opens with an empty line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - `COMMIT-SPEC.txt`: uncompressed commit baseline. It matched live until the 2026-09-22 compression.
-- `GUIDELINES.md`: the AGENTS.md writing and baseline-audit standard. It is a verbatim reference, not a rule baseline: no live counterpart or compression.
+- `GUIDELINES.md`: the agent rules writing and baseline-audit standard. It is a verbatim reference, not a rule baseline: no live counterpart or compression.

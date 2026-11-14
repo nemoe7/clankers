@@ -36,7 +36,7 @@
 - [README.md](README.md) — budgets, compression procedure, layout
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — rule, prompt, automation, and maintenance history
 - [rules/README.md](rules/README.md) — rule structure, installation, maintenance
-- [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) — the standard for writing an AGENTS.md; audit rule files against it
+- [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) — the standard for writing agent rules; audit rule files against it
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
 

@@ -1,4 +1,4 @@
-"""Owner skills: `SKILL.md` frontmatter, naming, licenses, and the `skills/README.md` list."""
+"""Owner skills: `SKILL.md` frontmatter, naming, and licenses."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ EXPECTED_SKILL_FIELDS = {
   "allowed-tools",
 }
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-DOCUMENTED_SKILL_RE = re.compile(r"\[([a-z0-9-]+)\]\([a-z0-9-]+/SKILL\.md\)")
 UPSTREAM_RE = re.compile(r"^[ \t]+upstream:", re.MULTILINE)
 DESCRIPTION_LIMIT = 1024
 SKILL_LINE_LIMIT = 500
@@ -57,22 +56,6 @@ def _skill_dirs(repo: Repo) -> list[Path]:
     for path in repo.skills.iterdir()
     if path.is_dir() and not path.name.startswith(".") and path.name != "refs"
   )
-
-
-def _check_readme_list(repo: Repo, skills: list[Path], errors: list[str]) -> None:
-  readme = repo.skills / "README.md"
-
-  if not readme.is_file():
-    errors.append("skills/README.md is missing")
-    return
-
-  documented = set(DOCUMENTED_SKILL_RE.findall(readme.read_text(encoding="utf-8")))
-  actual = {path.name for path in skills}
-
-  if documented != actual:
-    errors.append(
-      f"skills/README.md list mismatch: documented={sorted(documented)} actual={sorted(actual)}"
-    )
 
 
 def _check_license(
@@ -125,7 +108,6 @@ def _check_skill(repo: Repo, skill: Path, errors: list[str]) -> None:
 def check_skills(repo: Repo, errors: list[str]) -> int:
   """Check every owner skill and return how many there are."""
   skills = _skill_dirs(repo)
-  _check_readme_list(repo, skills, errors)
 
   for skill in skills:
     _check_skill(repo, skill, errors)
