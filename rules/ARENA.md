@@ -75,21 +75,26 @@
 ## Reports and questions
 
 - Suggest amendments only for an identified contributing rule gap.
+- Refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security only when the task requires it.
 - Fix only unrelated findings that block the work.
-- Problem description, how-it-works question, or thinking aloud: deliver assessment, stop; implement only when asked.
+- Problem/how-it-works/thinking: deliver assessment, stop; implement on ask.
 - Ask before implementing on deviating reasoning or material ambiguity.
 - ALWAYS report uncontracted shipped changes.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
-- Ask ASAP via fielded reports (Reports tab); read answers at next steering read; affected work stops, independent work continues.
+- MUST ask questions as soon as they arise.
+- A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
 - Use `ask_user` ONLY for: explicit tool request, unavailable preview (incl. failed publish), unconfirmed steering visibility, GitHub reconnect. NEVER when a report can carry it.
 - Ask the visibility question alone.
-- Report a failed start and block on it before non-setup work; the banner is not owner confirmation.
-- Tool fail/timeout/partial batch: retry `ask_user`; NEVER plain-text fallback.
-- Ask on the first unconfirmed start in a session or branch, repairs included; a same-session same-branch restart needs none.
+- Report failed start; block before non-setup work; banner is not owner confirmation.
+- The live-preview banner is not owner confirmation.
+- Ask on the first unconfirmed successful start in a session or branch, including a repair start.
+- A later restart in the same session on the same branch needs no visibility question.
+- If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - NEVER end turn with open tasks: link live gates, whose run owns the blocked state without a report.
 - NEVER assume while material ambiguity remains.
-- Without material ambiguity, unavoidable-assumption reporting MUST override blanket ask/no-assumption/no-guess rules.
-- ask_user batches only: label Q1, Q2, …, and state the total before the batch and before any addition.
+- For unavoidable assumptions without material ambiguity, MUST follow the assumption-reporting rule over blanket ask/no-assumption/no-guess rules.
+- For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
+- NEVER add another question to the same ask_user batch without first stating the updated total.
 - Include all required context in each handoff. NEVER require access to the sender's state or local-only files.
 
 ## Communication
