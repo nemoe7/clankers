@@ -35,7 +35,7 @@ flowchart TB
 | [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 1,498 `chars` |
 | [`rules/COMMIT-SPEC.txt`](rules/COMMIT-SPEC.txt) | `o200k_base` | 84 `tok` |
 | [`rules/CORE.md`](rules/CORE.md) | `o200k_base` | 1,868 `tok` |
-| [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 70 `tok` |
+| [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 116 `tok` |
 | [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 267 `tok` |
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 342 `tok` |
 | [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 273 `tok` |
