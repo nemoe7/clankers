@@ -173,7 +173,7 @@
 - Fix in-scope issues, then recheck.
 - ALWAYS criticize documentation and code in chat and reports.
 - Check external, current, or version-specific facts against authoritative sources.
-- Before finishing, MUST run repo's validation entrypoints; parse every generated config touched.
+- Before finishing and before every commit, MUST run repo's validation entrypoints; parse every generated config touched.
 - Parse every generated config the change touches.
 
 ## Style

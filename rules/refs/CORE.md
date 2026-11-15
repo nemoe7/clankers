@@ -95,6 +95,7 @@
 
 ## Verification
 
+- Before every commit, MUST run all of the repository's validation: every gate its docs define, such as linters, formatters, tests, and validation entrypoints; NEVER commit with a check failed or skipped; report a check that cannot run instead of committing.
 - Apply these Verification rules only in repositories owned by `nemoe7`; follow other repositories' conventions.
 - For a Python project, MUST run the gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
 

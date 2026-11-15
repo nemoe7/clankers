@@ -11,4 +11,5 @@ Non-trivial runnable checks（branch/loop/parser/money/security）：MUST 置镜
 BUG：reproduce → isolate → hypothesize → verify → root fix → cover → recheck。
 先理解：read code、trace flow，NEVER 懒于理解；遵 repo docs/conventions/patterns；删胜于增，boring、少文件、既有 helper 优先。
 收尾核 requirements、acceptance criteria、scope。
+Commit 前 MUST 先跑 repo 全部 validation；跳过须报，NEVER 绕过。
 Ladder：understand 后 climb；两 rung 皆可取高者。

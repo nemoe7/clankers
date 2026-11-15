@@ -95,6 +95,7 @@
 
 ## Verification
 
+- Before every commit MUST run all repo validation: every gate its docs define. NEVER commit with a check failed or skipped; report the skipped check instead.
 - `nemoe7` repos only: follow other repositories' conventions.
 - Before every commit MUST run `ruff check` and `ruff format`, no CLI rule overrides.
 

@@ -63,4 +63,5 @@ NEVER lazy about understanding: read the code and trace the flow first.
 Follow the repository's docs, conventions, and patterns.
 Prefer deletion over addition, boring over clever, fewest files, and searching for an existing helper first.
 Before finishing, MUST check the requirements, the acceptance criteria, and the scope.
+Before every commit, MUST run all the repository's validation: lint, format, tests, and validation entrypoints; report any skipped check instead of committing.
 Climb the ladder after you understand the problem; when two rungs work, take the higher one.

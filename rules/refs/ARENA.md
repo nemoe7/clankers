@@ -173,7 +173,7 @@
 - Fix in-scope issues, then recheck.
 - ALWAYS criticize documentation and code, in chat responses and in report files.
 - Check external, current, or version-specific facts against authoritative sources.
-- Before finishing, MUST run the repo's own validation entrypoints (test suite, config validators).
+- Before finishing and before every commit, MUST run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 
 ## Style
