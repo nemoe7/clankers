@@ -4,7 +4,7 @@
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
 - ALWAYS consult the approved plan file.
 - ALWAYS update the approved plan file for user overrides.
-- ALWAYS follow the approved plan step-by-step.
+- ALWAYS follow approved plan step-by-step.
 - MUST run the gates named in the project's AGENTS.md before every commit.
 - MUST update the TODO list after each task.
 - If Plan mode was used, MUST delete the plan files.
