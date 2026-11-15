@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
 from checks.parity import check_parity
 from checks.parity.keywords import compare_keyword_counts, prose_lines
 from checks.parity.prompts import check_system_prompt_parity, prompt_sections
 from checks.parity.root_copies import check_root_copies
 from checks.parity.rules import check_rule_parity, section_rule_lines
-from checks.parity.skill_refs import check_skill_refs_parity
+from checks.parity.skills import check_skills_parity
 from checks.repo import DEFAULT_ROOT, Repo
 
 
@@ -36,7 +39,7 @@ def test_skill_refs_parity_accepts_compressed_wording_per_line(tmp_path: Path):
   write(tmp_path, "skills/refs/sample/SKILL.md", "Name\n\nFirst rule.\nSecond rule.\n")
   write(tmp_path, "skills/sample/SKILL.md", "Name\n\nFirst rule.\nSecond.\n")
   errors: list[str] = []
-  check_skill_refs_parity(Repo(tmp_path), errors)
+  check_skills_parity(Repo(tmp_path), errors)
   assert errors == []
 
 
@@ -44,7 +47,7 @@ def test_skill_refs_parity_rejects_a_merged_line(tmp_path: Path):
   write(tmp_path, "skills/refs/sample/SKILL.md", "Name\n\nFirst rule.\nSecond rule.\n")
   write(tmp_path, "skills/sample/SKILL.md", "Name\n\nFirst and second rule.\n")
   errors: list[str] = []
-  check_skill_refs_parity(Repo(tmp_path), errors)
+  check_skills_parity(Repo(tmp_path), errors)
   assert len(errors) == 1
   assert "must be equal" in errors[0]
 
@@ -57,7 +60,7 @@ def test_skill_refs_parity_rejects_a_live_only_line(tmp_path: Path):
     "Name\n\nFirst rule.\nSecond rule.\nThird rule.\n",
   )
   errors: list[str] = []
-  check_skill_refs_parity(Repo(tmp_path), errors)
+  check_skills_parity(Repo(tmp_path), errors)
   assert len(errors) == 1
   assert "must be equal" in errors[0]
 
@@ -65,7 +68,7 @@ def test_skill_refs_parity_rejects_a_live_only_line(tmp_path: Path):
 def test_skill_refs_parity_rejects_a_baseline_without_a_live_file(tmp_path: Path):
   write(tmp_path, "skills/refs/sample/SKILL.md", "Name\n")
   errors: list[str] = []
-  check_skill_refs_parity(Repo(tmp_path), errors)
+  check_skills_parity(Repo(tmp_path), errors)
   assert errors == [
     "skills/sample/SKILL.md: refs counterpart exists without a live file"
   ]
@@ -97,6 +100,51 @@ def test_rule_parity_accepts_merged_lines(tmp_path: Path):
   errors: list[str] = []
   check_rule_parity(rule_tree(tmp_path, "## A\n- one\n- two\n"), errors)
   assert errors == []
+
+
+@contextmanager
+def captured_parity_warnings(caplog: pytest.LogCaptureFixture):
+  """Capture warnings from the 'checks' logger, which does not propagate."""
+  logger = logging.getLogger("checks")
+  logger.addHandler(caplog.handler)
+  logger.setLevel(logging.WARNING)
+  try:
+    with caplog.at_level(logging.WARNING, logger="checks"):
+      yield
+  finally:
+    logger.removeHandler(caplog.handler)
+    logger.setLevel(logging.NOTSET)
+
+
+def test_rule_parity_warns_when_a_clause_matches_refs_exactly(
+  tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+  with captured_parity_warnings(caplog):
+    check_rule_parity(rule_tree(tmp_path, "## A\n- one\n- two\n"), [])
+  assert "rules/CORE.md 'A' line 1: live clause matches refs exactly" in caplog.text
+
+
+def test_rule_parity_warns_when_a_clause_rewords_at_the_same_token_count(
+  tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+  with captured_parity_warnings(caplog):
+    check_rule_parity(rule_tree(tmp_path, "## A\n- uno\n- two\n"), [])
+  assert (
+    "rules/CORE.md 'A' line 1: live clause reworded at the same token count"
+    in caplog.text
+  )
+
+
+def test_rule_parity_does_not_warn_when_compression_shrinks_tokens(
+  tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+  with captured_parity_warnings(caplog):
+    check_rule_parity(rule_tree(tmp_path, "## A\n-1\n-2\n"), [])
+  assert "rules/CORE.md 'A' line 1: live clause matches refs exactly" not in caplog.text
+  assert (
+    "rules/CORE.md 'A' line 1: live clause reworded at the same token count"
+    not in caplog.text
+  )
 
 
 def test_rule_parity_rejects_an_added_rule_and_a_moved_heading(tmp_path: Path):
@@ -150,9 +198,10 @@ def prompt_errors(root: Path, ref: str, live: str) -> list[str]:
   return errors
 
 
-def test_system_prompt_parity_rejects_growth(tmp_path: Path):
+def test_system_prompt_parity_rejects_an_added_line(tmp_path: Path):
   errors = prompt_errors(tmp_path, PROMPT, PROMPT + "Do three.\n")
-  assert any("compression may shrink but never grow" in error for error in errors)
+  assert any("'Rules': 3 lines vs 2 in refs" in error for error in errors)
+  assert any("never add rules" in error for error in errors)
 
 
 def test_system_prompt_parity_rejects_a_section_absent_from_refs(tmp_path: Path):
@@ -252,3 +301,49 @@ def test_keyword_compare_ignores_inline_code():
     "x", "Use `do not` literally.", "Use `do not` literally. Run.", errors
   )
   assert errors == []
+
+
+def test_wenyan_keyword_compare_accepts_mapped_equivalents():
+  errors: list[str] = []
+  compare_keyword_counts(
+    "x", "MUST NEVER run it. Prefer x.", "須勿運行。優先x。", errors, wenyan=True
+  )
+  assert errors == []
+
+
+def test_wenyan_keyword_compare_flags_a_dropped_and_an_added_keyword():
+  errors: list[str] = []
+  compare_keyword_counts("x", "MUST run it.", "run it.", errors, wenyan=True)
+  assert (
+    len(errors) == 1
+    and "'MUST' dropped from live" in errors[0]
+    and "restore" in errors[0]
+  )
+  errors.clear()
+  compare_keyword_counts("x", "Run it.", "勿run it.", errors, wenyan=True)
+  assert (
+    len(errors) == 1
+    and "'NEVER' added in live" in errors[0]
+    and "refs baseline" in errors[0]
+  )
+
+
+def test_check_parity_invokes_every_subcheck(
+  tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+  from checks import parity
+
+  called: list[str] = []
+
+  def record(name: str):
+    def fake(repo: Repo, errors: list[str]) -> None:
+      called.append(name)
+
+    return fake
+
+  monkeypatch.setattr(parity, "check_rule_parity", record("rules"))
+  monkeypatch.setattr(parity, "check_system_prompt_parity", record("prompts"))
+  monkeypatch.setattr(parity, "check_skills_parity", record("skills"))
+  monkeypatch.setattr(parity, "check_root_copies", record("root"))
+  parity.check_parity(Repo(tmp_path), [])
+  assert called == ["rules", "prompts", "skills", "root"]

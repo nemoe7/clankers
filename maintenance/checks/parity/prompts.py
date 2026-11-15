@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..repo import Repo
-from .keywords import compare_keyword_counts
+from .compare import compare_lines
 
 # `system-prompts/refs/` holds the full wording and the live copy compresses it.
 # The compression may merge or drop lines, but it NEVER adds a rule the refs lack.
@@ -48,14 +48,15 @@ def prompt_sections(
   ]
 
 
-def _count(lines: list[str], span: tuple[int, int]) -> int:
-  start, end = span
-  return sum(1 for line in lines[start + 1 : end] if line.strip())
-
-
-def _spans(sections: list[tuple[str, int, int]]) -> dict[str, tuple[int, int]]:
-  """Map each header to its span. A repeated header keeps its first span."""
-  return {head: (start, end) for head, start, end in reversed(sections)}
+def _section_lines(
+  text: str, sections: list[tuple[str, int, int]], head: str
+) -> list[str]:
+  """Return the non-empty lines under one section."""
+  lines = text.split("\n")
+  for h, start, end in sections:
+    if h == head:
+      return [line.strip() for line in lines[start + 1 : end] if line.strip()]
+  return []
 
 
 def _check_pair(
@@ -63,73 +64,43 @@ def _check_pair(
   ref_text: str,
   live_text: str,
   errors: list[str],
-  header_prefix: str = "## ",
-  keywords: bool = True,
+  wenyan: bool = False,
 ) -> None:
-  if len(live_text.encode()) > len(ref_text.encode()):
-    errors.append(
-      f"{label}: {len(live_text.encode())} bytes vs "
-      f"{len(ref_text.encode())} in refs; compression may shrink but never grow"
-    )
-
-  ref_sections = prompt_sections(ref_text, header_prefix)
-  live_sections = prompt_sections(live_text, header_prefix)
+  ref_sections = prompt_sections(ref_text)
+  live_sections = prompt_sections(live_text)
   ref_names = [head for head, _, _ in ref_sections]
   live_names = [head for head, _, _ in live_sections]
 
   added = [head for head in live_names if head not in ref_names]
-  if added:
-    errors.append(f"{label}: sections absent from refs: {added}")
+  missing = [head for head in ref_names if head not in live_names]
+  if added or missing:
+    if added:
+      errors.append(f"{label}: sections absent from refs: {added}")
+    if missing:
+      errors.append(f"{label}: sections missing in live: {missing}")
     return
 
-  # Whole-file 'do not' scan of the live copy (case-insensitive)
-  if keywords:
-    compare_keyword_counts(f"{label}", live_text, live_text, errors)
+  for head in ref_names:
+    ref_rules = _section_lines(ref_text, ref_sections, head)
+    live_rules = _section_lines(live_text, live_sections, head)
 
-  # A caption may repeat a section name, so refs "Prompt transparency" is both a section and a worked-example caption.
-  # Compare only the unambiguous names both copies carry, so a compressed-away caption does not read as a divergence.
-  repeated = {head for head in ref_names if ref_names.count(head) > 1}
-  shared = [
-    head
-    for head in dict.fromkeys(live_names)
-    if head in ref_names and head not in repeated
-  ]
-  ref_span = _spans(ref_sections)
-  live_span = _spans(live_sections)
-  ref_lines = ref_text.split("\n")
-  live_lines = live_text.split("\n")
-
-  for position, head in enumerate(shared):
-    # Widen each span to the next shared header, so refs may carry
-    # sub-labels the live copy compressed away.
-    following = shared[position + 1] if position + 1 < len(shared) else None
-    ref_end = ref_span[following][0] if following else ref_span[head][1]
-    live_end = live_span[following][0] if following else live_span[head][1]
-    ref_rules = _count(ref_lines, (ref_span[head][0], ref_end))
-    live_rules = _count(live_lines, (live_span[head][0], live_end))
-
-    if live_rules > ref_rules:
-      errors.append(
-        f"{label} '{head}': {live_rules} lines vs {ref_rules} in refs; "
+    # Equal line count per section
+    if len(live_rules) != len(ref_rules):
+      reason = (
         "compression may merge lines but never add rules"
+        if len(live_rules) > len(ref_rules)
+        else "compression may merge lines but never drop them"
       )
-    elif live_rules < ref_rules:
       errors.append(
-        f"{label} '{head}': {live_rules} lines vs {ref_rules} in refs; "
-        "compression may merge lines but never drop them"
+        f"{label} '{head}': {len(live_rules)} lines vs {len(ref_rules)} in refs; {reason}"
       )
+      continue
 
-    # Hard-rule keyword parity per clause, only when clause pairing is known
-    if keywords and ref_rules == live_rules:
-      for i, (ref_line, live_line) in enumerate(
-        zip(
-          [line for line in ref_lines[ref_span[head][0] : ref_end] if line.strip()],
-          [line for line in live_lines[live_span[head][0] : live_end] if line.strip()],
-        )
-      ):
-        compare_keyword_counts(
-          f"{label} '{head}' rule {i + 1}", ref_line, live_line, errors
-        )
+    # Wenyan is a Chinese field copy. Keyword counts cannot transfer between
+    # grammars, so its lines skip keyword parity (compare_lines keeps the rest).
+    compare_lines(
+      f"{label} '{head}'", ref_rules, live_rules, errors, keywords=not wenyan
+    )
 
 
 def check_system_prompt_parity(repo: Repo, errors: list[str]) -> None:
@@ -141,21 +112,17 @@ def check_system_prompt_parity(repo: Repo, errors: list[str]) -> None:
       continue
 
     ref_text = reference.read_text(encoding="utf-8")
-    for subdir, label in SYSTEM_PROMPT_COPIES:
+    for subdir, _ in SYSTEM_PROMPT_COPIES:
       live_dir = repo.system_prompts / subdir if subdir else repo.system_prompts
       live = live_dir / name
       shown = f"system-prompts/{subdir + '/' if subdir else ''}{name}"
       if not live.is_file():
         errors.append(f"{shown}: refs/live pair incomplete")
         continue
-      # Use ## prefix for all headers, as they're Markdown
-      header_prefix = "## "
-      # Wenyan is a Chinese field copy: English keyword counts cannot apply.
       _check_pair(
         shown,
         ref_text,
         live.read_text(encoding="utf-8"),
         errors,
-        header_prefix,
-        keywords=(subdir != "wenyan"),
+        wenyan=(subdir == "wenyan"),
       )

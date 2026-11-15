@@ -1,13 +1,14 @@
-"""Skill files: each live file matches its `skills/refs/` baseline line for line."""
+"""Skill files: each live file matches its `skills/` baseline line for line."""
 
 from __future__ import annotations
 
 from ..repo import Repo
-from .keywords import compare_keyword_counts, prose_lines
+from .compare import compare_lines
+from .keywords import prose_lines
 from .rules import rule_line_count
 
 
-def check_skill_refs_parity(repo: Repo, errors: list[str]) -> None:
+def check_skills_parity(repo: Repo, errors: list[str]) -> None:
   """Check each skill file against its refs baseline.
 
   Live files must match refs line for line: no merged or dropped clauses.
@@ -24,6 +25,7 @@ def check_skill_refs_parity(repo: Repo, errors: list[str]) -> None:
     if not live.is_file():
       errors.append(f"{shown}: refs counterpart exists without a live file")
       continue
+
     ref_lines = rule_line_count(baseline)
     live_lines = rule_line_count(live)
     if live_lines != ref_lines:
@@ -31,14 +33,17 @@ def check_skill_refs_parity(repo: Repo, errors: list[str]) -> None:
         f"{shown}: {live_lines} lines vs {ref_lines} in "
         f"{repo.relative(baseline)}; must be equal"
       )
+      continue
 
-    # Hard-rule keyword parity per line, only when line pairing is known
-    ref_text = baseline.read_text(encoding="utf-8")
-    live_text = live.read_text(encoding="utf-8")
-    if ref_lines == live_lines:
-      for i, (ref_line, live_line) in enumerate(
-        zip(prose_lines(ref_text), prose_lines(live_text))
-      ):
-        if ref_line is None or live_line is None:
-          continue
-        compare_keyword_counts(f"{shown} line {i + 1}", ref_line, live_line, errors)
+    # Clause checks run on prose lines, with fenced code and blanks dropped.
+    ref_prose = [
+      line
+      for line in prose_lines(baseline.read_text(encoding="utf-8"))
+      if line is not None and line.strip()
+    ]
+    live_prose = [
+      line
+      for line in prose_lines(live.read_text(encoding="utf-8"))
+      if line is not None and line.strip()
+    ]
+    compare_lines(shown, ref_prose, live_prose, errors)

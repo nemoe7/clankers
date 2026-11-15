@@ -8,6 +8,18 @@ import re
 # Only the capitalized forms count.
 KEYWORDS = ("ALWAYS", "MUST", "NEVER", "Prefer")
 PATTERNS = {keyword: re.compile(rf"\b{re.escape(keyword)}\b") for keyword in KEYWORDS}
+
+# Wenyan one-to-one map: English keyword -> single Chinese equivalent.
+# Strictest force per keyword, all single chars measure 1 o200k_base token.
+WENYAN_MAP = {
+  "MUST": "須",
+  "NEVER": "勿",
+  "ALWAYS": "皆",
+  "Prefer": "優先",
+}
+WENYAN_PATTERNS = {
+  keyword: re.compile(chinese) for keyword, chinese in WENYAN_MAP.items()
+}
 DO_NOT = re.compile(r"\bdo not\b", re.IGNORECASE)
 DO_NOT_LABEL = "do not"
 # Fenced code blocks ```...``` and inline `...`
@@ -48,8 +60,24 @@ def keyword_counts(text: str) -> dict[str, int]:
   return counts
 
 
+def wenyan_keyword_counts(text: str) -> dict[str, int]:
+  """Count wenyan equivalents of English keywords plus any literal English keywords."""
+  counts = {keyword: 0 for keyword in KEYWORDS}
+  for keyword, pattern in WENYAN_PATTERNS.items():
+    counts[keyword] = len(pattern.findall(text))
+  # Literal English keywords also count (wenyan is hybrid)
+  english_counts = keyword_counts(text)
+  for keyword in KEYWORDS:
+    counts[keyword] += english_counts[keyword]
+  return counts
+
+
 def compare_keyword_counts(
-  label: str, ref_text: str, live_text: str, errors: list[str]
+  label: str,
+  ref_text: str,
+  live_text: str,
+  errors: list[str],
+  wenyan: bool = False,
 ) -> None:
   """Flag keywords dropped from live, added against refs, and 'do not' wording.
 
@@ -57,16 +85,15 @@ def compare_keyword_counts(
   """
   if ref_text.lstrip().startswith("#") or live_text.lstrip().startswith("#"):
     return
-  ref_counts = keyword_counts(ref_text)
-  live_counts = keyword_counts(live_text)
 
-  for keyword in (*KEYWORDS, DO_NOT_LABEL):
-    if keyword == DO_NOT_LABEL:
-      if live_counts[keyword]:
-        errors.append(
-          f"{label}: 'do not' found ({live_counts[keyword]}x); replace it with NEVER"
-        )
-      continue
+  if wenyan:
+    ref_counts = keyword_counts(ref_text)
+    live_counts = wenyan_keyword_counts(live_text)
+  else:
+    ref_counts = keyword_counts(ref_text)
+    live_counts = keyword_counts(live_text)
+
+  for keyword in KEYWORDS:
     if ref_counts[keyword] > live_counts[keyword]:
       errors.append(
         f"{label}: '{keyword}' dropped from live "
@@ -77,3 +104,9 @@ def compare_keyword_counts(
         f"{label}: '{keyword}' added in live "
         f"({live_counts[keyword]} vs {ref_counts[keyword]} in refs); update the refs baseline"
       )
+
+  # 'do not' check only for non-wenyan (English) copies
+  if not wenyan and live_counts[DO_NOT_LABEL]:
+    errors.append(
+      f"{label}: 'do not' found ({live_counts[DO_NOT_LABEL]}x); replace it with NEVER"
+    )

@@ -12,8 +12,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### checks
 
-- Add a hard-rule keyword parity stage: flag `ALWAYS`, `MUST`, `NEVER`, and `Prefer` dropped from live or added against refs. Also replace soft `do not` negation in live clause lines with a `NEVER` replacement. Compare clause lines only when refs and live line counts pair, and skip headers, fenced code, and inline code.
+- Add a hard-rule keyword parity stage: flag `ALWAYS`, `MUST`, `NEVER`, and `Prefer` dropped from live or added against refs. Compare clause lines only when line counts pair, skip headers and code, replace soft `do not` with `NEVER`.
 - Require equal refs and live line counts for system prompts and skill files, so compression keeps every clause instead of merging or dropping lines.
+- Warn when a live clause matches its refs clause exactly or rewords at the same token count. Missed compression and non-shrinking rewrites then surface without failing the check.
 
 #### rules
 
@@ -26,6 +27,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Align hard-rule keywords between refs baselines and live copies across rules, system prompts, and skills. Replace soft `do not` negation with `NEVER` in clause lines, and re-measure the README table.
 
 ### Changed
+
+#### checks
+
+- Fold the parity stage into one `check_parity` entry point over a shared line comparer. Rename the skill-refs check to skills, match prompt sections by heading, swap the byte cap for per-clause tokens, keep the wenyan keyword skip.
 
 #### docs
 
