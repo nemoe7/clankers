@@ -72,7 +72,7 @@ def test_every_file_measures_tokens_except_the_chatgpt_fields():
   for field in budgets.CHATGPT_FIELDS:
     assert budgets.measure_type(f"rules/{field}") == "Unicode chars"
   assert set(budgets.MEASURE_OVERRIDES) == {
-    f"rules/{f}" for f in budgets.CHATGPT_FIELDS
+    f"rules/{lang}{f}" for lang in ("", "wenyan/") for f in budgets.CHATGPT_FIELDS
   }
 
 
@@ -84,6 +84,7 @@ def test_budget_files_are_discovered_by_glob(tmp_path: Path):
     "rules/CHATGPT-MORE.txt": "Unicode chars",
     "rules/CORE.md": "o200k_base",
     "rules/kilo/plan.md": "o200k_base",
+    "rules/wenyan/CHATGPT-MORE.txt": "Unicode chars",
     "skills/alpha/SKILL.md": "o200k_base",
     "system-prompts/NEMOGPT.md": "o200k_base",
     "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
@@ -156,7 +157,10 @@ def test_check_budgets_reports_a_type_mismatch(tmp_path: Path):
   budgets.update_readme_measurements(repo)
   text = repo.readme.read_text(encoding="utf-8")
   repo.readme.write_text(
-    text.replace("`Unicode chars` | 11 `chars`", "`o200k_base` | 2 `tok`"),
+    text.replace(
+      "| [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `Unicode chars` | 11 `chars` |",
+      "| [`rules/CHATGPT-MORE.txt`](rules/CHATGPT-MORE.txt) | `o200k_base` | 2 `tok` |",
+    ),
     encoding="utf-8",
   )
   errors: list[str] = []
