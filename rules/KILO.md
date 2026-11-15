@@ -8,3 +8,4 @@
 - MUST run shell commands in PowerShell (`pwsh`), not Bash.
 - NEVER use `cd`.
 - Headroom elides repeated read/tool output as `[↑NL msg X: '<snippet>']`; read elided content from message X, `↑NL` counts lines, snippet names source, Grep covers pointer gaps.
+- MUST trust the elision: matching head text proves the lines repeat the named message, so NEVER re-run a command or read to see elided content.

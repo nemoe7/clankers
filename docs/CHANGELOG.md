@@ -19,6 +19,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Add a Kilo rule stating headroom elides repeated read and tool output into pointer lines, with recovery via the cited message and Grep.
+- Add a Kilo rule trusting the elision: matching head text proves repetition, so agents never re-run a command or read to see elided content.
 
 ### Fixed
 

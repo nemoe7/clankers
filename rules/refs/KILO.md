@@ -8,3 +8,4 @@
 - The shell is PowerShell (`pwsh`), not Bash. MUST use PowerShell syntax for shell commands.
 - NEVER use `cd`.
 - Headroom elides repeated read and tool output into pointer lines like `[↑NL same as msg X: '<snippet>']`; read the elided content from message X, where `↑NL` counts the elided lines, the snippet names the source, and Grep covers content the pointer does not.
+- MUST trust the elision: when a repeated read or tool output line starts with the same head text, the lines repeat the named message verbatim. NEVER re-run a command or a read to see elided content, and never cite the re-run as new evidence.
