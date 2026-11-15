@@ -6,7 +6,7 @@
 - ALWAYS update the approved plan file for user overrides.
 - ALWAYS follow the approved plan step-by-step.
 - MUST run the gates named in the project's AGENTS.md before every commit.
-- MUST update the TODO list after each task.
+- MUST maintain the TODO list per KILO.md: update status with `todowrite` after every step, and refresh with `todoread` when resuming.
 - If Plan mode was used, MUST delete the plan files.
 - Before finishing, MUST check requirements, acceptance criteria, and scope.
 - Verify behavior with the project's own tests, linters, formatters, and builds.
