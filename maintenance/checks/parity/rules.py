@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..repo import Repo
+from .keywords import compare_keyword_counts
 
 SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "KILO.md")
 # Kilo mode overrides and both ChatGPT fields compare plain non-empty line counts.
@@ -82,14 +83,28 @@ def _check_sectioned(repo: Repo, name: str, errors: list[str]) -> None:
       ref_tokens = count_tokens(ref_rule)
       if live_tokens > ref_tokens:
         errors.append(
-          f"rules/{name} '{heading}' rule {i+1}: live={live_tokens} tokens, refs={ref_tokens} tokens; "
+          f"rules/{name} '{heading}' rule {i + 1}: live={live_tokens} tokens, refs={ref_tokens} tokens; "
           f"{NEVER_EXCEED_TOKENS}"
+        )
+    # Hard-rule keyword parity per clause, only when clause pairing is known
+    if len(live_rules) == len(ref_rules):
+      for i, (live_rule, ref_rule) in enumerate(zip(live_rules, ref_rules)):
+        compare_keyword_counts(
+          f"rules/{name} '{heading}' rule {i + 1}", ref_rule, live_rule, errors
         )
 
 
 def _check_plain(repo: Repo, live_name: str, ref_name: str, errors: list[str]) -> None:
-  ref_lines = [l.strip() for l in (repo.rule_refs / ref_name).read_text(encoding="utf-8").splitlines() if l.strip()]
-  live_lines = [l.strip() for l in (repo.rules / live_name).read_text(encoding="utf-8").splitlines() if l.strip()]
+  ref_lines = [
+    l.strip()
+    for l in (repo.rule_refs / ref_name).read_text(encoding="utf-8").splitlines()
+    if l.strip()
+  ]
+  live_lines = [
+    l.strip()
+    for l in (repo.rules / live_name).read_text(encoding="utf-8").splitlines()
+    if l.strip()
+  ]
 
   # Equal line count
   if len(live_lines) != len(ref_lines):
@@ -104,8 +119,14 @@ def _check_plain(repo: Repo, live_name: str, ref_name: str, errors: list[str]) -
     ref_tokens = count_tokens(ref_line)
     if live_tokens > ref_tokens:
       errors.append(
-        f"rules/{live_name} line {i+1}: live={live_tokens} tokens, refs={ref_tokens} tokens; "
+        f"rules/{live_name} line {i + 1}: live={live_tokens} tokens, refs={ref_tokens} tokens; "
         f"{NEVER_EXCEED_TOKENS}"
+      )
+  # Hard-rule keyword parity per line, only when line pairing is known
+  if len(live_lines) == len(ref_lines):
+    for i, (live_line, ref_line) in enumerate(zip(live_lines, ref_lines)):
+      compare_keyword_counts(
+        f"rules/{live_name} line {i + 1}", ref_line, live_line, errors
       )
 
 

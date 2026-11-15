@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from checks.parity import check_parity
+from checks.parity.keywords import compare_keyword_counts, prose_lines
 from checks.parity.prompts import check_system_prompt_parity, prompt_sections
 from checks.parity.root_copies import check_root_copies
 from checks.parity.rules import check_rule_parity, section_rule_lines
@@ -116,8 +117,16 @@ def test_system_prompt_sections_are_hash_lines_between_blanks():
 
 def test_system_prompt_parity_accepts_compression(tmp_path: Path):
   write(tmp_path, "system-prompts/refs/NEMOGPT.md", PROMPT)
-  write(tmp_path, "system-prompts/NEMOGPT.md", "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n")
-  write(tmp_path, "system-prompts/wenyan/NEMOGPT.md", "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n")
+  write(
+    tmp_path,
+    "system-prompts/NEMOGPT.md",
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n",
+  )
+  write(
+    tmp_path,
+    "system-prompts/wenyan/NEMOGPT.md",
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n",
+  )
   errors: list[str] = []
   check_system_prompt_parity(Repo(tmp_path), errors)
   assert errors == []
@@ -138,16 +147,22 @@ def test_system_prompt_parity_rejects_growth(tmp_path: Path):
 
 
 def test_system_prompt_parity_rejects_a_section_absent_from_refs(tmp_path: Path):
-  errors = prompt_errors(tmp_path, PROMPT, "## Intro\n\nYou are NemoGPT.\n\n## Extra\n\nDo.\n")
+  errors = prompt_errors(
+    tmp_path, PROMPT, "## Intro\n\nYou are NemoGPT.\n\n## Extra\n\nDo.\n"
+  )
   assert "system-prompts/NEMOGPT.md: sections absent from refs: ['Extra']" in errors
-  assert "system-prompts/wenyan/NEMOGPT.md: sections absent from refs: ['Extra']" in errors
+  assert (
+    "system-prompts/wenyan/NEMOGPT.md: sections absent from refs: ['Extra']" in errors
+  )
 
 
 def test_system_prompt_parity_rejects_a_section_with_more_lines_than_refs(
   tmp_path: Path,
 ):
   errors = prompt_errors(
-    tmp_path, "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\n", "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\nB.\n"
+    tmp_path,
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\n",
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\nB.\n",
   )
   assert any("'Rules': 2 lines vs 1 in refs" in error for error in errors)
 
@@ -178,4 +193,42 @@ def test_root_copy_must_match_its_rule_source(tmp_path: Path):
   write(tmp_path, "ARENA.md", "rule\n")
   errors.clear()
   check_root_copies(repo, errors)
+  assert errors == []
+
+
+def test_keyword_compare_flags_a_dropped_and_an_added_keyword():
+  errors: list[str] = []
+  compare_keyword_counts("x", "MUST run it.", "Run it.", errors)
+  assert (
+    len(errors) == 1 and "dropped from live" in errors[0] and "restore" in errors[0]
+  )
+  errors.clear()
+  compare_keyword_counts("x", "Run it.", "MUST run it.", errors)
+  assert (
+    len(errors) == 1 and "added in live" in errors[0] and "refs baseline" in errors[0]
+  )
+
+
+def test_keyword_compare_skips_headers():
+  errors: list[str] = []
+  compare_keyword_counts("x", "# MUST stop\n", "# stop\n", errors)
+  assert errors == []
+
+
+def test_prose_lines_blanks_fenced_code():
+  lines = prose_lines("A\n```text\nDo not commit.\n```\nB\n")
+  assert lines == ["A", None, None, None, "B"]
+
+
+def test_keyword_compare_flags_do_not_in_live_prose():
+  errors: list[str] = []
+  compare_keyword_counts("x", "Do Not stop.", "do not stop.", errors)
+  assert len(errors) == 1 and "replace it with NEVER" in errors[0]
+
+
+def test_keyword_compare_ignores_inline_code():
+  errors: list[str] = []
+  compare_keyword_counts(
+    "x", "Use `do not` literally.", "Use `do not` literally. Run.", errors
+  )
   assert errors == []

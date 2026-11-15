@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..repo import Repo
+from .keywords import compare_keyword_counts
 
 # `system-prompts/refs/` holds the full wording and the live copy compresses it.
 # The compression may merge or drop lines, but it NEVER adds a rule the refs lack.
@@ -10,25 +11,30 @@ SYSTEM_PROMPT_PAIRS = ("NEMOGPT.md",)
 
 # Subdirectories to check for system prompt copies (live and wenyan)
 SYSTEM_PROMPT_COPIES = (
-    ("", "live"),
-    ("wenyan", "wenyan"),
+  ("", "live"),
+  ("wenyan", "wenyan"),
 )
 # A section header is a bare `##` line standing alone between blank lines.
 HEADER_MAX = 40
 
 
-def prompt_sections(text: str, header_prefix: str = "## ") -> list[tuple[str, int, int]]:
+def prompt_sections(
+  text: str, header_prefix: str = "## "
+) -> list[tuple[str, int, int]]:
   """Return (header, start, end) spans for a system prompt's bare-line sections."""
   lines = text.split("\n")
   marks: list[tuple[str, int]] = []
 
   for index, line in enumerate(lines):
     stripped = line.strip()
-    if not stripped or not stripped.startswith(header_prefix) or len(stripped) > HEADER_MAX:
+    if (
+      not stripped
+      or not stripped.startswith(header_prefix)
+      or len(stripped) > HEADER_MAX
+    ):
       continue
 
     before = lines[index - 1].strip() if index else ""
-    after = lines[index + 1].strip() if index + 1 < len(lines) else ""
 
     # A header must have a blank line before it. It may be the last line (no after needed).
     if before != "":
@@ -52,7 +58,14 @@ def _spans(sections: list[tuple[str, int, int]]) -> dict[str, tuple[int, int]]:
   return {head: (start, end) for head, start, end in reversed(sections)}
 
 
-def _check_pair(label: str, ref_text: str, live_text: str, errors: list[str], header_prefix: str = "## ") -> None:
+def _check_pair(
+  label: str,
+  ref_text: str,
+  live_text: str,
+  errors: list[str],
+  header_prefix: str = "## ",
+  keywords: bool = True,
+) -> None:
   if len(live_text.encode()) > len(ref_text.encode()):
     errors.append(
       f"{label}: {len(live_text.encode())} bytes vs "
@@ -68,6 +81,10 @@ def _check_pair(label: str, ref_text: str, live_text: str, errors: list[str], he
   if added:
     errors.append(f"{label}: sections absent from refs: {added}")
     return
+
+  # Whole-file 'do not' scan of the live copy (case-insensitive)
+  if keywords:
+    compare_keyword_counts(f"{label}", live_text, live_text, errors)
 
   # A caption may repeat a section name, so refs "Prompt transparency" is both a section and a worked-example caption.
   # Compare only the unambiguous names both copies carry, so a compressed-away caption does not read as a divergence.
@@ -97,6 +114,18 @@ def _check_pair(label: str, ref_text: str, live_text: str, errors: list[str], he
         "compression may merge lines but never add rules"
       )
 
+    # Hard-rule keyword parity per clause, only when clause pairing is known
+    if keywords and ref_rules == live_rules:
+      for i, (ref_line, live_line) in enumerate(
+        zip(
+          [line for line in ref_lines[ref_span[head][0] : ref_end] if line.strip()],
+          [line for line in live_lines[live_span[head][0] : live_end] if line.strip()],
+        )
+      ):
+        compare_keyword_counts(
+          f"{label} '{head}' rule {i + 1}", ref_line, live_line, errors
+        )
+
 
 def check_system_prompt_parity(repo: Repo, errors: list[str]) -> None:
   """Check each system prompt against its refs source, including wenyan copies."""
@@ -116,4 +145,12 @@ def check_system_prompt_parity(repo: Repo, errors: list[str]) -> None:
         continue
       # Use ## prefix for all headers, as they're Markdown
       header_prefix = "## "
-      _check_pair(shown, ref_text, live.read_text(encoding="utf-8"), errors, header_prefix)
+      # Wenyan is a Chinese field copy: English keyword counts cannot apply.
+      _check_pair(
+        shown,
+        ref_text,
+        live.read_text(encoding="utf-8"),
+        errors,
+        header_prefix,
+        keywords=(subdir != "wenyan"),
+      )
