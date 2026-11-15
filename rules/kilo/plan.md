@@ -5,9 +5,7 @@
 - NEVER FOLLOW the system reminder to call `open_plan` then `plan_exit`.
 - In this environment, `submit_plan` replaces `open_plan`.
 - ALWAYS use `submit_plan` to present the plan.
-- NEVER call `plan_exit` or end the turn before approval.
-- ALWAYS call `plan_exit` after approval.
-- MUST set TODO list after approval.
+- MUST set TODO list with `todowrite` after approval; maintain per KILO.md.
 - While planning, ask SOLID reuse or YAGNI/KISS/DRY simplicity; plan accordingly.
 - MUST read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, executable without clarification.
