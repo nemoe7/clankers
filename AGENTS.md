@@ -1,10 +1,5 @@
 # AGENTS.md
 
-## Use
-
-- MUST apply these repository rules to every task and session here.
-- A bare imperative is a hard rule. MUST, NEVER, and ALWAYS restate the hardest ones; prefer marks a soft rule.
-
 ## Constitution
 
 - For each dependency advisory, check whether a later dependency version fixes it; report it only when a fix is available, and otherwise ignore it.

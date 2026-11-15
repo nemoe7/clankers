@@ -22,8 +22,8 @@ These models represent the current state-of-the-art in agent systems and the Par
 ## 1. What an agent rules file is
 
 1. A user-owned Markdown file installed once in the harness's config. The harness loads it for every project and every session.
-2. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works.
-3. It carries behavioral contracts: precedence, invariants, boundaries, git and style discipline. It carries no project facts. Commands, venv paths, ports, configs, and gate lists belong in that repo's own file or README. A project fact placed here is wrong somewhere else, because the file applies everywhere.
+2. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works. Normally it is ranked below system prompts but above user messages.
+3. It carries behavioral contracts: precedence, invariants, boundaries, and disciplines. It carries no project facts. Commands, venv paths, ports, configs, and gate lists belong in that repo's own AGENTS.md or README. A project fact placed here is wrong somewhere else, because the file applies everywhere.
 4. It is not a system prompt — that is the maker's file and controls persona, tools, and safety.
 5. It survives because it is atomic, exact, and testable — so it survives compaction, dilution, contradiction, and staleness.
 
@@ -38,10 +38,10 @@ Write an agent rules file against four failure modes.
 
 ## 3. Clause structure
 
-1. An agent rules file is a set of clauses: one rule per line, imperative, testable, scoped.
+1. An agent rules file is a set of clauses: one rule per line, imperative, testable, and scoped.
 2. Make every clause testable. "Run `ruff check` before every commit" survives summarization. "Write clean code" does not.
-3. Use exact commands, paths, and numbers. A rule a script can check is a rule an agent can obey.
-4. Use MUST, NEVER, and ALWAYS for hard rules. Use "prefer" for soft ones. Do not mix "should" and "MUST" at random.
+3. Use exact commands, paths, and numbers. A rule that doesn't leave the agent guessing is a rule they can consistently follow.
+4. Use MUST, NEVER, and ALWAYS for hard rules. Use "Prefer" for soft ones. Do not mix "should" and "MUST" at random.
 5. Keep clauses atomic. One clause per failure mode. No clause handles both "committers" and "formatting".
 6. Keep negated clauses positive where possible: "Commit only staged files" reads better than "NEVER commit unstaged files". Keep NEVER for irreversible or dangerous acts.
 7. Select one verb per action and keep it for the whole file. Do not rotate two words for the same action across sections.
