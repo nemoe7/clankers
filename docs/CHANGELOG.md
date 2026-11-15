@@ -12,7 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### checks
 
-- Add a hard-rule keyword parity stage: flag `ALWAYS`, `MUST`, `NEVER`, and `Prefer` dropped from live or added against refs. Flag soft `do not` negation in live clause lines with a `NEVER` replacement. Compare clause lines only when refs and live line counts pair, and skip headers, fenced code, and inline code.
+- Add a hard-rule keyword parity stage: flag `ALWAYS`, `MUST`, `NEVER`, and `Prefer` dropped from live or added against refs. Also replace soft `do not` negation in live clause lines with a `NEVER` replacement. Compare clause lines only when refs and live line counts pair, and skip headers, fenced code, and inline code.
 - Require equal refs and live line counts for system prompts and skill files, so compression keeps every clause instead of merging or dropping lines.
 
 #### rules
@@ -30,6 +30,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### docs
 
 - Restructure root AGENTS.md to agents.md format, dropping environment-specific facts, redundant config redefinitions, and rot-prone specifics. Split Rules, System Prompts, GPT Plugins, Userscripts, Skills into own overview sections.
+
+#### rules
+
+- Drop `plan_exit` from kilo plan agent. Use `submit_plan` only.
+- Add global pre-commit validation rule to CORE.md: run all repo gates before every commit.
+- Extend ARENA.md pre-commit validation to commit time. Add paired ChatGPT clause.
+- Strengthen TODO discipline: KILO.md, plan/code/debug overrides require `todowrite`/`todoread` per step. Completion forbidden before checks pass.
+- Mirror wenyan CHATGPT-MORE.txt with compressed commit clause.
 
 ## 2026-11-14
 
