@@ -10,7 +10,7 @@
 - MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - MUST check which shell and terminal the harness runs before executing a command, and use that shell's syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
-- Preserve behavior, architecture, interfaces, intent, and conventions unless required.
+- MUST preserve behavior, architecture, interfaces, intent, and conventions unless required.
 - Before planning or making an edit, MUST grep every caller of the function you are about to touch.
 - When in doubt, MUST ask; NEVER assume anything.
 - NEVER weaken explicit requirements or replace project conventions.
@@ -36,7 +36,7 @@
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - MUST report every unrelated finding; fix only the ones that block the work.
-- Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
+- Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; MUST ask before implementing rather than after.
 - Ask every question with the question tool when the surface provides one; NEVER ask in plain text.
 - Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user NEVER replied, stated as a recommendation rather than as a neutral list.
   - Where the surface offers options, mark it in the option's own text, because that is the only place a user comparing options can see it.
@@ -105,7 +105,7 @@
 - For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, keep the formatter's 88-column width, and run `ruff format` before other local gates.
 - Keep comments and docstrings rare and factual. Use them only to explain non-obvious external constraints or business invariants, and ALWAYS use the established contract as comments.
 - Leave unrelated code untouched.
-- MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
+- MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and NEVER commit them.
 
 ## Git
 

@@ -8,6 +8,18 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-11-15
 
+### Added
+
+#### checks
+
+- Add a hard-rule keyword parity stage: flag `ALWAYS`, `MUST`, `NEVER`, and `Prefer` dropped from live or added against refs. Flag soft `do not` negation in live clause lines with a `NEVER` replacement. Compare clause lines only when refs and live line counts pair, and skip headers, fenced code, and inline code.
+
+### Fixed
+
+#### checks
+
+- Align hard-rule keywords between refs baselines and live copies across rules, system prompts, and skills. Replace soft `do not` negation with `NEVER` in clause lines, and re-measure the README table.
+
 ### Changed
 
 #### docs

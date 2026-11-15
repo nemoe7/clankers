@@ -11,12 +11,12 @@ description: >
   named. The request must be about the size of specific text. Ignore the
   bare words "shorten", "trim", "condense", or "tighten" when they describe
   writing something new, cutting scope, shortening a process, or reducing an
-  unrelated quantity. Do NOT use to summarize, abridge, outline, paraphrase, or
+  unrelated quantity. NEVER use to summarize, abridge, outline, paraphrase, or
   rewrite for a new audience, since those discard content by design.
 license: MIT. LICENSE.txt has complete terms
 metadata:
   argument-hint: "[tokens|words|chars|bytes] [target]"
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Squash
@@ -52,7 +52,7 @@ Set the target first: an explicit budget, a percentage, or "as small as still fa
 
 Text often satisfies several limits at once, such as a character cap on a field whose contents also cost tokens. Accept every budget given and treat them as simultaneous constraints, not alternatives.
 
-Units do not move together: contractions and symbols can cut characters while adding tokens, and fewer words can leave bytes unchanged. Measure every governing unit after each pass. Keep a pass only when no budget regresses, and let whichever unit is still over drive the next pass. Report all of them.
+Units move separately: contractions and symbols can cut characters while adding tokens, and fewer words can leave bytes unchanged. Measure every governing unit after each pass. Keep a pass only when no budget regresses, and let whichever unit is still over drive the next pass. Report all of them.
 
 When budgets conflict, so satisfying one pushes another over, stop and report the conflict with both counts rather than selecting a winner.
 
@@ -97,7 +97,7 @@ Keep each pass small enough to review.
 
 Keep the structure: headings, section order, list versus prose, tables, code blocks. Squashing shortens and never reorganizes. Reorganizing is a separate request.
 
-Keep the register and audience. Do not turn prose into telegraphic notes, invent abbreviations, or drop articles until the text reads as a different document. Terse, but unambiguous: cryptic is a failed pass.
+Keep the register and audience. NEVER turn prose into telegraphic notes, invent abbreviations, or drop articles until the text reads as a different document. Terse, but unambiguous: cryptic is a failed pass.
 
 ### Caveman register
 

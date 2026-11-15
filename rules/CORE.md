@@ -11,7 +11,7 @@
 - MUST check the harness shell before commands; use its syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - MUST keep behavior, architecture, interfaces, intent, conventions unless required.
-- Grep every caller before planning or editing a function.
+- MUST grep every caller before planning or editing a function.
 - When in doubt, MUST ask; NEVER assume anything.
 - NEVER weaken explicit requirements or replace project conventions.
 - MUST apply code-style rules only in `nemoe7` repos.
@@ -38,7 +38,7 @@
 - MUST report every unrelated finding; fix only blocking ones.
 - Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: MUST ask before implementing.
 - Ask every question with the question tool; NEVER ask in plain text.
-- Questions with 3+ options or an open choice carry a recommended answer: the one you would take if the user never replied. Yes/no and confirm questions carry none.
+- Questions with 3+ options or an open choice carry a recommended answer: the one you would take if the user NEVER replied. Yes/no and confirm questions carry none.
   - State it as a recommendation, not a neutral list; where the surface offers options, mark it in the option text.
 
 - MUST state each unavoidable assumption immediately.
@@ -62,7 +62,7 @@
 - Cohesive modules, low coupling, small interfaces, local data.
 - Ground choices in requirements, code, tests, docs; NEVER invent APIs.
 - SOLID: one reason per unit, extend at existing seam, substitutable subtypes, small interfaces, depend on abstraction.
-- SOLID vs simplicity: ask during planning which governs — SOLID reuse or simplicity; follow answer.
+- SOLID vs simplicity: MUST ask during planning which governs — SOLID reuse or simplicity; follow answer.
 - Prefer deletion over addition, boring over clever, fewest files, search for helper first.
 - NEVER lazy about understanding: read code, trace flow first.
 - Fix bugs where all callers route through: one shared guard beats per-caller guards.
@@ -105,7 +105,7 @@
 - Python: MUST use Ruff default selection plus `E501` at 120 chars; keep formatter width 88; run `ruff format` before other local gates.
 - Keep comments/docstrings rare, factual, only for non-obvious external constraints or business invariants; ALWAYS use established contract as comments.
 - Leave unrelated code alone.
-- Keep scratch files/scripts/output outside repo or delete after use; NEVER commit them.
+- MUST keep scratch files/scripts/output outside repo or delete after use; NEVER commit them.
 
 ## Git
 

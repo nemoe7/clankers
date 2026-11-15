@@ -37,7 +37,7 @@ becomes:
 python3 skills/nemoizer/scripts/nemoize.py --format .
 ```
 
-Do not rewrite exclusion markers or the rotation table; apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
+NEVER rewrite exclusion markers or the rotation table; apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
 
 - NEVER add # nonemo without explicit user authorization.
 - Use `nonemo: <id>` to suppress only that rule on the line.
@@ -82,7 +82,7 @@ Limit sentences to 20 words for unclassified prose, 25 for explicit description 
 - Put one instruction per sentence unless simultaneous actions require one sentence.
 - Rewrite noun clusters over three words when the technical term and its meaning survive.
 - Keep one topic per paragraph within four sentences or the stricter project limit.
-- Use the serial (Oxford) comma in lists of three or more items, and do not mix `/` and `or` in one series.
+- Use the serial (Oxford) comma in lists of three or more items, and NEVER mix `/` and `or` in one series.
 - List three or more steps or conditions, preserving their order and grouping.
 - Define uncommon technical terms when needed, and use them consistently.
 - Prefer simple tenses unless compound forms carry confidence or current relevance that must survive.

@@ -57,7 +57,7 @@ python3 skills/nemoizer/scripts/nemoize.py --format .
 Each change prints as a pair: `path:line: -` and the old line, then `path:line: +`
 and the new one.
 
-- Do not rewrite exclusion markers or the rotation table, and apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
+- NEVER rewrite exclusion markers or the rotation table, and apply only unsuppressed rotations and straight-quote replacements for curly quotation marks.
 - Pass a license file or a generated tree to `--ignore`; the tool reads every other
   text file.
 
@@ -105,7 +105,7 @@ Delete a marker when the line no longer needs it.
 - State a missing source fact without inventing a plausible replacement or hiding a relevant knowledge limit.
 - Remove a sentence that repeats its heading only when it adds no information.
 - Remove redundant document narration while retaining useful source credits, action-changing caveats, and change history.
-- Lead with the direct answer, do not restate the question, and order needed explanations as conclusion, reason, and action.
+- Lead with the direct answer, NEVER restate the question, and order needed explanations as conclusion, reason, and action.
 - Limit instructions to 20 words and descriptions to 25 unless a longer form is necessary to preserve meaning.
 - Put one instruction in each sentence unless simultaneous actions require a single sentence.
 - Rewrite noun clusters longer than three words when the rewrite preserves the technical term and its meaning.

@@ -145,7 +145,7 @@ steer report rm <id|--stale>
 - Publish all reports through the `arena-steering` skill in the shared preview.
 - Carry every proposal and question in a fielded report, NEVER in chat.
 - Use a new report for a follow-up to a report that already has answers.
-- Do not waive requested reports or reports required for assessments, questions, or blocked tasks.
+- NEVER waive requested reports or reports required for assessments, questions, or blocked tasks.
 - Publish every unrelated finding in a fielded report with a suggested next action.
 - Keep each fielded-report question, its context, and its controls on one vertical screen.
 - Put the question after at most one short paragraph or three short bullets of facts needed to answer it.

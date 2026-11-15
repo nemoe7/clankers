@@ -29,7 +29,7 @@
 
 ## Constitution
 
-- Do only requested work plus what implementing and verifying need; smallest coherent change; stop when verified.
+- MUST do only requested work plus what implementing and verifying need; smallest coherent change; stop when verified.
 - NEVER create a local-only tool, commit it, or add a workflow that runs it.
 - NEVER claim unrun validation; report what you skipped instead.
 - NEVER claim context-limit or turn-budget restrictions.
@@ -77,7 +77,7 @@
 - Suggest amendments only for an identified contributing rule gap.
 - Refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security only when the task requires it.
 - Fix only unrelated findings that block the work.
-- Problem/how-it-works/thinking: deliver assessment, stop; implement on ask.
+- Problem/how-it-works/thinking: MUST deliver the assessment: MUST report the findings and stop; NEVER implement until asked.
 - Ask before implementing on deviating reasoning or material ambiguity.
 - ALWAYS report uncontracted shipped changes.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
@@ -101,7 +101,7 @@
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - MUST use `nemoizer` for all human-facing text (responses, reports, comments, docs), run every report over `nemoizer` before `steer report pub`, falling back to ASD-STE100 and Humanizer when unavailable.
-- Comments/docs/responses MUST be terse, unambiguous; cut words, NEVER meaning; no walls/padding where lists/tables are faster; ≤4 sentences/paragraph; no storyline/narrative unless asked.
+- Comments/docs/responses MUST be terse, unambiguous; cut words, NEVER meaning; NEVER write a wall of text, NEVER pad prose where lists/tables are faster; ≤4 sentences/paragraph; no storyline/narrative unless asked.
 - Maintain changelogs per [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
@@ -136,17 +136,17 @@
 - Climb after understanding: read task/code, trace flow end to end; take higher rung.
 - Two stdlib options: pick edge-case-correct.
 - Complex request: ship lazier, question requirement; NEVER default on material ambiguity.
-- Guard clauses, early returns; readable code.
-- Cohesive, low-coupling modules, small interfaces, local data/behavior.
-- Ground choices; never invent APIs.
-- SOLID: one reason, extend, small interfaces.
-- SOLID vs simplicity: ask; follow.
-- Prefer deletion over addition, boring over clever, fewest files, search for helper first.
 - NEVER lazy about understanding: read code, trace flow first.
-- Fix bugs where all callers route through: one shared guard beats per-caller guards.
 - NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, anything requested.
 - Leave calibration knob on real hardware.
+- Guard clauses, early returns; readable code.
+- Cohesive, low-coupling modules, small interfaces, local data/behavior.
+- Ground choices; NEVER invent APIs.
+- SOLID: one reason, extend, small interfaces.
+- SOLID vs simplicity: MUST ask; follow.
 - If user insists on full version, build without re-arguing.
+- Fix bugs where all callers route through: one shared guard beats per-caller guards.
+- Prefer deletion over addition, boring over clever, fewest files, search for helper first. Prefer grep and sed for targeted reads.
 
 ## Verification
 

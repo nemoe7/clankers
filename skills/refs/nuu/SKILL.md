@@ -45,7 +45,7 @@ One short specification for every page we ship, paired with a small command-line
 16. Choose line height for legibility at the actual size, measure, and script. Start with 1.1 to 1.3 times the font size for headings and 1.3 to 1.5 for body text, then verify rendered content and accessibility.
 17. Keep h1-h6 letter-spacing within -0.5% to -3% (-0.005em to -0.03em). Keep non-heading letter-spacing at 0, except .eyebrow labels at 0.06em.
 18. Left-align prose over 3 lines, forbid justified text, center at most 3 lines, and match alignment between headings and their body text.
-19. Give multiline prose a comfortable reading measure. Use 50 to 75 characters, with 65 as a starting point, when the content and viewport permit. Do not force a minimum width on narrow or compact surfaces.
+19. Give multiline prose a comfortable reading measure. Use 50 to 75 characters, with 65 as a starting point, when the content and viewport permit. NEVER force a minimum width on narrow or compact surfaces.
 20. Use at most 2 ramp font sizes per card or dialog (3 per view), varying weight and --muted first. Keep headings larger or bolder than body text. For landing pages and content websites, use at most 6 sizes per view instead of 3 when the content needs them.
 21. Match sibling gaps across axes within a group and keep inter-group gaps at least 1.5x intra-group gaps on the Clause 6 scale. Start with 2x when the layout has room.
 22. Align stacked card items on one inline edge with symmetric inline padding. Use house fonts with non-italic body blocks and keep uppercase on .eyebrow.
