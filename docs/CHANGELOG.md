@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### checks
 
 - Align hard-rule keywords between refs baselines and live copies across rules, system prompts, and skills. Replace soft `do not` negation with `NEVER` in clause lines, and re-measure the README table.
+- Restore the `checks` logger's prior level after parity warning capture, so shared-logger tests pass regardless of test order or worker scheduling.
 
 ### Changed
 

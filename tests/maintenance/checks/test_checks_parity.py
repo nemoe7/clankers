@@ -107,13 +107,14 @@ def captured_parity_warnings(caplog: pytest.LogCaptureFixture):
   """Capture warnings from the 'checks' logger, which does not propagate."""
   logger = logging.getLogger("checks")
   logger.addHandler(caplog.handler)
+  previous = logger.level
   logger.setLevel(logging.WARNING)
   try:
     with caplog.at_level(logging.WARNING, logger="checks"):
       yield
   finally:
     logger.removeHandler(caplog.handler)
-    logger.setLevel(logging.NOTSET)
+    logger.setLevel(previous)
 
 
 def test_rule_parity_warns_when_a_clause_matches_refs_exactly(
