@@ -32,12 +32,21 @@ def test_this_repository_passes_every_parity_gate():
   assert errors == []
 
 
-def test_skill_refs_parity_accepts_compressed_live_files(tmp_path: Path):
+def test_skill_refs_parity_accepts_compressed_wording_per_line(tmp_path: Path):
+  write(tmp_path, "skills/refs/sample/SKILL.md", "Name\n\nFirst rule.\nSecond rule.\n")
+  write(tmp_path, "skills/sample/SKILL.md", "Name\n\nFirst rule.\nSecond.\n")
+  errors: list[str] = []
+  check_skill_refs_parity(Repo(tmp_path), errors)
+  assert errors == []
+
+
+def test_skill_refs_parity_rejects_a_merged_line(tmp_path: Path):
   write(tmp_path, "skills/refs/sample/SKILL.md", "Name\n\nFirst rule.\nSecond rule.\n")
   write(tmp_path, "skills/sample/SKILL.md", "Name\n\nFirst and second rule.\n")
   errors: list[str] = []
   check_skill_refs_parity(Repo(tmp_path), errors)
-  assert errors == []
+  assert len(errors) == 1
+  assert "must be equal" in errors[0]
 
 
 def test_skill_refs_parity_rejects_a_live_only_line(tmp_path: Path):
@@ -50,7 +59,7 @@ def test_skill_refs_parity_rejects_a_live_only_line(tmp_path: Path):
   errors: list[str] = []
   check_skill_refs_parity(Repo(tmp_path), errors)
   assert len(errors) == 1
-  assert "compression may merge lines but never add them" in errors[0]
+  assert "must be equal" in errors[0]
 
 
 def test_skill_refs_parity_rejects_a_baseline_without_a_live_file(tmp_path: Path):
@@ -120,12 +129,12 @@ def test_system_prompt_parity_accepts_compression(tmp_path: Path):
   write(
     tmp_path,
     "system-prompts/NEMOGPT.md",
-    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n",
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nGo one.\nGo two.\n",
   )
   write(
     tmp_path,
     "system-prompts/wenyan/NEMOGPT.md",
-    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nDo one and two.\n",
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nGo one.\nGo two.\n",
   )
   errors: list[str] = []
   check_system_prompt_parity(Repo(tmp_path), errors)
@@ -154,6 +163,17 @@ def test_system_prompt_parity_rejects_a_section_absent_from_refs(tmp_path: Path)
   assert (
     "system-prompts/wenyan/NEMOGPT.md: sections absent from refs: ['Extra']" in errors
   )
+
+
+def test_system_prompt_parity_rejects_a_section_with_fewer_lines_than_refs(
+  tmp_path: Path,
+):
+  errors = prompt_errors(
+    tmp_path,
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA.\nB.\n",
+    "## Intro\n\nYou are NemoGPT.\n\n## Rules\n\nA and B.\n",
+  )
+  assert any("'Rules': 1 lines vs 2 in refs" in error for error in errors)
 
 
 def test_system_prompt_parity_rejects_a_section_with_more_lines_than_refs(
@@ -217,7 +237,7 @@ def test_keyword_compare_skips_headers():
 
 def test_prose_lines_blanks_fenced_code():
   lines = prose_lines("A\n```text\nDo not commit.\n```\nB\n")
-  assert lines == ["A", None, None, None, "B"]
+  assert lines == ["A", None, None, None, "B", ""]
 
 
 def test_keyword_compare_flags_do_not_in_live_prose():

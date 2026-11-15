@@ -113,6 +113,11 @@ def _check_pair(
         f"{label} '{head}': {live_rules} lines vs {ref_rules} in refs; "
         "compression may merge lines but never add rules"
       )
+    elif live_rules < ref_rules:
+      errors.append(
+        f"{label} '{head}': {live_rules} lines vs {ref_rules} in refs; "
+        "compression may merge lines but never drop them"
+      )
 
     # Hard-rule keyword parity per clause, only when clause pairing is known
     if keywords and ref_rules == live_rules:

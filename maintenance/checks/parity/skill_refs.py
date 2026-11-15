@@ -1,4 +1,4 @@
-"""Skill files: each live file holds no more lines than its `skills/refs/` baseline."""
+"""Skill files: each live file matches its `skills/refs/` baseline line for line."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .rules import rule_line_count
 def check_skill_refs_parity(repo: Repo, errors: list[str]) -> None:
   """Check each skill file against its refs baseline.
 
-  Live files compress the refs wording, so a higher live line count flags a live-only rule.
+  Live files must match refs line for line: no merged or dropped clauses.
   """
   refs_root = repo.skills / "refs"
   if not refs_root.is_dir():
@@ -26,10 +26,10 @@ def check_skill_refs_parity(repo: Repo, errors: list[str]) -> None:
       continue
     ref_lines = rule_line_count(baseline)
     live_lines = rule_line_count(live)
-    if live_lines > ref_lines:
+    if live_lines != ref_lines:
       errors.append(
         f"{shown}: {live_lines} lines vs {ref_lines} in "
-        f"{repo.relative(baseline)}; compression may merge lines but never add them"
+        f"{repo.relative(baseline)}; must be equal"
       )
 
     # Hard-rule keyword parity per line, only when line pairing is known

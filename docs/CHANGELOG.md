@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### checks
 
 - Add a hard-rule keyword parity stage: flag `ALWAYS`, `MUST`, `NEVER`, and `Prefer` dropped from live or added against refs. Flag soft `do not` negation in live clause lines with a `NEVER` replacement. Compare clause lines only when refs and live line counts pair, and skip headers, fenced code, and inline code.
+- Require equal refs and live line counts for system prompts and skill files, so compression keeps every clause instead of merging or dropping lines.
 
 ### Fixed
 
