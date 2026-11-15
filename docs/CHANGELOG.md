@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-15
+
+### Changed
+
+#### docs
+
+- Restructure root AGENTS.md to agents.md format, dropping environment-specific facts, redundant config redefinitions, and rot-prone specifics. Split Rules, System Prompts, GPT Plugins, Userscripts, Skills into own overview sections.
+
 ## 2026-11-14
 
 ### Changed
