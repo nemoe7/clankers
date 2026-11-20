@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-20
+
+### Added
+
+#### rules
+
+- Add a Kilo rule stating Python UTF-8 mode is enabled (`PYTHONUTF8=1`), so Python child processes emit UTF-8 by default.
+
 ## 2026-11-15
 
 ### Added
