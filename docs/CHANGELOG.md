@@ -20,6 +20,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Scope `kilo_memory_save` to durable project facts (decisions, constraints, conventions, corrections) and explicitly exclude environment facts that break when the environment changes.
 - Delete the plan folder instead of the plan files after Plan mode.
+- Squash live clause files whose clauses still matched refs word-for-word. Every clause, keyword count, and line count survives, and each touched budget shrinks.
+
+#### system prompts
+
+- Squash the live prompt and its wenyan copy where clauses still matched refs, including worked examples. Meaning, quoted strings, and line pairing stay intact.
 
 ## 2026-11-15
 

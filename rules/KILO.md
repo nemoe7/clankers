@@ -2,8 +2,8 @@
 
 ## Tools
 
-- ALWAYS call `kilo_memory_save` on new durable facts about the project: decisions, constraints, conventions, corrections.
-- NEVER save environment facts (shell, venv, paths, tools, commands) that break when the environment changes.
+- ALWAYS call `kilo_memory_save` for new durable project facts: decisions, constraints, conventions, corrections.
+- NEVER save environment facts (shell, venv, paths, tools, commands) that break on environment change.
 - MUST manage TODO strictly per task: `todowrite` to create and update after every step, `todoread` on resume; NEVER mark done before checks pass.
 - ALWAYS include commit steps with messages in the TODO list.
 - MUST run shell commands in PowerShell (`pwsh`), not Bash.

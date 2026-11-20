@@ -1,25 +1,25 @@
 
 ### Native Debug Agent Overrides
 
-- ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
-- ALWAYS use `submit_plan` to present your plan for approval.
-- ALWAYS include the explanation of the bug in the plan, including the fix.
+- NATIVE-REMINDER CONFLICT: THIS SECTION ALWAYS WINS.
+- ALWAYS use `submit_plan` for plan approval.
+- ALWAYS include explanation of bug in plan, including fix.
 - NEVER EDIT BEFORE PLAN APPROVAL.
-- Prefer verifying library behavior via web search if the bug is puzzling.
-- ALWAYS consult the approved plan file.
-- ALWAYS update the approved plan file for user overrides.
-- Follow the approved plan step-by-step.
-- MUST run the gates named in the project's AGENTS.md before every commit.
+- Prefer verifying library behavior via web search if bug puzzling.
+- ALWAYS consult approved plan file.
+- ALWAYS update approved plan file for user overrides.
+- Follow approved plan step-by-step.
+- MUST run gates named in project AGENTS.md before every commit.
 - MUST maintain TODO per KILO.md: `todowrite` after every step, `todoread` on resume.
-- If Plan mode was used, MUST delete the plan folder.
+- If Plan mode used, MUST delete plan folder.
 - Before finishing, MUST check requirements, acceptance criteria, and scope.
-- Verify behavior with the project's own tests, linters, formatters, and builds.
-- Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
-- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
-- Fix in-scope issues, then recheck.
-- Complete planned changes, checks, commits, and cleanup.
-- Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
-- Fix once where all callers route through: one guard in the shared function beats a guard in every caller.
-- Falsifiable hypotheses, evidence over guessing, one variable at a time.
-- NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
-- Behavioral fixes get a focused regression test.
+- Verify behavior with project tests, linters, formatters, and builds.
+- Verify relevant external, version-specific, time-sensitive facts against authoritative sources.
+- Review diffs: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
+- Fix in-scope issues; recheck.
+- Complete planned changes, checks, commits, cleanup.
+- Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
+- Fix once where all callers route through: one guard in shared function beats guard in every caller.
+- Falsifiable hypotheses, evidence over guessing, one variable per change.
+- NEVER arbitrary fallback, hidden failure, unrevised assumption.
+- Behavioral fixes get focused regression tests.
