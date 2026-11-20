@@ -18,6 +18,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### rules
 
+- Require full trust of headroom elision.
+- Ban re-running, re-reading, Grep, re-derivation, and every other workaround that seeks to see or verify elided content.
+- Ban citing any reconstruction as evidence.
 - Scope `kilo_memory_save` to durable project facts (decisions, constraints, conventions, corrections) and explicitly exclude environment facts that break when the environment changes.
 - Delete the plan folder instead of the plan files after Plan mode.
 - Squash live clause files whose clauses still matched refs word-for-word. Every clause, keyword count, and line count survives, and each touched budget shrinks.

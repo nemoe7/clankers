@@ -10,4 +10,4 @@
 - Python UTF-8 mode is enabled in this shell (`PYTHONUTF8=1`); every Python process emits UTF-8 by default.
 - NEVER use `cd`.
 - Headroom elides repeated read and tool output into pointer lines like `[↑NL same as msg X: '<snippet>']`; read the elided content from message X, where `↑NL` counts the elided lines, the snippet names the source, and Grep covers content the pointer does not.
-- MUST trust the elision: when a repeated read or tool output line starts with the same head text, the lines repeat the named message verbatim. NEVER re-run a command or a read to see elided content, and never cite the re-run as new evidence.
+- MUST trust the elision fully: when a read or tool output line starts with the same head text, the elided lines repeat the named message verbatim. NEVER re-run a command, re-read a file, Grep, re-derive, or use any other workaround to see or verify elided content, and NEVER cite any such reconstruction as new or confirmatory evidence; cite elided content by the message it repeats.
