@@ -19,6 +19,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Scope `kilo_memory_save` to durable project facts (decisions, constraints, conventions, corrections) and explicitly exclude environment facts that break when the environment changes.
+- Delete the plan folder instead of the plan files after Plan mode.
 
 ## 2026-11-15
 
