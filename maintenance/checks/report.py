@@ -70,23 +70,28 @@ class Notes:
 
 
 def run_check(
-  name: str, errors: list[str], check: Callable[[], Any], warnings: int = 0
+  name: str,
+  errors: list[str],
+  check: Callable[[], Any],
+  warnings: int | Callable[[], int] = 0,
 ) -> Any:
   """Run one named check and log its verdict as `{step}: {result} {time}`.
 
   Checks append errors to one shared list. Count only the errors this check adds.
-  A positive `warnings` count reports a `warn` verdict instead of `ok`.
+  A positive `warnings` count, read after the check runs, reports a `warn`
+  verdict instead of `ok`.
   """
   started = time.perf_counter()
   before = len(errors)
   reported = check()
   found = len(errors) - before
   span = time.perf_counter() - started
+  warned = warnings() if callable(warnings) else warnings
   if found:
     LOG.error("%s: FAIL %.2fs", name, span)
     for error in errors[before:]:
       LOG.error("- %s", error)
-  elif warnings:
+  elif warned:
     LOG.warning("%s: warn %.2fs", name, span)
   else:
     LOG.info("%s: ok %.2fs", name, span)

@@ -37,6 +37,20 @@ def test_run_stages_returns_what_each_stage_reported(tmp_path: Path, capsys):
   assert "two: FAIL" in capsys.readouterr().out
 
 
+def test_run_stages_flushes_the_parity_notes_and_reports_warn(tmp_path: Path, capsys):
+  from checks.report import EXACT_COPY
+
+  def parity(repo: Repo, errors: list[str], notes: object = None) -> None:
+    notes.add("rules/CORE.md", "A", 1, EXACT_COPY)
+
+  stages = (("parity", parity),)
+  errors: list[str] = []
+  assert cli.run_stages(Repo(tmp_path), errors, stages) == {"parity": None}
+  printed = capsys.readouterr().out
+  assert "- rules/CORE.md - A 1" in printed
+  assert "parity: warn " in printed
+
+
 def test_stages_continue_after_a_stale_budget(monkeypatch, capsys):
   table = budgets.read_budget_table(Repo(DEFAULT_ROOT))
   row = next(iter(table))

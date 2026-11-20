@@ -37,6 +37,16 @@ def test_run_check_reports_warn_when_only_warnings_logged(capsys):
   assert "- " not in printed
 
 
+def test_run_check_reads_the_warning_count_after_the_check_runs(capsys):
+  collected: list[str] = []
+
+  def collect() -> None:
+    collected.append("probe")
+
+  report.run_check("sample", [], collect, warnings=lambda: len(collected))
+  assert capsys.readouterr().out.startswith("sample: warn ")
+
+
 def test_run_check_counts_only_the_problems_it_added(capsys):
   errors = ["an earlier problem"]
   report.run_check("sample", errors, lambda: errors.append("a new problem"))

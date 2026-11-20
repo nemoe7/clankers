@@ -50,15 +50,21 @@ def run_stages(
 ) -> dict[str, Any]:
   """Run each stage and return what it reported, keyed by stage name."""
   reported: dict[str, Any] = {}
+  counted: dict[str, int] = {}
   for name, check in stages:
     notes = Notes() if name in NOTED_STAGES else None
 
-    def run(check=check, notes=notes) -> Any:
+    def run(name=name, check=check, notes=notes) -> Any:
       if notes is None:
         return check(repo, errors)
-      return check(repo, errors, notes)
+      result = check(repo, errors, notes)
+      counted[name] = notes.count
+      notes.flush()
+      return result
 
-    reported[name] = run_check(name, errors, run, warnings=notes.count if notes else 0)
+    reported[name] = run_check(
+      name, errors, run, warnings=(lambda c=counted, n=name: c[n]) if notes else 0
+    )
   return reported
 
 
