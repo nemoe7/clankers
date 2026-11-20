@@ -117,35 +117,28 @@ def captured_parity_warnings(caplog: pytest.LogCaptureFixture):
     logger.setLevel(previous)
 
 
-def test_rule_parity_warns_when_a_clause_matches_refs_exactly(
-  tmp_path: Path, caplog: pytest.LogCaptureFixture
-):
+def test_parity_groups_exact_matches_per_file(tmp_path: Path, caplog):
+  write(tmp_path, "rules/refs/CORE.md", "## A\n- one\n- two\n")
+  write(tmp_path, "rules/CORE.md", "## A\n- one\n- two\n")
   with captured_parity_warnings(caplog):
-    check_rule_parity(rule_tree(tmp_path, "## A\n- one\n- two\n"), [])
-  assert "rules/CORE.md 'A' line 1: live clause matches refs exactly" in caplog.text
+    check_parity(Repo(tmp_path), [])
+  assert "- rules/CORE.md - A 1, 2" in caplog.text
 
 
-def test_rule_parity_warns_when_a_clause_rewords_at_the_same_token_count(
-  tmp_path: Path, caplog: pytest.LogCaptureFixture
-):
+def test_parity_marks_reworded_lines(tmp_path: Path, caplog):
+  write(tmp_path, "rules/refs/CORE.md", "## A\n- one\n- two\n")
+  write(tmp_path, "rules/CORE.md", "## A\n- uno\n- two\n")
   with captured_parity_warnings(caplog):
-    check_rule_parity(rule_tree(tmp_path, "## A\n- uno\n- two\n"), [])
-  assert (
-    "rules/CORE.md 'A' line 1: live clause reworded at the same token count"
-    in caplog.text
-  )
+    check_parity(Repo(tmp_path), [])
+  assert "- rules/CORE.md - A 1*. A 2" in caplog.text
 
 
-def test_rule_parity_does_not_warn_when_compression_shrinks_tokens(
-  tmp_path: Path, caplog: pytest.LogCaptureFixture
-):
+def test_parity_does_not_warn_when_compression_shrinks_tokens(tmp_path: Path, caplog):
+  write(tmp_path, "rules/refs/CORE.md", "## A\n- one two\n- three\n")
+  write(tmp_path, "rules/CORE.md", "## A\n-1\n-2\n")
   with captured_parity_warnings(caplog):
-    check_rule_parity(rule_tree(tmp_path, "## A\n-1\n-2\n"), [])
-  assert "rules/CORE.md 'A' line 1: live clause matches refs exactly" not in caplog.text
-  assert (
-    "rules/CORE.md 'A' line 1: live clause reworded at the same token count"
-    not in caplog.text
-  )
+    check_parity(Repo(tmp_path), [])
+  assert caplog.records == []
 
 
 def test_rule_parity_rejects_an_added_rule_and_a_moved_heading(tmp_path: Path):
@@ -337,7 +330,7 @@ def test_check_parity_invokes_every_subcheck(
   called: list[str] = []
 
   def record(name: str):
-    def fake(repo: Repo, errors: list[str]) -> None:
+    def fake(repo: Repo, errors: list[str], notes: object = None) -> None:
       called.append(name)
 
     return fake

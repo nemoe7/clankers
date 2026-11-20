@@ -14,10 +14,13 @@ from .parity import check_parity
 from .paths import check_case_collisions
 from .prose import check_nemoize
 from .repo import DEFAULT_ROOT, Repo
-from .report import LOG, run_check
+from .report import LOG, Notes, run_check
 from .skills import check_skills
 
 Stage = tuple[str, Callable[[Repo, list[str]], Any]]
+
+# Stages that collect grouped warnings instead of logging per line.
+NOTED_STAGES = {"parity"}
 
 # Run order. A stage appends to the shared error list, so one failure never hides the rest.
 STAGES: tuple[Stage, ...] = (
@@ -46,10 +49,17 @@ def run_stages(
   repo: Repo, errors: list[str], stages: Sequence[Stage]
 ) -> dict[str, Any]:
   """Run each stage and return what it reported, keyed by stage name."""
-  return {
-    name: run_check(name, errors, lambda check=check: check(repo, errors))
-    for name, check in stages
-  }
+  reported: dict[str, Any] = {}
+  for name, check in stages:
+    notes = Notes() if name in NOTED_STAGES else None
+
+    def run(check=check, notes=notes) -> Any:
+      if notes is None:
+        return check(repo, errors)
+      return check(repo, errors, notes)
+
+    reported[name] = run_check(name, errors, run, warnings=notes.count if notes else 0)
+  return reported
 
 
 def update_readme(repo: Repo) -> None:
@@ -80,18 +90,14 @@ def main(argv: Sequence[str] | None = None, repo: Repo | None = None) -> int:
       return 1
 
   errors: list[str] = []
-  reported = run_stages(repo, errors, STAGES)
+  run_stages(repo, errors, STAGES)
   span = time.perf_counter() - started
 
   if errors:
-    LOG.error("Validation failed in %.2fs:", span)
+    LOG.error("check: fail %.2fs", span)
     for error in errors:
       LOG.error("- %s", error)
     return 1
 
-  LOG.info(
-    "Validation passed in %.2fs: %s skills, README measurements, refs/live parity and nemoize checked.",
-    span,
-    reported.get("skills", 0),
-  )
+  LOG.info("check: pass %.2fs", span)
   return 0

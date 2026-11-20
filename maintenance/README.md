@@ -113,7 +113,7 @@ The checker reports every problem it finds in:
 | Module | Concern |
 | --- | --- |
 | `repo.py` | `Repo(root)`, the paths every check reads. Tests pass a temporary root. |
-| `report.py` | Logging, `run_logged`, and `run_check`. |
+| `report.py` | Logging, grouped parity warnings (`Notes`), and `run_check`. |
 | `measure.py` | One measurer per budget type, `o200k_base` tokens and Unicode characters. |
 | `budgets.py` | Budget file discovery, the README table, and the character caps. |
 | `parity/` | Rules, system prompts, skill refs, and root copies. |

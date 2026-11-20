@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 from ..repo import Repo
+from ..report import Notes
 from .compare import compare_lines
 from .keywords import prose_lines
 from .rules import rule_line_count
 
 
-def check_skills_parity(repo: Repo, errors: list[str]) -> None:
+def check_skills_parity(
+  repo: Repo, errors: list[str], notes: Notes | None = None
+) -> None:
   """Check each skill file against its refs baseline.
 
   Live files must match refs line for line: no merged or dropped clauses.
   """
+  owned = notes is None
+  notes = notes or Notes()
   refs_root = repo.skills / "refs"
   if not refs_root.is_dir():
+    if owned:
+      notes.flush()
     return
 
   for baseline in sorted(refs_root.rglob("*")):
@@ -46,4 +53,7 @@ def check_skills_parity(repo: Repo, errors: list[str]) -> None:
       for line in prose_lines(live.read_text(encoding="utf-8"))
       if line is not None and line.strip()
     ]
-    compare_lines(shown, ref_prose, live_prose, errors)
+    compare_lines(shown, ref_prose, live_prose, errors, notes=notes, file=shown)
+
+  if owned:
+    notes.flush()

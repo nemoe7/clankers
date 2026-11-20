@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..repo import Repo
+from ..report import Notes
 from .compare import compare_lines
 
 SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "KILO.md")
@@ -43,7 +44,7 @@ def rule_line_count(path: Path) -> int:
   )
 
 
-def _check_sectioned(repo: Repo, name: str, errors: list[str]) -> None:
+def _check_sectioned(repo: Repo, name: str, errors: list[str], notes: Notes) -> None:
   ref_sections = section_rule_lines((repo.rule_refs / name).read_text(encoding="utf-8"))
   live_sections = section_rule_lines((repo.rules / name).read_text(encoding="utf-8"))
   ref_headings = [heading for heading, _ in ref_sections]
@@ -69,10 +70,20 @@ def _check_sectioned(repo: Repo, name: str, errors: list[str]) -> None:
       )
       continue
 
-    compare_lines(f"rules/{name} '{heading}'", ref_rules, live_rules, errors)
+    compare_lines(
+      f"rules/{name} '{heading}'",
+      ref_rules,
+      live_rules,
+      errors,
+      notes=notes,
+      file=f"rules/{name}",
+      section=heading,
+    )
 
 
-def _check_plain(repo: Repo, live_name: str, ref_name: str, errors: list[str]) -> None:
+def _check_plain(
+  repo: Repo, live_name: str, ref_name: str, errors: list[str], notes: Notes
+) -> None:
   ref_lines = [
     l.strip()
     for l in (repo.rule_refs / ref_name).read_text(encoding="utf-8").splitlines()
@@ -84,10 +95,21 @@ def _check_plain(repo: Repo, live_name: str, ref_name: str, errors: list[str]) -
     if l.strip()
   ]
 
-  compare_lines(f"rules/{live_name}", ref_lines, live_lines, errors)
+  compare_lines(
+    f"rules/{live_name}",
+    ref_lines,
+    live_lines,
+    errors,
+    notes=notes,
+    file=f"rules/{live_name}",
+  )
 
 
-def check_rule_parity(repo: Repo, errors: list[str]) -> None:
+def check_rule_parity(
+  repo: Repo, errors: list[str], notes: Notes | None = None
+) -> None:
+  owned = notes is None
+  notes = notes or Notes()
   pairs = [(name, name, True) for name in SECTIONED_PAIRS]
   pairs += [(live, ref, False) for live, ref in PLAIN_PAIRS]
 
@@ -98,6 +120,9 @@ def check_rule_parity(repo: Repo, errors: list[str]) -> None:
     ):
       errors.append(f"rules/{live_name}: refs/live pair incomplete")
     elif sectioned:
-      _check_sectioned(repo, live_name, errors)
+      _check_sectioned(repo, live_name, errors, notes)
     else:
-      _check_plain(repo, live_name, ref_name, errors)
+      _check_plain(repo, live_name, ref_name, errors, notes)
+
+  if owned:
+    notes.flush()

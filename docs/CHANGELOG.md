@@ -25,6 +25,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Delete the plan folder instead of the plan files after Plan mode.
 - Squash live clause files whose clauses still matched refs word-for-word. Every clause, keyword count, and line count survives, and each touched budget shrinks.
 
+#### checks
+
+- Print one `{step}: {result} {time}` verdict line per stage and a `check: pass` or `check: fail` summary, replacing the stage header and problem-count lines.
+- Group parity warnings per file instead of one line per clause. Each file lists sections and line numbers, `*` marks a reworded clause.
+- Drop the nemoize command echo and print the prose linter's own output instead.
+
 #### system prompts
 
 - Squash the live prompt and its wenyan copy where clauses still matched refs, including worked examples. Meaning, quoted strings, and line pairing stay intact.

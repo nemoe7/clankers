@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..repo import Repo
+from ..report import Notes
 from .compare import compare_lines
 
 # `system-prompts/refs/` holds the full wording and the live copy compresses it.
@@ -65,6 +66,7 @@ def _check_pair(
   live_text: str,
   errors: list[str],
   wenyan: bool = False,
+  notes: Notes | None = None,
 ) -> None:
   ref_sections = prompt_sections(ref_text)
   live_sections = prompt_sections(live_text)
@@ -99,12 +101,23 @@ def _check_pair(
     # Wenyan is a Chinese field copy. Keyword counts cannot transfer between
     # grammars, so its lines skip keyword parity (compare_lines keeps the rest).
     compare_lines(
-      f"{label} '{head}'", ref_rules, live_rules, errors, keywords=not wenyan
+      f"{label} '{head}'",
+      ref_rules,
+      live_rules,
+      errors,
+      keywords=not wenyan,
+      notes=notes,
+      file=label,
+      section=head,
     )
 
 
-def check_system_prompt_parity(repo: Repo, errors: list[str]) -> None:
+def check_system_prompt_parity(
+  repo: Repo, errors: list[str], notes: Notes | None = None
+) -> None:
   """Check each system prompt against its refs source, including wenyan copies."""
+  owned = notes is None
+  notes = notes or Notes()
   for name in SYSTEM_PROMPT_PAIRS:
     reference = repo.system_prompts / "refs" / name
     if not reference.is_file():
@@ -125,4 +138,8 @@ def check_system_prompt_parity(repo: Repo, errors: list[str]) -> None:
         live.read_text(encoding="utf-8"),
         errors,
         wenyan=(subdir == "wenyan"),
+        notes=notes,
       )
+
+  if owned:
+    notes.flush()

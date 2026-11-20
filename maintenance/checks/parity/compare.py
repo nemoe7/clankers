@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from ..report import LOG
+from ..report import EQUAL_TOKENS_REWORDED, EXACT_COPY, LOG, Notes
 from .keywords import compare_keyword_counts
 
 NEVER_EXCEED_TOKENS = "live clause token count exceeds refs baseline"
-EXACT_COPY = "live clause matches refs exactly; compression or review may be missing"
-EQUAL_TOKENS_REWORDED = (
-  "live clause reworded at the same token count as refs; compression did not shrink it"
-)
 
 
 def count_tokens(text: str) -> int:
@@ -23,8 +19,15 @@ def compare_lines(
   live_lines: list[str],
   errors: list[str],
   keywords: bool = True,
+  notes: Notes | None = None,
+  file: str | None = None,
+  section: str | None = None,
 ) -> None:
-  """Compare paired lines: equal count, token cap, keyword parity, warnings."""
+  """Compare paired lines: equal count, token cap, keyword parity, warnings.
+
+  Pass `notes` with a `file` name to collect warnings for grouped flushing.
+  Without `notes`, warnings log one line per clause.
+  """
   # Equal line count
   if len(live_lines) != len(ref_lines):
     errors.append(
@@ -45,7 +48,12 @@ def compare_lines(
         f"{NEVER_EXCEED_TOKENS}"
       )
 
-    if live_line == ref_line:
+    if notes is not None and file is not None:
+      if live_line == ref_line:
+        notes.add(file, section, i + 1, EXACT_COPY)
+      elif live_tokens == ref_tokens:
+        notes.add(file, section, i + 1, EQUAL_TOKENS_REWORDED)
+    elif live_line == ref_line:
       LOG.warning("%s: %s", line_label, EXACT_COPY)
     elif live_tokens == ref_tokens:
       LOG.warning("%s: %s", line_label, EQUAL_TOKENS_REWORDED)

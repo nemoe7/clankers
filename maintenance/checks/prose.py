@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 
 from .repo import Repo
-from .report import run_logged
+from .report import LOG
 
 NEMOIZE = "skills/nemoizer/scripts/nemoize.py"
 # Windows consoles default to cp1252. UTF-8 mode makes every Python child
@@ -15,7 +16,7 @@ CHILD_ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
 def check_nemoize(repo: Repo, errors: list[str]) -> None:
-  result = run_logged(
+  result = subprocess.run(
     [sys.executable, str(repo.root / NEMOIZE), "."],
     cwd=repo.root,
     capture_output=True,
@@ -23,6 +24,10 @@ def check_nemoize(repo: Repo, errors: list[str]) -> None:
     encoding="utf-8",
     errors="replace",
     env=CHILD_ENV,
+    check=False,
   )
+  output = (result.stdout + result.stderr).strip()
   if result.returncode:
-    errors.append(f"nemoize failed:\n{(result.stdout + result.stderr).strip()}")
+    errors.append(f"nemoize failed:\n{output}")
+  elif output:
+    LOG.info(output)

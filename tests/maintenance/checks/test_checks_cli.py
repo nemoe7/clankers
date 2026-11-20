@@ -34,7 +34,7 @@ def test_run_stages_returns_what_each_stage_reported(tmp_path: Path, capsys):
   )
   assert cli.run_stages(Repo(tmp_path), errors, stages) == {"one": 1, "two": None}
   assert errors == ["bad"]
-  assert "FAIL two:" in capsys.readouterr().out
+  assert "two: FAIL" in capsys.readouterr().out
 
 
 def test_stages_continue_after_a_stale_budget(monkeypatch, capsys):
@@ -47,13 +47,11 @@ def test_stages_continue_after_a_stale_budget(monkeypatch, capsys):
   assert cli.main([]) == 1
   output = capsys.readouterr().out
   for stage in ("skills", "links", "budgets", "parity", "paths"):
-    assert f"== {stage} ..." in output
-  assert "FAIL budgets:" in output
+    assert f"{stage}: " in output
+  assert "budgets: FAIL" in output
   assert f"README budget stale for {row}" in output
   assert (
-    output.index("FAIL budgets:")
-    < output.index("== parity ...")
-    < output.index("== paths ...")
+    output.index("budgets: FAIL") < output.index("parity: ") < output.index("paths: ")
   )
 
 
@@ -79,10 +77,8 @@ def test_main_reports_one_nemoize_stage_and_a_summary(monkeypatch, capsys):
   assert cli.main([]) == 0
   output = capsys.readouterr().out
   assert calls == [1]
-  assert output.count("== nemoize ...") == 1
-  assert (
-    "4 skills, README measurements, refs/live parity and nemoize checked." in output
-  )
+  assert output.count("nemoize: ok ") == 1
+  assert "check: pass " in output
 
 
 def test_update_failure_stops_before_any_stage(tmp_path: Path, monkeypatch, capsys):
@@ -112,33 +108,41 @@ def test_parse_args_defaults_to_no_update():
   assert cli.parse_args(["--update"]).update is True
 
 
-def test_nemoize_stage_logs_the_command_and_reports_failure(
+def test_nemoize_stage_reports_failure_without_echoing_the_command(
   tmp_path: Path, monkeypatch, capsys
 ):
   monkeypatch.setattr(
     prose,
-    "run_logged",
-    lambda command, **kwargs: SimpleNamespace(returncode=1, stdout="out", stderr="err"),
+    "subprocess",
+    SimpleNamespace(
+      run=lambda command, **kwargs: SimpleNamespace(
+        returncode=1, stdout="out", stderr="err"
+      )
+    ),
   )
   errors: list[str] = []
   prose.check_nemoize(Repo(tmp_path), errors)
   assert errors == ["nemoize failed:\nouterr"]
+  assert "$ " not in capsys.readouterr().out
 
 
-def test_nemoize_stage_passes_on_exit_zero(tmp_path: Path, monkeypatch):
+def test_nemoize_stage_passes_on_exit_zero_and_echoes_child_output(
+  tmp_path: Path, monkeypatch, capsys
+):
   seen = {}
 
   def fake(command, **kwargs):
     seen.update(command=command, cwd=kwargs["cwd"], env=kwargs["env"])
-    return SimpleNamespace(returncode=0, stdout="", stderr="")
+    return SimpleNamespace(returncode=0, stdout="nemoize findings\n", stderr="")
 
-  monkeypatch.setattr(prose, "run_logged", fake)
+  monkeypatch.setattr(prose, "subprocess", SimpleNamespace(run=fake))
   errors: list[str] = []
   prose.check_nemoize(Repo(tmp_path), errors)
   assert errors == []
   assert seen["command"][1:] == [str(tmp_path / prose.NEMOIZE), "."]
   assert seen["cwd"] == tmp_path
   assert seen["env"]["PYTHONUTF8"] == "1"
+  assert "nemoize findings" in capsys.readouterr().out
 
 
 def test_nemoize_scope_is_the_root_config(monkeypatch):
