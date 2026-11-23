@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - Require the final clause to strictly follow the rule-writing guidelines. Citations name a guideline the clause conforms to or the prior clause violated.
+- Require loading the squash skill before compressing an approved amendment into the live copy.
 
 ## 2026-11-20
 
