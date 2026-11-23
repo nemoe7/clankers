@@ -17,6 +17,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Ban reshaping validation output (grep, sed, awk, head, tail, cut) before reading or reporting it, and read the output as the validation emitted it.
 - Require kilo plan review via `submit_plan`. Ban plan files and `plan_exit`/`open_plan`.
 
+#### Removed
+
+- Drop the headroom pointer-format clause and the elision-trust clause from the kilo rules; elision is no longer a problem.
+
 #### checks
 
 - Fall back to the merge base when the push base was rewritten, so the version-bump gate no longer fails on an invalid revision range.
