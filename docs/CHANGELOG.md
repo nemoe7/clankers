@@ -19,11 +19,15 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### system prompts
 
-- Evolve NemoGPT with the Open WebUI tool-availability model: capabilities arrive in categories, per-category availability is conditional, injected tool schemas are the sole authority on what exists and how calls work, and absent capabilities are reported rather than simulated; memory updates prefer updating an existing record over adding a duplicate; add the absent-capability worked example.
+- Tighten NemoGPT verification against fabricated specifics. Quote a number or config key only from a source read this turn, and gather fresh evidence after a rejected answer.
+- Add the unverified-specifics worked example.
+
+- Evolve NemoGPT with the Open WebUI tool-availability model. Capabilities arrive per category with conditional availability, injected tool schemas are the sole authority, and absent capabilities are reported rather than simulated.
+- Prefer updating an existing memory record over adding a duplicate. Add the absent-capability worked example.
 
 #### Removed
 
-- Drop the headroom pointer-format clause and the elision-trust clause from the kilo rules; elision is no longer a problem.
+- Drop the headroom pointer-format clause and the elision-trust clause from the kilo rules. Elision is no longer a problem.
 
 #### checks
 
