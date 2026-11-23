@@ -292,6 +292,14 @@ def derived_test_files(repo: str = ".") -> dict[str, tuple[str, ...]]:
   return {name: tuple(sorted(paths)) for name, paths in grouped.items()}
 
 
+def derived_pytest_files(repo: str = ".") -> dict[str, tuple[str, ...]]:
+  """Keep only Python test files, since pytest cannot collect node test files."""
+  return {
+    name: tuple(path for path in paths if path.endswith(".py"))
+    for name, paths in derived_test_files(repo).items()
+  }
+
+
 SHARED_TEST_PATHS = (
   "requirements.txt",
   "pyproject.toml",
@@ -389,7 +397,7 @@ def step_test(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
   digests = json.loads(env.get("CI_DIGESTS", "{}"))
   if not isinstance(digests, dict) or any(name not in digests for name in selected):
     raise ValueError("Missing test-surface digest")
-  derived = derived_test_files(repo)
+  derived = derived_pytest_files(repo)
   python_tests = []
   node_tests = []
   extra_commands = []
@@ -426,7 +434,7 @@ def module_matrix(files: Sequence[str] | None, repo: str = ".") -> list[dict[str
   all_groups = files is None or any(
     fnmatch(path, pattern) for path in files for pattern in SHARED_TEST_PATHS
   )
-  derived = derived_test_files(repo)
+  derived = derived_pytest_files(repo)
   rows = []
   for name, roots in MODULE_TEST_DIRS.items():
     patterns = (*MODULE_PATHS[name], *MODULE_NODE_TESTS.get(name, ()))

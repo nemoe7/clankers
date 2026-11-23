@@ -556,7 +556,11 @@ def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatc
     commands.append(command)
     if command[0] == "git":
       return SimpleNamespace(
-        returncode=0, stdout="tests/skills/arena-steering/test_services.py\0"
+        returncode=0,
+        stdout=(
+          "tests/skills/arena-steering/test_services.py\0"
+          "tests/userscripts/arena.test.cjs\0"
+        ),
       )
     return SimpleNamespace(returncode=1 if command[0] == "node" else 0)
 
@@ -566,6 +570,7 @@ def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatc
   pytest_commands = [command for command in commands if "pytest" in command]
   assert len(pytest_commands) == 1
   assert "tests/skills/arena-steering/test_services.py" in pytest_commands[0]
+  assert ".cjs" not in pytest_commands[0]
   assert any(command[:2] == ["node", "--test"] for command in commands)
   monkeypatch.setattr(
     changed_paths.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0)
