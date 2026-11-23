@@ -10,7 +10,7 @@ Use one section per clause, list exact guideline citations, and state the failur
 
 Do not invent hunk line numbers. Additions have no `-` line. Deletions have no `+` line and leave the final clause empty. Keep quoted or explicitly verbatim wording unchanged.
 
-Never wrap clause text in backticks in proposals, acks, or reports. Pair CORE proposals with ARENA and CHATGPT proposals in the same submission.
+Never wrap clause text in backticks in proposals, acks, or reports. Pair CORE proposals with ARENA and CHATGPT proposals in the same submission. Before drafting a proposal, read the cited guidelines file in full, and cite only sections verifiably present there.
 
 ````markdown
 ## <filename.ext> - <clause-name>

@@ -4,7 +4,7 @@ Publish proposals as Steering fielded reports, not chat. Use one section and one
 
 In each `diff`, prefix changed old lines with `-` and changed new lines with `+`. Keep unchanged context verbatim, omit only unchanged context, and never replace changed text with `...`. Do not invent hunk line numbers.
 
-Additions have no `-` line. Deletions have no `+` line and leave the final clause empty. Keep quoted or explicitly verbatim wording unchanged. Never wrap clause text in backticks in proposals, acks, or reports.
+Additions have no `-` line. Deletions have no `+` line leaving the final clause empty. Keep quoted or explicitly verbatim wording unchanged, and never wrap clause text in backticks in proposals, acks, or reports. Before drafting a proposal, read the cited guidelines file in full, and cite only sections verifiably present there.
 
 Pair CORE proposals with ARENA and CHATGPT proposals in the same report. Keep each field directly below its clause. Use the built-in "Something else..." input for custom wording. Submit a new proposal for custom wording before editing.
 
