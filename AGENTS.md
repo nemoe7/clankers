@@ -49,6 +49,7 @@
 - `npx --yes markdownlint-cli2` from repository root.
 - `ruff format .`, then `ruff check .`.
 - `python maintenance/check.py` (add `--update` to refresh README measurements).
+- Measure single-clause tokens: `python maintenance/clause.py <clause file> <line> "<clause>"`.
 - Run the full test suite of the affected module (e.g., if arena-steering changed, run arena-steering's full suite).
 
 ## Code Style

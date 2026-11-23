@@ -246,6 +246,7 @@ MODULE_TESTS = {
   "Repository Prose and Validation": (
     "tests/maintenance/checks/test_checks_budgets.py",
     "tests/maintenance/checks/test_checks_cli.py",
+    "tests/maintenance/checks/test_checks_clause.py",
     "tests/maintenance/checks/test_checks_measure.py",
     "tests/maintenance/checks/test_checks_parity.py",
     "tests/maintenance/checks/test_checks_report.py",

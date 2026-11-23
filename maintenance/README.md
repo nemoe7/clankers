@@ -146,6 +146,8 @@ npm ci
 
 `--update` finds each clause file by the `BUDGET_GLOBS` patterns and rebuilds the budget table before checking, so added and retired files need no hand-edited row. Every file measures `o200k_base` tokens except the two ChatGPT fields, which count Unicode characters (`MEASURE_OVERRIDES`). Test it with `python3 -m pytest tests/maintenance/checks`.
 
+`maintenance/clause.py <clause file> <line> "<clause>"` measures one candidate clause against its baseline line in `o200k_base` tokens and runs the same per-clause checks `check.py` applies (token cap, keyword parity). Agents draft squashes against this before proposing amendments.
+
 ## PR checks
 
 The PR-check watcher waits at most 30 seconds for a first visible check on the pinned head. An empty window fails as not started. It then follows the latest checks until every visible one is terminal. API reads time out after five seconds, and API time reduces polling pauses.

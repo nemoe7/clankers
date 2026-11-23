@@ -38,6 +38,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require the final clause to strictly follow the rule-writing guidelines. Citations name a guideline the clause conforms to or the prior clause violated.
 - Require loading the squash skill before compressing an approved amendment into the live copy.
 
+### Added
+
+#### maintenance
+
+- Add `maintenance/clause.py`: measure one candidate clause against its baseline line (`o200k_base` tokens plus per-clause cap and keyword parity).
+
 ## 2026-11-20
 
 ### Added
