@@ -181,7 +181,9 @@ def test_module_matrix_selects_owners_and_shared_changes():
   )
   for path in paths:
     owners = [
-      name for name, tests in changed_paths.MODULE_TESTS.items() if path in tests
+      name
+      for name, roots in changed_paths.MODULE_TEST_DIRS.items()
+      if any(path.startswith(root) for root in roots)
     ]
     selected = changed_paths.module_matrix([path])
     assert [row["name"] for row in selected] == owners
@@ -193,7 +195,7 @@ def test_module_matrix_selects_owners_and_shared_changes():
     "docs/workflows/gemini-release/CHANGELOG.md",
   ):
     assert not changed_paths.module_matrix([doc])
-  all_names = set(changed_paths.MODULE_TESTS)
+  all_names = set(changed_paths.MODULE_TEST_DIRS)
   assert "Proxies" not in all_names
   for shared in (
     "requirements.txt",
@@ -259,7 +261,6 @@ def test_v2_steering_source_runs_task_chain_regressions():
 
 def test_module_test_ownership_is_complete_and_unique():
   root = Path(changed_paths.__file__).resolve().parents[2]
-  owned = [path for paths in changed_paths.MODULE_TESTS.values() for path in paths]
   discovered = {
     path.relative_to(root).as_posix()
     for directory in ("tests", "maintenance", "skills", "github/workflows")
@@ -269,8 +270,16 @@ def test_module_test_ownership_is_complete_and_unique():
     .as_posix()
     .startswith(changed_paths.ARCHIVED_TEST_PREFIX)
   }
-  assert set(owned) == discovered
-  assert len(owned) == len(set(owned))
+  owners = {
+    path: [
+      name
+      for name, roots in changed_paths.MODULE_TEST_DIRS.items()
+      if any(path.startswith(root) for root in roots)
+    ]
+    for path in discovered
+  }
+  assert all(len(hits) == 1 for hits in owners.values())
+  changed_paths.check_module_ownership(str(root))
 
 
 def test_module_step_routes_changes_and_missing_bases(tmp_path):
@@ -281,16 +290,20 @@ def test_module_step_routes_changes_and_missing_bases(tmp_path):
   out = tmp_path / "modules.txt"
   assert changed_paths.step_module_tests({"PUSH_BEFORE": base}, out, str(repo)) == 0
   values = dict(line.split("=", 1) for line in outputs(out).splitlines())
-  assert json.loads(values["matrix"])["include"] == changed_paths.module_matrix([path])
+  assert json.loads(values["matrix"])["include"] == changed_paths.module_matrix(
+    [path], str(repo)
+  )
   out.unlink()
   assert changed_paths.step_module_tests({}, out, str(repo)) == 0
   values = dict(line.split("=", 1) for line in outputs(out).splitlines())
-  assert json.loads(values["matrix"])["include"] == changed_paths.module_matrix(None)
+  assert json.loads(values["matrix"])["include"] == changed_paths.module_matrix(
+    None, str(repo)
+  )
 
 
 def test_unknown_tests_fail_before_scheduling(tmp_path):
   repo = init_repo(tmp_path)
-  path = "tests/maintenance/workflows/test_new_module.py"
+  path = "tests/test_orphan.py"
   commit_change(repo, path)
   try:
     changed_paths.check_module_ownership(str(repo))
@@ -298,6 +311,14 @@ def test_unknown_tests_fail_before_scheduling(tmp_path):
     assert path in str(error)
   else:
     raise AssertionError("An unowned test must not be skipped.")
+
+
+def test_new_test_in_owner_directory_needs_no_registration(tmp_path):
+  repo = init_repo(tmp_path)
+  path = "tests/maintenance/pr/test_added.py"
+  commit_change(repo, path)
+  changed_paths.check_module_ownership(str(repo))
+  assert path in changed_paths.derived_test_files(str(repo))["PR Checks"]
 
 
 def test_renames_select_both_source_modules(tmp_path):
@@ -533,6 +554,10 @@ def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatc
 
   def run(command, **kwargs):
     commands.append(command)
+    if command[0] == "git":
+      return SimpleNamespace(
+        returncode=0, stdout="tests/skills/arena-steering/test_services.py\0"
+      )
     return SimpleNamespace(returncode=1 if command[0] == "node" else 0)
 
   monkeypatch.setattr(changed_paths.subprocess, "run", run)
@@ -540,6 +565,7 @@ def test_combined_tests_record_only_after_all_commands_pass(tmp_path, monkeypatc
   assert not changed_paths.load_ledger(ledger)
   pytest_commands = [command for command in commands if "pytest" in command]
   assert len(pytest_commands) == 1
+  assert "tests/skills/arena-steering/test_services.py" in pytest_commands[0]
   assert any(command[:2] == ["node", "--test"] for command in commands)
   monkeypatch.setattr(
     changed_paths.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=0)

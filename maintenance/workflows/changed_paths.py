@@ -13,6 +13,7 @@ import sys
 import tempfile
 from collections.abc import Mapping, Sequence
 from fnmatch import fnmatch
+from functools import cache
 from pathlib import Path
 
 EMPTY_BASE = "0" * 40
@@ -194,95 +195,42 @@ def step_artifacts(env: Mapping[str, str], output: Path, repo: str = ".") -> int
   return 0
 
 
-MODULE_TESTS = {
-  "Preview": (
-    "tests/skills/arena-steering/test_store.py",
-    "tests/skills/arena-steering/test_services.py",
-    "tests/skills/arena-steering/test_server_cli.py",
-    "tests/skills/arena-steering/test_survey.py",
-    "tests/skills/arena-steering/test_web_ui.py",
-    "tests/skills/arena-steering/test_messages_views.py",
-    "tests/skills/arena-steering/test_reports_views.py",
-    "tests/skills/arena-steering/test_tasks_ui.py",
-    "tests/skills/arena-steering/test_transport_ui.py",
-    "tests/skills/arena-steering/test_messages_ui.py",
-    "tests/skills/arena-steering/test_reports_ui.py",
-    "tests/skills/arena-steering/test_pre.py",
-    "tests/skills/arena-steering/test_browser_requirement.py",
-    "tests/skills/arena-steering/test_browser_retry.py",
-  ),
-  "nemoize": (
-    "tests/skills/nemoizer/test_assertions.py",
-    "tests/skills/nemoizer/test_cli.py",
-    "tests/skills/nemoizer/test_config.py",
-    "tests/skills/nemoizer/test_files.py",
-    "tests/skills/nemoizer/test_markers.py",
-    "tests/skills/nemoizer/test_rules.py",
-    "tests/skills/nemoizer/test_runner.py",
-    "tests/skills/nemoizer/prose/test_extract.py",
-    "tests/skills/nemoizer/prose/test_review.py",
-    "tests/skills/nemoizer/prose/test_rotate.py",
-    "tests/skills/nemoizer/prose/test_ui.py",
-  ),
-  "UI/UX": (
-    "tests/skills/nuu/test_nuu.py",
-    "tests/skills/nuu/test_measure.py",
-  ),
-  "Userscripts": (),
-  "GPT Plugins": (
-    "tests/maintenance/gpt_plugins/test_gate_gpt_plugins.py",
-    "tests/maintenance/gpt_plugins/test_artifacts.py",
-  ),
-  "Gemini Release": ("tests/github/workflows/test_gemini_release.py",),
-  "PR Checks": ("tests/maintenance/pr/test_gate_pr.py",),
-  "Rules Publishing": ("tests/maintenance/publish/test_publish.py",),
-  "Workflow and Distribution": (
-    "tests/maintenance/workflows/test_changed_paths.py",
-    "tests/maintenance/workflows/test_check_artifacts.py",
-    "tests/maintenance/workflows/test_codeql_filter.py",
-    "tests/maintenance/workflows/test_gate_workflows.py",
-    "tests/maintenance/workflows/test_distribute_sync.py",
-  ),
-  "Repository Prose and Validation": (
-    "tests/maintenance/checks/test_checks_budgets.py",
-    "tests/maintenance/checks/test_checks_cli.py",
-    "tests/maintenance/checks/test_checks_clause.py",
-    "tests/maintenance/checks/test_checks_measure.py",
-    "tests/maintenance/checks/test_checks_parity.py",
-    "tests/maintenance/checks/test_checks_report.py",
-    "tests/maintenance/checks/test_checks_structure.py",
-  ),
+# Each module owns a test directory tree, so a new test file needs no registration.
+MODULE_TEST_DIRS = {
+  "Preview": ("tests/skills/arena-steering/",),
+  "nemoize": ("tests/skills/nemoizer/",),
+  "UI/UX": ("tests/skills/nuu/",),
+  "Userscripts": ("tests/userscripts/",),
+  "GPT Plugins": ("tests/maintenance/gpt_plugins/",),
+  "Gemini Release": ("tests/github/workflows/",),
+  "PR Checks": ("tests/maintenance/pr/",),
+  "Rules Publishing": ("tests/maintenance/publish/",),
+  "Workflow and Distribution": ("tests/maintenance/workflows/",),
+  "Repository Prose and Validation": ("tests/maintenance/checks/",),
 }
 # Archived tests remain available for historical reference but are not CI owners.
 ARCHIVED_TEST_PREFIX = "docs/archive/"
 MODULE_PATHS = {
   "Preview": (
     "skills/arena-steering/*",
-    "tests/skills/arena-steering/*",
     "maintenance/demo-arena-steer.py",
   ),
   "nemoize": (
     "skills/*nemoizer/*",
     ".agents/skills/nemoizer/*",
-    "tests/skills/nemoizer/*",
   ),
-  "UI/UX": ("skills/*nuu/*", ".agents/skills/nuu/*", "tests/skills/nuu/*"),
-  "Userscripts": ("userscripts/*", "tests/userscripts/*"),
+  "UI/UX": ("skills/*nuu/*", ".agents/skills/nuu/*"),
+  "Userscripts": ("userscripts/*",),
   "GPT Plugins": (
     "gpt-plugins/*",
     "maintenance/gpt_plugins/*",
     ".github/workflows/artifacts.yml",
-    "tests/maintenance/gpt_plugins/*",
   ),
-  "Gemini Release": (
-    "github/workflows/*",
-    "tests/github/workflows/test_gemini_release.py",
-  ),
-  "PR Checks": ("maintenance/pr/*", "tests/maintenance/pr/*"),
+  "Gemini Release": ("github/workflows/*",),
+  "PR Checks": ("maintenance/pr/*",),
   "Rules Publishing": (
     "maintenance/publish/*",
     "rules/*",
-    "tests/maintenance/publish/*",
   ),
   "Workflow and Distribution": (
     ".github/workflows/*",
@@ -290,7 +238,6 @@ MODULE_PATHS = {
     "maintenance/workflows/check_artifacts.py",
     "maintenance/workflows/codeql_filter.py",
     "maintenance/workflows/gate_workflows.py",
-    "tests/maintenance/workflows/*",
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",
@@ -301,7 +248,6 @@ MODULE_PATHS = {
     "README.md",
     "rules/*",
     "skills/*/SKILL.md",
-    "tests/maintenance/checks/*",
   ),
 }
 MODULE_NODE_TESTS = {
@@ -313,6 +259,39 @@ MODULE_NODE_TESTS = {
 MODULE_COMMANDS = {
   "Userscripts": ("node userscripts/arena.user.js", "node userscripts/chatgpt.user.js"),
 }
+
+
+def test_file_name(path: str) -> bool:
+  """True for tracked files CI treats as module tests."""
+  return (
+    Path(path).name.startswith("test_")
+    and path.endswith(".py")
+    or path.endswith((".test.cjs", ".checks.cjs"))
+  )
+
+
+@cache
+def derived_test_files(repo: str = ".") -> dict[str, tuple[str, ...]]:
+  """Group tracked test files by their owning module directory."""
+  result = git(["ls-files", "-z"], repo)
+  if result.returncode:
+    raise SystemExit(f"git ls-files failed: {result.stderr.strip()}")
+  grouped: dict[str, list[str]] = {name: [] for name in MODULE_TEST_DIRS}
+  for path in result.stdout.split("\0"):
+    if not path or path.startswith(ARCHIVED_TEST_PREFIX) or not test_file_name(path):
+      continue
+    owners = [
+      name
+      for name, roots in MODULE_TEST_DIRS.items()
+      if any(path.startswith(root) for root in roots)
+    ]
+    if len(owners) > 1:
+      raise SystemExit("Each test must have one module owner.")
+    if owners:
+      grouped[owners[0]].append(path)
+  return {name: tuple(sorted(paths)) for name, paths in grouped.items()}
+
+
 SHARED_TEST_PATHS = (
   "requirements.txt",
   "pyproject.toml",
@@ -343,14 +322,14 @@ def ci_surfaces() -> dict[str, tuple[str, ...]]:
     # The repo gate scans all text, validates paths, and checks parity.
     "repo_check": (".",),
   }
-  for name, tests in MODULE_TESTS.items():
+  for name, roots in MODULE_TEST_DIRS.items():
     extra = {
       "GPT Plugins": ("skills/nemoizer/*", "skills/refs/nemoizer/*"),
       "Repository Prose and Validation": (".",),
     }.get(name, ())
     surfaces["module_" + surface_key(name)] = (
       *MODULE_PATHS[name],
-      *tests,
+      *roots,
       *MODULE_NODE_TESTS.get(name, ()),
       *extra,
     )
@@ -404,18 +383,19 @@ def step_test(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
   """Run selected suites together and record them only when the whole union passes."""
   selected = env.get("CI_TEST_SURFACES", "").split(",")
   selected = [name for name in selected if name]
-  names = {"module_" + surface_key(name): name for name in MODULE_TESTS}
+  names = {"module_" + surface_key(name): name for name in MODULE_TEST_DIRS}
   if len(selected) != len(set(selected)) or any(name not in names for name in selected):
     raise ValueError("Unknown or duplicate test surface")
   digests = json.loads(env.get("CI_DIGESTS", "{}"))
   if not isinstance(digests, dict) or any(name not in digests for name in selected):
     raise ValueError("Missing test-surface digest")
+  derived = derived_test_files(repo)
   python_tests = []
   node_tests = []
   extra_commands = []
   for key in selected:
     name = names[key]
-    python_tests.extend(MODULE_TESTS[name])
+    python_tests.extend(derived[name])
     node_tests.extend(MODULE_NODE_TESTS.get(name, ()))
     extra_commands.extend(
       shlex.split(command) for command in MODULE_COMMANDS.get(name, ())
@@ -441,19 +421,24 @@ def step_test(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
   return int(failed)
 
 
-def module_matrix(files: Sequence[str] | None) -> list[dict[str, str]]:
+def module_matrix(files: Sequence[str] | None, repo: str = ".") -> list[dict[str, str]]:
   """Select test owners. Shared inputs and a missing base select all groups."""
   all_groups = files is None or any(
     fnmatch(path, pattern) for path in files for pattern in SHARED_TEST_PATHS
   )
+  derived = derived_test_files(repo)
   rows = []
-  for name, tests in MODULE_TESTS.items():
-    patterns = (*tests, *MODULE_NODE_TESTS.get(name, ()), *MODULE_PATHS[name])
-    if not all_groups and not any(
-      fnmatch(path, pattern) for path in files for pattern in patterns
+  for name, roots in MODULE_TEST_DIRS.items():
+    patterns = (*MODULE_PATHS[name], *MODULE_NODE_TESTS.get(name, ()))
+    if not (
+      all_groups
+      or any(fnmatch(path, pattern) for path in files for pattern in patterns)
+      or any(path.startswith(root) for path in files for root in roots)
     ):
       continue
-    commands = ["python -m pytest -q " + shlex.join(tests)] if tests else []
+    commands = (
+      ["python -m pytest -q " + shlex.join(derived[name])] if derived[name] else []
+    )
     if node_tests := MODULE_NODE_TESTS.get(name):
       arguments = ["node", "--test"]
       commands.append(shlex.join([*arguments, *node_tests]))
@@ -462,27 +447,19 @@ def module_matrix(files: Sequence[str] | None) -> list[dict[str, str]]:
   return rows
 
 
-def check_module_ownership(repo: str) -> None:
-  """Fail before scheduling if a tracked test has no unique owner."""
+def check_module_ownership(repo: str = ".") -> None:
+  """Fail before scheduling if a tracked test has no unique owner directory."""
   result = git(["ls-files", "-z"], repo)
   if result.returncode:
     raise SystemExit(f"git ls-files failed: {result.stderr.strip()}")
-  owned = [path for tests in MODULE_TESTS.values() for path in tests]
-  owned += [path for tests in MODULE_NODE_TESTS.values() for path in tests]
   discovered = {
     path
     for path in result.stdout.split("\0")
-    if path
-    and not path.startswith(ARCHIVED_TEST_PREFIX)
-    and (
-      (Path(path).name.startswith("test_") and path.endswith(".py"))
-      or path.endswith((".test.cjs", ".checks.cjs"))
-    )
+    if path and not path.startswith(ARCHIVED_TEST_PREFIX) and test_file_name(path)
   }
-  if missing := discovered - set(owned):
-    raise SystemExit("Tests need a module owner: " + ", ".join(sorted(missing)))
-  if len(owned) != len(set(owned)):
-    raise SystemExit("Each test must have one module owner.")
+  owned = {path for paths in derived_test_files(repo).values() for path in paths}
+  if missing := sorted(discovered - owned):
+    raise SystemExit("Tests need a module owner: " + ", ".join(missing))
 
 
 def step_module_tests(env: Mapping[str, str], output: Path, repo: str = ".") -> int:
@@ -490,7 +467,7 @@ def step_module_tests(env: Mapping[str, str], output: Path, repo: str = ".") -> 
   check_module_ownership(repo)
   base = event_base(env, repo)
   files = changed_files(base, (), repo) if base is not None else None
-  rows = module_matrix(files)
+  rows = module_matrix(files, repo)
   write_output(output, "run", str(bool(rows)).lower())
   write_output(output, "matrix", json.dumps({"include": rows}, separators=(",", ":")))
   print("Selected test groups: " + ", ".join(row["name"] for row in rows))
