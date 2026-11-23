@@ -37,6 +37,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Require the final clause to strictly follow the rule-writing guidelines. Citations name a guideline the clause conforms to or the prior clause violated.
 - Require loading the squash skill before compressing an approved amendment into the live copy.
+- Derive each module's test list from its test directory, and move the two cross-directory tests into their owner directories. A new test file inside a module directory needs no registration, and the ownership gate fails only on tests outside every module directory.
 
 ### Added
 
