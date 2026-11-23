@@ -231,7 +231,7 @@ MODULE_TESTS = {
   "Userscripts": (),
   "GPT Plugins": (
     "tests/maintenance/gpt_plugins/test_gate_gpt_plugins.py",
-    "tests/github/workflows/test_artifacts.py",
+    "tests/maintenance/gpt_plugins/test_artifacts.py",
   ),
   "Gemini Release": ("tests/github/workflows/test_gemini_release.py",),
   "PR Checks": ("tests/maintenance/pr/test_gate_pr.py",),
@@ -241,7 +241,7 @@ MODULE_TESTS = {
     "tests/maintenance/workflows/test_check_artifacts.py",
     "tests/maintenance/workflows/test_codeql_filter.py",
     "tests/maintenance/workflows/test_gate_workflows.py",
-    "tests/github/actions/test_distribute_sync.py",
+    "tests/maintenance/workflows/test_distribute_sync.py",
   ),
   "Repository Prose and Validation": (
     "tests/maintenance/checks/test_checks_budgets.py",
@@ -273,7 +273,6 @@ MODULE_PATHS = {
     "maintenance/gpt_plugins/*",
     ".github/workflows/artifacts.yml",
     "tests/maintenance/gpt_plugins/*",
-    "tests/github/workflows/test_artifacts.py",
   ),
   "Gemini Release": (
     "github/workflows/*",
@@ -292,9 +291,6 @@ MODULE_PATHS = {
     "maintenance/workflows/codeql_filter.py",
     "maintenance/workflows/gate_workflows.py",
     "tests/maintenance/workflows/*",
-    "tests/maintenance/workflows/test_check_artifacts.py",
-    "tests/maintenance/workflows/test_gate_workflows.py",
-    "tests/github/actions/test_distribute_sync.py",
   ),
   "Repository Prose and Validation": (
     "maintenance/check.py",

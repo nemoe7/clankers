@@ -175,7 +175,7 @@ def test_main_needs_an_output_file(tmp_path, monkeypatch):
 def test_module_matrix_selects_owners_and_shared_changes():
   paths = (
     "tests/maintenance/checks/test_checks_cli.py",
-    "tests/github/workflows/test_artifacts.py",
+    "tests/maintenance/gpt_plugins/test_artifacts.py",
     "tests/maintenance/workflows/test_gate_workflows.py",
     "tests/github/workflows/test_gemini_release.py",
   )
