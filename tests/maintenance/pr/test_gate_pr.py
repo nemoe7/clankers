@@ -332,6 +332,8 @@ def test_the_contract_runs_the_version_bump_checks(tmp_path: Path, monkeypatch):
 
   def fake_git(*arguments: str) -> str:
     seen.append(arguments)
+    if arguments[0] == "merge-base":
+      return ""
     if arguments[0] == "diff":
       return "userscripts/arena.user.js\n"
     if arguments[0] == "show":
@@ -366,6 +368,8 @@ def test_the_contract_accepts_a_bumped_userscript(tmp_path: Path, monkeypatch):
   )
 
   def fake_git(*arguments: str) -> str:
+    if arguments[0] == "merge-base":
+      return ""
     if arguments[0] == "diff":
       return "userscripts/arena.user.js\n"
     if arguments[0] == "show":
@@ -386,6 +390,8 @@ def test_the_contract_rejects_multi_step_userscript_bump(tmp_path: Path, monkeyp
   )
 
   def fake_git(*arguments: str) -> str:
+    if arguments[0] == "merge-base":
+      return ""
     if arguments[0] == "diff":
       return "userscripts/arena.user.js\n"
     if arguments[0] == "show":
@@ -402,6 +408,28 @@ def test_the_bump_range_skips_a_missing_base():
   assert gate_pr.bump_range("..abc") is None
   assert gate_pr.bump_range("abc..") is None
   assert gate_pr.bump_range("abc..def") == ("abc", "def")
+
+
+def test_the_bump_range_falls_back_to_the_merge_base(monkeypatch):
+  """A rewritten push base no longer reaches the head, so the gate diffs against their merge base."""
+  calls = []
+
+  def fake_git(*arguments: str) -> str:
+    calls.append(arguments)
+    if arguments[0] == "merge-base":
+      if "--is-ancestor" in arguments:
+        raise SystemExit("not an ancestor")
+      return "merge-base-sha\n"
+    if arguments[0] == "diff":
+      return "userscripts/arena.user.js\n"
+    if arguments[0] == "show":
+      return "// ==UserScript==\n// @name x | v0.0.0\n// @version 0.0.0\n// ==/UserScript==\n"
+    raise AssertionError(f"unexpected git call: {arguments}")
+
+  monkeypatch.setattr(gate_pr, "_git", fake_git)
+  gate_pr.run_version_checks("rewritten-base..HEAD")
+  diff = next(call for call in calls if call[0] == "diff")
+  assert "merge-base-sha..HEAD" in diff
 
 
 def test_the_version_bump_mode_reports_failures(monkeypatch, capsys):

@@ -368,6 +368,18 @@ def bump_range(revision_range: str) -> tuple[str, str] | None:
   return base, head
 
 
+def _bump_base(base: str, head: str) -> str:
+  """Return the push base, or their merge base when the push base was rewritten.
+
+  A force-push or amend makes the pre-push sha unrelated to the new head, so the
+  range has no base. Comparing against the merge base keeps the changed set real."""
+  try:
+    _git("merge-base", "--is-ancestor", base, head)
+  except SystemExit:
+    return _git("merge-base", base, head).strip()
+  return base
+
+
 def run_version_checks(revision_range: str) -> list[Failure]:
   """Validate the versioned modules as the `version-bumps` job does.
 
@@ -387,6 +399,7 @@ def run_version_checks(revision_range: str) -> list[Failure]:
   if bounds is None:
     return failures
   base, head = bounds
+  base = _bump_base(base, head)
   changed = _git(
     "diff", "--name-only", f"{base}..{head}", "--", *VERSIONED_PATHS
   ).split()
