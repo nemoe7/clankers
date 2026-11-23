@@ -17,6 +17,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Ban reshaping validation output (grep, sed, awk, head, tail, cut) before reading or reporting it, and read the output as the validation emitted it.
 - Require kilo plan review via `submit_plan`. Ban plan files and `plan_exit`/`open_plan`.
 
+#### system prompts
+
+- Evolve NemoGPT with the Open WebUI tool-availability model: capabilities arrive in categories, per-category availability is conditional, injected tool schemas are the sole authority on what exists and how calls work, and absent capabilities are reported rather than simulated; memory updates prefer updating an existing record over adding a duplicate; add the absent-capability worked example.
+
 #### Removed
 
 - Drop the headroom pointer-format clause and the elision-trust clause from the kilo rules; elision is no longer a problem.
