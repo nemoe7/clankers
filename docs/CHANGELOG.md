@@ -14,6 +14,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Bar commits on default branch and prefer reusing branches over one per change.
 - Resolve headroom elision mentally from the pointer alone, and require review-feedback questions and points addressed in chat before any edit or resubmit.
+- Ban reshaping validation output (grep, sed, awk, head, tail, cut) before reading or reporting it, and read the output as the validation emitted it.
 
 #### checks
 
