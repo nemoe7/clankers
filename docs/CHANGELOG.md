@@ -13,10 +13,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Bar commits on default branch and prefer reusing branches over one per change.
+- Resolve headroom elision mentally from the pointer alone, and require review-feedback questions and points addressed in chat before any edit or resubmit.
 
 #### checks
 
-- Fall back to the merge base when the push base was rewritten by an amend or force-push, so the version-bump gate no longer fails on an invalid revision range.
+- Fall back to the merge base when the push base was rewritten, so the version-bump gate no longer fails on an invalid revision range.
 
 ## 2026-11-20
 
