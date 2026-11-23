@@ -4,7 +4,7 @@ Before editing an agent-facing clause, submit its proposal in Plannotator. Appro
 
 For other harnesses, present the same clause layout and request approve, reject, or custom per clause using their native controls.
 
-Use one section per clause. List exact guideline citations and the failure prevented. In each `diff`, prefix changed old lines with `-` and changed new lines with `+`. Keep unchanged context verbatim, omit only unchanged context, and never replace changed text with `...`.
+Use one section per clause. List exact guideline citations and the failure prevented. The final clause MUST strictly follow rules/refs/GUIDELINES.md. In each `diff`, prefix changed old lines with `-` and changed new lines with `+`. Keep unchanged context verbatim, omit only unchanged context, and never replace changed text with `...`.
 
 Do not invent hunk line numbers. Additions have no `-` line. Deletions have no `+` line and leave the final clause empty. Keep quoted or explicitly verbatim wording unchanged.
 

@@ -21,6 +21,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Fall back to the merge base when the push base was rewritten, so the version-bump gate no longer fails on an invalid revision range.
 
+#### maintenance
+
+- Require the final clause to strictly follow the rule-writing guidelines. Citations name a guideline the clause conforms to or the prior clause violated.
+
 ## 2026-11-20
 
 ### Added
