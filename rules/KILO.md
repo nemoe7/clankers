@@ -12,4 +12,5 @@
 - Headroom elides repeated read/tool output as `[↑NL msg X: '<snippet>']`; resolve mentally from the pointer alone, `↑NL` counts lines, snippet names source; Grep covers pointer gaps.
 - MUST trust elision fully: matching head text proves elided lines repeat the named message verbatim. Resolve mentally from the pointer; NEVER re-run, re-read, re-open msg X, Grep, re-derive, or work around it to see or verify content; NEVER cite a reconstruction as evidence; cite the message it repeats.
 - Review feedback: answer questions in chat and wait for replies, inspect points needing inspection; address every point before editing anything or resubmitting; NEVER resubmit unchanged or count an edit as addressing feedback.
+- Plans MUST use `submit_plan`; NEVER write plan files or use `plan_exit` or `open_plan`.
 - NEVER reshape validation output (grep, sed, awk, head, tail, cut) before reading or reporting it; read the raw output as the validation emitted it.
