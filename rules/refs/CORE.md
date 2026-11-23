@@ -113,7 +113,8 @@
 - MUST stage only task-related files, leaving unrelated and user-owned files unstaged.
 - Respect the user's global gitignore (`core.excludesFile`).
 - Review the diff after each edit.
-- If on the default branch, `git switch -c <branch>` before editing; otherwise edit and commit on the current branch: one logical change per commit, all its files, checks green, independently revertible.
+- NEVER commit on the default branch.
+- Prefer reusing an existing branch over creating a new branch for every change.
 - Follow the project's commit-message convention when the project states one.
 - When the project states none, use Conventional Commits: one per completed feature, in the form `<type>[optional scope]: <description>`, with `!` before the colon to mark a breaking change.
 - Write the subject imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body.

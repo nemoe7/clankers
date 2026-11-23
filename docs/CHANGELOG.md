@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-23
+
+### Changed
+
+#### rules
+
+- Bar commits on default branch and prefer reusing branches over one per change.
+
 ## 2026-11-20
 
 ### Added
