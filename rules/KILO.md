@@ -9,6 +9,8 @@
 - MUST run shell commands in PowerShell (`pwsh`), not Bash.
 - Python UTF-8 mode is enabled (`PYTHONUTF8=1`); Python child processes emit UTF-8 by default.
 - NEVER use `cd`.
+- MUST use `git switch` to change branches; NEVER `git checkout` or other syntax.
+- MUST run global `ruff`; NEVER use a venv-local ruff.
 
 - Review feedback: answer questions in chat and wait for replies, inspect points needing inspection; address every point before editing anything or resubmitting; NEVER resubmit unchanged or count an edit as addressing feedback.
 - Plans MUST use `submit_plan`; NEVER write plan files or use `plan_exit` or `open_plan`.

@@ -9,6 +9,8 @@
 - The shell is PowerShell (`pwsh`), not Bash. MUST use PowerShell syntax for shell commands.
 - Python UTF-8 mode is enabled in this shell (`PYTHONUTF8=1`); every Python process emits UTF-8 by default.
 - NEVER use `cd`.
+- When changing branches, MUST use `git switch <branch>`; NEVER use `git checkout` or any other command to change branches.
+- MUST run the global `ruff` command for formatting and linting; NEVER use a venv-local ruff.
 
 - When a plan review returns feedback, address every point in chat before editing the plan or any file: answer every question it asks and wait for the reply, inspect every point that needs inspection before resubmitting, and NEVER resubmit unchanged or count an edit itself as addressing feedback.
 - Plans MUST be submitted through the `submit_plan` tool; NEVER write a plan file to disk or use `plan_exit` or `open_plan`.

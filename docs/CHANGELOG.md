@@ -15,6 +15,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Require reading pytest addopts before running and avoiding a duplicate `-q`, which removes the summary line.
 - Require judging validation by its full printed output, never by the exit code alone, and never suppressing or truncating it.
 - Require committing each verified change before stopping, on a branch.
+- Require `git switch` to change branches, never `git checkout` or other syntax.
+- Require the global `ruff`, never a venv-local ruff.
 
 ### Changed
 
