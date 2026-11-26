@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Extend the raw-validation-output clause from reading and reporting to every use of validation output.
+- State that `submit_plan` writes the plan file, and that generated plan files with `approved`, `annotations`, or `denied` appended join the deletion flow.
 
 ## 2026-11-23
 

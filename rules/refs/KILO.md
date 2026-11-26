@@ -13,7 +13,7 @@
 - MUST run the global `ruff` command for formatting and linting; NEVER use a venv-local ruff.
 
 - When a plan review returns feedback, address every point in chat before editing the plan or any file: answer every question it asks and wait for the reply, inspect every point that needs inspection before resubmitting, and NEVER resubmit unchanged or count an edit itself as addressing feedback.
-- Plans MUST be submitted through the `submit_plan` tool; NEVER write a plan file to disk or use `plan_exit` or `open_plan`.
+- Plans MUST be submitted through the `submit_plan` tool, which writes the plan file; NEVER write a separate plan file to disk or use `plan_exit` or `open_plan`. Generated plan files in the plan folder, with `approved`, `annotations`, or `denied` appended, are part of the deletion flow.
 - When checking, using, or reporting a validation run, read its raw output as the validation emitted it; NEVER pass validation output through text-munging tools (grep, sed, awk, head, tail, cut) to filter, summarize, or reshape it before reading, using, or reporting it.
 - MUST judge a validation run by its full printed output; NEVER treat the exit code alone as proof it passed, and NEVER suppress or truncate the output.
 - Before running pytest, MUST read the active addopts from pytest config and avoid options it already sets, above all a second `-q` (double `-q` removes the summary line).
