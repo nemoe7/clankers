@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This log use
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-11-26
+
+### Added
+
+#### rules
+
+- Require reading pytest addopts before running and avoiding a duplicate `-q`, which removes the summary line.
+- Require judging validation by its full printed output, never by the exit code alone, and never suppressing or truncating it.
+- Require committing each verified change before stopping, on a branch.
+
+### Changed
+
+#### rules
+
+- Extend the raw-validation-output clause from reading and reporting to every use of validation output.
+
 ## 2026-11-23
 
 ### Changed
