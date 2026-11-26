@@ -38,7 +38,7 @@ flowchart TB
 | [`rules/KILO.md`](rules/KILO.md) | `o200k_base` | 415 `tok` |
 | [`rules/kilo/code.md`](rules/kilo/code.md) | `o200k_base` | 263 `tok` |
 | [`rules/kilo/debug.md`](rules/kilo/debug.md) | `o200k_base` | 325 `tok` |
-| [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 251 `tok` |
+| [`rules/kilo/plan.md`](rules/kilo/plan.md) | `o200k_base` | 261 `tok` |
 | [`rules/wenyan/CHATGPT-CUSTOM.txt`](rules/wenyan/CHATGPT-CUSTOM.txt) | `Unicode chars` | 1,479 `chars` |
 | [`rules/wenyan/CHATGPT-MORE.txt`](rules/wenyan/CHATGPT-MORE.txt) | `Unicode chars` | 1,161 `chars` |
 | [`skills/arena-steering/SKILL.md`](skills/arena-steering/SKILL.md) | `o200k_base` | 2,291 `tok` |
